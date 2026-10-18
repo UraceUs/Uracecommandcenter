@@ -410,13 +410,15 @@ deixa a pessoa desfazer uma assinatura feita por erro quando o sistema não deu 
   cliente cai no **support@** (Reply-To). A tela de "Signed" diz para onde a cópia foi (mascarado).
 - **Para quem:** sempre o e-mail que assinou (o da conta, confirmado por código, ou o do convite). Nem o cliente
   nem a equipe escolhem outro destino; se o card mudou de e-mail depois, a cópia continua indo para o que assinou.
-- **Se o Gmail falhar**, a assinatura **vale do mesmo jeito**: fica registrado "a cópia por e-mail não saiu" e
-  dá para reenviar. O PDF que não bate mais com o hash gravado não sai.
+- **Se o Gmail falhar** (recusa, rede caída ou lenta), a assinatura **vale do mesmo jeito**: fica registrado "a
+  cópia por e-mail não saiu" e dá para reenviar. O PDF que não bate mais com o hash gravado não sai.
 - **Na trilha** (Site › Waiver › Trilha): **cópia por e-mail**, com a hora, para quem e o **message-id** do Gmail;
   ou **a cópia por e-mail não saiu**, com o motivo. Nada disso entra no PDF nem muda a waiver.
 - **Reenviar:**
-  - o cliente, em **Drivers › Signed waivers** (`/ops/portal/waivers`), botão **Email me a copy** (uma a cada
-    10 min, até 3 por dia por waiver);
+  - o cliente, em **Drivers › Signed waivers** (`/ops/portal/waivers`), botão **Email me a copy** (10 min depois
+    da última cópia que **saiu**; se a automática falhou, pode pedir na hora; até 3 por dia por waiver). Se quem
+    pede é outra conta que vê a waiver (o piloto dela, assinada pelo convite), a cópia vai do mesmo jeito para
+    quem assinou, e a trilha registra que o pedido veio daquela conta;
   - a equipe, no card › aba **Waivers** (operador+) ou em **Site › Waiver › Assinadas aqui** (gerente+), botão
     **✉ Reenviar cópia**: a janela mostra o e-mail que assinou antes de mandar (uma por minuto, até 10 por dia).
     O card e a lista mostram a última cópia ("cópia por e-mail para m•••@… em …" ou "não saiu").

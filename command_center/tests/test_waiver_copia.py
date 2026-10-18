@@ -45,7 +45,7 @@ def _eventos(wid, *quais):
 
 
 def _sem_intervalo(monkeypatch):
-    monkeypatch.setitem(copia_waiver.INTERVALO_MIN, "signer", 0)
+    monkeypatch.setitem(copia_waiver.INTERVALO_MIN, "cliente", 0)
     monkeypatch.setitem(copia_waiver.INTERVALO_MIN, "staff", 0)
 
 
@@ -198,17 +198,17 @@ def test_email_me_a_copy_vai_so_para_quem_assinou_com_intervalo_e_teto(cli, monk
     wid, pid, hc, _ = assinada(cli)
     r = cli.post(f"{P}/waivers/{wid}/email", headers=hc)
     assert r.status_code == 429 and "just emailed a copy" in r.json()["detail"], "a cópia automática acabou de sair"
-    monkeypatch.setitem(copia_waiver.INTERVALO_MIN, "signer", 0)
+    monkeypatch.setitem(copia_waiver.INTERVALO_MIN, "cliente", 0)
     c = conectar(); c.execute("UPDATE portal_accounts SET email='maria.nova@example.com'"); c.commit(); c.close()
-    for _ in range(copia_waiver.POR_DIA["signer"]):
+    for _ in range(copia_waiver.POR_DIA["cliente"]):
         r = cli.post(f"{P}/waivers/{wid}/email", headers=hc)
         assert r.status_code == 200, r.text
         assert r.json()["sent_to"] == "m••••@example.com"
     r = cli.post(f"{P}/waivers/{wid}/email", headers=hc)
     assert r.status_code == 429 and "several times today" in r.json()["detail"]
-    assert len(copias("maria@example.com")) == 1 + copia_waiver.POR_DIA["signer"] and copias("maria.nova@example.com") == []
+    assert len(copias("maria@example.com")) == 1 + copia_waiver.POR_DIA["cliente"] and copias("maria.nova@example.com") == []
     pedidos = [e["detail"]["requested_by"] for e in _eventos(wid, "copy_emailed")]
-    assert pedidos == ["auto"] + ["signer"] * copia_waiver.POR_DIA["signer"]
+    assert pedidos == ["auto"] + ["signer"] * copia_waiver.POR_DIA["cliente"]
 
 
 def test_outra_conta_nao_ve_nao_baixa_e_nao_pede_copia(cli):  # noqa: F811
@@ -338,3 +338,123 @@ def test_o_hash_do_anexo_e_o_do_arquivo_entregue_pelo_download(cli):  # noqa: F8
     wid, *_ = assinada(cli)
     pdf = cli.get(f"{P}/waivers/{wid}/pdf").content
     assert hashlib.sha256(pdf).hexdigest() == copias()[0]["attachments"][0]["sha256"]
+
+
+# ------------------------------------------------------------------ revisão do PR #334
+def _gmail_sem_rede(monkeypatch, erro):
+    """O envio de verdade (sem CC_EMAIL_FAKE), com o token falso e a rede que falha com `erro`."""
+    import sys
+    import types
+    falso = types.ModuleType("adminai.google_auth")
+    falso.access_token = lambda conta: "token-de-teste"
+    monkeypatch.setitem(sys.modules, "adminai.google_auth", falso)
+    import adminai
+    monkeypatch.setattr(adminai, "google_auth", falso, raising=False)
+
+    def urlopen(req, timeout=None):
+        raise erro
+
+    monkeypatch.setattr(email_envio.urllib.request, "urlopen", urlopen)
+    monkeypatch.delenv("CC_EMAIL_FAKE")
+
+
+@pytest.mark.parametrize("erro", [TimeoutError("timed out"), ConnectionResetError(104, "reset")])
+def test_rede_caida_no_envio_vira_falha_na_trilha_e_503_nunca_500(cli, monkeypatch, erro):  # noqa: F811
+    _sem_intervalo(monkeypatch)
+    liga(cli)
+    wid, *_ = assinada(cli)
+    h = equipe(cli)
+    _gmail_sem_rede(monkeypatch, erro)
+    r = cli.post(f"{API}/waivers/{wid}/copy", headers=h)
+    assert r.status_code == 503, r.text
+    ev = _eventos(wid, "copy_email_failed")[-1]
+    assert ev["detail"]["reason"] == "gmail" and type(erro).__name__ in ev["detail"]["error"]
+    copia_waiver.em_segundo_plano(wid)                    # a automática também deixa a falha na trilha
+    assert len(_eventos(wid, "copy_email_failed")) == 2
+
+
+def test_erro_inesperado_no_envio_tambem_vira_falha_e_503(cli, monkeypatch):  # noqa: F811
+    _sem_intervalo(monkeypatch)
+    liga(cli)
+    wid, pid, hc, _ = assinada(cli)
+
+    def quebra(*a, **k):
+        raise ValueError("Header values may not contain linefeed or carriage return characters")
+
+    monkeypatch.setattr(email_envio, "enviar", quebra)
+    r = cli.post(f"{P}/waivers/{wid}/email", headers=hc)
+    assert r.status_code == 503, r.text
+    assert _eventos(wid, "copy_email_failed")[-1]["detail"]["reason"] == "error"
+
+
+def test_nome_com_quebra_de_linha_sai_numa_linha_e_nao_injeta_cabecalho():
+    w = {"id": 7, "signer_name": "Ana\r\nBcc: intruso@example.com Teste", "minor_name": None, "doc_sha256": "a" * 64,
+         "completed_at": "2026-01-15T12:00:00.000Z", "expires_at": "2027-01-15"}
+    t = {"driver_name": "Leo\r\nBcc: intruso@example.com\r\n", "template_name": "Adult\nWaiver", "account_id": 1, "signature_id": "x"}
+    assunto, texto, html = copia_waiver.email(w, t)
+    assert "\r" not in assunto and "\n" not in assunto and assunto == "Your signed URACE waiver for Leo Bcc: intruso@example.com"
+    _conta, msg = email_envio.mensagem("ana@example.com", assunto, texto, html=html)
+    assert msg["Bcc"] is None and msg["To"] == "ana@example.com" and len(msg.get_all("Subject")) == 1
+    assert texto.startswith("Hi Ana,")
+
+
+def test_depois_da_automatica_falhar_o_cliente_pede_de_novo_na_hora(cli, monkeypatch):  # noqa: F811
+    original = email_envio.enviar
+
+    def falha_uma_vez(para, assunto, texto, html=None, anexos=None, responder_para=None):
+        if anexos and not falha_uma_vez.ja:
+            falha_uma_vez.ja = True
+            raise email_envio.ErroEnvio("Gmail recusou o envio: HTTP 503")
+        return original(para, assunto, texto, html=html, anexos=anexos, responder_para=responder_para)
+
+    falha_uma_vez.ja = False
+    monkeypatch.setattr(email_envio, "enviar", falha_uma_vez)
+    liga(cli)
+    wid, pid, hc, _ = assinada(cli)
+    assert _eventos(wid, "copy_email_failed") and not _eventos(wid, "copy_emailed")
+    r = cli.post(f"{P}/waivers/{wid}/email", headers=hc)
+    assert r.status_code == 200, "a que falhou não segura o pedido por 10 minutos"
+    r = cli.post(f"{P}/waivers/{wid}/email", headers=hc)
+    assert r.status_code == 429, "a que saiu segura"
+
+
+def test_numero_gigante_nas_rotas_da_waiver_nao_vira_500(cli):  # noqa: F811
+    liga(cli)
+    wid, pid, hc, _ = assinada(cli)
+    g = 10 ** 20
+    assert cli.get(f"{P}/waivers/history?offset={g}").status_code == 422
+    assert cli.post(f"{P}/waivers/{g}/email", headers=hc).status_code == 422
+    assert cli.get(f"{P}/waivers/{g}/pdf").status_code == 422
+    h = equipe(cli)
+    assert cli.post(f"{API}/waivers/{g}/copy", headers=h).status_code == 422
+    assert cli.get(f"{API}/waivers/{g}/download").status_code == 422
+    assert cli.get(f"{API}/site/waiver-nativa?offset={g}").status_code == 422
+    assert cli.get(f"{API}/waivers/{wid}/download").status_code == 200, "o número normal continua"
+
+
+def test_a_copia_pedida_por_outra_conta_nao_fica_como_do_signatario(cli, monkeypatch):  # noqa: F811
+    """Assinada pelo convite (o e-mail do card); o piloto é de uma conta da área do cliente, que pede a cópia pelo
+    histórico: a cópia vai para quem assinou, e a trilha diz que quem pediu foi aquela conta, não o signatário."""
+    from command_center.tests import test_convite_waiver as tc
+    _sem_intervalo(monkeypatch)
+    liga(cli)
+    cid = tc.card(name="Bruno Adulto", email="bruno@example.com", pilot_name=None, pilot_dob="1990-02-02")
+    hc, (pid,) = cliente(cli, pilotos=(("Bruno Adulto", "1990-02-02"),))
+    conta = um(conectar(), "SELECT account_id FROM portal_pilots WHERE id=?", (pid,))["account_id"]
+    c = conectar(); c.execute("UPDATE portal_pilots SET client_id=? WHERE id=?", (cid, pid)); c.commit(); c.close()
+    assert tc.manda(cli, equipe(cli), cid, "bruno@example.com").status_code == 201
+    r = tc.assina(cli, tc.token_do_email("bruno@example.com"), typed_name="Bruno Adulto")
+    assert r.status_code == 201, r.text
+    wid = um(conectar(), "SELECT id FROM waivers WHERE client_id=? AND source='urace'", (cid,))["id"]
+    assert um(conectar(), "SELECT pilot_id FROM waivers WHERE id=?", (wid,))["pilot_id"] == pid
+    cli.cookies.clear()
+    assert cli.post(f"{P}/login", json={"email": CONTA["email"], "password": CONTA["password"]}).status_code == 200
+    hc = {"X-CSRF": cli.cookies.get("cp_csrf")}
+    r = cli.post(f"{P}/waivers/{wid}/email", headers=hc)
+    assert r.status_code == 200, r.text
+    assert r.json()["sent_to"] == "b••••@example.com" and copias("maria@example.com") == []
+    ev = _eventos(wid, "copy_emailed")[-1]
+    assert ev["flow"] == "invite" and ev["detail"]["requested_by"] == "account"
+    assert ev["detail"]["requested_account_id"] == conta
+    aud = todos(conectar(), "SELECT actor FROM audit_logs WHERE event='waiver.copy.emailed' AND entity_id=? ORDER BY id", (str(wid),))
+    assert aud[-1]["actor"] == f"portal:{conta}"

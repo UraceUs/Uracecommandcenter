@@ -61,8 +61,12 @@ def mensagem(para, assunto, texto, html=None, anexos=None, responder_para=None):
 def enviar(para, assunto, texto, html=None, anexos=None, responder_para=None):
     """Manda um e-mail de texto. Devolve o id da mensagem no Gmail (ou do arquivo, no teste). #305: com `html`, vai
     também a versão com a identidade da URACE (`email_marca`); quem lê só texto recebe o texto. #114: `anexos`
-    [(nome, bytes, tipo)] e `responder_para` (Reply-To)."""
-    conta, msg = mensagem(para, assunto, texto, html, anexos, responder_para)
+    [(nome, bytes, tipo)] e `responder_para` (Reply-To). Revisão do #334: todo erro de montar ou de mandar vira
+    `ErroEnvio` (cabeçalho com quebra de linha é `ValueError`; rede caída ou lenta, `OSError`), nunca um 500."""
+    try:
+        conta, msg = mensagem(para, assunto, texto, html, anexos, responder_para)
+    except ValueError as e:
+        raise ErroEnvio(f"mensagem inválida: {str(e)[:120]}")
     falso = os.environ.get("CC_EMAIL_FAKE")
     if falso:
         with open(falso, "a", encoding="utf-8") as f:
@@ -92,3 +96,5 @@ def enviar(para, assunto, texto, html=None, anexos=None, responder_para=None):
         raise ErroEnvio(f"Gmail recusou o envio: HTTP {e.code}")
     except urllib.error.URLError as e:
         raise ErroEnvio(f"Gmail sem conexão: {e.reason}")
+    except (OSError, ValueError) as e:                       # TimeoutError, ConnectionResetError, resposta que não é JSON
+        raise ErroEnvio(f"Gmail sem resposta: {type(e).__name__}")

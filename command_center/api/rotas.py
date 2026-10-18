@@ -8,7 +8,7 @@ import sqlite3
 import threading
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
 from pydantic import BaseModel
 
 from command_center.api import atencao, auth, equipe, vendas
@@ -902,7 +902,7 @@ def _envelope_id(con, wid):
 
 
 @r.get("/waivers/{wid}/download")
-def waiver_download(wid: int, request: Request, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+def waiver_download(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """PDF assinado (documento + certificado). Baixa do DocuSign na primeira vez e guarda
     em ~/.urace/waivers: depois o card do cliente abre o arquivo guardado, e é o mesmo
     arquivo que vai anexado na tarefa do Asana."""
@@ -1007,7 +1007,7 @@ def waiver_void(wid: int, dados: AnularIn, request: Request, u=Depends(auth.exig
 
 
 @r.post("/waivers/{wid}/copy")
-def waiver_copia(wid: int, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+def waiver_copia(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
     """#114: reenviar a cópia da waiver assinada no próprio sistema. Vai sempre ao e-mail que assinou (`signer_email`);
     a tela mostra esse e-mail antes do clique. O message-id (ou a falha) fica na trilha da waiver."""
     from command_center.providers import copia_waiver

@@ -683,7 +683,7 @@ class WaiverNativaIn(BaseModel):
 
 
 @r.get("/waiver-nativa")
-def waiver_nativa(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+def waiver_nativa(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0, le=10**9),
                   con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
     """Ligada ou não, os dois modelos importados (nome, hash, quando, versão), as assinadas aqui (paginadas) e
     a conferência do aviso §744.301(3) no parental atual (#116)."""

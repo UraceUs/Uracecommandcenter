@@ -28,8 +28,11 @@ from command_center.db import auditar, um, waiver_anulada
 log = logging.getLogger("cc.waiver.copia")
 
 RESPONDER_PARA = "support@urace.us"
-INTERVALO_MIN = {"signer": 10, "staff": 1}      # entre duas cópias da mesma waiver
-POR_DIA = {"signer": 3, "staff": 10}            # pedidos de reenvio por waiver nas últimas 24 h
+# Quem pede: "cliente" (uma conta da área do cliente, pelo histórico) ou "staff" (a equipe). Na trilha, o pedido do
+# cliente fica "signer" quando é a conta que assinou e "account" quando é outra conta que vê a waiver (revisão do #334).
+INTERVALO_MIN = {"cliente": 10, "staff": 1}     # depois de uma cópia que SAIU (a que falhou não segura ninguém)
+POR_DIA = {"cliente": 3, "staff": 10}           # pedidos de reenvio por waiver nas últimas 24 h
+PEDIDOS = {"cliente": ("signer", "account"), "staff": ("staff",)}
 EVENTOS = ("copy_emailed", "copy_email_failed")
 
 
@@ -65,17 +68,22 @@ def nome_do_arquivo(w):
     return f"URACE-waiver-{w['id']}.pdf"
 
 
+def _limpo(x):
+    """Uma linha só: quebra de linha num nome não vira cabeçalho novo no e-mail (revisão do #334)."""
+    return " ".join(str(x or "").split())
+
+
 def email(w, t):
     """(assunto, texto, html) da cópia. Inglês: é o que o cliente lê."""
     from command_center import enderecos
     from command_center.providers import email_marca
-    piloto = t.get("driver_name") or w.get("minor_name") or "the driver"
-    primeiro = (w.get("signer_name") or "").split()[0] if w.get("signer_name") else "there"
+    piloto = _limpo(t.get("driver_name") or w.get("minor_name")) or "the driver"
+    primeiro = (_limpo(w.get("signer_name")).split() or ["there"])[0]
     assunto = f"Your signed URACE waiver for {piloto}"
     quando = _quando(w["completed_at"])
     ate = _dia(w["expires_at"])
     conta = bool(t.get("account_id"))
-    intro = (f"Attached is your signed copy of the {t.get('template_name') or 'URACE waiver'} for {piloto}, "
+    intro = (f"Attached is your signed copy of the {_limpo(t.get('template_name')) or 'URACE waiver'} for {piloto}, "
              f"signed on {quando} (Orlando time). It is valid until {ate}.")
     guardar = "Keep this email: it is your copy of the signed document."
     onde = (f"You can also download it any time in your URACE account: {enderecos.cliente()}/ops/portal/waivers"
@@ -107,44 +115,52 @@ def ultima(con, wid):
 
 
 def _limite(con, wid, quem):
+    """O intervalo conta só da última cópia que saiu: se a automática falhou, o cliente pede de novo na hora."""
     agora_utc = datetime.now(timezone.utc)
-    ult = um(con, f"SELECT at FROM waiver_events WHERE waiver_id=? AND event IN ({','.join('?' * len(EVENTOS))}) "
-                  "ORDER BY id DESC LIMIT 1", (wid, *EVENTOS))
+    ult = um(con, "SELECT at FROM waiver_events WHERE waiver_id=? AND event='copy_emailed' ORDER BY id DESC LIMIT 1", (wid,))
     if ult and ult["at"] > _iso(agora_utc - timedelta(minutes=INTERVALO_MIN[quem])):
         raise Cedo("We just emailed a copy. Check your inbox (and the spam folder) before asking again."
-                   if quem == "signer" else "Uma cópia acabou de sair. Espere um minuto antes de reenviar.")
+                   if quem == "cliente" else "Uma cópia acabou de sair. Espere um minuto antes de reenviar.")
+    pedidos = PEDIDOS[quem]
     n = um(con, f"""SELECT COUNT(*) AS n FROM waiver_events WHERE waiver_id=? AND event IN ({','.join('?' * len(EVENTOS))})
-                    AND at >= ? AND json_extract(detail, '$.requested_by') = ?""",
-           (wid, *EVENTOS, _iso(agora_utc - timedelta(hours=24)), quem))["n"]
+                    AND at >= ? AND json_extract(detail, '$.requested_by') IN ({','.join('?' * len(pedidos))})""",
+           (wid, *EVENTOS, _iso(agora_utc - timedelta(hours=24)), *pedidos))["n"]
     if n >= POR_DIA[quem]:
         raise Cedo("You already asked for this copy several times today. Try again tomorrow."
-                   if quem == "signer" else "Já saíram muitas cópias desta waiver hoje. Tente amanhã.")
+                   if quem == "cliente" else "Já saíram muitas cópias desta waiver hoje. Tente amanhã.")
 
 
-def mandar(con, wid, quem="auto", fluxo=None, por=None, user_id=None, ip=None, user_agent=None, enviar_email=None):
-    """Manda a cópia da waiver `wid` ao signatário. `quem`: auto (logo depois de assinar), signer (o cliente pediu)
-    ou staff (a equipe reenviou; `por` é o nome de quem). Devolve {ok, sent_to, message_id, at} ou {ok: False, error}.
-    `LookupError`: não é waiver nativa assinada. `NaoEnvia`: anulada ou sem PDF. `Cedo`: intervalo ou teto."""
+def mandar(con, wid, quem="auto", conta=None, por=None, user_id=None, ip=None, user_agent=None, enviar_email=None):
+    """Manda a cópia da waiver `wid` ao signatário. `quem`: auto (logo depois de assinar), cliente (a conta `conta`
+    pediu pela área do cliente) ou staff (a equipe reenviou; `por` é o nome de quem). Devolve {ok, sent_to,
+    message_id, at} ou {ok: False, error}. `LookupError`: não é waiver nativa assinada. `NaoEnvia`: anulada.
+    `Cedo`: intervalo ou teto. Qualquer outro erro no envio vira `copy_email_failed`, nunca exceção."""
     from command_center.providers import email_envio, trilha_waiver as tw
     w = um(con, "SELECT * FROM waivers WHERE id=? AND source='urace' AND status='completed'", (wid,))
     if not w:
         raise LookupError("waiver")
     if um(con, f"SELECT 1 AS x FROM waivers WHERE id=? AND {waiver_anulada()}", (wid,)):
         raise NaoEnvia("This waiver was voided by URACE: its copy is not emailed again. You can still download it."
-                       if quem == "signer" else "Waiver anulada: a cópia não se reenvia (o PDF continua para baixar).")
+                       if quem == "cliente" else "Waiver anulada: a cópia não se reenvia (o PDF continua para baixar).")
     if quem in INTERVALO_MIN:
         _limite(con, wid, quem)
     t = json.loads(w["audit"] or "{}")
-    fluxo = fluxo or ("staff" if quem == "staff" else "invite" if t.get("invitation_id") else "account")
+    # revisão do #334: o fluxo é o da assinatura (convite ou conta), e o pedido do cliente diz se foi a conta que assinou
+    fluxo = "staff" if quem == "staff" else "invite" if t.get("invitation_id") else "account"
+    pedido = quem
+    if quem == "cliente":
+        pedido = "signer" if t.get("account_id") and t.get("account_id") == conta else "account"
     ids = _ids(w, t)
     para = w["signer_email"]
-    base = {"to": _mascarar(para), "requested_by": quem, **({"by": por, "user_id": user_id} if quem == "staff" else {})}
+    base = {"to": _mascarar(para), "requested_by": pedido, **({"by": por, "user_id": user_id} if quem == "staff" else {}),
+            **({"requested_account_id": conta} if quem == "cliente" else {})}
+    ator = f"user:{user_id}" if user_id else f"portal:{conta}" if conta else f"waiver:{wid}"
 
     def falhou(motivo, erro):
         tw.registrar(con, "copy_email_failed", fluxo, ip=ip, user_agent=user_agent, detail={**base, "reason": motivo, "error": erro},
                      **ids)
-        auditar(con, "waiver.copy.failed", f"user:{user_id}" if user_id else f"waiver:{wid}", user_id=user_id, entity_type="waiver",
-                entity_id=wid, detail={"to": para, "requested_by": quem, "reason": motivo, "error": erro}, ip=ip)
+        auditar(con, "waiver.copy.failed", ator, user_id=user_id, entity_type="waiver",
+                entity_id=wid, detail={"to": para, "requested_by": pedido, "reason": motivo, "error": erro}, ip=ip)
         log.warning(json.dumps({"log": "cc.waiver.copia", "waiver": wid, "ok": False, "reason": motivo}))
         return {"ok": False, "sent_to": base["to"], "error": erro}
 
@@ -163,13 +179,15 @@ def mandar(con, wid, quem="auto", fluxo=None, por=None, user_id=None, ip=None, u
                                                     responder_para=RESPONDER_PARA)
     except email_envio.ErroEnvio as e:
         return falhou("gmail", str(e)[:160])
+    except Exception as e:                               # noqa: BLE001 — revisão do #334: nada aqui vira 500 nem some calado
+        return falhou("error", type(e).__name__)
     if not mid:
         return falhou("gmail", "Gmail did not return a message id")
     ev = tw.registrar(con, "copy_emailed", fluxo, ip=ip, user_agent=user_agent, detail={
         **base, "message_id": mid, "from": email_envio.CAIXAS[email_envio.remetente()], "reply_to": RESPONDER_PARA,
         "attachment": nome_do_arquivo(w), "attachment_sha256": sha, "attachment_bytes": len(pdf)}, **ids)
-    auditar(con, "waiver.copy.emailed", f"user:{user_id}" if user_id else f"waiver:{wid}", user_id=user_id, entity_type="waiver",
-            entity_id=wid, detail={"to": para, "requested_by": quem, "message_id": mid, "sha256": sha}, ip=ip)
+    auditar(con, "waiver.copy.emailed", ator, user_id=user_id, entity_type="waiver",
+            entity_id=wid, detail={"to": para, "requested_by": pedido, "message_id": mid, "sha256": sha}, ip=ip)
     log.info(json.dumps({"log": "cc.waiver.copia", "waiver": wid, "ok": True}))
     return {"ok": True, "sent_to": base["to"], "message_id": mid, "at": ev["at"]}
 

@@ -19,7 +19,7 @@ import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from command_center.api import auth
@@ -849,7 +849,7 @@ def waiver_evento(pid: int, dados: EventoTelaIn, request: Request, cid=Depends(c
 
 
 @r.get("/waivers/history")
-def waivers_historico(response: Response, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0),
+def waivers_historico(response: Response, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0, le=10**9),
                       cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """#114 (lacuna E-2): todas as waivers assinadas pela conta (pelos pilotos dela), vigentes, vencidas e anuladas,
     das mais novas para as mais velhas, paginadas (`X-Total-Count`), cada uma com o download e a última cópia por e-mail."""
@@ -861,13 +861,13 @@ def waivers_historico(response: Response, limit: int = Query(20, ge=1, le=100), 
 
 
 @r.post("/waivers/{wid}/email")
-def waiver_por_email(wid: int, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def waiver_por_email(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """#114: "Email me a copy". Vai sempre para o e-mail que assinou (`signer_email`), nunca para outro."""
     from command_center.providers import copia_waiver, waiver_nativa as wn
     if not wn.da_conta(con, cid, wid):
         raise HTTPException(404, "Waiver not found.")
     try:
-        r = copia_waiver.mandar(con, wid, "signer", fluxo="account", ip=auth._ip(request),
+        r = copia_waiver.mandar(con, wid, "cliente", conta=cid, ip=auth._ip(request),
                                 user_agent=request.headers.get("user-agent"))
     except copia_waiver.NaoEnvia as e:
         raise HTTPException(409, str(e))
@@ -879,7 +879,7 @@ def waiver_por_email(wid: int, request: Request, cid=Depends(cliente_atual), con
 
 
 @r.get("/waivers/{wid}/pdf")
-def waiver_assinada_pdf(wid: int, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def waiver_assinada_pdf(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """O PDF assinado (documento + página de assinatura e certificado), só da própria conta."""
     from command_center.providers import trilha_waiver as tw, waiver_nativa as wn
     w = wn.da_conta(con, cid, wid)
