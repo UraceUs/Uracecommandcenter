@@ -281,7 +281,7 @@ leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas 
 | Site › Contas de clientes | — (a lista mostra os pilotos, a sugestão e o card) | **Vincular a este** ou **Criar cliente**; **Vincular** ao escolhido em *Outro cliente*; ligada: **Desvincular** (gerente) |
 | Site › Pedidos do site | o total, com o nº do pedido e a hora | **Resolvido** (sem estoque), **Página do pedido ↗**, **Copiar o link**, **Venda** |
 | Site › Security deposit | o que segue retido | **Conferir no Stripe**, **Devolver pelo Stripe** (gerente) |
-| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale | **Card**, **PDF**, **Anular** (gerente) |
+| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale | **Card**, **PDF**, **Trilha** (abre a trilha de eventos dentro do cartão), **Anular** (gerente) |
 | Site › Serviços e preços / Cartões das páginas | o preço | **Salvar**, **Desativar**/**Reativar** (ou **Esconder**/**Mostrar**, ↑ ↓) |
 | Site › Produtos da loja | o preço | **Editar** |
 | Site › Estoque do site | quanto tem (Galpão + Pista) | **Passar a dropshipping**/**em estoque**, **Abrir o produto** |
