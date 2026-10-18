@@ -83,3 +83,31 @@ def test_pedidos_e_compras_com_total(cli):
     d = cli.get("/ops/api/compras/pedidos?limit=2").json()
     assert len(d["pedidos"]) == 2 and d["total"] == 5
     assert cli.get("/ops/api/compras?limit=10").json()["total"] == 0
+
+
+def test_no_store_vale_para_arquivo_e_o_json_continua_com_etag():
+    """Revisão do #115: o arquivo cuja rota pede `no-store` (PDF assinado, pacote de prova) sai `private, no-store` e sem
+    ETag; o JSON que pede `no-store` (a Agenda do Google, consultada a cada 120 s) continua com ETag e 304."""
+    from fastapi import FastAPI, Response as R
+    from fastapi.responses import JSONResponse
+    from command_center.api.cache_api import ETagAPI
+    mini = FastAPI()
+
+    @mini.get("/ops/api/json")
+    def _json():
+        return JSONResponse({"ok": 1}, headers={"Cache-Control": "no-store"})
+
+    @mini.get("/ops/api/pdf")
+    def _pdf():
+        return R(b"%PDF-1.7 teste", media_type="application/pdf",
+                 headers={"Content-Disposition": 'attachment; filename="x.pdf"', "Cache-Control": "no-store"})
+
+    mini.add_middleware(ETagAPI)
+    with TestClient(mini) as t:
+        j = t.get("/ops/api/json")
+        assert j.headers["cache-control"] == "private, no-cache" and j.headers["etag"]
+        assert t.get("/ops/api/json", headers={"If-None-Match": j.headers["etag"]}).status_code == 304
+        p = t.get("/ops/api/pdf")
+        assert p.status_code == 200 and p.content == b"%PDF-1.7 teste"
+        assert p.headers["cache-control"] == "private, no-store" and "etag" not in p.headers
+        assert t.get("/ops/api/pdf", headers={"If-None-Match": "*"}).status_code == 200, "arquivo no-store nunca dá 304"

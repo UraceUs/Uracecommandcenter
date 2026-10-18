@@ -890,6 +890,8 @@ function TrilhaDaWaiver({ wid }: { wid: number }) {
         {(e.event === 'copy_emailed' || e.event === 'copy_email_failed') && e.detail && <div>{tr("para {0}", String(e.detail.to || '—'))}
           {e.detail.message_id ? <> · message-id <span className="mono">{String(e.detail.message_id)}</span></> : null}
           {e.detail.error ? <> · {String(e.detail.error)}</> : null}</div>}
+        {e.event === 'evidence_exported' && e.detail && <div>{tr("ZIP SHA-256")} <span className="mono">{String(e.detail.zip_sha256 || '—')}</span>
+          {e.detail.by ? <> · {tr("por {0}", String(e.detail.by))}</> : null}</div>}
         {(e.event === 'id_checked' || e.event === 'id_check_failed') && e.detail && <div>{tr("documento: {0}", DOCUMENTO_W[String(e.detail.document_type)] || String(e.detail.document_type || '—'))}
           {' · '}{e.detail.name_matches ? tr("nome confere") : tr("nome não confere")}
           {e.detail.minor_age_matches === true ? <> · {tr("idade do menor confere")}</> : e.detail.minor_age_matches === false ? <> · {tr("idade do menor não confere")}</> : null}
@@ -932,6 +934,30 @@ function WaiverNativa() {
   const [indo, setIndo] = useState(false)
   const [trilha, setTrilha] = useState<number | null>(null)
   const reenviarCopia = useReenviarCopia(() => l.reload())          // #114
+  const [baixando, setBaixando] = useState<number | null>(null)
+  /* #115: o pacote de prova vem como arquivo; se o servidor recusa (PDF que não bate com o hash, DocuSign), o motivo
+   * aparece aqui, em vez de um download quebrado */
+  async function baixarPacote(w: Assinada) {
+    setBaixando(w.id)
+    try {
+      const r = await fetch(`/ops/api/waivers/${w.id}/evidence.zip`, { credentials: 'same-origin' })
+      if (!r.ok) {
+        const j = await r.json().catch(() => null) as { detail?: unknown } | null
+        throw new Error(typeof j?.detail === 'string' ? tr(j.detail) : tr("O pacote de prova não saiu (HTTP {0}).", r.status))
+      }
+      const url = URL.createObjectURL(await r.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `URACE-waiver-${w.id}-evidence.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 30000)
+      if (r.headers.get('X-Evidence-Integrity') === 'problems')       // revisão do #115: o que não bate, com destaque
+        toast(tr("Pacote de prova baixado, mas a conferência achou registros que não batem: veja o aviso no topo do certificado e do VERIFY.md."), 'crit')
+      else toast(tr("Pacote de prova baixado. A exportação ficou na trilha da waiver."), 'ok')
+    } catch (e) { toast((e as Error).message, 'crit') } finally { setBaixando(null) }
+  }
   async function importar() {
     setIndo(true)
     try { await api.post('/site/waiver-nativa/importar', {}); toast(tr("Modelos importados do DocuSign (só leitura lá)."), 'ok'); l.reload() }
@@ -990,6 +1016,10 @@ function WaiverNativa() {
             <a className="btn" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
             {/* #111: a trilha de eventos abre dentro do cartão, que ocupa a linha inteira */}
             <button className="btn" aria-expanded={trilha === w.id} onClick={() => setTrilha(trilha === w.id ? null : w.id)}>{tr("Trilha")}</button>
+            {/* #115: o pacote de prova (ZIP) para o advogado; a exportação fica na trilha e na auditoria */}
+            {can('MANAGER') && <button className="btn" disabled={baixando === w.id} onClick={() => baixarPacote(w)}
+              title={tr("Baixar o pacote de prova (ZIP) para o advogado: PDF assinado, trilha, carimbo de tempo, certificado e declaração (rascunho)")}>
+              {baixando === w.id ? <span className="spin" /> : tr("Pacote de prova")}</button>}
             {!w.voided_at && <button className="btn" onClick={() => reenviarCopia(w)}>{tr("✉ Reenviar cópia")}</button>}
             {!w.voided_at && can('MANAGER') && <button className="btn danger" onClick={() => anular(w)}>{tr("Anular")}</button>}</>}>
           {(w.voided_at || !w.client_id || w.sealed_at) && <CdLista>

@@ -944,6 +944,27 @@ def waiver_download(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), 
                     headers={"Content-Disposition": f'attachment; filename="{nome}.pdf"', "Cache-Control": "no-store"})
 
 
+@r.get("/waivers/{wid}/evidence.zip")
+def waiver_pacote_de_prova(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), u=Depends(auth.exige("MANAGER")),
+                           con: sqlite3.Connection = Depends(get_db)):
+    """#115: o pacote de prova (ZIP) da waiver assinada no próprio sistema, para o advogado e o tribunal — gerente ou
+    acima. O PDF assinado, a trilha, os eventos com a cadeia de hashes, o audit_logs, o modelo, o carimbo, os
+    certificados públicos, o certificado avulso, a descrição do sistema, a declaração (rascunho) e o SHA256SUMS. A
+    exportação fica na trilha (`evidence_exported`) e na auditoria (`waiver.evidence_export`), com o hash do ZIP."""
+    from fastapi.responses import Response as Resposta
+    from command_center.providers import prova_waiver
+    try:
+        z, info = prova_waiver.exportar(con, wid, u, ip=auth._ip(request), user_agent=request.headers.get("user-agent"))
+    except LookupError:
+        raise HTTPException(404, "Waiver not found.")
+    except (prova_waiver.NaoExporta, prova_waiver.SemArquivo) as e:
+        raise HTTPException(409, str(e))
+    return Resposta(content=z, media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="URACE-waiver-{wid}-evidence.zip"',
+                             "Cache-Control": "no-store", "X-Content-SHA256": info["sha256"],
+                             "X-Evidence-Integrity": "ok" if info["integrity_ok"] else "problems"})
+
+
 class LixeiraIn(BaseModel):
     reason: str | None = None
 

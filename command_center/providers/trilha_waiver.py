@@ -16,8 +16,8 @@ primeira linha mexida.
   precisa de UPDATE.
 - **Depois de assinar** (PDF baixado, anulada, a cópia por e-mail — #114, com o message-id, ou a falha —; a
   conferência do documento com foto no balcão — #117, `id_checked` ou `id_check_failed`, com o tipo de documento e o
-  que conferiu, nunca a imagem nem o número —; o pacote de prova na próxima tarefa) não entram no PDF selado, que não
-  muda: ficam aqui, com o `waiver_id`, e no painel.
+  que conferiu, nunca a imagem nem o número —; o pacote de prova exportado — #115, com o hash do ZIP) não entram no
+  PDF selado, que não muda: ficam aqui, com o `waiver_id`, no painel e no certificado avulso do pacote de prova.
 """
 import hashlib
 import json

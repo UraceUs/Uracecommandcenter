@@ -24,7 +24,8 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 18/10/2026 (#117, conferir o documento da waiver no balcão e o nascimento travado; antes, #313, o
+> Atualizado em 18/10/2026 (#115, o **pacote de prova** da waiver para o advogado; antes, #117, conferir o documento da
+> waiver no balcão e o nascimento travado, e #313, o
 > cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
 > painel. Se a tela mudar e este texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
 
@@ -170,7 +171,7 @@ pedem acesso de operador.
 | Site | **Editor do site** | `/ops/site/editor` (uma página: `/ops/site/editor/<n>`) | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta, no computador (Celular 390 px ou Computador 1280 px reduzido para caber) e no celular; **?** mostra os atalhos (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
-| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, o **selo digital e carimbo de tempo** (#110), modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111) e **Anular** (#109) | gerente+ |
+| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, o **selo digital e carimbo de tempo** (#110), modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111), o **Pacote de prova** (#115) e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar; no cliente aberto, **Waiver · Conferir documento** (#117) | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
@@ -281,7 +282,7 @@ leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas 
 | Site › Contas de clientes | — (a lista mostra os pilotos, a sugestão e o card) | **Vincular a este** ou **Criar cliente**; **Vincular** ao escolhido em *Outro cliente*; ligada: **Desvincular** (gerente) |
 | Site › Pedidos do site | o total, com o nº do pedido e a hora | **Resolvido** (sem estoque), **Página do pedido ↗**, **Copiar o link**, **Venda** |
 | Site › Security deposit | o que segue retido | **Conferir no Stripe**, **Devolver pelo Stripe** (gerente) |
-| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale ("selada · carimbo de tempo", #110) | **Card**, **PDF**, **Trilha** (abre a trilha de eventos dentro do cartão), **Anular** (gerente) |
+| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale ("selada · carimbo de tempo", #110) | **Card**, **PDF**, **Trilha** (abre a trilha de eventos dentro do cartão), **Pacote de prova** (ZIP para o advogado, gerente), **Anular** (gerente) |
 | Site › Serviços e preços / Cartões das páginas | o preço | **Salvar**, **Desativar**/**Reativar** (ou **Esconder**/**Mostrar**, ↑ ↓) |
 | Site › Produtos da loja | o preço | **Editar** |
 | Site › Estoque do site | quanto tem (Galpão + Pista) | **Passar a dropshipping**/**em estoque**, **Abrir o produto** |
@@ -641,11 +642,54 @@ com **hora, IP e aparelho**, e nenhum se muda nem se apaga (o próprio banco rec
   ("×N", com a hora do primeiro e a do último). Irmãos abertos em duas abas: cada certificado leva os passos do
   seu piloto.
 - **Depois de assinar** (cópia por e-mail, com o message-id, ou a falha (#114); PDF baixado pelo cliente ou
-  pela equipe; anulada; documento conferido, ou que não conferiu, no balcão (#117); e, na próxima tarefa, pacote de
-  prova) **não** entra no PDF, que não muda: fica só na trilha.
+  pela equipe; anulada; documento conferido, ou que não conferiu, no balcão (#117); **pacote de prova exportado**,
+  com o hash do ZIP (#115)) **não** entra no PDF, que não muda: fica na trilha e no certificado avulso do pacote de prova.
 - **Onde ver:** Site › Waiver › Assinadas aqui › **Trilha** (gerente+): os passos de antes, a assinatura e
   o que veio depois, e se a trilha inteira está **íntegra** (cada passo leva o hash do anterior; uma linha
   mexida aparece como "trilha com linha mexida no evento #n").
+
+#### Site › Waiver: pacote de prova para o advogado (#115)
+
+Para defender a waiver num tribunal, o advogado precisa de uma explicação de **como** a assinatura foi parar no
+documento e da declaração de quem guarda os registros (o **custodiante**: Italo Jorge da Silveira, decisão do dono de
+06/10). O pacote de prova junta tudo num arquivo só.
+
+- **Onde:** Site › Waiver › **Assinadas aqui** › no cartão da waiver, **Pacote de prova** (gerente ou acima; o
+  operador não vê nem baixa). Baixa um ZIP `URACE-waiver-<n>-evidence.zip`. A anulada também tem pacote (a anulação
+  vai junto). A waiver do DocuSign não tem: ela se prova pelo certificado do DocuSign.
+- **O que vai no ZIP** (em inglês, porque é para o advogado e o tribunal):
+  - `signed.pdf` (o PDF assinado e selado, exatamente o do servidor), `audit.json` (a trilha gravada na assinatura) e
+    `waiver.json` (a linha da waiver e a anulação, se houver);
+  - `events.json` e `events.csv`: a **Trilha** inteira, com o hash de cada passo refeito e a cadeia conferida;
+  - `audit_logs.json`: o que a Auditoria tem da waiver e da conta (o cadastro e a confirmação do e-mail; login,
+    código e leitura só da sessão desta assinatura, desde a assinatura anterior da conta e no máximo 24 h antes do
+    primeiro passo; a assinatura; o cadastro do piloto desta waiver) ou do convite. **Nunca** vai senha, cookie, token,
+    link do convite, corpo de e-mail ou caminho de pasta do servidor. A waiver do irmão não aparece no pacote desta;
+  - `template.pdf` e `template.json`: a versão do modelo que valia (#116);
+  - `timestamp.tst` e `timestamp.json` (o carimbo de tempo), `seal-cert.pem`, `seal-root.pem` e `tsa/tsa-root.pem`
+    (os certificados **públicos**; a chave do selo nunca sai do servidor);
+  - `certificate-of-completion.pdf`: o certificado avulso com **todos** os passos, inclusive os de depois de assinar
+    (cópia por e-mail, documento conferido no balcão, PDF baixado, anulada);
+  - `system-description.md`: a descrição do sistema (`docs/waiver-esign-system.md`), com o commit em execução;
+  - `declaration-DRAFT.md`: a declaração (FRE 902(11)/(13) e Fla. Stat. §90.902(11)) já preenchida com os dados da
+    waiver, marcada **"DRAFT — for attorney review — not to be signed"**. **Não assine:** o texto final é do advogado
+    (ele também confirma o cargo do custodiante, o tribunal e a forma, declaração ou affidavit);
+  - `VERIFY.md`, `verify_events.py` e `SHA256SUMS`: o passo a passo para conferir (o `sha256sum -c`, o Adobe ou o pyHanko, o
+    `selo-waiver conferir` no servidor e o `openssl ts -verify` do carimbo) e o hash de cada arquivo.
+- **O mesmo registro, na mesma versão do sistema (o commit), dá o mesmo ZIP**, byte a byte: baixar de novo sem nada
+  ter mudado dá o mesmo hash. Por isso as exportações anteriores não entram no ZIP. Se algo mudou na waiver depois (uma
+  cópia por e-mail, o balcão, a anulação), o ZIP novo traz isso e o hash muda; depois de uma atualização do sistema, a
+  descrição do sistema e a declaração mudam e o hash do ZIP também (os registros, não).
+- **A trilha é conferida contra o que foi gravado na assinatura**, não só contra ela mesma: se alguém mexer num passo
+  direto no banco e refizer o hash dele, o pacote mostra **INTEGRITY WARNING** no topo do certificado avulso, no
+  `VERIFY.md` e na declaração, com o passo que não bate (por exemplo "chain broken between #4 and #5"). O
+  `verify_events.py` do pacote faz a mesma conferência no computador do advogado.
+- **Fica registrado:** cada download vira o passo **pacote de prova exportado** na Trilha (com o hash do ZIP e quem
+  baixou) e a Auditoria `waiver.evidence_export`.
+- **Se o PDF no servidor não bater com o hash gravado na assinatura**, o pacote não sai (a tela mostra o erro):
+  restaure o PDF da Biblioteca (o backup do Drive) e baixe de novo.
+- **Para o advogado:** mande o ZIP inteiro, sem abrir nem mudar nada (mudar qualquer arquivo faz o `SHA256SUMS` não
+  conferir). Pelo e-mail da empresa ou pasta compartilhada só com ele: o pacote tem dado do cliente.
 
 ### Um card por piloto
 
