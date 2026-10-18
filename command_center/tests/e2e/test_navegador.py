@@ -160,6 +160,10 @@ def servidor(tmp_path_factory):
     from command_center.tests.google_falso import GoogleFalso
     GOOGLE = GoogleFalso()                               # #220: o login e o Calendar do Google são os falsos, locais
     GOOGLE_CRED = str(pasta / "google-web-credentials.json")   # começa SEM o arquivo: botão desligado
+    # #110: o selo da waiver (de TESTE, gerado aqui, no lugar onde o servidor procura) e a TSA falsa, local
+    from command_center.tests import selo_teste
+    selo_teste.criar_selo(pasta / "waivers" / "selo")
+    TSA = selo_teste.TsaFalsa()
     porta = _porta_livre()
     env = dict(os.environ, CC_DB_PATH=str(pasta / "e2e.sqlite"), URACE_DIR=str(pasta), URACE_ENV="/nao/existe",
                CC_AUTOSYNC="0", PYTHONPATH=RAIZ, CC_EMAIL_FAKE=EMAILS,
@@ -170,7 +174,9 @@ def servidor(tmp_path_factory):
                STRIPE_SECRET_KEY="sk_test_e2e", STRIPE_WEBHOOK_SECRET=WHSEC_E2E, STRIPE_API_BASE=STRIPE.origem, STRIPE_CHECKOUT_ORIGEM=STRIPE.origem,
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM",  # 32 bytes de teste
                CC_GOOGLE_BASE=GOOGLE.origem, CC_GOOGLE_WEB_CREDENTIALS=GOOGLE_CRED,
-               CC_GOOGLE_REDIRECT_URI=f"http://127.0.0.1:{porta}/ops/api/google/callback")
+               CC_GOOGLE_REDIRECT_URI=f"http://127.0.0.1:{porta}/ops/api/google/callback",
+               CC_WAIVER_TSA=TSA.url)
+    env.pop("CC_WAIVER_SEAL_DIR", None)                  # o servidor acha o selo em URACE_DIR/waivers/selo
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
     log = open(pasta / "uvicorn.log", "w")
@@ -192,6 +198,7 @@ def servidor(tmp_path_factory):
     log.close()
     STRIPE.srv.shutdown()
     GOOGLE.parar()
+    TSA.parar()
 
 
 @pytest.fixture(scope="module")
@@ -934,6 +941,10 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a = entrar(navegador, servidor, "italo@urace.us")
     abrir(a, servidor, "/site/waiver")
     a.get_by_text("desligada", exact=True).wait_for()
+    # #110: o selo está configurado (a semente não liga sem ele) e a tela mostra a raiz
+    sec = a.locator("section", has=a.get_by_role("heading", name="Selo digital e carimbo de tempo", level=2))
+    sec.get_by_text("selo configurado").wait_for()
+    assert "Raiz do selo (SHA-256)" in sec.inner_text()
     a.get_by_role("button", name="Ligar", exact=True).click()
     a.get_by_role("dialog").get_by_role("button", name="Ligar", exact=True).click()
     a.get_by_text("Ligada: o cliente já vê").wait_for()
@@ -1068,6 +1079,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     abrir(a, servidor, "/site/waiver")
     a.get_by_text("Rafa Waiver").wait_for()
     assert "parental · por Rita Waiver" in a.locator("article.cd", has_text="Rafa Waiver").inner_text()
+    assert "selada · carimbo de tempo" in a.locator("article.cd", has_text="Rafa Waiver").inner_text()      # #110
     # 4. #111: a trilha da assinada, com o que a tela relatou (abriu, leu tudo) e o que o servidor registrou
     a.locator("article.cd", has_text="Rafa Waiver").get_by_role("button", name="Trilha").click()
     a.get_by_text(re.compile(r"trilha íntegra · \d+ eventos no total")).wait_for()

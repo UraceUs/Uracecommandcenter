@@ -785,12 +785,29 @@ interface ModeloW { kind: 'adult' | 'parental'; templateId: string; name: string
   version: number | null }
 interface Assinada { id: number; client_id: number | null; signer_name: string; signer_email: string; minor_name: string | null; template: string
   completed_at: string; expires_at: string; doc_sha256: string; voided_at: string | null; voided_by: string | null; void_reason: string | null
-  copy?: CopiaW | null }
+  copy?: CopiaW | null; sealed_at?: string | null; seal_tsa?: string | null }
 /* #116: a conferência do aviso §744.301(3) no parental. O texto do aviso não está no sistema: é o que o advogado
  * aprovar, num arquivo no servidor. Sem ele, só informa; com ele, barra importar, ligar e assinar a parental. */
 interface Conferencia { configured: boolean; ok: boolean | null; reason: string; notice_pt?: number | null; body_pt?: number | null }
 interface Aviso744 extends Conferencia { path: string; approved_text: string | null; approved_sha256: string | null }
-interface WN { ligada: boolean; modelos: ModeloW[]; assinadas: { itens: Assinada[]; total: number; limit: number; offset: number }; aviso_744: Aviso744 }
+/* #110: o PDF assinado sai selado (PAdES, com o certificado de selo da URACE) e com o carimbo de tempo de uma TSA externa
+ * (RFC 3161). A chave fica no servidor, fora do repositório e do backup do banco. Sem ela, a assinatura não liga. */
+interface Selo { configured: boolean; code: string; reason: string; dir: string; tsa: string[]; tsa_roots: string[]; field: string
+  seal_subject?: string; seal_sha256?: string; seal_not_after?: string; root_sha256?: string }
+
+/* o motivo vem como código do servidor e é traduzido aqui (o texto do servidor fica para a auditoria) */
+function motivoDoSelo(code: string) {
+  const r: Record<string, string> = {
+    missing: tr("Falta a chave ou um dos certificados do selo no servidor."),
+    key_open: tr("A chave do selo pode ser lida por outros usuários do servidor (precisa de chmod 600)."),
+    unreadable: tr("Os arquivos do selo no servidor não abrem."),
+    key_mismatch: tr("A chave do selo não é a do certificado de selo."),
+    wrong_root: tr("O certificado de selo não foi emitido pela raiz guardada."),
+    expired: tr("O certificado de selo está fora da validade.") }
+  return r[code] || tr("O selo não está configurado.")
+}
+interface WN { ligada: boolean; modelos: ModeloW[]; assinadas: { itens: Assinada[]; total: number; limit: number; offset: number }; aviso_744: Aviso744
+  selo: Selo }
 interface VersaoM { id: number; kind: 'adult' | 'parental'; sha256: string; name: string; pages: number | null; imported_at: string
   imported_by_name: string | null; current: boolean; number: number; signatures: number; notice_744: Conferencia | null }
 interface Versoes { itens: VersaoM[]; total: number; limit: number; offset: number }
@@ -813,6 +830,27 @@ function AvisoDoParental({ a }: { a: Aviso744 }) {
         : <p className="small muted" style={{ margin: 0 }}>{tr("O texto do aviso não está no sistema: quando o advogado aprovar, ele vai para o arquivo {0} no servidor. Até lá a conferência só informa e nada é barrado.", a.path)}</p>}
       {a.approved_text && <details><summary className="small" style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center', gap: 6 }}>{tr("Texto aprovado")} <span className="mono muted">{a.approved_sha256?.slice(0, 12)}</span></summary>
         <p className="small" style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: '8px 0 0' }}>{a.approved_text}</p></details>}
+    </div>
+  </Section>
+}
+
+function SeloDaWaiver({ s }: { s: Selo }) {
+  return <Section title={tr("Selo digital e carimbo de tempo")}
+    right={s.configured ? <Chip tone="ok" glyph="✓">{tr("selo configurado")}</Chip> : <Chip tone="crit" glyph="✕">{tr("selo não configurado")}</Chip>}>
+    <div className="card card-b stack" style={{ gap: 10 }}>
+      <p className="small" style={{ margin: 0 }}>{tr("O PDF assinado sai com o selo digital da URACE (PAdES) e o carimbo de tempo de uma autoridade externa (RFC 3161). Mudar 1 byte do arquivo quebra o selo, e a hora da assinatura vem de fora do servidor.")}</p>
+      {s.configured
+        ? <>
+          <p className="small" style={{ margin: 0, overflowWrap: 'anywhere' }}>{tr("Raiz do selo (SHA-256):")} <span className="mono">{s.root_sha256}</span></p>
+          <p className="small muted" style={{ margin: 0 }}>{tr("Certificado de selo válido até {0}. No Adobe, a identidade aparece como desconhecida (certificado próprio); a integridade e o carimbo aparecem válidos.", fmtDate(s.seal_not_after))}</p>
+        </>
+        : <>
+          <p className="small" style={{ margin: 0, overflowWrap: 'anywhere' }}><b>{motivoDoSelo(s.code)}</b></p>
+          <p className="small muted" style={{ margin: 0 }}>{tr("Sem o selo, a assinatura não liga; se já estiver ligada, o cliente lê \"Online signing is temporarily unavailable\" e nada é gravado. Quem configura é o administrador, no servidor.")}</p>
+        </>}
+      <p className="small muted" style={{ margin: 0, overflowWrap: 'anywhere' }}>{tr("Carimbo de tempo, nesta ordem (10 s cada): {0}", s.tsa.join(' · '))}</p>
+      <p className="small muted" style={{ margin: 0, overflowWrap: 'anywhere' }}>{tr("Só vale o carimbo de uma autoridade com raiz aceita: {0}", s.tsa_roots.join(' · ') || '—')}</p>
+      <p className="small muted" style={{ margin: 0, overflowWrap: 'anywhere' }}>{tr("A chave do selo fica em {0} e não vai no backup do banco: guarde uma cópia fora da VPS.", s.dir)}</p>
     </div>
   </Section>
 }
@@ -917,7 +955,7 @@ function WaiverNativa() {
   if (l.error && !l.data) return <ErrorState error={l.error} retry={l.reload} />
   if (!l.data) return <Loading />
   const d = l.data, a = d.assinadas
-  const prontos = d.modelos.every(m => m.sha256)
+  const prontos = d.modelos.every(m => m.sha256) && d.selo.configured
   return <div className="stack" style={{ gap: 18 }}>
     <Section title={tr("Assinatura na área do cliente")} right={d.ligada ? <Chip tone="ok">{tr("ligada")}</Chip> : <Chip tone="neutral">{tr("desligada")}</Chip>}>
       <div className="stack" style={{ gap: 10 }}>
@@ -925,7 +963,7 @@ function WaiverNativa() {
         {!d.ligada && <p className="small muted" style={{ margin: 0 }}>{tr("Antes de ligar: o advogado confirma que a assinatura eletrônica com essa página de certificado vale para a waiver de menor na Flórida.")}</p>}
         {admin ? <div className="row wrap" style={{ gap: 8 }}>
           {d.ligada ? <button className="btn sm ghost" onClick={() => ligar(false)}>{tr("Desligar")}</button>
-            : <button className="btn sm primary" disabled={!prontos} title={prontos ? undefined : tr("Importe os dois modelos primeiro")} onClick={() => ligar(true)}>{tr("Ligar")}</button>}
+            : <button className="btn sm primary" disabled={!prontos} title={prontos ? undefined : d.selo.configured ? tr("Importe os dois modelos primeiro") : tr("Configure o selo da waiver primeiro")} onClick={() => ligar(true)}>{tr("Ligar")}</button>}
         </div> : <p className="small muted" style={{ margin: 0 }}>{tr("Só o ADMIN liga ou desliga.")}</p>}
       </div>
     </Section>
@@ -937,6 +975,7 @@ function WaiverNativa() {
       </div>)}</div>
       <p className="small muted" style={{ margin: '8px 0 0' }}>{tr("Importar só LÊ os modelos no DocuSign. Se o texto mudar lá, importe de novo: as próximas assinaturas usam o novo, as já feitas ficam com o delas.")}</p>
     </Section>
+    <SeloDaWaiver s={d.selo} />
     <AvisoDoParental a={d.aviso_744} />
     <VersoesDoModelo key={d.modelos.map(m => m.sha256 || '').join()} />
     <Section title={tr("Assinadas aqui")} count={a.total}>
@@ -953,9 +992,11 @@ function WaiverNativa() {
             <button className="btn" aria-expanded={trilha === w.id} onClick={() => setTrilha(trilha === w.id ? null : w.id)}>{tr("Trilha")}</button>
             {!w.voided_at && <button className="btn" onClick={() => reenviarCopia(w)}>{tr("✉ Reenviar cópia")}</button>}
             {!w.voided_at && can('MANAGER') && <button className="btn danger" onClick={() => anular(w)}>{tr("Anular")}</button>}</>}>
-          {(w.voided_at || !w.client_id) && <CdLista>
+          {(w.voided_at || !w.client_id || w.sealed_at) && <CdLista>
             {w.voided_at && <CdItem tom="crit">{tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</CdItem>}
             {!w.client_id && <CdItem tom="warn">{tr("sem card")}</CdItem>}
+            {/* #110: selada, com a hora do carimbo da TSA */}
+            {w.sealed_at && <CdItem tom="ok" glifo="✓">{tr("selada · carimbo de tempo {0}", fmtDateTime(w.sealed_at))}</CdItem>}
           </CdLista>}
           {/* #114: a situação da cópia por e-mail (saiu, falhou, ainda não) */}
           <SituacaoDaCopia c={w.copy} />

@@ -170,7 +170,7 @@ pedem acesso de operador.
 | Site | **Editor do site** | `/ops/site/editor` | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
-| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111) e **Anular** (#109) | gerente+ |
+| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, o **selo digital e carimbo de tempo** (#110), modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111) e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar; no cliente aberto, **Waiver · Conferir documento** (#117) | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
@@ -281,7 +281,7 @@ leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas 
 | Site › Contas de clientes | — (a lista mostra os pilotos, a sugestão e o card) | **Vincular a este** ou **Criar cliente**; **Vincular** ao escolhido em *Outro cliente*; ligada: **Desvincular** (gerente) |
 | Site › Pedidos do site | o total, com o nº do pedido e a hora | **Resolvido** (sem estoque), **Página do pedido ↗**, **Copiar o link**, **Venda** |
 | Site › Security deposit | o que segue retido | **Conferir no Stripe**, **Devolver pelo Stripe** (gerente) |
-| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale | **Card**, **PDF**, **Trilha** (abre a trilha de eventos dentro do cartão), **Anular** (gerente) |
+| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale ("selada · carimbo de tempo", #110) | **Card**, **PDF**, **Trilha** (abre a trilha de eventos dentro do cartão), **Anular** (gerente) |
 | Site › Serviços e preços / Cartões das páginas | o preço | **Salvar**, **Desativar**/**Reativar** (ou **Esconder**/**Mostrar**, ↑ ↓) |
 | Site › Produtos da loja | o preço | **Editar** |
 | Site › Estoque do site | quanto tem (Galpão + Pista) | **Passar a dropshipping**/**em estoque**, **Abrir o produto** |
@@ -553,6 +553,70 @@ legal, e não há cópia no DocuSign.
     não é importado (o atual continua valendo), a assinatura **não liga** e a parental **não se assina
     online** (pela área do cliente ou pelo convite); a adult segue normal. Arquivo que não abre ou
     vazio também barra.
+
+#### Site › Waiver: selo digital e carimbo de tempo (#110)
+
+Antes, a única prova de que o PDF assinado não mudou era o hash guardado no nosso próprio banco. Agora o PDF
+sai **selado**, como o "tamper-evident seal" do DocuSign:
+
+- **O selo** é uma assinatura digital (PAdES, SHA-256) com o certificado de selo da URACE, que **certifica** o
+  documento ("nenhuma alteração"). Mudar **1 byte** do arquivo quebra o selo.
+- **O carimbo de tempo** vem de uma autoridade externa (RFC 3161), não do relógio do servidor: DigiCert e, se ela
+  não responder em 10 s, FreeTSA (a lista fica em `CC_WAIVER_TSA`, no `adminai.env`). O carimbo vai dentro do
+  PDF e também na tabela `waiver_timestamps`, que não muda nem se apaga.
+- **Só vale carimbo de autoridade conhecida.** Logo depois de selar, o sistema confere o carimbo: a autoridade tem
+  de vir de uma **raiz de TSA aceita** e a hora dela tem de estar a até **5 minutos** do relógio da VPS. Senão,
+  tenta a próxima da lista (e, sem nenhuma, a assinatura não acontece). As raízes aceitas são a **DigiCert Trusted
+  Root G4** (já vem com o sistema, conferida pela impressão SHA-256 `55:2F:7B:DC:…:C8:99:88`) e os arquivos `.pem`
+  da pasta `~/.urace/waivers/selo/tsa/` (ou `CC_WAIVER_TSA_ROOTS`): é lá que entra a raiz da **FreeTSA** (passo 2
+  abaixo). Outra autoridade em `CC_WAIVER_TSA` só vale com a raiz dela nessa pasta.
+- **Dono, 06/10:** certificado próprio da URACE + carimbo gratuito. No **Adobe**, o selo aparece com a identidade
+  **desconhecida** (o certificado é nosso, não está na lista do Adobe); a integridade e o carimbo aparecem
+  válidos. O certificado pago reconhecido pelo Adobe fica para depois.
+- **Na tela** (Site › Waiver › **Selo digital e carimbo de tempo**, gerente+): **selo configurado** (com a
+  impressão SHA-256 da raiz e a validade do certificado) ou **selo não configurado** (com o motivo). Em
+  **Assinadas aqui**, cada waiver diz **"selada · carimbo de tempo"** com a hora da autoridade.
+- **Sem o selo, não liga.** O botão **Ligar** fica desligado até o selo estar configurado. Se o selo sumir com a
+  assinatura ligada, ou se as duas autoridades estiverem fora do ar, o cliente lê *"Online signing is temporarily
+  unavailable. Please try again in a few minutes, or sign the waiver in person at the track."*, **nada é gravado**
+  e o **código do e-mail continua valendo** (ele tenta de novo com o mesmo código). A falha fica na Auditoria
+  (`waiver.seal_failed`, com o motivo).
+- **A página de certificado** (a última do PDF) é desenhada antes de selar: ela descreve o selo e o carimbo, não o
+  resultado. O que veio depois de assinar continua só na Trilha.
+
+**Configurar (uma vez, na VPS, pelo administrador)**
+
+1. `cd ~/Uraceagent && ~/.urace/cc-venv/bin/python -m command_center.manage selo-waiver criar`: gera a raiz e o
+   certificado de selo em `~/.urace/waivers/selo/` (`seal-key.pem` só para o dono do processo, `seal-cert.pem`,
+   `root-cert.pem`) e mostra a **impressão SHA-256 da raiz**: anote. Nunca sobrescreve: se já existe, avisa e
+   não muda nada. A chave da raiz **não é guardada** (ninguém emite outro selo com ela).
+2. A raiz pública da FreeTSA, baixada do site dela (o repositório não a traz porque não deu para conferir a
+   original daqui):
+   `mkdir -p ~/.urace/waivers/selo/tsa && curl -fsS -o ~/.urace/waivers/selo/tsa/freetsa-cacert.pem https://freetsa.org/files/cacert.pem && openssl x509 -in ~/.urace/waivers/selo/tsa/freetsa-cacert.pem -noout -subject -fingerprint -sha256`
+   Confira que o assunto é o da FreeTSA e compare a impressão SHA-256 com a que a FreeTSA publica no site dela
+   (`https://freetsa.org`); anote a impressão junto com a da raiz do selo.
+   Sem esse arquivo, a FreeTSA não vale e só a DigiCert carimba.
+3. `~/.urace/cc-venv/bin/python -m command_center.manage selo-waiver conferir`: sela um PDF de teste com a
+   autoridade de verdade, valida (o selo pela raiz da URACE e o carimbo pelas raízes de TSA) e diz se o relógio
+   da VPS bate com o dela. Mostra também as raízes de TSA aceitas.
+4. `timedatectl`: tem de dizer `System clock synchronized: yes` e `NTP service: active`. A hora da assinatura no
+   certificado é a do servidor; a do carimbo é a da autoridade, e as duas têm de bater.
+
+**Backup da chave do selo.** A pasta `~/.urace/waivers/selo/` **não vai no backup do banco** (#299) nem no Drive.
+Guarde uma cópia dela **fora da VPS** (no gerenciador de senhas do dono, como o `adminai.env`), por exemplo:
+`tar -czf ~/selo-waiver-$(date +%F).tgz -C ~/.urace/waivers selo`, baixe o arquivo para o computador do dono,
+guarde no gerenciador de senhas e **apague a cópia da VPS** (`rm ~/selo-waiver-*.tgz`). Nunca no repositório,
+nunca por e-mail ou chat. Se a chave se perder, os PDFs já assinados continuam conferíveis pela raiz pública
+(`root-cert.pem`, que também vai dentro de cada PDF); para assinar de novo, restaure a cópia na mesma pasta
+(`chmod 600 seal-key.pem`) ou, sem cópia, gere um selo novo com `selo-waiver criar` numa pasta vazia (a raiz muda:
+guarde a antiga para conferir os PDFs de antes).
+
+**Conferir um PDF assinado:** abra no Adobe Reader (painel **Assinaturas**: "o documento não foi modificado" e o
+carimbo de tempo) ou, na VPS, `~/.urace/cc-venv/bin/python -m command_center.manage selo-waiver conferir <arquivo.pdf>`
+(só lê). Ele diz se o arquivo está **íntegro**, se o selo é **da URACE** (o certificado tem de vir da raiz do selo:
+uma assinatura de outra empresa, mesmo de uma autoridade conhecida, não vale) e se o carimbo é de uma autoridade
+aceita, com a hora batendo com a do selo. **Depois de trocar o selo**, os PDFs de antes se conferem com a raiz
+antiga: `… selo-waiver conferir <arquivo.pdf> --raiz <root-cert.pem antigo>`.
 
 #### Trilha de eventos da waiver assinada no próprio sistema (#111)
 

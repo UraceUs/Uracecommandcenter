@@ -234,6 +234,25 @@ BEGIN SELECT RAISE(ABORT, 'waiver_voids is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS waiver_voids_no_delete BEFORE DELETE ON waiver_voids
 BEGIN SELECT RAISE(ABORT, 'waiver_voids is append-only'); END;
 
+-- #110 (lacunas D-2 e G-3): o carimbo de tempo RFC 3161 de cada waiver nativa selada. O PDF final sai com o selo
+-- PAdES da URACE e o carimbo de uma TSA externa (providers/selo_waiver.py); o token, como a TSA devolveu (DER), fica
+-- também aqui, com a TSA, a hora dela e os hashes. Um por waiver, gravado na mesma transação do INSERT da waiver, e
+-- append-only (trigger em db/__init__.py, WAIVER_SO_INSERT).
+CREATE TABLE IF NOT EXISTS waiver_timestamps (
+  id               INTEGER PRIMARY KEY,
+  waiver_id        INTEGER NOT NULL UNIQUE REFERENCES waivers(id),
+  signature_id     TEXT NOT NULL,
+  at               TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  tsa_url          TEXT NOT NULL,
+  gen_time         TEXT NOT NULL,                 -- a hora do carimbo, da TSA (UTC)
+  serial           TEXT NOT NULL,
+  policy           TEXT,
+  token_sha256     TEXT NOT NULL,
+  token            BLOB NOT NULL,                 -- TimeStampToken (ContentInfo DER)
+  seal_cert_sha256 TEXT NOT NULL,
+  document_sha256  TEXT NOT NULL                  -- o hash do PDF selado (= waivers.doc_sha256)
+);
+
 -- #111 (lacuna C-3): a trilha de eventos da waiver nativa, um passo por linha (convite enviado, abriu a tela,
 -- recebeu o PDF, leu todas as páginas, código enviado e confirmado, revisou, assinou; e o que vem depois:
 -- anulada, PDF baixado…), com hora, IP e aparelho. Append-only (trigger em db/__init__.py, criado a cada

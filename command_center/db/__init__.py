@@ -444,9 +444,9 @@ def status_da_waiver(alias="waivers"):
 
 
 # Tabelas de prova da waiver que só recebem INSERT: o banco recusa UPDATE e DELETE, como no `audit_logs`.
-# #116: as versões dos modelos; #111: a trilha de eventos. A trava é criada (ou trocada, se o texto mudou) a cada
-# subida, com as da waiver.
-WAIVER_SO_INSERT = ("waiver_template_versions", "waiver_events")
+# #116: as versões dos modelos; #111: a trilha de eventos; #110: o carimbo de tempo. A trava é criada (ou trocada, se o
+# texto mudou) a cada subida, com as da waiver.
+WAIVER_SO_INSERT = ("waiver_template_versions", "waiver_events", "waiver_timestamps")
 # #112: a revisão antes do clique final só aceita marcar `used_at`, uma vez (na transação da assinatura); o resto é
 # prova e não muda, e nada sai. Coluna nova em `waiver_reviews` tem de entrar aqui (test_waiver_revisao.py trava).
 REVISAO_TRAVADAS = ("id", "created_at", "expires_at", "flow", "account_id", "invite_id", "pilot_id", "client_id", "kind",
