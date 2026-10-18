@@ -236,8 +236,10 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     waivers = todos(con, """SELECT w.*, v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason
                             FROM waivers w LEFT JOIN waiver_voids v ON v.waiver_id = w.id
                             WHERE w.client_id=? ORDER BY w.sent_at DESC""", (cid,))
+    from command_center.providers import copia_waiver
     for w in waivers:
         w["links"] = _links(con, "waiver", w["id"])
+        w["copy"] = copia_waiver.ultima(con, w["id"]) if w["source"] == "urace" else None     # #114: a última cópia por e-mail
     box = bool(u.get("cargo"))               # mecânico/coach (#92): o card sem e-mail, IA e valores
     emails = [] if box else todos(con, "SELECT * FROM emails WHERE client_id=? ORDER BY last_at DESC LIMIT 50", (cid,))
     for e in emails:
@@ -1002,6 +1004,25 @@ def waiver_void(wid: int, dados: AnularIn, request: Request, u=Depends(auth.exig
     except wn.NaoAnula as e:
         raise HTTPException(409, str(e))
     return {"ok": True, "voided_at": v["at"], "voided_by": v["by_name"], "reason": v["reason"]}
+
+
+@r.post("/waivers/{wid}/copy")
+def waiver_copia(wid: int, request: Request, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """#114: reenviar a cópia da waiver assinada no próprio sistema. Vai sempre ao e-mail que assinou (`signer_email`);
+    a tela mostra esse e-mail antes do clique. O message-id (ou a falha) fica na trilha da waiver."""
+    from command_center.providers import copia_waiver
+    try:
+        res = copia_waiver.mandar(con, wid, "staff", por=u.get("name"), user_id=u["id"], ip=auth._ip(request),
+                                  user_agent=request.headers.get("user-agent"))
+    except LookupError:
+        raise HTTPException(404, "Só a waiver assinada no próprio sistema tem cópia por e-mail aqui.")
+    except copia_waiver.NaoEnvia as e:
+        raise HTTPException(409, str(e))
+    except copia_waiver.Cedo as e:
+        raise HTTPException(429, str(e))
+    if not res["ok"]:
+        raise HTTPException(503, f"A cópia não saiu ({res['error']}). Ficou registrado na trilha; tente de novo.")
+    return {"ok": True, "sent_to": res["sent_to"], "message_id": res["message_id"], "at": res["at"]}
 
 
 class ReenviarIn(BaseModel):

@@ -4434,5 +4434,16 @@
 "relatado pela tela": "reported by the page",
 "registrado pelo servidor": "recorded by the server",
 "depois de assinar": "after signing",
-"Trilha": "Trail"
+"Trilha": "Trail",
+"cópia por e-mail: ainda não saiu": "emailed copy: not sent yet",
+"cópia por e-mail para {0} em {1}": "copy emailed to {0} on {1}",
+"a cópia por e-mail não saiu em {0}": "the emailed copy failed on {0}",
+"Reenviar a cópia da waiver?": "Resend the waiver copy?",
+"Reenviar cópia": "Resend copy",
+"Vai para {0}, o e-mail que assinou, com o PDF assinado anexado. Sai do noreply@; a resposta cai no support@.": "It goes to {0}, the email that signed, with the signed PDF attached. It is sent from noreply@; replies go to support@.",
+"Cópia enviada para {0}.": "Copy sent to {0}.",
+"✉ Reenviar cópia": "✉ Resend copy",
+"Manda de novo o PDF assinado ao e-mail que assinou": "Sends the signed PDF again to the email that signed",
+"a cópia por e-mail não saiu": "emailed copy failed",
+"para {0}": "to {0}"
 }

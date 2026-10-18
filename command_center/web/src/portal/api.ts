@@ -91,7 +91,13 @@ export interface WaiverPiloto { driver_id: number; driver: string; kind: 'adult'
   waiver_id: number | null; signed_at: string | null; valid_until: string | null }
 export interface Waivers { enabled: boolean; drivers: WaiverPiloto[]
   /** #108: o e-mail da conta e se já foi confirmado por código */
-  email: string | null; email_verified: boolean }
+  email: string | null; email_verified: boolean
+  /** #114: quantas waivers a conta já assinou aqui (vigentes, vencidas e anuladas) */
+  signed_total?: number }
+/** #114: uma waiver da lista da conta, com a última cópia por e-mail (o destino mascarado). */
+export interface WaiverDaConta { id: number; kind: 'adult' | 'parental'; document: string; driver: string; signer_name: string
+  signed_at: string; valid_until: string; status: 'valid' | 'expired' | 'voided'; voided_at: string | null; signed_via: 'account' | 'invite'
+  copy: { status: 'sent' | 'failed'; at: string; to: string | null } | null; pdf: string }
 export interface WaiverModelo { kind: 'adult' | 'parental'; name: string; pages: number; text: string
   /** #105: a declaração do pai ou da mãe, com {minor} no lugar do nome */
   declaration: string | null }

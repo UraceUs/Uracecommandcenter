@@ -547,6 +547,8 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .portal-revisao-assinatura{display:block;max-width:100%;height:auto;max-height:120px;background:#fff;border:1px solid var(--glass-line-2);border-radius:10px}
 .portal-revisao-nome{min-height:40px}
 .portal-revisao-acoes .btn{min-height:44px}
+/* #114: a lista das waivers da conta */
+.portal-waivers{list-style:none;margin:0;padding:0}
 .portal-visual{background:none;border:0;padding:0;color:var(--accent-ink);font:inherit;cursor:pointer;text-decoration:underline;min-height:40px}
 .login .art .lema{position:relative;margin:0;font-family:var(--font-cond);font-weight:900;font-size:clamp(30px,3.4vw,50px);line-height:.95;text-transform:uppercase;
   letter-spacing:-.008em;color:var(--ink);text-shadow:0 8px 34px rgba(0,0,0,.7);max-width:12ch}

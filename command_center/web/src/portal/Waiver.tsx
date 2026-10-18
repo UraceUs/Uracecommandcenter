@@ -68,7 +68,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   const [f, setF] = useState({ typed_name: '', signature: '', read_and_agree: false, consent_esign: false, english_understood: false, relationship: '', guardian_declaration: false })
   const [erro, setErro] = useState<string | null>(null)
   const [indo, setIndo] = useState(false)
-  const [feita, setFeita] = useState<{ waiver_id: number; valid_until: string } | null>(null)
+  const [feita, setFeita] = useState<{ waiver_id: number; valid_until: string; copy_to?: string } | null>(null)
   // #107: as caixas só se liberam depois de o documento inteiro passar pela tela
   const [lido, setLido] = useState<{ em: string; modo: 'pdf_viewer' | 'pdf_opened_and_text' } | null>(null)
   const [semVisor, setSemVisor] = useState(false)
@@ -134,6 +134,8 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
     {topo}
     <div className="banner ok" role="status"><span className="bi" aria-hidden="true">✓</span><div className="grow">
       Signed. The waiver for {piloto.name} is valid until <b>{new Date(feita.valid_until + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</b>.</div></div>
+    {feita.copy_to && <p className="small" style={{ margin: 0 }}>A copy of the signed PDF is on its way to <b>{feita.copy_to}</b>. You can also find it
+      any time in <Link to="/portal/waivers">Waivers</Link>.</p>}
     <div className="row wrap" style={{ gap: 8 }}>
       <a className="btn primary" href={`${BASE}/waivers/${feita.waiver_id}/pdf`}>Download the signed PDF</a>
       <button className="btn" onClick={() => nav('/portal/drivers')}>Back to Drivers</button></div>

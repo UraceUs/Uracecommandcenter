@@ -32,7 +32,7 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
   const [enviado, setEnviado] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [indo, setIndo] = useState(false)
-  const [feita, setFeita] = useState<{ valid_until: string } | null>(null)
+  const [feita, setFeita] = useState<{ valid_until: string; copy_to?: string } | null>(null)
   const [rev, setRev] = useState<RevisaoWaiver | null>(null)          // #112: o resumo do passo 1
   const [nomeOk, setNomeOk] = useState(false)
   const [revisando, setRevisando] = useState(false)
@@ -72,6 +72,8 @@ export function ConviteWaiverPagina({ token }: { token: string }) {
     {topo}
     <div className="banner ok" role="status"><span className="bi" aria-hidden="true">✓</span><div className="grow">
       Signed. The waiver for {c.driver} is valid until <b>{dataUS(feita.valid_until)}</b>. URACE already has it on file.</div></div>
+    {feita.copy_to && <p className="small" style={{ margin: 0 }}>A copy of the signed PDF is on its way to <b>{feita.copy_to}</b>: keep that email.
+      This link stops working on {dataUS(c.expires_at)}.</p>}
     <div className="row wrap" style={{ gap: 8 }}><a className="btn primary" href={`${BASE}${caminho}/signed.pdf`}>Download the signed PDF</a></div>
   </div>
   if (fora) return <div className="stack" style={{ gap: 12 }}>

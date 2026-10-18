@@ -16,6 +16,8 @@ import { Link } from 'react-router-dom'
 import { useToast } from '../components/Toast'
 import { fmtDate, fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
+import { SituacaoDaCopia } from '../components/CopiaDaWaiver'
+import { useReenviarCopia, type CopiaW } from '../components/reenviarCopia'
 
 type Tom = 'warn' | 'info' | 'ok' | 'neutral' | 'accent' | 'crit'
 interface Per { open: boolean; spots: number; reason: string | null; capacity: number; used: number }
@@ -769,7 +771,8 @@ function Contas() {
 interface ModeloW { kind: 'adult' | 'parental'; templateId: string; name: string | null; pages: number | null; sha256: string | null; imported_at: string | null
   version: number | null }
 interface Assinada { id: number; client_id: number | null; signer_name: string; signer_email: string; minor_name: string | null; template: string
-  completed_at: string; expires_at: string; doc_sha256: string; voided_at: string | null; voided_by: string | null; void_reason: string | null }
+  completed_at: string; expires_at: string; doc_sha256: string; voided_at: string | null; voided_by: string | null; void_reason: string | null
+  copy?: CopiaW | null }
 /* #116: a conferência do aviso §744.301(3) no parental. O texto do aviso não está no sistema: é o que o advogado
  * aprovar, num arquivo no servidor. Sem ele, só informa; com ele, barra importar, ligar e assinar a parental. */
 interface Conferencia { configured: boolean; ok: boolean | null; reason: string; notice_pt?: number | null; body_pt?: number | null }
@@ -804,14 +807,14 @@ function AvisoDoParental({ a }: { a: Aviso744 }) {
 /* #111: a trilha de eventos de uma waiver assinada aqui (append-only e encadeada por hash). O que veio antes
  * de assinar está também no certificado do PDF; o que veio depois (anulada, PDF baixado) fica só aqui. */
 interface EventoW { id: number; at: string; event: string; phase: 'before' | 'signed' | 'after'; source: 'server' | 'client'
-  ip: string | null; user_agent: string | null }
+  ip: string | null; user_agent: string | null; detail?: Record<string, unknown> | null }
 interface TrilhaW { eventos: EventoW[]; cadeia: { ok: boolean; total: number | null; first_bad_id: number | null } }
 
 function rotuloDoEvento(ev: string) {
   const r: Record<string, string> = {
     invite_sent: tr("convite enviado por e-mail"), screen_opened: tr("abriu a tela de assinar"), pdf_delivered: tr("recebeu o PDF"),
     all_pages_viewed: tr("leu todas as páginas"), code_sent: tr("código enviado"), code_verified: tr("código confirmado"),
-    reviewed: tr("revisou o resumo"), signed: tr("assinou"), copy_emailed: tr("cópia por e-mail"), id_checked: tr("documento conferido no balcão"),
+    reviewed: tr("revisou o resumo"), signed: tr("assinou"), copy_emailed: tr("cópia por e-mail"), copy_email_failed: tr("a cópia por e-mail não saiu"), id_checked: tr("documento conferido no balcão"),
     voided: tr("anulada"), downloaded: tr("PDF baixado"), evidence_exported: tr("pacote de prova exportado") }
   return r[ev] || ev
 }
@@ -828,6 +831,9 @@ function TrilhaDaWaiver({ wid }: { wid: number }) {
       : <ol className="small stack" style={{ margin: 0, paddingLeft: 18, gap: 4 }}>{eventos.map(e => <li key={e.id} style={{ overflowWrap: 'anywhere' }}>
         <b>{rotuloDoEvento(e.event)}</b> · {fmtDateTime(e.at)} · {e.source === 'client' ? tr("relatado pela tela") : tr("registrado pelo servidor")}
         {e.phase === 'after' && <> · <Chip tone="neutral">{tr("depois de assinar")}</Chip></>}
+        {(e.event === 'copy_emailed' || e.event === 'copy_email_failed') && e.detail && <div>{tr("para {0}", String(e.detail.to || '—'))}
+          {e.detail.message_id ? <> · message-id <span className="mono">{String(e.detail.message_id)}</span></> : null}
+          {e.detail.error ? <> · {String(e.detail.error)}</> : null}</div>}
         <div className="muted">IP {e.ip || '—'} · {e.user_agent || '—'}</div></li>)}</ol>}
   </div>
 }
@@ -865,6 +871,7 @@ function WaiverNativa() {
   const l = useGet<WN>(`/site/waiver-nativa?limit=${POR_PAGINA}&offset=${offset}`)
   const [indo, setIndo] = useState(false)
   const [trilha, setTrilha] = useState<number | null>(null)
+  const reenviarCopia = useReenviarCopia(() => l.reload())          // #114
   async function importar() {
     setIndo(true)
     try { await api.post('/site/waiver-nativa/importar', {}); toast(tr("Modelos importados do DocuSign (só leitura lá)."), 'ok'); l.reload() }
@@ -914,10 +921,12 @@ function WaiverNativa() {
         : <div className="card"><div className="tbl">{a.itens.map(w => <div key={w.id}><div className="tr">
           <span className="mono small" style={{ width: 92 }}>{fmtDate(w.completed_at)}</span>
           <span className="grow">{w.minor_name || w.signer_name}<div className="small muted">{w.template === 'parental' ? tr("parental · por {0}", w.signer_name) : tr("adult")} {tr("· vale até")} {fmtDate(w.expires_at)}</div>
-            {w.voided_at && <div className="small"><Chip tone="crit">{tr("anulada")}</Chip> {tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div>}</span>
+            {w.voided_at && <div className="small"><Chip tone="crit">{tr("anulada")}</Chip> {tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div>}
+            <SituacaoDaCopia c={w.copy} /></span>
           {w.client_id ? <Link className="btn sm ghost" to={`/clients/${w.client_id}`}>{tr("Card")}</Link> : <span className="small muted">{tr("sem card")}</span>}
           <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`}>{tr("PDF")}</a>
           <button className="btn sm ghost" aria-expanded={trilha === w.id} onClick={() => setTrilha(trilha === w.id ? null : w.id)}>{tr("Trilha")}</button>
+          {!w.voided_at && <button className="btn sm ghost" onClick={() => reenviarCopia(w)}>{tr("✉ Reenviar cópia")}</button>}
           {!w.voided_at && can('MANAGER') && <button className="btn sm danger" onClick={() => anular(w)}>{tr("Anular")}</button>}
         </div>{trilha === w.id && <TrilhaDaWaiver wid={w.id} />}</div>)}</div></div>}
       {a.total > POR_PAGINA && <div className="row" style={{ gap: 8, marginTop: 10 }}>
