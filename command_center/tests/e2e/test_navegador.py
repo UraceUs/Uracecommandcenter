@@ -4649,7 +4649,9 @@ _MARCA = """() => { const d = document.querySelector('iframe.ed-iframe').content
   const n = d.querySelector('.ed-solta-antes, .ed-solta-depois, .ed-solta-dentro')
   if (!n) return null
   const r = n.getBoundingClientRect()
-  return { id: n.getAttribute('data-ed-w') || n.getAttribute('data-ed-col') || n.getAttribute('data-ed-s'), top: r.top, bottom: r.bottom,
+  // onde a linha azul fica: em cima da peça (antes), embaixo (depois) ou a peça inteira (dentro)
+  const linha = n.classList.contains('ed-solta-depois') ? r.bottom : r.top
+  return { id: n.getAttribute('data-ed-w') || n.getAttribute('data-ed-col') || n.getAttribute('data-ed-s'), top: r.top, bottom: r.bottom, linha,
            sec: n.closest('[data-ed-s]')?.getAttribute('data-ed-s'), topo: d.querySelector('header.topo').getBoundingClientRect().bottom,
            alto: d.defaultView.innerHeight } }"""
 
@@ -4685,7 +4687,7 @@ def test_editor_canva_arrastar_por_cima_do_cabecalho_preso_cai_no_que_se_ve(serv
     g.mouse.up()
     marca = g.evaluate("window.__marca")
     assert marca, "a linha azul aparece"
-    assert marca["top"] >= marca["topo"] - 1 and marca["top"] < marca["alto"], f"a linha fica à vista, embaixo do cabeçalho: {marca}"
+    assert marca["topo"] - 1 <= marca["linha"] < marca["alto"], f"a linha fica à vista, embaixo do cabeçalho: {marca}"
     assert marca["sec"] != "hds5", f"não cai na última seção: {marca}"
     _salvo(g)
     onde = [(sc["id"], k, i) for sc in _rascunho(g, servidor, pid)["itens"] for k, col in enumerate(sc["itens"])
@@ -4715,7 +4717,7 @@ def test_editor_canva_arrastar_por_cima_do_cabecalho_preso_cai_no_que_se_ve(serv
     g.mouse.move(pal["x"] + 20, pal["y"] + pal["height"] / 2, steps=4)          # de volta à paleta: não põe nada
     g.mouse.up()
     assert depois < antes - 20, f"a prévia rola para cima com o ponteiro no cabeçalho: {antes} -> {depois}"
-    assert marca and marca["top"] >= marca["topo"] - 1, f"a linha continua à vista: {marca}"
+    assert marca and marca["linha"] >= marca["topo"] - 1, f"a linha continua à vista: {marca}"
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
 

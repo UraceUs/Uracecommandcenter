@@ -628,7 +628,8 @@ export class Ponte {
     }
     // com o ponteiro em cima do cabeçalho preso (a prévia rolada por dentro), o alvo é o que aparece logo embaixo
     // dele: a linha azul fica à vista e a peça cai no que a pessoa vê, nunca na última seção da página
-    y = Math.max(y, this.topoPreso() + 1)
+    const preso = this.topoPreso()
+    y = Math.max(y, preso + 1)
     const el = comoElemento(this.doc.elementFromPoint(x, y))
     let sec = el?.closest('[data-ed-s]') || null
     if (!sec || !lista.includes(sec)) {        // fora das seções (cabeçalho, rodapé): a que passa nessa altura, ou a mais perto
@@ -656,6 +657,10 @@ export class Ponte {
       const b = filhos[i].getBoundingClientRect()
       if (y < b.top + b.height / 2) {
         if (filhos[i].getAttribute('data-ed-w') === ignorar) return { d: { tipo: 'col', sid, c: Number(ci), i }, marca: filhos[i], como: 'dentro' }
+        // a peça meio coberta pelo cabeçalho preso: a linha de cima ficaria escondida, então a peça cai depois dela
+        // (a linha de baixo está à vista)
+        if (b.top < preso && filhos[i + 1]?.getAttribute('data-ed-w') !== ignorar)
+          return { d: { tipo: 'col', sid, c: Number(ci), i: i + 1 }, marca: filhos[i], como: 'depois' }
         return { d: { tipo: 'col', sid, c: Number(ci), i }, marca: filhos[i], como: 'antes' }
       }
     }
