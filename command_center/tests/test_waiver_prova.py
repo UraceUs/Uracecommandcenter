@@ -24,7 +24,8 @@ from command_center.tests.test_waiver_nativa import (CONTA, P, SENHA, assina, cl
 API = "/ops/api"
 NOMES = ["signed.pdf", "audit.json", "waiver.json", "events.json", "events.csv", "audit_logs.json", "template.json",
          "template.pdf", "timestamp.tst", "timestamp.json", "seal-cert.pem", "seal-root.pem", "tsa/tsa-root.pem",
-         "certificate-of-completion.pdf", "system-description.md", "declaration-DRAFT.md", "VERIFY.md", "SHA256SUMS"]
+         "certificate-of-completion.pdf", "system-description.md", "declaration-DRAFT.md", "VERIFY.md", "verify_events.py",
+         "SHA256SUMS"]
 
 
 def _assinada(cli):  # noqa: F811
@@ -58,6 +59,35 @@ def _cert_x509(pem):
     return x509.load_pem_x509_certificate(pem)
 
 
+def _conferidores(arq):
+    """O `verify_events.py` do pacote e o trecho Python do passo 5 do VERIFY.md (têm de ser o mesmo código)."""
+    md = arq["VERIFY.md"].decode()
+    trecho = md.split("## 5.", 1)[1].split("```python\n", 1)[1].split("```", 1)[0]
+    assert trecho == arq["verify_events.py"].decode(), "o VERIFY.md mostra o mesmo conferidor que vai no pacote"
+    return [arq["verify_events.py"].decode(), trecho]
+
+
+def _roda(z, codigo):
+    """O conferidor num subprocesso, na pasta do ZIP extraído, como o advogado rodaria."""
+    import sys
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        z.extractall(d)
+        with open(os.path.join(d, "conferir.py"), "w", encoding="utf-8") as f:
+            f.write(codigo)
+        return subprocess.run([sys.executable, "-I", "conferir.py"], cwd=d, capture_output=True, text=True, timeout=60)
+
+
+def _mexe_no_evento(con, eid, **campos):
+    """Como quem tem uma cópia do banco sem as travas: muda o evento e REFAZ o hash dele (o próprio hash confere)."""
+    con.execute("DROP TRIGGER IF EXISTS waiver_events_no_update")
+    r = um(con, "SELECT * FROM waiver_events WHERE id=?", (eid,))
+    r.update(campos)
+    con.execute(f"UPDATE waiver_events SET {', '.join(k + '=?' for k in campos)}, hash=? WHERE id=?",
+                (*campos.values(), tw._hash(r["prev_hash"], r), eid))
+    con.commit()
+
+
 # ------------------------------------------------------------------ o que vai no ZIP
 def test_o_zip_traz_tudo_da_lista_e_o_sha256sums_confere(cli):  # noqa: F811
     wid, _ = _assinada(cli)
@@ -67,6 +97,7 @@ def test_o_zip_traz_tudo_da_lista_e_o_sha256sums_confere(cli):  # noqa: F811
     assert "etag" not in r.headers
     assert f'filename="URACE-waiver-{wid}-evidence.zip"' in r.headers["content-disposition"]
     assert r.headers["x-content-sha256"] == hashlib.sha256(r.content).hexdigest()
+    assert r.headers["x-evidence-integrity"] == "ok"
     z, arq = _arquivos(r.content)
     assert z.namelist() == NOMES, z.namelist()
     linhas = arq["SHA256SUMS"].decode().splitlines()
@@ -86,6 +117,12 @@ def test_o_zip_traz_tudo_da_lista_e_o_sha256sums_confere(cli):  # noqa: F811
     for e in ev["events"]:
         canon = json.dumps({k: e[k] for k in ev["chain"]["fields"]}, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
         assert hashlib.sha256(f"{e['prev_hash'] or ''}|{canon}".encode()).hexdigest() == e["hash"], e["event"]
+    assert ev["integrity"] == {"ok": True, "problems": []}
+    assert all(e["matches_sealed_record"] for e in ev["events"] if e["phase"] in ("before", "signed"))
+    for codigo in _conferidores(arq):                     # o verify_events.py e o trecho do VERIFY.md: tudo confere
+        p = _roda(z, codigo)
+        assert p.returncode == 0 and "ALL EVENTS CHECK OUT" in p.stdout, p.stdout + p.stderr
+    assert "no problem found" in arq["VERIFY.md"].decode() and "INTEGRITY WARNING" not in _cert(arq["certificate-of-completion.pdf"])
     nomes = [e["event"] for e in ev["events"]]
     for passo in ("pdf_delivered", "reviewed", "code_sent", "code_verified", "signed", "copy_emailed"):
         assert passo in nomes, (passo, nomes)
@@ -285,6 +322,10 @@ def test_a_declaracao_e_rascunho_para_o_advogado_e_a_descricao_leva_o_commit(cli
     commit = sistema.versao()["commit"]
     assert f"commit `{commit or 'unknown'}`" in desc
     ver = arq["VERIFY.md"].decode()
+    assert "same version of the system" in ver and "always produces byte-identical" not in ver
+    assert "same version of the system (commit)" in _cert(arq["certificate-of-completion.pdf"])
+    with open(pw.DOC_SISTEMA, encoding="utf-8") as f:
+        assert "same version of the system (commit)" in " ".join(f.read().split())
     for trecho in ("sha256sum -c SHA256SUMS", "pyhanko sign validate", "selo-waiver conferir signed.pdf --raiz seal-root.pem",
                    "openssl ts -verify -in timestamp.tst -token_in", w["doc_sha256"]):
         assert trecho in ver, trecho
@@ -365,3 +406,165 @@ def test_depois_de_trocar_o_selo_a_raiz_vem_de_dentro_do_pdf_assinado(cli, monke
     raiz = _cert_x509(arq["seal-root.pem"])
     assert sw._sha_der(raiz) == trilha["seal"]["root_cert_sha256"]
     assert sw.validar(arq["signed.pdf"], raiz=raiz, raizes_tsa_extra=[_cert_x509(arq["tsa/tsa-root.pem"])])["ok"]
+
+
+# ------------------------------------------------------------------ revisão do #115: a trilha contra a âncora
+def test_evento_de_antes_mexido_com_o_hash_refeito_aparece_como_elo_quebrado_e_contra_o_audit_json(cli):  # noqa: F811
+    wid, _ = _assinada(cli)
+    con = conectar()
+    rev = um(con, "SELECT id FROM waiver_events WHERE event='reviewed'")["id"]
+    assert um(con, "SELECT id FROM waiver_events WHERE id=?", (rev + 1,)), "o seguinte existe (o elo a conferir)"
+    _mexe_no_evento(con, rev, ip="203.0.113.9")
+    z, info = pw.montar(con, wid)
+    assert not info["integrity_ok"]
+    _z, arq = _arquivos(z)
+    ev = json.loads(arq["events.json"])
+    assert ev["chain"]["all_event_hashes_recompute"], "o hash refeito confere consigo mesmo: por isso a âncora"
+    assert ev["chain"]["whole_event_table_chain_intact_when_exported"] is False
+    assert ev["chain"]["first_broken_event_id"] == rev + 1 and ev["chain"]["previous_event_id"] == rev
+    probs = ev["integrity"]["problems"]
+    assert not ev["integrity"]["ok"]
+    assert any(f"chain broken between #{rev} and #{rev + 1}" in p for p in probs), probs
+    assert any(f"event #{rev} (reviewed) differs from the record made at signing" in p for p in probs), probs
+    marcado = next(e for e in ev["events"] if e["id"] == rev)
+    assert marcado["matches_sealed_record"] is False and marcado["ip"] == "203.0.113.9"
+    cert = _cert(arq["certificate-of-completion.pdf"])
+    assert "INTEGRITY WARNING" in cert and "DOES NOT MATCH THE RECORD MADE AT SIGNING" in cert
+    assert f"chain broken between #{rev} and #{rev + 1}" in cert
+    assert "INTEGRITY WARNING" in arq["VERIFY.md"].decode() and "no problem found" not in arq["VERIFY.md"].decode()
+    assert "[ATTORNEY: when this package was exported, URACE's system found records that do not match" in \
+        arq["declaration-DRAFT.md"].decode()
+    for codigo in _conferidores(arq):                     # e quem confere fora do sistema vê o mesmo
+        p = _roda(_z, codigo)
+        assert p.returncode == 1, p.stdout + p.stderr
+        assert f"chain broken between #{rev} and #{rev + 1}" in p.stdout and f"event #{rev} (reviewed) differs" in p.stdout
+        assert "PROBLEM(S) FOUND" in p.stdout
+
+
+def test_ultimo_evento_mexido_com_o_hash_refeito_aparece_contra_o_registro_da_anulacao(cli):  # noqa: F811
+    wid, _ = _assinada(cli)
+    h = equipe(cli, "ger@urace.us")
+    assert cli.post(f"{API}/waivers/{wid}/void", json={"reason": "assinada com o nascimento errado do piloto"},
+                    headers=h).status_code == 200
+    con = conectar()
+    v = um(con, "SELECT id FROM waiver_events WHERE event='voided'")["id"]
+    assert v == um(con, "SELECT MAX(id) AS id FROM waiver_events")["id"], "o último da tabela: nenhum elo depois dele"
+    det = json.loads(um(con, "SELECT detail FROM waiver_events WHERE id=?", (v,))["detail"])
+    _mexe_no_evento(con, v, detail=json.dumps({**det, "reason": "pedido do cliente"}, ensure_ascii=False, sort_keys=True))
+    z, info = pw.montar(con, wid)
+    _z, arq = _arquivos(z)
+    ev = json.loads(arq["events.json"])
+    assert ev["chain"]["whole_event_table_chain_intact_when_exported"], "a cadeia sozinha não pega o último"
+    assert not info["integrity_ok"] and any("(voided) differs from the void record" in p for p in ev["integrity"]["problems"])
+    assert next(e for e in ev["events"] if e["id"] == v)["matches_independent_record"] is False
+    assert _baixa(cli, wid).headers["x-evidence-integrity"] == "problems", "a tela avisa quem baixou"
+    assert json.loads(arq["waiver.json"])["voided"]["reason"] == "assinada com o nascimento errado do piloto"
+    cert = _cert(arq["certificate-of-completion.pdf"])
+    assert "INTEGRITY WARNING" in cert and "DOES NOT MATCH THIS EVENT'S OWN RECORD" in cert
+    for codigo in _conferidores(arq):
+        p = _roda(_z, codigo)
+        assert p.returncode == 1 and f"event #{v} (voided) differs from the void record" in p.stdout, p.stdout + p.stderr
+
+
+# ------------------------------------------------------------------ revisão do #115: o que entra da conta
+def test_conta_com_dois_pilotos_nada_de_uma_waiver_no_pacote_da_outra(cli):  # noqa: F811
+    liga(cli)
+    hc, (a, b) = cliente(cli, pilotos=(("Leo Santos", "2014-05-01"), ("Ana Santos", "2016-03-03")))
+    r1 = assina(cli, hc, a)
+    assert r1.status_code == 201, r1.text
+    c = conectar(); c.execute("UPDATE portal_codes SET created_at='2000-01-01T00:00:00Z'"); c.commit(); c.close()
+    r2 = assina(cli, hc, b)
+    assert r2.status_code == 201, r2.text
+    w1, w2 = r1.json()["waiver_id"], r2.json()["waiver_id"]
+    con = conectar()
+    assina1 = um(con, "SELECT at FROM audit_logs WHERE event='portal.waiver.sign' AND json_extract(detail, '$.waiver')=?",
+                 (w1,))["at"]
+    for wid, meu, outro, outra in ((w1, a, b, w2), (w2, b, a, w1)):
+        _z, arq = _arquivos(pw.montar(con, wid)[0])
+        linhas = json.loads(arq["audit_logs.json"])["rows"]
+        pilotos = {x["detail"].get("piloto") for x in linhas if x["event"].startswith("portal.driver.")}
+        assert pilotos == {meu}, (wid, pilotos)
+        assert [x["detail"]["waiver"] for x in linhas if x["event"] == "portal.waiver.sign"] == [wid]
+        assert str(outra) not in {x["entity_id"] for x in linhas if x["entity_type"] == "waiver"}
+        assert {e["waiver_id"] for e in json.loads(arq["events.json"])["events"]} <= {wid, None}
+        assert {e["pilot_id"] for e in json.loads(arq["events.json"])["events"]} <= {meu, None}
+        if wid == w2:                     # a sessão da waiver do irmão (antes da assinatura dela) não entra nesta
+            sessao = [x for x in linhas if x["event"] in pw.EVENTOS_DA_CONTA]
+            assert sessao and all(x["at"] > assina1 for x in sessao), [(x["event"], x["at"]) for x in sessao]
+        assert {"portal.signup", "portal.email.verified"} <= {x["event"] for x in linhas}, "o cadastro entra sempre"
+
+
+def test_o_que_a_conta_fez_depois_de_assinar_ou_muito_antes_nao_entra(cli):  # noqa: F811
+    from command_center.db import auditar
+    wid, _ = _assinada(cli)
+    con = conectar()
+    w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
+    conta = json.loads(w["audit"])["account_id"]
+    auditar(con, "portal.login", f"portal:{conta}", entity_type="portal_account", entity_id=conta, detail={"marca": "depois"})
+    con.execute("""INSERT INTO audit_logs (at, actor, event, entity_type, entity_id, detail) VALUES
+                   ('2020-01-01T10:00:00.000Z', ?, 'portal.login', 'portal_account', ?, '{"marca": "antigo"}')""",
+                (f"portal:{conta}", str(conta)))
+    con.commit()
+    _z, arq = _arquivos(pw.montar(con, wid)[0])
+    marcas = {(x["detail"] or {}).get("marca") for x in json.loads(arq["audit_logs.json"])["rows"] if isinstance(x["detail"], dict)}
+    assert "depois" not in marcas, "o login depois da assinatura não é desta assinatura"
+    assert "antigo" not in marcas, "conta antiga não traz anos de login"
+
+
+def test_detalhe_com_chave_proibida_ou_caminho_do_servidor_nao_sai(cli):  # noqa: F811
+    from command_center.db import auditar
+    wid, _ = _assinada(cli)
+    con = conectar()
+    auditar(con, "waiver.teste", "system", entity_type="waiver", entity_id=wid,
+            detail={"token": "segredo-do-token-01", "Cookie": "cp_session=segredo-do-cookie-02",
+                    "dentro": {"password": "segredo-da-senha-03", "ok": "fica"},
+                    "lista": [{"link": "https://my.urace.us/ops/portal/invite/segredoDoLink04.selo"}],
+                    "note": "veja https://my.urace.us/ops/portal/invite/segredoDoLink05.selo agora",
+                    "reason": "falta seal-key.pem em /home/urace/.urace/waivers/selo (rode o criar)"})
+    con.commit()
+    _z, arq = _arquivos(pw.montar(con, wid)[0])
+    linha = next(x for x in json.loads(arq["audit_logs.json"])["rows"] if x["event"] == "waiver.teste")
+    assert linha["detail"] == {"dentro": {"ok": "fica"}, "lista": [{}], "note": "veja [invitation link removed] agora",
+                               "reason": "falta seal-key.pem em [server path] (rode o criar)"}, linha["detail"]
+    for dados in arq.values():
+        assert b"segredo-do-token-01" not in dados and b"segredo-do-cookie-02" not in dados
+        assert b"segredo-da-senha-03" not in dados and b"segredoDoLink04" not in dados and b"segredoDoLink05" not in dados
+        assert b"/home/urace/" not in dados
+
+
+def test_o_motivo_do_selo_fora_vai_sem_o_caminho_da_pasta(cli, tmp_path, monkeypatch):  # noqa: F811
+    from command_center.tests.test_waiver_nativa import confirma_email
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    cli.get(f"{P}/waivers/model/parental/pdf")
+    confirma_email(cli, hc)
+    vazia = tmp_path / "sem-selo"
+    vazia.mkdir()
+    selo_de_verdade = os.environ["CC_WAIVER_SEAL_DIR"]
+    monkeypatch.setenv("CC_WAIVER_SEAL_DIR", str(vazia))
+    from command_center.tests.test_waiver_selo import _corpo
+    assert cli.post(f"{P}/drivers/{pid}/waiver/review", json=_corpo(), headers=hc).status_code == 503
+    monkeypatch.setenv("CC_WAIVER_SEAL_DIR", selo_de_verdade)
+    r = assina(cli, hc, pid)
+    assert r.status_code == 201, r.text
+    con = conectar()
+    cru = um(con, "SELECT detail FROM audit_logs WHERE event='waiver.seal_failed'")["detail"]
+    assert str(vazia) in cru, "o motivo, na auditoria do servidor, diz a pasta"
+    _z, arq = _arquivos(pw.montar(con, r.json()["waiver_id"])[0])
+    falha = next(x for x in json.loads(arq["audit_logs.json"])["rows"] if x["event"] == "waiver.seal_failed")
+    assert "[server path]" in falha["detail"]["reason"] and str(vazia) not in json.dumps(falha)
+    assert str(tmp_path).encode() not in arq["audit_logs.json"]
+
+
+def test_as_mensagens_dos_409_estao_traduzidas():
+    with open(os.path.join(os.path.dirname(__file__), "..", "web", "src", "i18n", "en.json"), encoding="utf-8") as f:
+        dic = json.load(f)
+    for m in pw.MENSAGENS:
+        assert m in dic and dic[m] != m, m
+
+
+def test_a_declaracao_diz_o_que_e_imutavel_de_fato(cli):  # noqa: F811
+    wid, _ = _assinada(cli)
+    dec = _arquivos(pw.montar(conectar(), wid)[0])[1]["declaration-DRAFT.md"].decode()
+    assert "cannot be changed or deleted" not in dec
+    assert "link to a client card" in dec and "hides it from lists" in dec

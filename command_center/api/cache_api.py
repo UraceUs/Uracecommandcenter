@@ -5,8 +5,9 @@ GET 200 da API sai com `ETag` (hash do corpo) e `Cache-Control: private, no-cach
 navegador guarda, pergunta de novo com `If-None-Match` e, se nada mudou, recebe **304 sem
 corpo**. O dado continua sempre conferido com o servidor (no-cache = revalidar sempre; com a
 sessão caída a resposta é 401 e o guardado não aparece), e `private` impede cache
-compartilhado (proxy, CDN). A rota que já diz `no-store` (#115: o PDF assinado, o pacote de prova da waiver)
-passa como está: nada dela fica guardado no navegador.
+compartilhado (proxy, CDN). O arquivo (não JSON) cuja rota já diz `no-store` (#115: o PDF assinado, o pacote de
+prova da waiver) sai `private, no-store`, sem ETag: nada dele fica guardado no navegador. A resposta JSON segue com
+ETag e 304 mesmo que a rota peça `no-store` (as telas que se atualizam sozinhas continuam leves).
 
 É um middleware ASGI puro, registrado por dentro de todos: vê o corpo inteiro, antes do gzip.
 
@@ -22,6 +23,10 @@ MAX_POR_PAGINA = 500
 
 def _etag(corpo):
     return 'W/"' + hashlib.sha1(corpo).hexdigest()[:20] + '"'
+
+
+def _e_json(tipo):
+    return tipo.startswith(b"application/json") or tipo.startswith(b"application/problem+json")
 
 
 def _bate(if_none_match, etag):
@@ -55,9 +60,10 @@ class ETagAPI:
                 return
             corpo = b"".join(partes)
             proprio = next((v for k, v in inicio["headers"] if k.lower() == b"cache-control"), b"")
-            if b"no-store" in proprio.lower() and inicio["status"] == 200:
-                # #115: a rota que pede `no-store` (o PDF assinado, o pacote de prova) não fica no navegador nem ganha ETag;
-                # e continua `private` (nunca em cache compartilhado)
+            tipo = next((v for k, v in inicio["headers"] if k.lower() == b"content-type"), b"").lower()
+            if b"no-store" in proprio.lower() and inicio["status"] == 200 and not _e_json(tipo):
+                # #115: o ARQUIVO que pede `no-store` (o PDF assinado, o pacote de prova, o guia em .md) não fica no
+                # navegador nem ganha ETag; e continua `private` (nunca em cache compartilhado). JSON segue com ETag/304.
                 cab = [(k, v) for k, v in inicio["headers"] if k.lower() != b"cache-control"]
                 valor = proprio if b"private" in proprio.lower() else b"private, " + proprio
                 await send({**inicio, "headers": cab + [(b"cache-control", valor)]})

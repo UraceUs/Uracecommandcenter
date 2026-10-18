@@ -961,7 +961,8 @@ def waiver_pacote_de_prova(request: Request, wid: int = Path(..., ge=1, le=2**63
         raise HTTPException(409, str(e))
     return Resposta(content=z, media_type="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="URACE-waiver-{wid}-evidence.zip"',
-                             "Cache-Control": "no-store", "X-Content-SHA256": info["sha256"]})
+                             "Cache-Control": "no-store", "X-Content-SHA256": info["sha256"],
+                             "X-Evidence-Integrity": "ok" if info["integrity_ok"] else "problems"})
 
 
 class LixeiraIn(BaseModel):

@@ -17,11 +17,17 @@ Este módulo junta, num ZIP só, tudo o que o sistema guardou da waiver `wid`, a
 | `certificate-of-completion.pdf` | o certificado avulso, com todos os eventos, inclusive os de depois de assinar |
 | `system-description.md` | `docs/waiver-esign-system.md`, com o commit em execução |
 | `declaration-DRAFT.md` | a declaração FRE 902(11)/(13) e §90.902(11) preenchida, **rascunho para o advogado** |
-| `VERIFY.md` e `SHA256SUMS` | o passo a passo para conferir e o hash de cada arquivo |
+| `VERIFY.md`, `verify_events.py` e `SHA256SUMS` | o passo a passo, o conferidor dos eventos e o hash de cada arquivo |
 
-- **Nunca** vai a chave do selo, cookie, token, senha, link do convite ou corpo de e-mail (`_limpo`).
+- **Nunca** vai a chave do selo, cookie, token, senha, link do convite, corpo de e-mail ou caminho de pasta do servidor
+  (`_limpo`).
+- **A âncora da trilha** (revisão do #115): o hash de cada evento se refaz com o próprio conteúdo; quem mexe numa linha
+  e refaz o hash dela passaria. Por isso os eventos de antes e o `signed` são comparados com o gravado na assinatura
+  (`audit.json`) e os de depois com o registro de cada um (`_conferir`). O que não bate vai, com destaque, para o
+  `events.json`, o certificado avulso, o VERIFY.md e a declaração.
 - **Determinístico**: datas fixas no ZIP, ordem fixa, certificado com `invariant` do reportlab e nenhuma hora "de
-  agora" dentro dos arquivos. Os mesmos dados dão os mesmos bytes. Por isso o pacote **não lista as exportações
+  agora" dentro dos arquivos. O mesmo registro e a mesma versão do sistema (commit) dão os mesmos bytes; outro commit
+  muda a descrição do sistema e a declaração (e o hash do ZIP), não os registros. Por isso o pacote **não lista as exportações
   anteriores** (`evidence_exported` e `waiver.evidence_export`): elas ficam no sistema, com o hash do ZIP de cada uma,
   e exportar de novo o mesmo registro dá o mesmo hash.
 - Cada exportação grava o evento `evidence_exported` (trilha, #111) e a auditoria `waiver.evidence_export`, com o
@@ -47,8 +53,11 @@ DOC_SISTEMA = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.pa
                            "docs", "waiver-esign-system.md")
 NAO_LISTA = ("evidence_exported",)              # a exportação não entra no pacote (determinístico)
 
-# O que da conta entra no audit_logs.json: o que mostra quem é a pessoa e como ela chegou a assinar.
-EVENTOS_DA_CONTA = ("portal.signup", "portal.login", "portal.email.verified", "portal.code.sent", "portal.password",
+# O que da conta entra no audit_logs.json: o que mostra quem é a pessoa e como ela chegou a assinar. O cadastro e a
+# confirmação do e-mail entram sempre (até a assinatura); o resto, só na janela desta assinatura (`_janela_da_conta`).
+SEMPRE_DA_CONTA = ("portal.signup", "portal.email.verified")
+JANELA_HORAS = 24
+EVENTOS_DA_CONTA = ("portal.login", "portal.code.sent", "portal.password",
                     "portal.password.reset.sent", "portal.password.reset", "portal.account.update",
                     "portal.waiver.document_view", "waiver.seal_failed")
 EVENTOS_DO_PILOTO = ("portal.driver.create", "portal.driver.update", "portal.driver.birth_date_locked")
@@ -58,6 +67,63 @@ CHAVES_PROIBIDAS = {"token", "token_hash", "cookie", "cookies", "password", "sen
                     "csrf", "session", "session_id", "link", "invite_link", "url_do_convite", "body", "html", "text",
                     "code", "sign_code", "code_hash", "authorization"}
 _LINK_CONVITE = re.compile(r"\S*/portal/invite/[A-Za-z0-9_.~-]+\S*")
+# revisão do #115: o motivo de `waiver.seal_failed` diz em que pasta do servidor faltou o selo; o caminho não sai
+_CAMINHO = re.compile(r"(?<![\w/:.])(?:~|/(?:home|root|var|opt|tmp|srv|etc|usr|mnt|private|Users))(?:/[^\s,;:()'\"]*)?")
+
+
+# O conferidor dos eventos que vai no pacote (`verify_events.py`) e no VERIFY.md: só a biblioteca padrão do Python.
+# Revisão do #115: além do hash de cada evento, o elo entre ids seguidos, os eventos de antes e o `signed` contra o que
+# foi gravado na assinatura (audit.json) e a anulação contra o registro dela (waiver.json).
+SCRIPT_EVENTOS = """import hashlib, json, sys
+pkg = json.load(open('events.json', encoding='utf-8'))
+sealed = json.load(open('audit.json', encoding='utf-8'))
+record = json.load(open('waiver.json', encoding='utf-8'))
+fields = pkg['chain']['fields']
+by_id = {e['id']: e for e in pkg['events']}
+problems, prev = [], None
+for e in pkg['events']:
+    canon = json.dumps({k: e[k] for k in fields}, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    if hashlib.sha256(f"{e['prev_hash'] or ''}|{canon}".encode('utf-8')).hexdigest() != e['hash']:
+        problems.append(f"event #{e['id']} ({e['event']}): its hash does not match its content")
+    if prev is not None and e['id'] == prev['id'] + 1 and e['prev_hash'] != prev['hash']:
+        problems.append(f"chain broken between #{prev['id']} and #{e['id']}")
+    prev = e
+groups = sealed.get('events') or []
+covered = [i for g in groups for i in (g.get('ids') or [g.get('id')])]
+for g in groups:
+    ids = g.get('ids') or [g.get('id')]
+    for i in ids:
+        e = by_id.get(i)
+        if e is None:
+            problems.append(f"event #{i}, recorded at signing, is missing")
+        elif (e['event'], e['source'], e['ip'], e['user_agent']) != (g['event'], g['source'], g['ip'], g['user_agent']):
+            problems.append(f"event #{i} ({e['event']}) differs from the record made at signing (audit.json)")
+    last = by_id.get(ids[-1])
+    if last is not None and last['hash'] != g['hash']:
+        problems.append(f"event #{ids[-1]} ({last['event']}): hash differs from the record made at signing (audit.json)")
+if covered and sealed.get('events_chain_hash') and (by_id.get(covered[-1]) or {}).get('hash') != sealed['events_chain_hash']:
+    problems.append('the last event before signing does not match events_chain_hash in audit.json')
+for e in pkg['events']:
+    d = json.loads(e['detail']) if e['detail'] else {}
+    if e['event'] == 'signed' and (d.get('document_sha256') != sealed.get('document_sha256')
+                                   or (groups and list(d.get('covers') or []) != covered)):
+        problems.append(f"event #{e['id']} (signed) differs from the record made at signing (audit.json)")
+    if e['event'] == 'voided' and (record.get('voided') or {}).get('reason') != d.get('reason'):
+        problems.append(f"event #{e['id']} (voided) differs from the void record in waiver.json")
+for p in problems:
+    print('PROBLEM:', p)
+print('ALL EVENTS CHECK OUT' if not problems else f'{len(problems)} PROBLEM(S) FOUND')
+sys.exit(1 if problems else 0)
+"""
+
+
+# As mensagens dos 409 (a tela mostra com tr(): estão no en.json, test_waiver_prova.py trava)
+SO_NATIVA = ("Só a waiver assinada no próprio sistema tem pacote de prova. A do DocuSign se prova pelo certificado do "
+             "DocuSign.")
+SEM_PDF = "O PDF desta waiver não está no servidor: o pacote não sai sem ele."
+PDF_MUDOU = ("O PDF desta waiver no servidor não bate com o hash gravado na assinatura: o pacote não sai. Restaure o "
+             "arquivo do backup (Biblioteca) e tente de novo.")
+MENSAGENS = (SO_NATIVA, SEM_PDF, PDF_MUDOU)
 
 
 class NaoExporta(Exception):
@@ -84,7 +150,7 @@ def _limpo(v):
     if isinstance(v, list):
         return [_limpo(x) for x in v]
     if isinstance(v, str):
-        return _LINK_CONVITE.sub("[invitation link removed]", v)
+        return _CAMINHO.sub("[server path]", _LINK_CONVITE.sub("[invitation link removed]", v))
     return v
 
 
@@ -120,8 +186,7 @@ def _waiver(con, wid):
     if not w:
         raise LookupError("waiver")
     if w.get("source") != "urace" or w.get("status") != "completed":
-        raise NaoExporta("Só a waiver assinada no próprio sistema tem pacote de prova. A do DocuSign se prova pelo "
-                         "certificado do DocuSign.")
+        raise NaoExporta(SO_NATIVA)
     return w
 
 
@@ -130,10 +195,9 @@ def _pdf_assinado(w):
         with open(w["pdf_path"], "rb") as f:
             pdf = f.read()
     except (OSError, TypeError):
-        raise SemArquivo("O PDF desta waiver não está no servidor: o pacote não sai sem ele.")
+        raise SemArquivo(SEM_PDF)
     if _sha(pdf) != w["doc_sha256"]:
-        raise SemArquivo("O PDF desta waiver no servidor não bate com o hash gravado na assinatura: o pacote não sai. "
-                         "Restaure o arquivo do backup (Biblioteca) e tente de novo.")
+        raise SemArquivo(PDF_MUDOU)
     return pdf
 
 
@@ -160,26 +224,124 @@ def _eventos(con, wid):
     return saida
 
 
-def _cadeia(con, eventos):
+def _do_audit(con, wid, evento):
+    return [(r, _detalhe(r["detail"]) or {}) for r in
+            todos(con, "SELECT * FROM audit_logs WHERE entity_type='waiver' AND entity_id=? AND event=? ORDER BY id",
+                  (str(wid), evento))]
+
+
+def _conferir(con, w, trilha, eventos, anulacao):
+    """Revisão do #115: o hash de cada evento se refaz com o próprio conteúdo, então quem mexe numa linha e refaz o hash
+    dela passa nessa conta. A âncora é o que foi gravado na hora da assinatura (`audit.json`, na linha imutável da waiver
+    e na página selada do PDF): os eventos de antes e o `signed` são comparados com ela; os de depois, com o registro
+    próprio de cada um (`waiver_voids`, a auditoria do balcão e da cópia). Marca cada evento e devolve os problemas."""
+    problemas = []
+    grupos = trilha.get("events") or []
+    do_grupo = {i: g for g in grupos for i in (g.get("ids") or [g.get("id")])}
+    cobertos = [i for g in grupos for i in (g.get("ids") or [g.get("id")])]
+    por_id = {e["id"]: e for e in eventos}
+    ant = None
+    for e in eventos:
+        if not e["hash_recomputes"]:
+            problemas.append(f"event #{e['id']} ({e['event']}): its hash does not match its content")
+        if ant is not None and e["id"] == ant["id"] + 1 and e["prev_hash"] != ant["hash"]:
+            problemas.append(f"chain broken between #{ant['id']} and #{e['id']}: event #{ant['id']} was changed after it "
+                             "was recorded")
+        ant = e
+        e["matches_sealed_record"] = None
+        e["matches_independent_record"] = None
+        if e["phase"] == "before" and grupos:
+            g = do_grupo.get(e["id"])
+            ok = bool(g) and (e["event"], e["source"], e["ip"], e["user_agent"]) == \
+                (g.get("event"), g.get("source"), g.get("ip"), g.get("user_agent"))
+            ids = (g.get("ids") or [g.get("id")]) if g else []
+            if ok and ids and e["id"] == ids[0]:
+                ok = e["at_utc"] == g.get("at_utc")
+            if ok and ids and e["id"] == ids[-1]:
+                ok = e["hash"] == g.get("hash") and (e["at_utc"] == g.get("last_at_utc", g.get("at_utc")))
+            if ok and cobertos and e["id"] == cobertos[-1] and trilha.get("events_chain_hash"):
+                ok = e["hash"] == trilha["events_chain_hash"]
+            e["matches_sealed_record"] = ok
+            if not ok:
+                problemas.append(f"event #{e['id']} ({e['event']}) differs from the record made at signing (audit.json)")
+        elif e["phase"] == "signed":
+            d = _detalhe(e["detail"]) or {}
+            ok = (d.get("document_sha256") == w["doc_sha256"] == trilha.get("document_sha256")
+                  and d.get("template_sha256") == trilha.get("template_sha256")
+                  and e["signature_id"] == trilha.get("signature_id")
+                  and (not grupos or list(d.get("covers") or []) == cobertos))
+            e["matches_sealed_record"] = ok
+            if not ok:
+                problemas.append(f"event #{e['id']} (signed) differs from the record made at signing (audit.json)")
+        elif e["event"] == "voided":
+            d = _detalhe(e["detail"]) or {}
+            ok = bool(anulacao) and d.get("reason") == anulacao["reason"] and d.get("by") == anulacao["by_name"]
+            e["matches_independent_record"] = ok
+            if not ok:
+                problemas.append(f"event #{e['id']} (voided) differs from the void record (waiver_voids, in waiver.json)")
+        elif e["event"] in ("id_checked", "id_check_failed"):
+            d = _detalhe(e["detail"]) or {}
+            a = next((x for _r, x in _do_audit(con, w["id"], "waiver.id_check") if x.get("event_id") == e["id"]), None)
+            ok = a is not None and all(a.get(k) == d.get(k) for k in ("document_type", "name_matches", "minor_age_matches"))
+            e["matches_independent_record"] = ok
+            if not ok:
+                problemas.append(f"event #{e['id']} ({e['event']}) differs from its audit-log row (waiver.id_check)")
+        elif e["event"] == "copy_emailed":
+            d = _detalhe(e["detail"]) or {}
+            ok = any(x.get("message_id") == d.get("message_id") for _r, x in _do_audit(con, w["id"], "waiver.copy.emailed"))
+            e["matches_independent_record"] = ok
+            if not ok:
+                problemas.append(f"event #{e['id']} (copy_emailed) differs from its audit-log row (waiver.copy.emailed)")
+    for i in cobertos:
+        if i not in por_id:
+            problemas.append(f"event #{i}, recorded at signing (audit.json), is missing from the event trail")
+    return problemas
+
+
+def _cadeia_toda(con):
+    """A tabela inteira de eventos, elo por elo: o primeiro problema, dito com os dois ids (revisão do #115: o evento
+    mexido e com o hash refeito aparece como o elo quebrado entre ele e o seguinte)."""
     from command_center.providers import trilha_waiver as tw
-    v = tw.verificar(con)
+    anterior, ant_id = None, None
+    for r in con.execute(f"SELECT id, prev_hash, hash, {', '.join(tw._CAMPOS)} FROM waiver_events ORDER BY id"):
+        r = dict(r)
+        if tw._hash(r["prev_hash"], r) != r["hash"]:
+            return {"ok": False, "first_broken_event_id": r["id"], "previous_event_id": ant_id,
+                    "problem": f"event #{r['id']} does not match its own hash: it was changed after it was recorded"}
+        if r["prev_hash"] != anterior:
+            return {"ok": False, "first_broken_event_id": r["id"], "previous_event_id": ant_id,
+                    "problem": f"chain broken between #{ant_id} and #{r['id']}: event #{ant_id} was changed after it was "
+                               "recorded, or events between them were removed"}
+        anterior, ant_id = r["hash"], r["id"]
+    return {"ok": True, "first_broken_event_id": None, "previous_event_id": None, "problem": None}
+
+
+def _cadeia(con, eventos, problemas):
+    from command_center.providers import trilha_waiver as tw
+    v = _cadeia_toda(con)
+    if not v["ok"] and v["problem"] not in problemas:
+        problemas.append(f"whole event table: {v['problem']}")
     return {"algorithm": "hash = SHA-256( prev_hash + '|' + canonical JSON of the event fields ); canonical JSON = "
                          "json.dumps({field: value for the fields listed}, sort_keys=True, separators=(',', ':'), "
                          "ensure_ascii=False); prev_hash is empty for the first event of the whole table",
             "fields": list(tw._CAMPOS), "events_in_package": len(eventos),
             "all_event_hashes_recompute": all(e["hash_recomputes"] for e in eventos),
             "whole_event_table_chain_intact_when_exported": v["ok"],
-            "first_broken_event_id": v["first_bad_id"],
-            "note": "Each event's prev_hash is the hash of the event recorded just before it in URACE's whole event "
-                    "table (which also holds other people's waivers, not included here). The whole table was "
-                    "re-verified, link by link, when this package was exported."}
+            "first_broken_event_id": v["first_broken_event_id"], "previous_event_id": v["previous_event_id"],
+            "whole_table_problem": v["problem"],
+            "note": "A hash that recomputes only shows the event matches itself. The anchors are the record made at signing "
+                    "(audit.json: the events before the signature, their hashes and events_chain_hash, also printed on the "
+                    "sealed PDF) and, for the events after signing, their own records (waiver.json, audit_logs.json). Each "
+                    "event's prev_hash is the hash of the event recorded just before it in URACE's whole event table (which "
+                    "also holds other people's waivers, not included here); the whole table was re-verified, link by link, "
+                    "when this package was exported."}
 
 
 def _csv(eventos):
     buf = io.StringIO()
     cols = ("id", "phase", "event", "label", "at_utc", "at_florida", "flow", "source", "ip", "user_agent", "account_id",
             "invite_id", "pilot_id", "client_id", "kind", "template_version_id", "waiver_id", "signature_id", "detail",
-            "prev_hash", "hash", "hash_recomputes")
+            "prev_hash", "hash", "hash_recomputes", "matches_sealed_record", "matches_independent_record")
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(cols)
     for e in eventos:
@@ -196,12 +358,15 @@ def _auditoria(con, w, trilha):
                             AND event<>'waiver.evidence_export'""", (str(wid),))
     conta = trilha.get("account_id")
     if conta:
-        m1, m2 = ",".join("?" * len(EVENTOS_DA_CONTA)), ",".join("?" * len(EVENTOS_DO_PILOTO))
+        m0, m1, m2 = (",".join("?" * len(x)) for x in (SEMPRE_DA_CONTA, EVENTOS_DA_CONTA, EVENTOS_DO_PILOTO))
+        desde = _janela_da_conta(con, w, trilha)
         linhas += todos(con, f"""SELECT * FROM audit_logs WHERE entity_type='portal_account' AND entity_id=? AND (
-                                   (event IN ({m1}) AND at <= ?)
+                                   (event IN ({m0}) AND at <= ?)
+                                   OR (event IN ({m1}) AND at > ? AND at <= ?)
                                    OR (event='portal.waiver.sign' AND json_extract(detail, '$.waiver') = ?)
                                    OR (event IN ({m2}) AND json_extract(detail, '$.piloto') = ?))""",
-                        (str(conta), *EVENTOS_DA_CONTA, w["completed_at"], wid, *EVENTOS_DO_PILOTO, trilha.get("driver_id")))
+                        (str(conta), *SEMPRE_DA_CONTA, w["completed_at"], *EVENTOS_DA_CONTA, desde, w["completed_at"], wid,
+                         *EVENTOS_DO_PILOTO, trilha.get("driver_id")))
     convite = trilha.get("invitation_id")
     if convite:
         linhas += todos(con, """SELECT * FROM audit_logs WHERE (entity_type='waiver_invite' AND entity_id=?)
@@ -217,6 +382,20 @@ def _auditoria(con, w, trilha):
                              "user_id": r["user_id"], "entity_type": r["entity_type"], "entity_id": r["entity_id"],
                              "ip": r["ip"], "detail": _detalhe(r["detail"])}))
     return saida
+
+
+def _janela_da_conta(con, w, trilha):
+    """Desde quando a parte da conta conta esta assinatura (revisão do #115): o mais tarde entre a assinatura anterior
+    da conta (a sessão da waiver do irmão não entra na deste) e 24 h antes do primeiro passo que esta assinatura cobre
+    (conta antiga não traz anos de login)."""
+    from datetime import timedelta
+    ant = um(con, """SELECT MAX(at) AS at FROM audit_logs WHERE entity_type='portal_account' AND entity_id=?
+                     AND event='portal.waiver.sign' AND at < ?""", (str(trilha.get("account_id")), w["completed_at"]))["at"]
+    grupos = trilha.get("events") or []
+    primeiro = min((g.get("at_utc") for g in grupos if g.get("at_utc")), default=None) or w["completed_at"]
+    t = datetime.fromisoformat(str(primeiro).replace("Z", "+00:00")) - timedelta(hours=JANELA_HORAS)
+    inicio = t.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    return max(inicio, ant) if ant else inicio
 
 
 def _modelo(con, w, trilha):
@@ -311,7 +490,7 @@ def _carimbo(con, w, assinatura):
 
 
 # ------------------------------------------------------------------ o certificado avulso
-def _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo):
+def _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo, problemas):
     """O certificado de conclusão avulso (inglês: vai para o tribunal), com todos os eventos, inclusive os de depois de
     assinar. `invariant=1`: o mesmo registro dá o mesmo PDF (sem data de criação nem id aleatório)."""
     from reportlab.lib.pagesizes import letter
@@ -355,6 +534,13 @@ def _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo):
     linha("Generated from URACE's records for the evidence package. It is separate from the sealed PDF (signed.pdf), which "
           "cannot change after signing; this certificate also lists what happened after the signature.", 8,
           "Helvetica-Oblique", 11)
+    if problemas:                                     # revisão do #115: o que não bate aparece antes de tudo
+        titulo("INTEGRITY WARNING: THE RECORDS DO NOT ALL MATCH")
+        for p in problemas:
+            linha(f"- {p}", 10, "Helvetica-Bold", 14)
+        linha("These checks compare the event trail with the record made at signing (audit.json, kept in the waiver's "
+              "unchangeable row and summarized on the sealed PDF) and with the independent records of each later event. "
+              "See VERIFY.md, step 5.", 8, "Helvetica-Oblique", 11)
     if anulacao:
         s_utc, s_local = _horas(anulacao["at"])
         titulo("STATUS: VOIDED BY URACE")
@@ -400,6 +586,10 @@ def _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo):
         if extra:
             partes.append((f"Details: {extra}", 8, "Helvetica", 11))
         partes.append((f"Event hash: {e['hash']}", 7, "Helvetica-Oblique", 10))
+        if e.get("matches_sealed_record") is False:
+            partes.append(("DOES NOT MATCH THE RECORD MADE AT SIGNING (audit.json)", 9, "Helvetica-Bold", 12))
+        if e.get("matches_independent_record") is False:
+            partes.append(("DOES NOT MATCH THIS EVENT'S OWN RECORD (waiver.json / audit_logs.json)", 9, "Helvetica-Bold", 12))
         cabe(sum(p[3] * len(_quebra(p[0], 100)) for p in partes))
         for p in partes:
             linha(*p)
@@ -408,11 +598,13 @@ def _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo):
     titulo("Integrity of the event trail")
     linha(f"{cadeia['events_in_package']} event(s) listed; every event hash recomputes from its content: "
           f"{'yes' if cadeia['all_event_hashes_recompute'] else 'NO'}. Whole event table hash chain intact when exported: "
-          f"{'yes' if cadeia['whole_event_table_chain_intact_when_exported'] else 'NO (first broken event #' + str(cadeia['first_broken_event_id']) + ')'}.")
+          f"{'yes' if cadeia['whole_event_table_chain_intact_when_exported'] else 'NO: ' + str(cadeia['whole_table_problem'])}. "
+          f"Events before signing match the record made at signing, and later events match their own records: "
+          f"{'yes' if not problemas else 'NO (see the warning at the top)'}.")
     y -= 6
     linha("Exports of this evidence package are logged by URACE (audit event waiver.evidence_export, with the package "
-          "SHA-256) and are not listed here, so the same record always produces the same package. How to check every "
-          "file: VERIFY.md.", 8, "Helvetica-Oblique", 11)
+          "SHA-256) and are not listed here, so the same record, exported by the same version of the system (commit), "
+          "always produces the same package. How to check every file: VERIFY.md.", 8, "Helvetica-Oblique", 11)
     cv.showPage()
     cv.save()
     return buf.getvalue()
@@ -432,11 +624,20 @@ def _descricao(commit):
             f"the same commit has the same text.\n\n" + corpo).encode("utf-8")
 
 
-def _verificar_md(w, trilha, carimbo, tem):
+def _verificar_md(w, trilha, carimbo, tem, problemas):
     raiz = (trilha.get("seal") or {}).get("root_cert_sha256") or "—"
     t = [f"# How to verify this evidence package — waiver record {w['id']}", "",
          f"Signature ID `{trilha.get('signature_id')}` · signed {trilha.get('signed_at_local')} "
-         f"({trilha.get('signed_at_utc')} UTC) · {EMPRESA}, Orlando, FL.", "",
+         f"({trilha.get('signed_at_utc')} UTC) · {EMPRESA}, Orlando, FL.", ""]
+    if problemas:
+        t += ["> **INTEGRITY WARNING.** When this package was exported, URACE's system found records that do not match:", ">",
+              *[f"> - {p}" for p in problemas], ">",
+              "> The details are in `events.json` (`integrity`), at the top of `certificate-of-completion.pdf` and in step 5.", ""]
+    else:
+        t += ["When this package was exported, URACE's system checked the event trail against the record made at signing "
+              "and against each later event's own record: **no problem found**. Every step below repeats a check "
+              "independently.", ""]
+    t += [
          "Every step below only reads the files. None needs access to URACE's systems, except step 4 (run on URACE's server).", "",
          "## 1. Every file is intact (SHA-256)", "",
          "In the folder where the ZIP was extracted:", "", "```", "sha256sum -c SHA256SUMS", "```", "",
@@ -480,14 +681,18 @@ def _verificar_md(w, trilha, carimbo, tem):
           "It must end with `selo e carimbo conferem: o arquivo não mudou desde a assinatura` (seal and time-stamp check "
           "out: the file has not changed since signing). On a computer whose list of TSA roots does not have this "
           "package's TSA, add `CC_WAIVER_TSA_ROOTS=tsa` before the command (in the extracted folder).", "",
-          "## 5. The event trail (hash chain)", "",
-          "`events.json` lists each event with the exact fields its hash covers. Recompute every hash:", "", "```python",
-          "import hashlib, json",
-          "pkg = json.load(open('events.json', encoding='utf-8'))",
-          "for e in pkg['events']:",
-          "    canon = json.dumps({k: e[k] for k in pkg['chain']['fields']}, sort_keys=True, separators=(',', ':'), ensure_ascii=False)",
-          "    ok = hashlib.sha256(f\"{e['prev_hash'] or ''}|{canon}\".encode('utf-8')).hexdigest() == e['hash']",
-          "    print(e['id'], e['event'], 'OK' if ok else 'MISMATCH')", "```", "",
+          "## 5. The event trail (hash chain and the record made at signing)", "",
+          "`events.json` lists each event with the exact fields its hash covers. A hash that recomputes only shows that "
+          "an event matches itself, so the check also uses two anchors: the record made at signing (`audit.json`, kept in "
+          "the waiver's unchangeable row, with the hash of each event before the signature and `events_chain_hash`, the "
+          "hash of the last one, also printed on the sealed PDF) and, for the void, its own record (`waiver.json`). The "
+          "same check is in `verify_events.py` (Python 3, standard library only): `python3 verify_events.py` in the "
+          "extracted folder must print `ALL EVENTS CHECK OUT`.", "", "```python", *SCRIPT_EVENTOS.rstrip("\n").split("\n"),
+          "```", "",
+          "It checks: every hash recomputes; for events with consecutive ids, each `prev_hash` is the previous event's hash "
+          "(otherwise it prints `chain broken between #a and #b`); each event before the signature matches `audit.json`; "
+          "the `signed` event covers exactly those events and the document's SHA-256; the `voided` event matches the void "
+          "record.", "",
           "The `signed` event lists, in `detail.covers`, the ids of the events before the signature that it covers. "
           "`certificate-of-completion.pdf` prints the same events, in Florida time and UTC, including the ones after "
           "signing (copy emailed, ID checked at the track, voided, downloaded).", "",
@@ -495,13 +700,15 @@ def _verificar_md(w, trilha, carimbo, tem):
           "`template.pdf` is the exact template version that was signed: its SHA-256 equals `template_sha256` in "
           "`audit.json`, and the first pages of `signed.pdf` are that template unchanged.", "",
           "## What is not in this package", "",
-          "No private key, password, session cookie, token, invitation link or email body. Exports of this package are "
-          "logged by URACE (`waiver.evidence_export`, with the ZIP's SHA-256) and are left out of the package, so the same "
-          "record always produces byte-identical files.", ""]
+          "No private key, password, session cookie, token, invitation link, email body or server folder path. Exports of "
+          "this package are logged by URACE (`waiver.evidence_export`, with the ZIP's SHA-256) and are left out of the "
+          "package, so the same record, exported by the same version of the system (the commit in "
+          "`system-description.md`), produces byte-identical files. A new version of the system changes "
+          "`system-description.md` and `declaration-DRAFT.md` (and with them the ZIP's SHA-256), not the records.", ""]
     return "\n".join(t).encode("utf-8")
 
 
-def _declaracao(w, trilha, carimbo, commit, anulacao, nomes):
+def _declaracao(w, trilha, carimbo, commit, anulacao, nomes, problemas):
     selo = trilha.get("seal") or {}
     t = ["# DRAFT — FOR ATTORNEY REVIEW — NOT TO BE SIGNED", "",
          "> **DRAFT — for attorney review — not to be signed.** This text was filled in automatically by URACE's system "
@@ -539,9 +746,15 @@ def _declaracao(w, trilha, carimbo, commit, anulacao, nomes):
             if carimbo else "") + ". Changing any byte of the file breaks the seal. "
          f"The SHA-256 fingerprint of URACE's seal root is `{selo.get('root_cert_sha256') or '—'}`.",
          "7. The files in this package are true and accurate copies of URACE's records, exported from URACE's system on "
-         "[date of export] by [name of the person who exported]. The waiver record itself cannot be changed or deleted in "
-         "URACE's database (database triggers refuse it).",
+         "[date of export] by [name of the person who exported]. URACE's database refuses (by database triggers) any "
+         "change to the signed waiver's content — signer, dates, document hash, trail and file — and refuses to delete it; "
+         "only two administrative fields of the record can change: its link to a client card (each change is recorded in "
+         "the audit log) and a flag that hides it from lists (the system refuses to hide a signed waiver). The event "
+         "trail, the time-stamp token, the template versions, the void record and the audit log accept new rows only.",
          ]
+    if problemas:
+        t.append("[ATTORNEY: when this package was exported, URACE's system found records that do not match: "
+                 + "; ".join(problemas) + ". Do not use item 6 or 7 as written before this is explained.]")
     if anulacao:
         t.append(f"8. The record shows that URACE voided this waiver on {_horas(anulacao['at'])[1]} "
                  f"(by {anulacao['by_name']}; reason: \"{anulacao['reason']}\"). The voided record is kept unchanged. "
@@ -586,7 +799,8 @@ def montar(con, wid, commit=None):
     commit = commit or _commit()
     anulacao = um(con, "SELECT * FROM waiver_voids WHERE waiver_id=?", (wid,))
     eventos = _eventos(con, wid)
-    cadeia = _cadeia(con, eventos)
+    problemas = _conferir(con, w, trilha, eventos, anulacao)
+    cadeia = _cadeia(con, eventos, problemas)
     modelo, pdf_modelo = _modelo(con, w, trilha)
     selo, raiz, assinatura = _do_selo(pdf, trilha)
     carimbo, token = _carimbo(con, w, assinatura)
@@ -597,7 +811,7 @@ def montar(con, wid, commit=None):
     registro["voided"] = _limpo(dict(anulacao)) if anulacao else None
     arquivos = [("signed.pdf", pdf), ("audit.json", (w["audit"] or "").encode("utf-8")), ("waiver.json", _json(registro)),
                 ("events.json", _json({"waiver_id": wid, "signature_id": trilha.get("signature_id"), "chain": cadeia,
-                                       "events": eventos})),
+                                       "integrity": {"ok": not problemas, "problems": problemas}, "events": eventos})),
                 ("events.csv", _csv(eventos)),
                 ("audit_logs.json", _json({"waiver_id": wid, "note": "Rows of URACE's append-only audit_logs about this "
                                            "waiver, the signer's account (until signing) or the invitation. Passwords, "
@@ -614,19 +828,21 @@ def montar(con, wid, commit=None):
         arquivos.append(("seal-root.pem", _pem(raiz.dump())))
     if raiz_tsa is not None:
         arquivos.append(("tsa/tsa-root.pem", _pem(raiz_tsa.dump())))
-    arquivos.append(("certificate-of-completion.pdf", _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo)))
+    arquivos.append(("certificate-of-completion.pdf", _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo,
+                                                                   problemas)))
     arquivos.append(("system-description.md", _descricao(commit)))
     tem = {n: True for n, _ in arquivos}
-    nomes = [n for n, _ in arquivos] + ["declaration-DRAFT.md", "VERIFY.md"]
-    arquivos.append(("declaration-DRAFT.md", _declaracao(w, trilha, carimbo, commit, anulacao, nomes)))
-    arquivos.append(("VERIFY.md", _verificar_md(w, trilha, carimbo, tem)))
+    nomes = [n for n, _ in arquivos] + ["declaration-DRAFT.md", "VERIFY.md", "verify_events.py"]
+    arquivos.append(("declaration-DRAFT.md", _declaracao(w, trilha, carimbo, commit, anulacao, nomes, problemas)))
+    arquivos.append(("VERIFY.md", _verificar_md(w, trilha, carimbo, tem, problemas)))
+    arquivos.append(("verify_events.py", SCRIPT_EVENTOS.encode("utf-8")))
     arquivos.append(("SHA256SUMS", "".join(f"{_sha(d)}  {n}\n" for n, d in arquivos).encode("ascii")))
     for n, d in arquivos:                                  # a trava: a chave do selo nunca sai, em arquivo nenhum
         if b"PRIVATE KEY" in d:
             raise RuntimeError(f"o pacote de prova ia levar uma chave privada em {n}")
     z = _zip(arquivos)
     return z, {"sha256": _sha(z), "bytes": len(z), "files": [n for n, _ in arquivos], "commit": commit.get("commit"),
-               "waiver": w}
+               "integrity_ok": not problemas, "problems": problemas, "waiver": w}
 
 
 def exportar(con, wid, usuario, ip=None, user_agent=None):
@@ -636,7 +852,8 @@ def exportar(con, wid, usuario, ip=None, user_agent=None):
     from command_center.providers import trilha_waiver as tw
     z, info = montar(con, wid)
     w = info.pop("waiver")
-    detalhe = {"zip_sha256": info["sha256"], "zip_bytes": info["bytes"], "by": usuario.get("name"), "user_id": usuario.get("id")}
+    detalhe = {"zip_sha256": info["sha256"], "zip_bytes": info["bytes"], "by": usuario.get("name"), "user_id": usuario.get("id"),
+               "integrity_ok": info["integrity_ok"]}
     def gravar():
         e = tw.registrar(con, "evidence_exported", "staff", ip=ip, user_agent=user_agent, detail=detalhe, waiver_id=wid,
                          client_id=w["client_id"], pilot_id=w["pilot_id"], kind=w["template"])

@@ -661,8 +661,10 @@ documento e da declaração de quem guarda os registros (o **custodiante**: Ital
   - `signed.pdf` (o PDF assinado e selado, exatamente o do servidor), `audit.json` (a trilha gravada na assinatura) e
     `waiver.json` (a linha da waiver e a anulação, se houver);
   - `events.json` e `events.csv`: a **Trilha** inteira, com o hash de cada passo refeito e a cadeia conferida;
-  - `audit_logs.json`: o que a Auditoria tem da waiver e da conta (cadastro, login, e-mail confirmado, código,
-    assinatura) ou do convite. **Nunca** vai senha, cookie, token, link do convite ou corpo de e-mail;
+  - `audit_logs.json`: o que a Auditoria tem da waiver e da conta (o cadastro e a confirmação do e-mail; login,
+    código e leitura só da sessão desta assinatura, desde a assinatura anterior da conta e no máximo 24 h antes do
+    primeiro passo; a assinatura; o cadastro do piloto desta waiver) ou do convite. **Nunca** vai senha, cookie, token,
+    link do convite, corpo de e-mail ou caminho de pasta do servidor. A waiver do irmão não aparece no pacote desta;
   - `template.pdf` e `template.json`: a versão do modelo que valia (#116);
   - `timestamp.tst` e `timestamp.json` (o carimbo de tempo), `seal-cert.pem`, `seal-root.pem` e `tsa/tsa-root.pem`
     (os certificados **públicos**; a chave do selo nunca sai do servidor);
@@ -672,11 +674,16 @@ documento e da declaração de quem guarda os registros (o **custodiante**: Ital
   - `declaration-DRAFT.md`: a declaração (FRE 902(11)/(13) e Fla. Stat. §90.902(11)) já preenchida com os dados da
     waiver, marcada **"DRAFT — for attorney review — not to be signed"**. **Não assine:** o texto final é do advogado
     (ele também confirma o cargo do custodiante, o tribunal e a forma, declaração ou affidavit);
-  - `VERIFY.md` e `SHA256SUMS`: o passo a passo para conferir (o `sha256sum -c`, o Adobe ou o pyHanko, o
+  - `VERIFY.md`, `verify_events.py` e `SHA256SUMS`: o passo a passo para conferir (o `sha256sum -c`, o Adobe ou o pyHanko, o
     `selo-waiver conferir` no servidor e o `openssl ts -verify` do carimbo) e o hash de cada arquivo.
-- **O mesmo registro dá o mesmo ZIP**, byte a byte: baixar de novo sem nada ter mudado dá o mesmo hash. Por isso as
-  exportações anteriores não entram no ZIP. Se algo mudou na waiver depois (uma cópia por e-mail, o balcão, a
-  anulação), o ZIP novo traz isso e o hash muda.
+- **O mesmo registro, na mesma versão do sistema (o commit), dá o mesmo ZIP**, byte a byte: baixar de novo sem nada
+  ter mudado dá o mesmo hash. Por isso as exportações anteriores não entram no ZIP. Se algo mudou na waiver depois (uma
+  cópia por e-mail, o balcão, a anulação), o ZIP novo traz isso e o hash muda; depois de uma atualização do sistema, a
+  descrição do sistema e a declaração mudam e o hash do ZIP também (os registros, não).
+- **A trilha é conferida contra o que foi gravado na assinatura**, não só contra ela mesma: se alguém mexer num passo
+  direto no banco e refizer o hash dele, o pacote mostra **INTEGRITY WARNING** no topo do certificado avulso, no
+  `VERIFY.md` e na declaração, com o passo que não bate (por exemplo "chain broken between #4 and #5"). O
+  `verify_events.py` do pacote faz a mesma conferência no computador do advogado.
 - **Fica registrado:** cada download vira o passo **pacote de prova exportado** na Trilha (com o hash do ZIP e quem
   baixou) e a Auditoria `waiver.evidence_export`.
 - **Se o PDF no servidor não bater com o hash gravado na assinatura**, o pacote não sai (a tela mostra o erro):

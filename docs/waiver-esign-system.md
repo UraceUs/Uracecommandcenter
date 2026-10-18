@@ -185,8 +185,15 @@ kept with the rest. Database backups follow §10.
 
 A manager exports it in Site › Waiver › Assinadas › **Pacote de prova**. The ZIP contains the signed PDF, the trail as
 stored, the event trail with the hash-chain check, the related audit-log rows (without passwords, cookies, tokens,
-invitation links or email bodies), the template version, the time-stamp token, the public seal and TSA certificates,
+invitation links, email bodies or server folder paths), the template version, the time-stamp token, the public seal and TSA certificates,
 a certificate of completion with every event (including after signing), this description, a draft declaration for
-the attorney (FRE 902(11)/(13); Fla. Stat. §90.902(11)) and `SHA256SUMS` with `VERIFY.md`. The same record always
-produces the same ZIP, byte for byte. Each export is recorded (`evidence_exported` in the event trail and
+the attorney (FRE 902(11)/(13); Fla. Stat. §90.902(11)), `SHA256SUMS`, `VERIFY.md` and `verify_events.py`.
+
+The event trail is checked against the record made at signing, not only against itself: each event before the
+signature, and the signature event, are compared with the trail stored in the waiver's unchangeable row (`audit.json`,
+whose last event hash is printed on the sealed PDF), and each later event with its own record (the void record, the
+audit-log rows of the front-desk check and of the emailed copy). Anything that does not match is shown at the top of
+the certificate of completion, in `events.json` and in `VERIFY.md`. The same record, exported by the
+same version of the system (commit), produces the same ZIP, byte for byte; a new version changes the system
+description and the draft declaration (and so the ZIP's SHA-256), not the records. Each export is recorded (`evidence_exported` in the event trail and
 `waiver.evidence_export` in the audit log, with the ZIP's SHA-256).

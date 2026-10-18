@@ -953,7 +953,9 @@ function WaiverNativa() {
       a.click()
       a.remove()
       setTimeout(() => URL.revokeObjectURL(url), 30000)
-      toast(tr("Pacote de prova baixado. A exportação ficou na trilha da waiver."), 'ok')
+      if (r.headers.get('X-Evidence-Integrity') === 'problems')       // revisão do #115: o que não bate, com destaque
+        toast(tr("Pacote de prova baixado, mas a conferência achou registros que não batem: veja o aviso no topo do certificado e do VERIFY.md."), 'crit')
+      else toast(tr("Pacote de prova baixado. A exportação ficou na trilha da waiver."), 'ok')
     } catch (e) { toast((e as Error).message, 'crit') } finally { setBaixando(null) }
   }
   async function importar() {

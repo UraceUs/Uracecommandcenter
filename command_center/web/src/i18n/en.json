@@ -4567,5 +4567,9 @@
 "ZIP SHA-256": "ZIP SHA-256",
 "O pacote de prova não saiu (HTTP {0}).": "The evidence package did not download (HTTP {0}).",
 "Pacote de prova baixado. A exportação ficou na trilha da waiver.": "Evidence package downloaded. The export was recorded in the waiver's trail.",
-"Faixa que saiu da página do código": "Band no longer on the code page"
+"Faixa que saiu da página do código": "Band no longer on the code page",
+"Só a waiver assinada no próprio sistema tem pacote de prova. A do DocuSign se prova pelo certificado do DocuSign.": "Only a waiver signed in our own system has an evidence package. A DocuSign waiver is proven by DocuSign's certificate.",
+"O PDF desta waiver não está no servidor: o pacote não sai sem ele.": "The PDF of this waiver is not on the server: the package cannot be exported without it.",
+"O PDF desta waiver no servidor não bate com o hash gravado na assinatura: o pacote não sai. Restaure o arquivo do backup (Biblioteca) e tente de novo.": "The PDF of this waiver on the server does not match the hash recorded at signing: the package was not exported. Restore the file from the backup (Library) and try again.",
+"Pacote de prova baixado, mas a conferência achou registros que não batem: veja o aviso no topo do certificado e do VERIFY.md.": "Evidence package downloaded, but the check found records that do not match: see the warning at the top of the certificate and of VERIFY.md."
 }
