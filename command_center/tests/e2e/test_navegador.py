@@ -4046,6 +4046,128 @@ def test_editor_canva_endereco_recusado_trava_o_publicar(servidor, navegador):
         g.close()
 
 
+# ------------------------------------------------------------------ #315, etapa 4: o texto das faixas originais
+_H1_E2E = "Coached every week, faster every month"
+
+
+def _abre_do_site(pg, servidor, csrf, caminho):
+    """Uma página do site (a do código) aberta no editor: as faixas dela viram faixas originais."""
+    r = pg.request.post(servidor + "/api/site/editor/paginas", headers=csrf, data={"base": caminho})
+    assert r.ok, r.text()
+    return r.json()["pagina"]["id"]
+
+
+def _h1_da_previa(pg):
+    return pg.evaluate("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('h1').textContent.trim()")
+
+
+def test_editor_canva_escreve_o_h1_da_academy_na_previa_e_publica(servidor, navegador):
+    """#315, etapa 4, computador: na Academy aberta no editor, clicar no h1 da faixa original seleciona o texto,
+    clicar de novo escreve no lugar; desfazer e refazer valem; o bloco dos planos (do painel) fica travado e a barra
+    diz onde ele se muda; publica e o site mostra o h1 novo, um só."""
+    site = servidor.removesuffix("/ops")
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _abre_do_site(g, servidor, csrf, "/academy/")
+    try:
+        abrir(g, servidor, f"/site/editor/{pid}")
+        lona = _lona(g)
+        h1 = lona.locator('[data-ed-o="0"] h1[data-ed-t]')
+        h1.wait_for()
+        velho = _h1_da_previa(g)
+        assert lona.locator("[data-ed-trava] [data-ed-t], [data-ed-t][data-ed-trava]").count() == 0, "dado do banco não se escreve"
+        h1.click()
+        barra = g.locator(".ed-barra")
+        barra.get_by_text("Texto da faixa original 1", exact=True).wait_for()
+        assert "ed-sel" in h1.get_attribute("class")
+        h1.click()                                             # de novo: escreve no lugar
+        g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('h1[contenteditable]')")
+        g.keyboard.press("Control+a")
+        g.keyboard.type(_H1_E2E)
+        _salvo(g)
+        assert list(_rascunho(g, servidor, pid)["itens"][0]["textos"].values()) == [_H1_E2E]
+        g.keyboard.press("Escape")
+        g.get_by_role("button", name="Desfazer (Ctrl+Z)").click()
+        g.wait_for_function(f"() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('h1').textContent.trim() === {velho!r}")
+        _salvo(g)
+        assert "textos" not in _rascunho(g, servidor, pid)["itens"][0], "desfeito, a faixa volta ao texto da página"
+        g.get_by_role("button", name="Refazer (Ctrl+Shift+Z)").click()
+        g.wait_for_function(f"() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('h1').textContent.trim() === {_H1_E2E!r}")
+        _salvo(g)
+        # o bloco dos planos é do painel: clicar nele seleciona a faixa e a barra diz onde se muda
+        lona.locator('[data-ed-trava="cartoes"]').first.click()
+        barra.get_by_role("link", name="Cartões das páginas ↗").wait_for()
+        assert "ed-trava-sel" in lona.locator('[data-ed-trava="cartoes"]').first.get_attribute("class")
+        assert lona.locator("[contenteditable]").count() == 0
+        publicar = g.get_by_role("button", name="Publicar", exact=True)
+        g.wait_for_function("() => ![...document.querySelectorAll('.ed-topo .btn.primary')].some(b => b.disabled)")
+        publicar.click()
+        g.get_by_text("Publicado: o site já mostra.").wait_for()
+        assert [n for n, _ in _cabecalhos(g)].count(1) == 1, "um h1 na tela do editor"
+        assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+        v = navegador.new_page(viewport={"width": 390, "height": 844})
+        v.goto(site + "/academy/")
+        v.get_by_role("heading", name=_H1_E2E, level=1).wait_for()
+        assert v.locator("h1").count() == 1 and velho not in v.locator("main").inner_text()
+        assert v.locator("[data-ed-t], [data-ed-trava], [contenteditable]").count() == 0, "o site não leva nada do editor"
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v.close()
+    finally:
+        g.request.post(servidor + f"/api/site/editor/paginas/{pid}/despublicar", headers=csrf)
+        g.close()
+
+
+def test_editor_canva_texto_da_faixa_original_no_celular(servidor, navegador):
+    """#315, etapa 4, celular (390, toque): tocar no h1 de uma faixa original seleciona, a barra fica embaixo; tocar de
+    novo escreve; tocar no bloco dos cartões (do painel) diz onde ele se muda. Nada rola para o lado (390 e 360) e todo
+    botão tem 40 px."""
+    ctx = navegador.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
+    g = ctx.new_page()
+    g.erros_js = []
+    g.on("pageerror", lambda e: g.erros_js.append(str(e)))
+    g.goto(servidor + "/login")
+    g.fill("#email", "eduardo@urace.us")
+    g.fill("#pw", SENHA)
+    g.keyboard.press("Enter")
+    g.wait_for_url(lambda u: "/login" not in u, timeout=10000)
+    csrf = _csrf(g)
+    pid = _abre_do_site(g, servidor, csrf, "/for-beginners/")
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    h1 = lona.locator('[data-ed-o="0"] h1[data-ed-t]')
+    h1.wait_for()
+    # a prévia no alto da tela e o h1 no alto da prévia: a barra presa embaixo não fica por cima dele
+    g.evaluate("document.querySelector('.ed-lona').scrollIntoView({ block: 'start' })")
+    h1.evaluate("n => n.scrollIntoView({ block: 'start' })")
+    h1.tap()
+    doca = g.locator(".ed-doca .ed-barra")
+    doca.get_by_text("Texto da faixa original 1", exact=True).wait_for()
+    caixa = doca.bounding_box()
+    assert caixa["y"] + caixa["height"] <= 844 and caixa["y"] > 844 / 2, f"a barra fica embaixo: {caixa}"
+    g.wait_for_timeout(600)                                    # o segundo toque de gente (não o toque duplo)
+    h1.tap()                                                   # de novo: escreve no lugar
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('h1[contenteditable]')")
+    g.keyboard.press("Control+End")
+    g.keyboard.type(" today")
+    _salvo(g)
+    assert list(_rascunho(g, servidor, pid)["itens"][0]["textos"].values())[0].endswith(" today")
+    doca.get_by_role("button", name=re.compile("^Pronto")).tap()
+    # o bloco dos cartões: do painel, travado
+    bloco = lona.locator('[data-ed-trava="cartoes"]').first
+    bloco.scroll_into_view_if_needed()
+    bloco.tap()
+    doca.get_by_role("link", name="Cartões das páginas ↗").wait_for()
+    for largura in (390, 360):
+        g.set_viewport_size({"width": largura, "height": 800})
+        r = g.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not g.evaluate(_PEQUENOS), (largura, g.evaluate(_PEQUENOS))
+        assert not _estreitos(g, ".ed-doca .btn, .ed-topo .btn"), (largura, _estreitos(g, ".ed-doca .btn, .ed-topo .btn"))
+    assert not g.erros_js, g.erros_js
+    ctx.close()
+
+
 def test_editor_canva_teclado_na_barra_nas_camadas_e_nos_avisos(servidor, navegador):
     """#315, só com o teclado (revisão): as abas são botões e as setas nelas não mexem na página; ↑/↓ das Camadas
     desligados quando não fazem nada; mudar de coluna nas Camadas deixa o foco na peça; a barra vem antes da prévia no

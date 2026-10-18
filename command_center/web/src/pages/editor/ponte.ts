@@ -8,13 +8,19 @@
  * - nada navega: clique em link, envio de formulário e o abrir/fechar das perguntas ficam parados.
  *
  * O painel recebe o que aconteceu pelos `Ganchos` e decide (selecionar, editar, mover). A ponte desenha a
- * seleção, põe o texto em edição, calcula onde uma coisa arrastada cai e troca só as seções que mudaram. */
+ * seleção, põe o texto em edição, calcula onde uma coisa arrastada cai e troca só as seções que mudaram.
+ *
+ * Etapa 4: nas faixas originais, cada texto que se escreve tem `data-ed-t` (a chave da folha) e se escreve no lugar
+ * como o texto de um elemento (só texto, até 400 letras); o bloco de dado (`data-ed-trava`: preço, plano, kart,
+ * reserva, blog, loja) não se escreve: clicar nele diz de onde ele vem. O texto do código de cada folha fica guardado
+ * aqui, para o desfazer e o "voltar ao texto do código" redesenharem a faixa sem o servidor. */
+import { MAX_TEXTO_ORIGINAL, textoDe } from './modelo'
 import { limparHtml, linhas, umaLinha } from './texto'
 import type { Conteudo, Destino, Sel, Tipo, W } from './tipos'
 
 export interface Ganchos {
   /** Clique (ou toque) numa peça da prévia. `x`/`y` são da prévia. */
-  clique(sel: Sel, ev: { duplo: boolean; x: number; y: number }): void
+  clique(sel: Sel, ev: { duplo: boolean; x: number; y: number; trava?: string }): void
   /** O texto em edição mudou: `valor` é o que ele virou no modelo. */
   digitou(id: string, valor: Partial<W>): void
   saiuDaEdicao(): void
@@ -32,8 +38,10 @@ export type Alvo = { d: Destino | number | { tipo: 'troca'; id: string }; marca:
 
 const ehDestino = (d: Alvo['d']): d is Destino => typeof d === 'object' && d !== null && (d.tipo === 'col' || d.tipo === 'nova')
 const SOLTA = ['ed-solta-antes', 'ed-solta-depois', 'ed-solta-dentro']
-const DE_PASSAGEM = ['ed-hover', 'ed-sel', 'ed-erro', 'ed-arrastando', ...SOLTA]
+const DE_PASSAGEM = ['ed-hover', 'ed-sel', 'ed-erro', 'ed-arrastando', 'ed-trava-sel', ...SOLTA]
 const ID = /^[a-z0-9]+$/
+/** O id de um texto de faixa original: `o<n>/<tag>.<n>:<hash8>`. */
+const ID_TEXTO = /^o[0-9]+\/(h1|h2|h3|p|li|summary|figcaption|a)\.[0-9]+:[0-9a-f]{8}$/
 
 const comoElemento = (t: EventTarget | null): Element | null => {
   const n = t as Node | null
@@ -54,7 +62,7 @@ function assinatura(el: Element): string {
 }
 
 interface Arrasto { oQue: NonNullable<Sel>; no: Element; x0: number; y0: number; toque: boolean; ativo: boolean; timer: number }
-interface Edicao { id: string; tipo: Tipo; raiz: HTMLElement; nos: HTMLElement[]; rico: boolean }
+interface Edicao { id: string; tipo: Tipo | 'orig'; raiz: HTMLElement; nos: HTMLElement[]; rico: boolean }
 
 export class Ponte {
   readonly doc: Document
@@ -75,6 +83,8 @@ export class Ponte {
   private engolirClique = false
   /** Seções que o servidor redesenhou mas ficaram como estavam porque tinham o texto em edição. */
   private puladas = new Set<string>()
+  /** O texto do código de cada folha das faixas originais (`o0/h1.0:…` → texto). */
+  private doCodigo = new Map<string, string>()
 
   constructor(doc: Document, ganchos: () => Ganchos, editar: boolean, dica: (tipo: string) => string) {
     this.doc = doc
@@ -120,6 +130,7 @@ export class Ponte {
     this.on(this.win, 'scroll', () => this.ganchos().mudouVista(), { passive: true })
     this.on(this.win, 'resize', () => this.ganchos().mudouVista())
     this.rotular(d)
+    this.lerTextosDoCodigo()
   }
 
   desligar() {
@@ -130,10 +141,18 @@ export class Ponte {
 
   // ------------------------------------------------------------------ achar as peças
   no(sel: Sel): HTMLElement | null {
+    if (sel?.tipo === 't') {
+      if (!ID_TEXTO.test(sel.id)) return null
+      const { faixa, chave } = textoDe(sel.id)
+      return this.doc.querySelector(`[data-ed-s="${faixa}"] [data-ed-t="${chave}"]`)
+    }
     if (!sel || !ID.test(sel.id)) return null
     return this.doc.querySelector(sel.tipo === 'w' ? `[data-ed-w="${sel.id}"]` : `[data-ed-s="${sel.id}"]`)
   }
   selDe(el: Element | null): Sel {
+    const t = el?.closest('[data-ed-t]')
+    const o = t?.closest('[data-ed-o]')
+    if (t && o) return { tipo: 't', id: `${o.getAttribute('data-ed-s')}/${t.getAttribute('data-ed-t')}` }
     const w = el?.closest('[data-ed-w]')
     if (w) return { tipo: 'w', id: w.getAttribute('data-ed-w') || '' }
     const s = el?.closest('[data-ed-s]')
@@ -156,7 +175,7 @@ export class Ponte {
   // ------------------------------------------------------------------ seleção, hover e erros
   marcar(sel: Sel) {
     this.sel = sel
-    this.doc.querySelectorAll('.ed-sel').forEach(n => n.classList.remove('ed-sel'))
+    this.doc.querySelectorAll('.ed-sel, .ed-trava-sel').forEach(n => n.classList.remove('ed-sel', 'ed-trava-sel'))
     this.no(sel)?.classList.add('ed-sel')
   }
   private marcarHover(n: Element | null) {
@@ -170,8 +189,9 @@ export class Ponte {
     this.doc.querySelectorAll('.ed-erro').forEach(n => n.classList.remove('ed-erro'))
     for (const id of ids) this.no({ tipo: 'w', id })?.classList.add('ed-erro')
   }
-  /** As dicas dos vazios ("Escreva o título"…), no idioma do painel. */
+  /** As dicas dos vazios ("Escreva o título"…) e dos blocos travados (de onde o dado vem), no idioma do painel. */
   rotular(raiz: ParentNode) {
+    raiz.querySelectorAll('[data-ed-trava]').forEach(el => el.setAttribute('title', this.dica('trava:' + el.getAttribute('data-ed-trava'))))
     raiz.querySelectorAll('[data-ed-w]').forEach(el => {
       const t = el.getAttribute('data-ed-tipo') || ''
       const alvo = t === 'botao' ? el.querySelector('a') : t === 'lista' ? null : el
@@ -203,10 +223,29 @@ export class Ponte {
       }
       const esperado: Element | null = antes ? antes.nextElementSibling : main.firstElementChild
       if (n !== esperado) main.insertBefore(n, esperado)
-      if (it.tipo === 'original') n.toggleAttribute('data-ed-oculto', !!it.oculto)
+      if (it.tipo === 'original') { n.toggleAttribute('data-ed-oculto', !!it.oculto); this.textosDaFaixa(n, it.id, it.textos || {}) }
       antes = n
     }
     this.marcar(this.sel)
+  }
+  /** Etapa 4: o texto do código de cada folha (o da página, ou o `data-ed-orig` quando ela já veio trocada). */
+  private lerTextosDoCodigo() {
+    this.doCodigo.clear()
+    this.main?.querySelectorAll('[data-ed-o] [data-ed-t]').forEach(t => {
+      const faixa = t.closest('[data-ed-o]')?.getAttribute('data-ed-s')
+      if (faixa) this.doCodigo.set(`${faixa}/${t.getAttribute('data-ed-t')}`, t.getAttribute('data-ed-orig') ?? umaLinha(t.textContent))
+    })
+  }
+  /** O texto do código de uma folha (`o0/h1.0:…`). */
+  textoDoCodigo(id: string): string { return this.doCodigo.get(id) ?? '' }
+  /** A faixa mostra o texto do modelo (o desfazer, o "voltar ao texto do código"); o texto em edição fica. */
+  private textosDaFaixa(n: Element, faixa: string, textos: Record<string, string>) {
+    n.querySelectorAll('[data-ed-t]').forEach(t => {
+      const chave = t.getAttribute('data-ed-t') || ''
+      const quer = textos[chave] ?? this.doCodigo.get(`${faixa}/${chave}`)
+      if (quer === undefined || (this.ed && this.ed.raiz === t)) return
+      if (umaLinha(t.textContent) !== quer) t.textContent = quer
+    })
   }
   private esqueleto(id: string, colunas: number): Element {
     const d = this.doc
@@ -262,12 +301,13 @@ export class Ponte {
   /** Põe o texto do elemento em edição: o cursor no ponto clicado, ou no fim; `tudo` marca o texto inteiro (o
    *  elemento que acabou de entrar: escrever já troca o texto de exemplo). Devolve se deu. */
   editarTexto(id: string, ponto?: { x: number; y: number }, tudo = false): boolean {
-    const raiz = this.no({ tipo: 'w', id })
+    const doTexto = id.includes('/')          // etapa 4: um texto de faixa original
+    const raiz = this.no({ tipo: doTexto ? 't' : 'w', id })
     if (!raiz) return false
-    const tipo = raiz.getAttribute('data-ed-tipo') as Tipo
+    const tipo: Tipo | 'orig' = doTexto ? 'orig' : raiz.getAttribute('data-ed-tipo') as Tipo
     let nos: HTMLElement[] = []
     const rico = tipo === 'texto'
-    if (tipo === 'titulo' || tipo === 'texto' || tipo === 'lista') nos = [raiz]
+    if (tipo === 'titulo' || tipo === 'texto' || tipo === 'lista' || tipo === 'orig') nos = [raiz]
     else if (tipo === 'botao') nos = Array.from(raiz.querySelectorAll<HTMLElement>('a'))
     else if (tipo === 'imagem') nos = Array.from(raiz.querySelectorAll<HTMLElement>('figcaption'))
     else if (tipo === 'faq') {
@@ -330,7 +370,7 @@ export class Ponte {
     if (!e) return null
     const r = e.raiz
     switch (e.tipo) {
-      case 'titulo': return { id: e.id, valor: { texto: umaLinha(r.textContent) } }
+      case 'titulo': case 'orig': return { id: e.id, valor: { texto: umaLinha(r.textContent) } }
       case 'botao': return { id: e.id, valor: { texto: umaLinha(r.querySelector('a')?.textContent) } }
       case 'texto': return { id: e.id, valor: { html: limparHtml(r.innerHTML) } }
       case 'lista': return { id: e.id, valor: { itens: linhas(r) } }
@@ -374,7 +414,14 @@ export class Ponte {
       if (this.ed.tipo === 'lista' && e.inputType.startsWith('format')) e.preventDefault()
       return
     }
-    if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak' || e.inputType.startsWith('format')) e.preventDefault()
+    if (e.inputType === 'insertParagraph' || e.inputType === 'insertLineBreak' || e.inputType.startsWith('format')) { e.preventDefault(); return }
+    // o texto da faixa original vai até 400 letras (o servidor confere de novo)
+    if (this.ed.tipo === 'orig' && e.inputType.startsWith('insert') && e.data && this.sobra() < e.data.length) e.preventDefault()
+  }
+  /** Quantas letras ainda cabem no texto da faixa original em edição (o marcado vai ser trocado). */
+  private sobra(): number {
+    const marcado = this.doc.getSelection()?.toString().length || 0
+    return MAX_TEXTO_ORIGINAL - (umaLinha(this.ed?.raiz.textContent).length - marcado)
   }
   private aoColar(e: ClipboardEvent) {
     if (!this.ed) return
@@ -386,7 +433,8 @@ export class Ponte {
       if (html) { this.doc.execCommand('insertHTML', false, limparHtml(html)); return }
     }
     const txt = dt.getData('text/plain') || ''
-    this.doc.execCommand('insertText', false, this.ed.rico || this.ed.tipo === 'lista' ? txt : umaLinha(txt))
+    const uma = this.ed.tipo === 'orig' ? umaLinha(txt).slice(0, Math.max(0, this.sobra())) : umaLinha(txt)
+    this.doc.execCommand('insertText', false, this.ed.rico || this.ed.tipo === 'lista' ? txt : uma)
   }
 
   private aoTeclar(e: KeyboardEvent) {
@@ -414,7 +462,10 @@ export class Ponte {
     if (this.engolirClique) { this.engolirClique = false; e.preventDefault(); return }
     if (this.ed && this.ed.nos.some(n => n.contains(el))) return       // no texto em edição: o cursor vai onde clicou
     e.preventDefault()
-    this.ganchos().clique(this.selDe(el), { duplo, x: e.clientX, y: e.clientY })
+    // o bloco de dado de uma faixa original: seleciona a faixa e diz de onde o dado vem
+    const bloco = el.closest('[data-ed-o]') ? el.closest('[data-ed-trava]') : null
+    this.ganchos().clique(this.selDe(el), { duplo, x: e.clientX, y: e.clientY, trava: bloco?.getAttribute('data-ed-trava') || undefined })
+    bloco?.classList.add('ed-trava-sel')
   }
 
   // ------------------------------------------------------------------ arrastar dentro da prévia (mouse e toque)
@@ -439,7 +490,7 @@ export class Ponte {
     a.no.classList.add('ed-arrastando')
     this.doc.documentElement.classList.add('ed-arrasto')
     this.marcarHover(null)
-    this.ponteiro = { x, y, modo: a.oQue.tipo }
+    this.ponteiro = { x, y, modo: a.oQue.tipo === 'w' ? 'w' : 's' }
     this.rolarSozinho()
     this.alvoDoPonteiro()
   }
@@ -448,7 +499,7 @@ export class Ponte {
     if (!a) {
       if (e.pointerType === 'mouse' && !this.ponteiro) {
         const el = comoElemento(e.target)
-        this.marcarHover(el ? el.closest('[data-ed-w]') || el.closest('[data-ed-s]') : null)
+        this.marcarHover(el ? el.closest('[data-ed-o] [data-ed-t]') || el.closest('[data-ed-w]') || el.closest('[data-ed-s]') : null)
       }
       return
     }
