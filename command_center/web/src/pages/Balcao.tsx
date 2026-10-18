@@ -315,7 +315,7 @@ function ItemRevisao({ p, onMudou }: { p: Pend; onMudou: (r: { itens: Pend[]; to
   const semSaldo = !!p.item && (p.item.nosso ?? 1) <= 0
   const temQbo = !!it && !!it.qbo_item_id && it.price != null
   // #313: o cartão D com o checklist do que falta para cobrar, cada linha com a ação dela
-  return <Cartao id={`revisao-${p.id}`} estado={!temItem ? tr("código novo") : !temCliente ? tr("sem cliente") : !temQbo ? tr("sem item no QuickBooks") : semSaldo ? tr("sem saldo na prateleira") : tr("pronta")}
+  return <Cartao id={`revisao-${p.id}`} estado={!temItem ? tr("código novo") : !temCliente ? tr("sem cliente") : !temQbo ? (it?.qbo_item_id ? tr("sem preço") : tr("sem item no QuickBooks")) : semSaldo ? tr("sem saldo na prateleira") : tr("pronta")}
     tom={temItem && temCliente && temQbo && !semSaldo ? 'ok' : 'warn'} avatar={p.pilot_name || null}
     nome={nome || tr("Código novo")} sub={[<span key="c" className="cd-mono">{p.code}</span>, `${p.pilot_name || tr("sem piloto")} · ${p.service_date} · ${tr("lida por {0}", p.por || '—')}`]}
     grande={p.item?.price != null ? usd(p.item.price) : null}

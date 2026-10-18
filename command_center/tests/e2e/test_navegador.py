@@ -5242,3 +5242,71 @@ def test_cartao_d_no_computador_a_tabela_continua_tabela_e_o_cartao_da_venda_abr
     g.get_by_role("heading", name="Lia Cartao D", level=1).wait_for()
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
+
+
+# ------------------------------------------------------------------ #313, revisão dos PRs #330, #331 e #333
+def _contraste_js():
+    """A razão de contraste (WCAG) entre o texto e o fundo de cada elemento do seletor."""
+    return """(sel) => { const lum = c => { const [r, g, b] = c.match(/[\\d.]+/g).slice(0, 3).map(Number).map(v => v / 255)
+        .map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4); return 0.2126 * r + 0.7152 * g + 0.0722 * b }
+      return [...document.querySelectorAll(sel)].filter(e => e.getClientRects().length).map(e => { const cs = getComputedStyle(e)
+        const a = lum(cs.color), b = lum(cs.backgroundColor); return Math.round(100 * (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)) / 100 }) }"""
+
+
+def test_revisao_pilula_amarela_e_verde_com_contraste_aa_no_tema_claro(servidor, navegador):
+    """Revisão: no tema claro, a pílula amarela dava 3,96:1 e a verde 4,49:1, abaixo do AA (4,5:1). Os tokens --warn e --ok
+    do tema claro escurecem; o escuro não muda."""
+    _dados_dos_cartoes_d()
+    g = entrar(navegador, servidor, largura=390, altura=800)
+    g.evaluate("localStorage.setItem('cc.theme', 'light')")
+    medidas = {}
+    for rota, sel in (("/site/agendamentos", ".cd-pill.warn, .cd-ic.warn"), ("/site/pedidos", ".cd-pill.ok, .cd-ic.ok")):
+        abrir(g, servidor, rota)
+        g.locator("article.cd").first.wait_for()
+        medidas[rota] = g.evaluate(_contraste_js(), sel)
+    assert all(medidas.values()) and all(c >= 4.5 for v in medidas.values() for c in v), medidas
+    g.close()
+
+
+# a tabela que vira cartão no celular: o bloco grande diz o que é (rota → o rótulo do bloco)
+_BLOCOS_RSP = {"/clients": "Próximo"}
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_revisao_no_celular_o_bloco_da_tabela_diz_o_que_e(servidor, navegador, largura):
+    """Revisão: no celular, o bloco grande da tabela que vira cartão escondia o rótulo (o "Saldo" da invoice paga aparecia
+    só como "$0.00"). O rótulo aparece em cima do valor."""
+    g = entrar(navegador, servidor, largura=largura, altura=800)
+    probs = []
+    for rota, rotulo in _BLOCOS_RSP.items():
+        abrir(g, servidor, rota)
+        g.locator("table.tbl.rsp td.rsp-bloco").first.wait_for()
+        r = g.evaluate("""() => { const td = document.querySelector('table.tbl.rsp td.rsp-bloco'), cs = getComputedStyle(td, '::before')
+          return { display: cs.display, conteudo: cs.content, alinhado: cs.textAlign } }""")
+        if r["display"] == "none" or rotulo not in r["conteudo"] or r["alinhado"] != "center":
+            probs.append(f"{rota}: o bloco sem o rótulo {rotulo!r} ({r})")
+    assert not probs, "\n".join(probs)
+    g.close()
+
+
+def test_revisao_balcao_peca_com_item_no_quickbooks_e_sem_preco_diz_sem_preco(servidor, navegador):
+    """Revisão do #331 (NO FAKE DATA): a peça que já tem item no QuickBooks e só não tem preço aparecia na Revisão com a
+    pílula "sem item no QuickBooks". A pílula diz o que falta: "sem preço"."""
+    import sqlite3
+    card = _dados_dos_cartoes_d()
+    con = sqlite3.connect(BANCO)
+    try:
+        if not con.execute("SELECT 1 FROM counter_pending WHERE code = 'REV331'").fetchone():
+            it = con.execute("""INSERT INTO stock_items (kind, tracking, name, qbo_item_id, price)
+                                VALUES ('peca', 'quantidade', 'Vela revisao 331 (e2e)', 'QBO-331', NULL)""").lastrowid
+            con.execute("""INSERT INTO counter_pending (code, item_id, client_id, pilot_name, service_date, motivo)
+                           VALUES ('REV331', ?, ?, 'Nico Cartao D', '2026-10-16', 'sem preço (e2e)')""", (it, card))
+            con.commit()
+    finally:
+        con.close()
+    g = entrar(navegador, servidor, largura=390, altura=800)
+    abrir(g, servidor, "/balcao")
+    cartao = g.locator("article.cd", has_text="REV331")
+    cartao.wait_for()
+    assert cartao.locator(".cd-pill").inner_text().strip().lower() == "sem preço", cartao.inner_text()
+    g.close()
