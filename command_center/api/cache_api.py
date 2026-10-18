@@ -5,7 +5,8 @@ GET 200 da API sai com `ETag` (hash do corpo) e `Cache-Control: private, no-cach
 navegador guarda, pergunta de novo com `If-None-Match` e, se nada mudou, recebe **304 sem
 corpo**. O dado continua sempre conferido com o servidor (no-cache = revalidar sempre; com a
 sessão caída a resposta é 401 e o guardado não aparece), e `private` impede cache
-compartilhado (proxy, CDN).
+compartilhado (proxy, CDN). A rota que já diz `no-store` (#115: o PDF assinado, o pacote de prova da waiver)
+passa como está: nada dela fica guardado no navegador.
 
 É um middleware ASGI puro, registrado por dentro de todos: vê o corpo inteiro, antes do gzip.
 
@@ -53,7 +54,9 @@ class ETagAPI:
             if msg.get("more_body"):
                 return
             corpo = b"".join(partes)
-            if inicio["status"] != 200:
+            proprio = next((v for k, v in inicio["headers"] if k.lower() == b"cache-control"), b"")
+            if inicio["status"] != 200 or b"no-store" in proprio.lower():
+                # #115: a rota que pede `no-store` (o PDF assinado, o pacote de prova) não fica no navegador nem ganha ETag
                 await send(inicio)
                 return await send({"type": "http.response.body", "body": corpo})
             etag = _etag(corpo)

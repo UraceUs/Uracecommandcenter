@@ -1089,11 +1089,30 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
         assert any(x.startswith(passo) for x in passos), (passo, passos)
     assert any(x.startswith("abriu a tela de assinar") and "relatado pela tela" in x for x in passos), passos
     assert any(x.startswith("PDF baixado") and "depois de assinar" in x for x in passos), passos
-    for largura in (360, 390):                       # a trilha aberta no celular não empurra a página para o lado
-        m = entrar(navegador, servidor, "italo@urace.us", largura=largura, altura=800)
+    for largura, quem in ((360, "italo@urace.us"), (390, "eduardo@urace.us")):   # a trilha aberta no celular não empurra a página
+        m = entrar(navegador, servidor, quem, largura=largura, altura=800)
         abrir(m, servidor, "/site/waiver")
-        m.locator("article.cd", has_text="Rafa Waiver").get_by_role("button", name="Trilha").click()
+        cartao = m.locator("article.cd", has_text="Rafa Waiver")
+        cartao.get_by_role("button", name="Trilha").click()
         m.get_by_text(re.compile(r"trilha íntegra")).wait_for()
+        r = m.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+        # 5. #115: o pacote de prova (gerente ou acima), com alvo de toque de 40 px, baixa o ZIP e a exportação vai para a trilha
+        pacote = cartao.get_by_role("button", name="Pacote de prova")
+        assert pacote.bounding_box()["height"] >= 40, (largura, pacote.bounding_box())
+        with m.expect_download() as baixou:
+            pacote.click()
+        import zipfile
+        z = zipfile.ZipFile(baixou.value.path())
+        assert baixou.value.suggested_filename.endswith("-evidence.zip")
+        for nome in ("signed.pdf", "audit.json", "events.json", "audit_logs.json", "timestamp.tst", "seal-root.pem",
+                     "certificate-of-completion.pdf", "declaration-DRAFT.md", "VERIFY.md", "SHA256SUMS"):
+            assert nome in z.namelist(), (nome, z.namelist())
+        assert z.read("declaration-DRAFT.md").startswith(b"# DRAFT \xe2\x80\x94 FOR ATTORNEY REVIEW")
+        m.get_by_text("Pacote de prova baixado").wait_for()
+        cartao.get_by_role("button", name="Trilha").click()              # fecha e abre: a trilha relê
+        cartao.get_by_role("button", name="Trilha").click()
+        m.get_by_text("pacote de prova exportado").first.wait_for()
         r = m.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], (largura, r)
         assert not m.erros_js and not m.erros_api, (m.erros_js, m.erros_api)

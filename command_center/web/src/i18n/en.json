@@ -4537,5 +4537,10 @@
 "A idade de {0} confere com o nascimento declarado na waiver ({1}, {2} anos)?": "Does {0}'s age match the date of birth declared on the waiver ({1}, {2} years old)?",
 "A idade de {0} confere com o nascimento do card ({1}, {2} anos)?": "Does {0}'s age match the date of birth on the card ({1}, {2} years old)?",
 "Nascimento declarado na waiver: {0} ({1} anos)": "Date of birth declared on the waiver: {0} ({1} years old)",
-"Nascimento no card: {0} ({1} anos)": "Date of birth on the card: {0} ({1} years old)"
+"Nascimento no card: {0} ({1} anos)": "Date of birth on the card: {0} ({1} years old)",
+"Pacote de prova": "Evidence package",
+"Baixar o pacote de prova (ZIP) para o advogado: PDF assinado, trilha, carimbo de tempo, certificado e declaração (rascunho)": "Download the evidence package (ZIP) for the attorney: signed PDF, trail, time-stamp, certificate and declaration (draft)",
+"ZIP SHA-256": "ZIP SHA-256",
+"O pacote de prova não saiu (HTTP {0}).": "The evidence package did not download (HTTP {0}).",
+"Pacote de prova baixado. A exportação ficou na trilha da waiver.": "Evidence package downloaded. The export was recorded in the waiver's trail."
 }
