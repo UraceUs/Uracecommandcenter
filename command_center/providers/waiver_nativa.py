@@ -367,6 +367,25 @@ def validade(tipo, nascimento, dia):
     return ate
 
 
+def parental_de_maior(con, w):
+    """A parental `w` já não vale porque o piloto fez 18, mesmo que a data gravada seja mais longa (assinada antes
+    da regra do #106). O nascimento é o do piloto da área do cliente a que ela vale (`pilot_id`); sem ele (convite de
+    um card sem conta), o do card. #117: `vigente`, o convite (`_vigente_do_card`) e o balcão usam esta mesma conta."""
+    if not w or w.get("template") != "parental":
+        return False
+    nasc = None
+    if w.get("pilot_id"):
+        p = um(con, "SELECT birth_date FROM portal_pilots WHERE id=?", (w["pilot_id"],))
+        nasc = p["birth_date"] if p else None
+    if not nasc and w.get("client_id"):
+        c = um(con, "SELECT pilot_dob FROM clients WHERE id=?", (w["client_id"],))
+        nasc = (c["pilot_dob"] or "").strip()[:10] if c else None
+    try:
+        return bool(nasc) and portal.idade(date.fromisoformat(nasc)) >= portal.MAIORIDADE
+    except ValueError:
+        return False
+
+
 def vigente(con, pid):
     """A waiver nativa ainda válida deste piloto (ou None). A parental deixa de valer quando o
     piloto faz 18, mesmo que a data gravada seja mais longa (assinada antes desta regra)."""
@@ -374,11 +393,7 @@ def vigente(con, pid):
                     AND COALESCE(hidden,0)=0 AND NOT {waiver_anulada()} AND expires_at >= ?
                     ORDER BY completed_at DESC LIMIT 1""",
            (pid, portal.hoje().isoformat()))
-    if w and w["template"] == "parental":
-        p = um(con, "SELECT birth_date FROM portal_pilots WHERE id=?", (pid,))
-        if p and p["birth_date"] and portal.idade(date.fromisoformat(p["birth_date"])) >= portal.MAIORIDADE:
-            return None
-    return w
+    return None if parental_de_maior(con, w) else w
 
 
 def faz_18_em(piloto):

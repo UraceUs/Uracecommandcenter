@@ -419,7 +419,9 @@ function Conta({ conta, setConta }: { conta: Account; setConta: (a: Account) => 
   </div>
 }
 
-export function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onSalvo: (a: Account) => void; onFechar: () => void }) {
+/** `nascimentoTravado` (#117): o piloto tem waiver assinada e valendo; o nascimento dela não muda (o servidor devolve 409). */
+export function FormPiloto({ piloto, onSalvo, onFechar, nascimentoTravado }: { piloto?: Driver; onSalvo: (a: Account) => void; onFechar: () => void
+  nascimentoTravado?: boolean }) {
   const [f, setF] = useState({ name: piloto?.name || '', birth_date: piloto?.birth_date || '', email: piloto?.email || '',
     phone: piloto?.phone || '', notes: piloto?.notes || '', social: piloto?.social || '' })
   const [m, setM] = useState<Record<string, string>>(Object.fromEntries(MEDIDAS.map(([k]) => [k, piloto?.measures?.[k] != null ? String(piloto.measures[k]) : ''])))
@@ -436,8 +438,12 @@ export function FormPiloto({ piloto, onSalvo, onFechar }: { piloto?: Driver; onS
     <Aviso erro={erro} />
     <div className="portal-2">
       <Campo rotulo="Driver's full name" dica="the person who will drive the kart" obrigatorio><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} required /></Campo>
-      <Campo rotulo="Date of birth" obrigatorio><input type="date" value={f.birth_date} onChange={e => setF({ ...f, birth_date: e.target.value })} required /></Campo>
+      <Campo rotulo="Date of birth" obrigatorio><input type="date" value={f.birth_date} onChange={e => setF({ ...f, birth_date: e.target.value })} required
+        readOnly={nascimentoTravado} aria-describedby={nascimentoTravado ? 'nasc-travado' : undefined} /></Campo>
     </div>
+    {nascimentoTravado && <p id="nasc-travado" className="small muted" style={{ margin: 0 }}>The date of birth is locked while the signed waiver is valid:
+      it decided which waiver was signed (parental or adult) and it is on the signed document. If it is wrong, contact URACE: our team voids
+      that waiver and you sign a new one with the right date.</p>}
     <div className="portal-2">
       <Campo rotulo="Email" dica="optional"><input type="email" value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Campo>
       <Campo rotulo="Phone" dica="optional"><input type="tel" value={f.phone} onChange={e => setF({ ...f, phone: e.target.value })} /></Campo>
@@ -466,7 +472,7 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
       <div className="row wrap" style={{ gap: 8 }}>{waivers && (waivers.enabled || !!waivers.signed_total) && <Link className="btn sm ghost" to="/portal/waivers">Signed waivers</Link>}
         {editando === null && <button className="btn sm" onClick={() => setEditando('novo')}>+ Add a driver</button>}</div></div>
     {conta.drivers.map(p => editando === p.id
-      ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} />
+      ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} nascimentoTravado={waiverDe(p.id)?.status === 'signed'} />
       : <article className="card card-b portal-piloto" key={p.id}>
         <div className="portal-piloto-topo"><div className="grow"><h2 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h2>
           <DadosDoPiloto p={p} completo />{waiverDe(p.id) && <LinhaWaiver w={waiverDe(p.id)!} />}

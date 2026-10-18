@@ -828,6 +828,7 @@ function rotuloDoEvento(ev: string) {
     invite_sent: tr("convite enviado por e-mail"), screen_opened: tr("abriu a tela de assinar"), pdf_delivered: tr("recebeu o PDF"),
     all_pages_viewed: tr("leu todas as páginas"), code_sent: tr("código enviado"), code_verified: tr("código confirmado"),
     reviewed: tr("revisou o resumo"), signed: tr("assinou"), copy_emailed: tr("cópia por e-mail"), copy_email_failed: tr("a cópia por e-mail não saiu"), id_checked: tr("documento conferido no balcão"),
+    id_check_failed: tr("documento não conferiu no balcão"),
     voided: tr("anulada"), downloaded: tr("PDF baixado"), evidence_exported: tr("pacote de prova exportado") }
   return r[ev] || ev
 }
@@ -847,6 +848,10 @@ function TrilhaDaWaiver({ wid }: { wid: number }) {
         {(e.event === 'copy_emailed' || e.event === 'copy_email_failed') && e.detail && <div>{tr("para {0}", String(e.detail.to || '—'))}
           {e.detail.message_id ? <> · message-id <span className="mono">{String(e.detail.message_id)}</span></> : null}
           {e.detail.error ? <> · {String(e.detail.error)}</> : null}</div>}
+        {(e.event === 'id_checked' || e.event === 'id_check_failed') && e.detail && <div>{tr("documento: {0}", String(e.detail.document_type || '—'))}
+          {' · '}{e.detail.name_matches ? tr("nome confere") : tr("nome não confere")}
+          {e.detail.minor_age_matches === true ? <> · {tr("idade do menor confere")}</> : e.detail.minor_age_matches === false ? <> · {tr("idade do menor não confere")}</> : null}
+          {e.detail.by ? <> · {tr("por {0}", String(e.detail.by))}</> : null}</div>}
         <div className="muted">IP {e.ip || '—'} · {e.user_agent || '—'}</div></li>)}</ol>}
   </div>
 }

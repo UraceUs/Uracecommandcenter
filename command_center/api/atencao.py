@@ -346,6 +346,31 @@ def _coletar(con):
                                   (x["peca"] or f"código novo {x['code']}") + (f" · {x['por']}" if x["por"] else ""))
                                  for x in pend[:6]]))
 
+    # ---- 4f2c. balcão (#117): o documento com foto não conferiu com a waiver. Registra e alerta; a equipe decide
+    # (conferir de novo, anular e pedir outra, ou seguir). Some quando a última conferência confere ou a waiver é anulada.
+    from command_center.providers.balcao import DOCUMENTOS as _DOCS
+    for e in todos(con, f"""SELECT e.id, e.at, e.waiver_id, e.client_id, e.detail, w.signer_name, w.template,
+                                   {waiver_anulada('w')} AS anulada, c.name AS cliente, c.pilot_name
+                              FROM waiver_events e JOIN waivers w ON w.id = e.waiver_id LEFT JOIN clients c ON c.id = e.client_id
+                             WHERE e.event = 'id_check_failed'
+                               AND e.id = (SELECT MAX(x.id) FROM waiver_events x WHERE x.waiver_id = e.waiver_id
+                                            AND x.event IN ('id_checked', 'id_check_failed'))
+                             ORDER BY e.id"""):
+        d = json.loads(e["detail"] or "{}")
+        quem = e["pilot_name"] or e["cliente"] or e["signer_name"] or f"waiver {e['waiver_id']}"
+        falhou = (["o nome não confere"] if not d.get("name_matches") else []) \
+            + (["a idade do menor não confere"] if d.get("minor_age_matches") is False else [])
+        itens.append(dict(key=_chave("waiver-documento", "waiver", e["waiver_id"]), level="HIGH",
+                          title=f"{quem}: o documento com foto não conferiu com a waiver",
+                          why=f"Na conferência do balcão, {d.get('by') or 'a equipe'} marcou: {' e '.join(falhou) or 'não confere'}. "
+                              "O sistema não bloqueia nada: a equipe decide (conferir de novo, anular a waiver e pedir outra, ou seguir).",
+                          entity={"type": "waiver", "id": e["waiver_id"]}, client_id=e["client_id"],
+                          link=f"/balcao/{e['client_id']}" if e["client_id"] else None, action="Decidir no balcão",
+                          facts=[("Assina", e["signer_name"] or "—"), ("Modelo", e["template"] or "—"),
+                                 ("Documento", _DOCS.get(d.get("document_type"), d.get("document_type") or "—")),
+                                 ("Quando", _dbr(_dia_fl(e["at"])))],
+                          auto_oculto="a waiver foi anulada" if e["anulada"] else None))
+
     # ---- 4f3. checklists (#92): começado e não concluído num dia que já passou
     from command_center.providers import checklists as _ck
     soltos = _ck.incompletos(con)

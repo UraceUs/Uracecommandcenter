@@ -7,14 +7,17 @@ As regras moram em `providers/balcao.py`; aqui fica quem pode o quê:
   vai lançar as peças e assim que ele lançar a peça já salva a invoice"*).
 - **criar o item no QuickBooks e enviar a invoice** é MANAGER: um mexe no catálogo da
   contabilidade, o outro manda cobrança para o cliente.
+- **conferir o documento com foto de quem assinou a waiver** (#117) é OPERATOR: é quem está no
+  check-in. Sem imagem e sem número do documento; o corpo só aceita os campos da lista.
 
 Cada lançamento grava primeiro aqui (commit) e depois leva a invoice ao QuickBooks. Se o
 QuickBooks falhar, a leitura fica salva e a tela mostra o erro com "Tentar de novo".
 """
 import sqlite3
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from command_center.api import auth
 from command_center.db import auditar, get_db, um
@@ -75,6 +78,33 @@ def pelo_qr(codigo: str, con: sqlite3.Connection = Depends(get_db), u=Depends(au
     if not c:
         raise HTTPException(404, "QR de cliente não reconhecido.")
     return b.resumo_cliente(c)
+
+
+class IdCheckIn(BaseModel):
+    """#117: o que a equipe conferiu. Lista fechada e nada mais: um campo de imagem ou de número do documento é 422."""
+    model_config = ConfigDict(extra="forbid")
+    client_id: int = Field(..., ge=1, le=2**63 - 1)        # o card aberto na tela: a waiver tem de ser dele
+    document_type: Literal["drivers_license", "passport", "state_id", "other_government_id"]
+    name_matches: StrictBool
+    minor_age_matches: StrictBool | None = None             # só na parental (piloto menor); obrigatório nela
+
+
+@r.post("/waivers/{wid}/id-check", status_code=201)
+def conferir_documento(dados: IdCheckIn, request: Request, wid: int = Path(..., ge=1, le=2**63 - 1),
+                       con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """#117: o documento com foto de quem assinou foi conferido no balcão. Vira `id_checked` (ou `id_check_failed`, que
+    aparece em "Precisa de atenção") na trilha da waiver e `waiver.id_check` na auditoria. Não bloqueia nada."""
+    try:
+        res = b.conferir_documento(con, wid, dados.client_id, dados.document_type, dados.name_matches,
+                                   dados.minor_age_matches, usuario=u, ip=auth._ip(request),
+                                   user_agent=request.headers.get("user-agent"))
+    except LookupError:
+        raise HTTPException(404, "Waiver não encontrada neste card.")
+    except b.ForaDeVigor as e:
+        raise HTTPException(409, str(e))
+    except b.ErroBalcao as e:
+        raise HTTPException(400, str(e))
+    return {**res, "waivers": b.waivers_do_card(con, dados.client_id)}
 
 
 class LancarIn(BaseModel):

@@ -2,7 +2,7 @@
 
 **Command Center da URACE — calendário e balcão de peças**
 
-Para quem trabalha no box, com o celular na mão. Atualizado em 17/10/2026 (#313: o cartão novo, igual em todo o painel).
+Para quem trabalha no box, com o celular na mão. Atualizado em 18/10/2026 (#117: conferir o documento da waiver no balcão).
 O guia do painel inteiro está no playbook geral (`docs/playbooks/playbook-geral.md`).
 
 ---
@@ -284,6 +284,28 @@ Se a peça já é do cliente (guardada com a gente), o sistema pergunta antes:
 **"Usar a dele (sem cobrar)"** ou **"Cobrar uma nova"**.
 
 O QR do cliente fica no card dele, no botão **"▣ QR do balcão"**.
+
+### Waiver · Conferir documento (check-in)
+
+Dono, 06/10 (#117): *"sim, no check-in"*. Aberto o cliente no balcão completo (pelo QR, pelos pilotos de hoje ou
+pelo nome), o quadro **"Waiver · Conferir documento"** mostra a waiver que vale **para este card**: a assinada no
+sistema e a do DocuSign. A de outro cliente nunca aparece aqui.
+
+1. Confira o nome do piloto e quem assinou: o **adulto** assina a própria (adult); pelo **menor**, assina o pai ou a
+   mãe (parental), e o quadro mostra o **nascimento declarado** e a idade.
+2. Peça o **documento com foto de quem assinou** e toque em **Conferir documento**.
+3. Escolha o tipo: **Carteira de motorista**, **Passaporte**, **State ID** ou **Outro documento oficial com foto**.
+4. Responda **O nome no documento confere?** e, pelo menor, **A idade confere com o nascimento declarado?**
+   (**Sim, confere** ou **Não confere**).
+5. **Gravar conferência**. O quadro passa a mostrar **documento conferido**, com o tipo, a hora e quem conferiu.
+
+**Não fotografe o documento e não anote o número.** O sistema guarda só o tipo e o que conferiu, na trilha da waiver
+(não muda a waiver assinada) e na Auditoria.
+
+Não conferiu? Grave **Não confere** assim mesmo. O sistema **não bloqueia nada sozinho**: o aviso vai para
+**Precisa de atenção** e o gerente decide (conferir de novo, anular a waiver e pedir outra, ou seguir). Conferiu de
+novo e bateu, o aviso sai. Sem waiver valendo, o quadro avisa: peça a assinatura antes da pista (o convite por e-mail
+sai do card).
 
 Cada **invoice de peças** é um cartão: em cima a situação (**aberta · não enviada**, **enviada**), o cliente, o
 **total no bloco grande** e as peças, uma por linha (quantas × preço). Se o QuickBooks recusou, a linha vermelha diz
