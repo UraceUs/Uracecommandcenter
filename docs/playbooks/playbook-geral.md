@@ -817,7 +817,8 @@ ajuda dos atalhos, sem mudar nada. A aba do navegador diz o nome da página aber
   preços do painel). É nela que se trabalha.
 - No computador, **Celular** mostra a página com 390 px e **Computador** com 1280 px de verdade (o site muda de desenho
   como muda para quem visita), **reduzida para caber** na prévia. Reduzida, tudo continua no lugar: o clique, a barra, o
-  arrastar e a linha azul caem onde o mouse está, e o contorno da seleção fica mais grosso para não sumir.
+  arrastar e a linha azul caem onde o mouse está, e o contorno da seleção fica mais grosso para não sumir. A seleção
+  tem um anel branco por dentro do azul, para aparecer também no fundo vermelho e no escuro.
 - Do lado (no computador) ou nas folhas de baixo (no celular), três abas: **Inserir** (a paleta), **Camadas** (a página em
   lista) e **Página** (título da aba, descrição, endereço, pendências, versões e **Atalhos do teclado (?)**).
 - Em cima: **← Páginas**, o nome da página, o estado (rascunho, no ar, no ar com mudanças), **salvo / salvando… / não
@@ -852,7 +853,9 @@ ajuda dos atalhos, sem mudar nada. A aba do navegador diz o nome da página aber
 **Arrastar, soltar e inserir**
 - **No computador**: arraste uma peça da prévia para outro lugar (na mesma coluna, para a outra coluna ou para outra
   seção) e uma seção inteira para cima ou para baixo; a **linha azul** mostra onde vai cair e a prévia rola sozinha perto
-  da borda (o cabeçalho do site, que fica preso em cima, conta como borda: passar por cima dele rola para cima). Arraste
+  da borda (o cabeçalho do site, que fica preso em cima, conta como borda: parar em cima dele rola para cima, e a peça
+  cai no que aparece logo embaixo dele, com a linha azul à vista). Ir com ↓ ou pelas Camadas até uma seção mais alta
+  que a prévia mostra o começo dela, logo embaixo do cabeçalho. Arraste
   uma peça da aba **Inserir** até a prévia, ou **clique** nela para pôr logo depois do que está selecionado. Uma peça
   solta em cima de uma faixa original vira uma seção nova antes ou depois dela.
 - **Fotos**: solte um arquivo do computador direto na prévia (vira uma imagem ali) ou em cima de uma imagem (troca a foto
@@ -872,7 +875,7 @@ ajuda dos atalhos, sem mudar nada. A aba do navegador diz o nome da página aber
   selecionado** (ou **Pôr no fim da página**, sem nada selecionado), põe a peça.
 - As folhas de Inserir, Camadas e Página fecham com **Esc** ou no **✕**, e o foco volta para o botão que as abriu.
 
-**Atalhos** — **?** (fora de um texto em edição) ou o botão **?** de cima abre a **ajuda dos atalhos**, com a lista
+**Atalhos** — **?** (fora de um texto em edição; no teclado brasileiro também com AltGr) ou o botão **?** de cima abre a **ajuda dos atalhos**, com a lista
 completa; **Esc**, **✕** ou **Entendi** fecham e o foco volta para onde estava (o Esc da ajuda não mexe na seleção).
 - Com uma peça escolhida: **↑ ↓** a anterior e a próxima · **Enter** escreve (na seção, vai para a primeira peça) ·
   **Esc** sobe um nível · **Alt+↑ ↓** move · **Alt+← →** muda de coluna · **Ctrl+D** duplica · **Delete** (ou
