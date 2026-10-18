@@ -104,7 +104,9 @@ export function Cofre() {
                   {aberto && (it.tem_senha || it.tem_nota) ? <button className="btn primary" onClick={() => ver(it)}>{a ? tr("Esconder") : tr("Ver senha")}</button> : null}
                   {aberto && !it.archived && <button className="btn" onClick={() => setEditar(it)}>{tr("Editar")}</button>}
                   <button className="btn" onClick={() => arquivar(it)}>{it.archived ? tr("Restaurar") : tr("Arquivar")}</button></>}>
-                {(it.username || a) && <CdLista>
+                {(it.username || a || (it.archived && it.outra_chave)) && <CdLista>
+                  {/* revisão do #333: arquivado, a pílula diz "Arquivado"; a outra chave (por que Ver senha não abre) vem aqui */}
+                  {!!it.archived && it.outra_chave && <CdItem tom="warn"><span title={tr("Guardado com outra chave do cofre")}>{tr("outra chave")}</span></CdItem>}
                   {it.username && <CdItem tom="neutral" glifo="@" acao={<button className="btn sm ghost" onClick={() => copiar(it.username!, toast, 'Usuário')}>{tr("Copiar")}</button>}>
                     <span className="small muted">{tr("Usuário")}</span> <b>{it.username}</b></CdItem>}
                   {a && <CdItem tom="warn" glifo="•" acao={a.senha ? <button className="btn sm ghost" onClick={() => copiar(a.senha!, toast, 'Senha')}>{tr("Copiar")}</button> : undefined}>

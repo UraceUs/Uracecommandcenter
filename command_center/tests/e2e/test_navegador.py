@@ -5269,7 +5269,7 @@ def test_revisao_pilula_amarela_e_verde_com_contraste_aa_no_tema_claro(servidor,
 
 
 # a tabela que vira cartão no celular: o bloco grande diz o que é (rota → o rótulo do bloco)
-_BLOCOS_RSP = {"/clients": "Próximo"}
+_BLOCOS_RSP = {"/clients": "Próximo", "/asana": "Data", "/quickbooks": "Saldo"}
 
 
 @pytest.mark.parametrize("largura", [360, 390])
@@ -5309,4 +5309,26 @@ def test_revisao_balcao_peca_com_item_no_quickbooks_e_sem_preco_diz_sem_preco(se
     cartao = g.locator("article.cd", has_text="REV331")
     cartao.wait_for()
     assert cartao.locator(".cd-pill").inner_text().strip().lower() == "sem preço", cartao.inner_text()
+    g.close()
+
+
+def test_revisao_cofre_arquivado_de_outra_chave_mostra_o_aviso(servidor, navegador):
+    """Revisão do #333: o login arquivado guardado com outra chave mostrava só "Arquivado"; o aviso "outra chave" (que explica
+    por que Ver senha não abre) ficava escondido."""
+    import sqlite3
+    con = sqlite3.connect(BANCO)
+    try:
+        if not con.execute("SELECT 1 FROM vault_items WHERE name = 'Login antigo do cofre (e2e 333)'").fetchone():
+            con.execute("""INSERT INTO vault_items (name, url, username, key_fp, archived)
+                           VALUES ('Login antigo do cofre (e2e 333)', 'https://example.com/a', 'arq@example.com', 'chave-antiga', 1)""")
+            con.commit()
+    finally:
+        con.close()
+    g = entrar(navegador, servidor, email="livre@urace.us", largura=390, altura=800)
+    abrir(g, servidor, "/cofre")
+    g.get_by_role("button", name="Arquivados", exact=True).click()
+    cartao = g.locator("article.cd", has_text="Login antigo do cofre (e2e 333)")
+    cartao.wait_for()
+    assert cartao.locator(".cd-pill").inner_text().strip().lower() == "arquivado"
+    assert cartao.locator(".cd-lista li", has=g.locator(".cd-ic.warn")).filter(has_text="outra chave").count() == 1, cartao.inner_text()
     g.close()
