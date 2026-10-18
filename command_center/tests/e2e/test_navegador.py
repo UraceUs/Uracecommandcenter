@@ -5253,3 +5253,26 @@ def test_revisao_no_celular_o_bloco_da_tabela_diz_o_que_e(servidor, navegador, l
             probs.append(f"{rota}: o bloco sem o rótulo {rotulo!r} ({r})")
     assert not probs, "\n".join(probs)
     g.close()
+
+
+def test_revisao_balcao_peca_com_item_no_quickbooks_e_sem_preco_diz_sem_preco(servidor, navegador):
+    """Revisão do #331 (NO FAKE DATA): a peça que já tem item no QuickBooks e só não tem preço aparecia na Revisão com a
+    pílula "sem item no QuickBooks". A pílula diz o que falta: "sem preço"."""
+    import sqlite3
+    card = _dados_dos_cartoes_d()
+    con = sqlite3.connect(BANCO)
+    try:
+        if not con.execute("SELECT 1 FROM counter_pending WHERE code = 'REV331'").fetchone():
+            it = con.execute("""INSERT INTO stock_items (kind, tracking, name, qbo_item_id, price)
+                                VALUES ('peca', 'quantidade', 'Vela revisao 331 (e2e)', 'QBO-331', NULL)""").lastrowid
+            con.execute("""INSERT INTO counter_pending (code, item_id, client_id, pilot_name, service_date, motivo)
+                           VALUES ('REV331', ?, ?, 'Nico Cartao D', '2026-10-16', 'sem preço (e2e)')""", (it, card))
+            con.commit()
+    finally:
+        con.close()
+    g = entrar(navegador, servidor, largura=390, altura=800)
+    abrir(g, servidor, "/balcao")
+    cartao = g.locator("article.cd", has_text="REV331")
+    cartao.wait_for()
+    assert cartao.locator(".cd-pill").inner_text().strip().lower() == "sem preço", cartao.inner_text()
+    g.close()
