@@ -10,8 +10,11 @@
  * mostra.
  *
  * Etapa 4: o texto das faixas originais (a página do código) também se escreve no lugar; o bloco de dado delas (preço,
- * plano, kart, reserva, blog, loja) fica travado e a barra diz onde ele se muda. */
-import { useEffect, useRef, useState, type KeyboardEvent as KE, type PointerEvent as PE } from 'react'
+ * plano, kart, reserva, blog, loja) fica travado e a barra diz onde ele se muda.
+ *
+ * Etapa 5: "?" abre a ajuda dos atalhos (Atalhos.tsx); a aba do navegador leva o nome da página e a tela tem a sua
+ * descrição; no celular, a página rola para a peça escolhida ficar inteira acima da barra presa embaixo. */
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as KE, type PointerEvent as PE } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
@@ -21,6 +24,8 @@ import { Chip, ErrorState, Loading } from '../../components/ui'
 import { Icon } from '../../components/Icon'
 import { useToast } from '../../components/Toast'
 import { tr } from '../../i18n'
+import { useDescricao } from '../../titulo'
+import { Atalhos } from './Atalhos'
 import { Barra, type AcoesBarra, type Ancora } from './Barra'
 import { Camadas } from './Camadas'
 import { Historico } from './historico'
@@ -74,6 +79,13 @@ function useTeclado() {
   }, [])
   return h
 }
+/** A altura do que fica preso no topo do painel (a barra de cima, no celular): a peça escolhida não fica embaixo dela. */
+function topoPreso(): number {
+  const t = document.querySelector('.topbar')
+  if (!t) return 0
+  const p = getComputedStyle(t).position
+  return p === 'fixed' || p === 'sticky' ? Math.max(0, t.getBoundingClientRect().bottom) : 0
+}
 
 export function EditorDePagina({ id }: { id: number }) {
   const { can } = useAuth()
@@ -105,6 +117,13 @@ export function EditorDePagina({ id }: { id: number }) {
   // o balão pedido de fora vale só para a peça dele (`id`): a barra da foto que acabou de entrar abre a descrição
   const [balao, setBalao] = useState<{ qual: 'link' | 'alt' | 'linkTexto'; id: string; vez: number } | null>(null)
   const [, setVez] = useState(0)
+  // a ajuda dos atalhos ("?")
+  const [ajuda, setAjuda] = useState(false)
+  const ajudaRef = useRef(false)
+  ajudaRef.current = ajuda
+  // a aba do navegador e o que a tela é (o nome da página entra pelo data-aba-titulo do h2)
+  const nomeDaPagina = doc?.seo.title || l.data?.pagina.title || ''
+  useDescricao(nomeDaPagina ? tr("Editor do site: a página \"{0}\" aberta na prévia para mudar como no Canva, com rascunho, publicar e versões.", nomeDaPagina) : '')
 
   const docRef = useRef<Doc | null>(null)
   const saidaRef = useRef<Saida | null>(null)
@@ -119,6 +138,11 @@ export function EditorDePagina({ id }: { id: number }) {
   const mudouNoTexto = useRef(false)
   const engolirClique = useRef(false)
   const quadro = useRef(0)
+  const quadroLivre = useRef(0)
+  const doca = useRef<HTMLDivElement | null>(null)
+  // a barra de baixo do celular só existe depois de a página carregar: o observador do tamanho dela liga quando ela aparece
+  const [docaEl, setDocaEl] = useState<HTMLDivElement | null>(null)
+  const ligarDoca = useCallback((el: HTMLDivElement | null) => { doca.current = el; setDocaEl(el) }, [])
   // o salvar: uma requisição por vez, sempre com a revisão que a tela tem
   const rev = useRef(0)
   const versaoLocal = useRef(0)
@@ -270,6 +294,33 @@ export function EditorDePagina({ id }: { id: number }) {
       if (t) setLimites(o => o.w === t.w && o.h === t.h ? o : t)
     })
   }
+  /** A peça escolhida inteira à vista na tela do painel (a prévia já rolou por dentro até ela). No celular, a barra
+   *  presa embaixo não cobre a peça: a página rola até a peça ficar entre o topo e a barra; se a página não rola mais,
+   *  a prévia rola por dentro o que faltou. A peça mais alta que o espaço fica com o começo à vista. Sem animação (a
+   *  rolagem é para já, e o leitor de tela não perde o lugar). */
+  function aVista() {
+    cancelAnimationFrame(quadroLivre.current)
+    quadroLivre.current = requestAnimationFrame(() => requestAnimationFrame(() => {
+      const s = selRef.current
+      const pt = ponte()
+      const r = s && pt ? pt.retangulo(s) : null
+      const el = r ? lona.current?.naTela(r) : null
+      const cx = lona.current?.caixa()
+      if (!el || !cx || !pt) return
+      const barra = doca.current?.getBoundingClientRect()
+      const topo = Math.max(topoPreso(), 0) + 8
+      const baixo = (barra?.height ? barra.top : window.innerHeight) - 8
+      const dy = el.bottom > baixo ? Math.min(el.bottom - baixo, el.top - topo) : el.top < topo ? el.top - topo : 0
+      if (Math.abs(dy) <= 1) return
+      const antes = window.scrollY
+      window.scrollBy({ top: dy, behavior: 'instant' })
+      const subiu = window.scrollY - antes            // a lona e a peça subiram isso na tela (desceram, se negativo)
+      // a prévia rola por dentro o que faltou: para cima sem a peça passar do começo da lona (nem do topo preso)
+      const cabe = dy > 0 ? Math.min(dy - subiu, (el.top - subiu) - Math.max(cx.top - subiu, topo)) : dy - subiu
+      if (Math.abs(cabe) > 1) pt.win.scrollBy({ top: cabe / cx.escala, behavior: 'instant' })
+      reposicionar()
+    }))
+  }
   function selecionar(s: Sel, rolar = false, bloco: string | null = null) {
     if (editRef.current && (!s || s.id !== editRef.current)) ponte()?.pararEdicao()
     setTrava(s?.tipo === 's' ? bloco : null)
@@ -277,7 +328,7 @@ export function EditorDePagina({ id }: { id: number }) {
     selRef.current = s
     setSel(s)
     ponte()?.marcar(s)
-    if (rolar) ponte()?.rolarAte(s)
+    if (rolar) { ponte()?.rolarAte(s); if (!estreito) aVista() }      // no celular, o efeito da seleção já cuida
     hist.current.cortar()
     reposicionar()
   }
@@ -495,6 +546,7 @@ export function EditorDePagina({ id }: { id: number }) {
   function teclar(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey
     const k = e.key.toLowerCase()
+    if (e.key === '?' && !mod && !e.altKey) { e.preventDefault(); setAjuda(true); return }
     if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); return }
     if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); desfazer(false); return }
     if (mod && k === 's') { e.preventDefault(); enviar(); return }
@@ -533,6 +585,7 @@ export function EditorDePagina({ id }: { id: number }) {
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
+      if (ajudaRef.current) return                    // a ajuda dos atalhos está aberta: as teclas são dela
       if (e.key === 'Escape' && fecharSeFolha.current()) { e.preventDefault(); return }      // Esc fecha a folha do celular
       if (t?.closest('input, textarea, select, [contenteditable]') && !((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's')) return
       if (t?.closest('button, a, summary') && (e.key === 'Enter' || e.key === ' ')) return
@@ -545,6 +598,15 @@ export function EditorDePagina({ id }: { id: number }) {
     return () => window.removeEventListener('keydown', f)
   }, [])
   useEffect(() => { reposicionar() }, [tela, estreito, aba])
+  // celular: a peça escolhida (e o texto em edição, com o teclado aberto) fica acima da barra de baixo, também quando a
+  // barra cresce (o balão do link, a descrição da foto, o aviso de erro)
+  useEffect(() => { if (estreito && sel) aVista() }, [sel, editando, teclado, estreito])
+  useEffect(() => {
+    if (!docaEl) return
+    const ro = new ResizeObserver(() => { if (selRef.current) aVista() })
+    ro.observe(docaEl)
+    return () => ro.disconnect()
+  }, [docaEl])
 
   // ------------------------------------------------------------------ a paleta arrastando até a prévia
   function arrastarDaPaleta(p: Peca, e: PE<HTMLButtonElement>) {
@@ -743,7 +805,8 @@ export function EditorDePagina({ id }: { id: number }) {
       : <PaginaPainel p={p} seo={doc.seo} gerente={gerente} problemas={atual.problemas} erros={listaErros} mudarSeo={mudarSeo}
         orfaos={nOrfaos} descartar={() => mudarC(cc => descartarOrfaos(cc, orfaos), { desenhar: false, anuncio: tr("Textos órfãos descartados") })}
         despublicar={() => acao('despublicar', p.base ? tr("O site voltou à página original.") : tr("A página saiu do ar."))}
-        versoes={versoes} abrirVersoes={abrirVersoes} voltarVersao={voltarVersao} recarregar={() => lona.current?.recarregar()} />
+        versoes={versoes} abrirVersoes={abrirVersoes} voltarVersao={voltarVersao} recarregar={() => lona.current?.recarregar()}
+        ajuda={() => setAjuda(true)} />
   const abas = (onde: 'lado' | 'folha') => <div className="seg ed-abas" role="group" aria-label={tr("Painéis do editor")}>
     {ABAS.filter(([k]) => gerente || k !== 'inserir').map(([k, n]) => {
       const on = onde === 'lado' ? aba === k : folha === k
@@ -757,7 +820,7 @@ export function EditorDePagina({ id }: { id: number }) {
       onChange={e => { const f = e.target.files?.[0]; const d = fotoPara.current; fotoPara.current = null; e.target.value = ''; if (f && d) subirFoto(f, d) }} />
     <div className="ed-topo">
       <Link className="btn sm ghost" to="/site/editor">{tr("← Páginas")}</Link>
-      <h2 className="h2 ed-nome">{doc.seo.title || p.path}</h2>
+      <h2 className="h2 ed-nome" data-aba-titulo="">{doc.seo.title || p.path}</h2>
       <Chip tone={ESTADO[p.estado][1]}>{ESTADO[p.estado][0]}</Chip>
       {gerente && <span className={`small ed-salvo${salvo === 'erro' || salvo === 'conflito' ? ' ruim' : ''}`}>
         {salvo === 'conflito' ? tr("parado: outra pessoa salvou") : salvo === 'erro' ? tr("não salvou") : salvando ? tr("salvando…") : tr("salvo")}</span>}
@@ -765,6 +828,8 @@ export function EditorDePagina({ id }: { id: number }) {
       {gerente && <>
         <button type="button" className="btn sm ghost" aria-label={tr("Desfazer (Ctrl+Z)")} title={tr("Desfazer (Ctrl+Z)")} disabled={!hist.current.podeDesfazer} onClick={() => desfazer()}>↶</button>
         <button type="button" className="btn sm ghost" aria-label={tr("Refazer (Ctrl+Shift+Z)")} title={tr("Refazer (Ctrl+Shift+Z)")} disabled={!hist.current.podeRefazer} onClick={() => desfazer(false)}>↷</button></>}
+      <button type="button" className="btn sm ghost ed-ajuda-btn" aria-label={tr("Atalhos do teclado (?)")} title={tr("Atalhos do teclado (?)")}
+        aria-haspopup="dialog" onClick={() => setAjuda(true)}>?</button>
       {!estreito && <div className="seg" role="group" aria-label={tr("Tamanho da prévia")}>
         <button type="button" className={`btn sm${tela === 'celular' ? '' : ' ghost'}`} aria-pressed={tela === 'celular'} onClick={() => setTela('celular')}>{tr("Celular")}</button>
         <button type="button" className={`btn sm${tela === 'computador' ? '' : ' ghost'}`} aria-pressed={tela === 'computador'} onClick={() => setTela('computador')}>{tr("Computador")}</button>
@@ -801,7 +866,7 @@ export function EditorDePagina({ id }: { id: number }) {
     </div>
     {/* o que fica preso na tela vai direto no <body>: o invólucro animado da página viraria a referência do fixed */}
     {createPortal(<div className="ed-fora">
-      {estreito && gerente && <div className="ed-doca" style={teclado ? { bottom: teclado + 8 } : undefined}>
+      {estreito && gerente && <div ref={ligarDoca} className="ed-doca" style={teclado ? { bottom: teclado + 8 } : undefined}>
         {barra || <div className="ed-barra ed-barra-baixo ed-doca-geral">
           <button type="button" className="btn sm" onClick={() => abrirFolha('inserir')}><Icon name="plus" size={16} /> {tr("Inserir")}</button>
           <button type="button" className="btn sm ghost" onClick={() => abrirFolha('camadas')}>{tr("Camadas")}</button>
@@ -821,6 +886,7 @@ export function EditorDePagina({ id }: { id: number }) {
           {abas('folha')}
           {painel(folha)}
         </div></>}
+      {ajuda && <Atalhos fechar={() => setAjuda(false)} />}
       {fantasma && <div className="ed-fantasma" style={{ transform: `translate(${fantasma.x + 12}px, ${fantasma.y + 12}px)` }} aria-hidden="true">{fantasma.nome}</div>}
     </div>, document.body)}
     <div className="sr-only" aria-live="polite">{aviso}</div>

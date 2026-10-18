@@ -4389,6 +4389,372 @@ def test_editor_canva_foto_solta_na_previa_abre_a_descricao(servidor, navegador)
     g.close()
 
 
+# ------------------------------------------------------------------ #315, etapa 5: o fechamento
+def _secoes_e2e(prefixo, n, colunas=2, botao=False):
+    """`n` seções fictícias: título e texto na coluna 1 e um texto na 2 (o primeiro título é o h1)."""
+    out = []
+    for k in range(n):
+        col1 = [{"id": f"{prefixo}t{k}", "tipo": "titulo", "texto": f"Kart Camp block {k}", "nivel": 1 if k == 0 else 2},
+                {"id": f"{prefixo}p{k}", "tipo": "texto", "html": f"<p>Left words of block {k}.</p>"}]
+        if botao and k == 3:
+            col1.append({"id": f"{prefixo}b{k}", "tipo": "botao", "texto": "Book a kart", "link": "/contact/"})
+        cols = [col1, [{"id": f"{prefixo}q{k}", "tipo": "texto", "html": f"<p>Right words of block {k}.</p>"}]][:colunas]
+        out.append({"id": f"{prefixo}s{k}", "tipo": "secao", "fundo": "clara", "espaco": "g", "colunas": colunas, "itens": cols})
+    return out
+
+
+def _caixa(loc):
+    b = loc.bounding_box()
+    assert b, loc
+    return b
+
+
+def _barra_junto(barra, el, folga=16):
+    """A barra flutuante fica logo em cima da peça (ou logo embaixo, quando não cabe em cima)."""
+    em_cima = 0 <= el["y"] - (barra["y"] + barra["height"]) <= folga
+    embaixo = 0 <= barra["y"] - (el["y"] + el["height"]) <= folga
+    return em_cima or embaixo
+
+
+def test_editor_canva_modo_computador_reduz_para_caber_e_a_barra_e_o_arrasto_seguem_a_escala(servidor, navegador):
+    """#315, etapa 5: no computador, **Computador** desenha a página com 1280 px de verdade (as media queries do site) e
+    reduz com `transform: scale` para caber na lona. A barra flutuante fica junto da peça escolhida com a escala e com a
+    rolagem de dentro da prévia, e não sai da lona quando a peça rola para fora; arrastar (na prévia e da paleta, com a
+    prévia rolada por dentro) cai onde a linha azul mostra. **Celular** volta a 390 px, sem escala."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Scale Kart Camp e2e", "/scale-camp-e2e/", _secoes_e2e("ze", 10))
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator('[data-ed-w="zet0"]').wait_for()
+    g.get_by_role("button", name="Computador").click()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentWindow.innerWidth === 1280")
+    g.wait_for_timeout(200)
+    g.evaluate("document.querySelector('.ed-lona').scrollIntoView({ block: 'start' })")
+    caixa_lona = _caixa(g.locator(".ed-lona"))
+    quadro = _caixa(g.locator("iframe.ed-iframe"))
+    escala = quadro["width"] / 1280
+    assert escala < 1, "a lona é mais estreita que 1280 px: a página é reduzida"
+    assert quadro["x"] >= caixa_lona["x"] - 1 and quadro["x"] + quadro["width"] <= caixa_lona["x"] + caixa_lona["width"] + 1, "cabe na lona"
+    assert abs(quadro["height"] - caixa_lona["height"]) <= 4, "a altura também cabe (o iframe é mais alto e reduzido junto)"
+    # escolher: a barra aparece junto da peça, já com a escala
+    alvo = lona.locator('[data-ed-w="zet1"]')
+    alvo.click()
+    barra = g.locator(".ed-barra")
+    barra.get_by_text("Título", exact=True).wait_for()
+    g.wait_for_timeout(150)
+    b0, e0 = _caixa(barra), _caixa(alvo)
+    assert _barra_junto(b0, e0), (b0, e0)
+    # a prévia rola por dentro: a peça sobe 100 px da página (× a escala na tela) e a barra vai junto
+    g.evaluate("document.querySelector('iframe.ed-iframe').contentWindow.scrollBy({ top: 100, behavior: 'instant' })")
+    g.wait_for_function(f"() => Math.abs(document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-w=\"zet1\"]').getBoundingClientRect().top - {e0['y'] - quadro['y']} / {escala} + 100) < 2")
+    g.wait_for_timeout(150)
+    b1, e1 = _caixa(barra), _caixa(alvo)
+    assert abs((e0["y"] - e1["y"]) - 100 * escala) <= 2, (e0, e1, escala)
+    assert abs((b0["y"] - b1["y"]) - (e0["y"] - e1["y"])) <= 2 or _barra_junto(b1, e1), (b0, b1, e0, e1)
+    # a peça rola para fora da prévia, por cima: a barra fica dentro da lona (não sobe por cima do topo do editor)
+    g.evaluate("""() => { const w = document.querySelector('iframe.ed-iframe').contentWindow
+      const r = w.document.querySelector('[data-ed-w="zet1"]').getBoundingClientRect()
+      w.scrollBy({ top: r.bottom + 400, behavior: 'instant' }) }""")
+    g.wait_for_timeout(250)
+    e2, b2 = _caixa(alvo), _caixa(barra)
+    assert e2["y"] + e2["height"] < caixa_lona["y"], "a peça saiu por cima"
+    assert b2["y"] >= caixa_lona["y"] and b2["y"] + b2["height"] <= caixa_lona["y"] + caixa_lona["height"] + 1, (b2, caixa_lona)
+    g.keyboard.press("Escape")
+    g.keyboard.press("Escape")
+    # arrastar com a escala e com a prévia rolada por dentro (o bloco 2 logo embaixo do cabeçalho preso do site): o
+    # texto do bloco 2 vai para o fim da coluna da direita
+    g.evaluate("""() => { const w = document.querySelector('iframe.ed-iframe').contentWindow
+      w.scrollTo({ top: 0, behavior: 'instant' })
+      const topo = w.document.querySelector('header.topo').getBoundingClientRect().bottom
+      const r = w.document.querySelector('[data-ed-s="zes2"]').getBoundingClientRect()
+      w.scrollBy({ top: r.top - topo - 30, behavior: 'instant' }) }""")
+    g.wait_for_timeout(200)
+    assert g.evaluate("document.querySelector('iframe.ed-iframe').contentWindow.scrollY") > 0
+    a = _caixa(lona.locator('[data-ed-w="zep2"]'))
+    b = _caixa(lona.locator('[data-ed-w="zeq2"]'))
+    g.mouse.move(a["x"] + 8, a["y"] + a["height"] / 2)
+    g.mouse.down()
+    g.mouse.move(a["x"] + 30, a["y"] + a["height"] / 2, steps=4)
+    g.mouse.move(b["x"] + 10, b["y"] + b["height"] - 1, steps=12)
+    assert lona.locator('[data-ed-w="zeq2"].ed-solta-depois').count() == 1, "a linha mostra onde cai, com a escala"
+    g.mouse.up()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[data-ed-col=\"zes2:1\"] [data-ed-w=\"zep2\"]')")
+    # da paleta (fora da prévia) para logo depois do título do bloco 2
+    pal = _caixa(g.locator(".ed-peca", has_text="Botão"))
+    h = _caixa(lona.locator('[data-ed-w="zet2"]'))
+    g.mouse.move(pal["x"] + 20, pal["y"] + pal["height"] / 2)
+    g.mouse.down()
+    g.mouse.move(pal["x"] + 60, pal["y"] + 30, steps=4)
+    g.mouse.move(h["x"] + 30, h["y"] + h["height"] - 2, steps=15)
+    assert lona.locator('[data-ed-w="zet2"].ed-solta-depois').count() == 1, "a linha da paleta, com a escala e a rolagem"
+    g.mouse.up()
+    g.wait_for_function("() => [...document.querySelector('iframe.ed-iframe').contentDocument.querySelectorAll('[data-ed-col=\"zes2:0\"] > [data-ed-w]')].map(n => n.getAttribute('data-ed-tipo')).join() === 'titulo,botao'")
+    _salvo(g)
+    s2 = _rascunho(g, servidor, pid)["itens"][2]["itens"]
+    assert [w["tipo"] for w in s2[0]] == ["titulo", "botao"] and [w["id"] for w in s2[1]] == ["zeq2", "zep2"], s2
+    assert lona.locator("html.ed-reduzida").count() == 1, "reduzida, o contorno da seleção engrossa"
+    # Celular: 390 px, sem escala
+    g.get_by_role("button", name="Celular").click()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentWindow.innerWidth === 390")
+    g.wait_for_timeout(200)
+    assert abs(_caixa(g.locator("iframe.ed-iframe"))["width"] - 390) <= 1, "390 px, sem escala"
+    assert lona.locator("html.ed-reduzida").count() == 0
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_interrogacao_abre_a_ajuda_dos_atalhos(servidor, navegador):
+    """#315, etapa 5: "?" abre a ajuda dos atalhos (da prévia, das Camadas ou no botão "?" de cima). É um diálogo com
+    título h3, com todos os atalhos que o editor atende; o foco entra e fica preso nele, Esc fecha sem mexer na seleção
+    e o foco volta para onde estava."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Help Kart Camp e2e", "/help-camp-e2e/", _secoes_e2e("he", 2))
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator('[data-ed-w="hep0"]').wait_for()
+    # das Camadas, só com o teclado
+    g.locator(".ed-lado").get_by_role("button", name="Camadas", exact=True).click()
+    linha = g.locator('.ed-camadas [data-camada="hep0"]')
+    linha.focus()
+    g.keyboard.press("Enter")
+    assert "ed-sel" in lona.locator('[data-ed-w="hep0"]').get_attribute("class")
+    g.keyboard.press("?")
+    ajuda = g.get_by_role("dialog", name="Atalhos do teclado")
+    ajuda.wait_for()
+    assert ajuda.locator("h3", has_text="Atalhos do teclado").count() == 1
+    texto = ajuda.inner_text()
+    for tecla in ["Enter", "Esc", "Alt", "Ctrl", "Delete", "Backspace", "?"]:
+        assert tecla in texto, tecla
+    for o_que in ["desfazer", "refazer", "duplicar", "mover para cima e para baixo", "mudar de coluna", "salvar já",
+                  "negrito e itálico", "link no texto marcado", "a peça anterior e a próxima", "esta ajuda"]:
+        assert o_que in texto, o_que
+    assert g.evaluate("() => !!document.activeElement?.closest('[role=dialog]')"), "o foco entra na ajuda"
+    for _ in range(4):
+        g.keyboard.press("Tab")
+        assert g.evaluate("() => !!document.activeElement?.closest('[role=dialog]')"), "Tab fica na ajuda"
+    g.keyboard.press("Shift+Tab")
+    assert g.evaluate("() => !!document.activeElement?.closest('[role=dialog]')"), "Shift+Tab fica na ajuda"
+    cab = _cabecalhos(g)
+    assert [n for n, _ in cab].count(1) == 1 and all(b <= a + 1 for (a, _), (b, _) in zip([(0, "")] + cab, cab)), cab
+    g.keyboard.press("Escape")
+    ajuda.wait_for(state="detached")
+    assert g.evaluate("() => document.activeElement?.getAttribute('data-camada')") == "hep0", "o foco volta para a linha"
+    assert "ed-sel" in lona.locator('[data-ed-w="hep0"]').get_attribute("class"), "o Esc da ajuda não mexe na seleção"
+    # da prévia: "?" com a peça escolhida lá dentro
+    lona.locator('[data-ed-w="heq1"]').click()
+    g.keyboard.press("?")
+    ajuda.wait_for()
+    ajuda.get_by_role("button", name="Entendi").click()
+    ajuda.wait_for(state="detached")
+    assert "ed-sel" in lona.locator('[data-ed-w="heq1"]').get_attribute("class")
+    # escrevendo no lugar, "?" é só uma letra
+    lona.locator('[data-ed-w="heq1"]').click()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentDocument.querySelector('[contenteditable]')")
+    g.keyboard.press("End")
+    g.keyboard.type(" Why?")
+    assert ajuda.count() == 0, "dentro do texto o ? não abre a ajuda"
+    g.keyboard.press("Escape")
+    # o botão "?" de cima: Esc fecha e o foco volta para ele
+    botao = g.get_by_role("button", name="Atalhos do teclado (?)").first
+    botao.click()
+    ajuda.wait_for()
+    g.keyboard.press("Escape")
+    ajuda.wait_for(state="detached")
+    assert g.evaluate("() => document.activeElement?.getAttribute('aria-label')") == "Atalhos do teclado (?)"
+    _salvo(g)
+    assert "Why?" in str(_rascunho(g, servidor, pid))
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_titulo_da_aba_e_descricao_da_tela(servidor, navegador):
+    """#315, etapa 5 (CLAUDE.md: título da aba por tela e `meta description`): a lista das páginas é "Editor do site";
+    a página aberta leva o nome dela na aba; cada uma tem a sua descrição, e ao sair volta a do painel."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Tab Title Kart Camp e2e", "/tab-camp-e2e/", _secoes_e2e("ta", 1))
+    desc = "() => document.querySelector('meta[name=\"description\"]').getAttribute('content')"
+    abrir(g, servidor, "/compras")
+    padrao = g.evaluate(desc)
+    abrir(g, servidor, "/site/editor")
+    g.wait_for_function("() => document.title === 'Editor do site · URACE Command Center'")
+    lista = g.evaluate(desc)
+    assert lista != padrao and "Editor do site" in lista, lista
+    abrir(g, servidor, f"/site/editor/{pid}")
+    _lona(g).locator('[data-ed-w="tat0"]').wait_for()
+    g.wait_for_function("() => document.title === 'Tab Title Kart Camp e2e · Editor do site · URACE Command Center'")
+    pagina = g.evaluate(desc)
+    assert "Tab Title Kart Camp e2e" in pagina and pagina not in (padrao, lista), pagina
+    # sair pelo painel (sem recarregar): a descrição acompanha a tela
+    g.get_by_role("link", name="← Páginas").click()
+    g.wait_for_function("() => document.title === 'Editor do site · URACE Command Center'")
+    g.wait_for_function(f"() => document.querySelector('meta[name=description]').content === {json.dumps(lista)}")
+    g.locator("nav.tabs").get_by_role("link", name="Painel do site").click()
+    g.wait_for_function(f"() => document.querySelector('meta[name=description]').content === {json.dumps(padrao)}")
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+_MOTION = """() => {
+  const SO = new Set(['transform', 'opacity', 'translate', 'scale', 'rotate'])
+  const TOKENS = [0.12, 0.2, 0.28, 0.18]           // --dur-rapida, --dur-media, --dur-lenta (painel) e --dur (site)
+  const quadros = {}
+  const lerQuadros = doc => { for (const f of doc.styleSheets) { let rs; try { rs = f.cssRules } catch { continue }
+    const andar = lista => { for (const r of lista) { if (r.type === 7) quadros[r.name] = [...r.cssRules].flatMap(k => [...k.style])
+      else if (r.cssRules) andar(r.cssRules) } }
+    andar(rs) } }
+  const out = { mexe: [], fora: [], quadros: [] }
+  const ver = (doc, els, onde) => {
+    lerQuadros(doc)
+    for (const el of els) for (const ps of [null, '::before', '::after']) {
+      const c = doc.defaultView.getComputedStyle(el, ps)
+      const nome = `${onde} ${el.tagName.toLowerCase()}.${String(el.className).split(' ').slice(0, 2).join('.')}${ps || ''}`
+      const props = c.transitionProperty.split(',').map(s => s.trim()), durs = c.transitionDuration.split(',').map(parseFloat)
+      props.forEach((p, i) => { const d = durs[i % durs.length]; if (d > 0.0001) {
+        out.mexe.push(`${nome} transition ${p} ${d}`)
+        if (!SO.has(p) || !TOKENS.some(t => Math.abs(t - d) < 0.001)) out.fora.push(`${nome} transition ${p} ${d}`) } })
+      const an = c.animationName.split(',').map(s => s.trim()), ad = c.animationDuration.split(',').map(parseFloat)
+      an.forEach((a, i) => { const d = ad[i % ad.length]; if (a !== 'none' && d > 0.0001) {
+        out.mexe.push(`${nome} animation ${a} ${d}`)
+        if (!TOKENS.some(t => Math.abs(t - d) < 0.001)) out.fora.push(`${nome} animation ${a} ${d}`)
+        const ruins = (quadros[a] || ['?']).filter(p => !SO.has(p))
+        if (ruins.length) out.quadros.push(`${nome} @keyframes ${a}: ${ruins.join()}`) } })
+    }
+  }
+  ver(document, [...document.querySelectorAll('.ed, .ed *, .ed-fora, .ed-fora *, .ed-ajuda, .ed-ajuda *')], 'painel')
+  const f = document.querySelector('iframe.ed-iframe').contentDocument
+  ver(f, [...f.querySelectorAll('*')], 'previa')
+  out.rolagem = getComputedStyle(f.documentElement).scrollBehavior
+  for (const k of ['mexe', 'fora', 'quadros']) out[k] = [...new Set(out[k])].slice(0, 12)
+  return out
+}"""
+
+
+def test_editor_canva_motion_so_transform_e_opacidade_e_reduced_motion_desliga(servidor, navegador):
+    """#315, etapa 5 (CLAUDE.md, motion): no painel do editor e na prévia, o que se move usa só transform e opacity,
+    com as durações dos tokens; com `prefers-reduced-motion: reduce` nada se move (nem a rolagem suave da prévia)."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Motion Kart Camp e2e", "/motion-camp-e2e/", _secoes_e2e("mo", 2))
+    g.close()
+
+    def olhar(movimento):
+        """O que se move no editor com uma peça escolhida, e depois com a ajuda dos atalhos aberta."""
+        pg = navegador.new_page(viewport={"width": 1280, "height": 900}, reduced_motion=movimento)
+        try:
+            pg.goto(servidor + "/login")
+            pg.fill("#email", "eduardo@urace.us")
+            pg.fill("#pw", SENHA)
+            pg.keyboard.press("Enter")
+            pg.wait_for_url(lambda u: "/login" not in u, timeout=10000)
+            abrir(pg, servidor, f"/site/editor/{pid}")
+            lona = _lona(pg)
+            lona.locator('[data-ed-w="mot1"]').click()
+            pg.locator(".ed-barra").get_by_text("Título", exact=True).wait_for()
+            lona.locator('[data-ed-w="mot1"]').hover()
+            yield pg.evaluate(_MOTION)
+            pg.keyboard.press("?")
+            pg.get_by_role("dialog", name="Atalhos do teclado").wait_for()
+            yield pg.evaluate(_MOTION)
+        finally:
+            pg.close()
+
+    for r in olhar("no-preference"):
+        assert r["mexe"], "com movimento, algo se move (a barra, a ajuda)"
+        assert not r["fora"], f"só transform/opacity e as durações dos tokens: {r['fora']}"
+        assert not r["quadros"], f"as animações só mexem em transform/opacity: {r['quadros']}"
+    for r in olhar("reduce"):
+        assert not r["mexe"], f"reduced-motion: nada se move: {r['mexe']}"
+        assert r["rolagem"] == "auto", "reduced-motion: a prévia rola sem animação"
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_editor_canva_no_celular_a_peca_escolhida_fica_acima_da_barra(servidor, navegador, largura):
+    """#315, etapa 5 (a melhoria registrada na etapa 4): no celular a barra fica presa embaixo e podia cobrir a peça
+    tocada. Agora a página rola para a peça ficar inteira acima da barra, também quando a barra cresce (o balão do
+    link). Em 360 e 390: nada rola para o lado, todo botão com 40 px, e a ajuda "?" cabe."""
+    ctx = navegador.new_context(viewport={"width": largura, "height": 780}, has_touch=True, is_mobile=True)
+    g = ctx.new_page()
+    g.goto(servidor + "/login")
+    g.fill("#email", "eduardo@urace.us")
+    g.fill("#pw", SENHA)
+    g.keyboard.press("Enter")
+    g.wait_for_url(lambda u: "/login" not in u, timeout=10000)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, f"Phone Bar Kart Camp {largura}", f"/phone-bar-{largura}-e2e/",
+                            _secoes_e2e(f"c{largura}", 6, colunas=1, botao=True))
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator(f'[data-ed-w="c{largura}t0"]').wait_for()
+    g.wait_for_timeout(300)
+    doca = g.locator(".ed-doca")
+
+    def acima_da_barra(loc):
+        g.wait_for_timeout(250)
+        e, d = _caixa(loc), _caixa(doca)
+        topo = g.evaluate("() => document.querySelector('.topbar')?.getBoundingClientRect().bottom || 0")
+        return e["y"] + e["height"] <= d["y"] + 1 and e["y"] >= topo - 1, (e, d, topo)
+
+    def por_na_borda(loc):
+        """Rola a página do painel (a lona passa da barra de baixo) e a prévia por dentro, para a peça ficar meio coberta
+        pela barra."""
+        g.evaluate("""() => { const l = document.querySelector('.ed-lona').getBoundingClientRect()
+          const d = document.querySelector('.ed-doca').getBoundingClientRect()
+          window.scrollBy({ top: l.bottom - (d.top + 120), behavior: 'instant' }) }""")
+        e, d = _caixa(loc), _caixa(doca)
+        g.evaluate(f"document.querySelector('iframe.ed-iframe').contentWindow.scrollBy({{ top: {e['y'] - (d['y'] - 12)}, behavior: 'instant' }})")
+        g.wait_for_timeout(150)
+        e, d = _caixa(loc), _caixa(doca)
+        assert e["y"] < d["y"] < e["y"] + e["height"], ("a peça começa meio coberta", e, d)
+
+    texto = lona.locator(f'[data-ed-w="c{largura}p2"]')
+    por_na_borda(texto)
+    e = _caixa(texto)
+    g.touchscreen.tap(e["x"] + 12, e["y"] + 4)
+    doca.locator(".ed-barra").get_by_text("Texto", exact=True).wait_for()
+    ok, info = acima_da_barra(texto)
+    assert ok, f"a peça tocada fica inteira acima da barra: {info}"
+    # o botão: a barra cresce com o balão do link e a peça continua à vista
+    doca.get_by_role("button", name="Fechar a seleção").tap()
+    botao = lona.locator(f'[data-ed-w="c{largura}b3"]')
+    por_na_borda(botao)
+    e = _caixa(botao)
+    g.touchscreen.tap(e["x"] + 12, e["y"] + 4)
+    doca.locator(".ed-barra").get_by_text("Botão", exact=True).wait_for()
+    doca.get_by_role("button", name="Link do botão").first.tap()
+    doca.locator(".ed-pop input").wait_for()
+    ok, info = acima_da_barra(botao)
+    assert ok, f"com o balão aberto, a peça continua acima da barra: {info}"
+    g.keyboard.press("Escape")
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not g.evaluate(_PEQUENOS), g.evaluate(_PEQUENOS)
+    assert not _estreitos(g, ".ed-doca .btn, .ed-topo .btn"), _estreitos(g, ".ed-doca .btn, .ed-topo .btn")
+    # a ajuda dos atalhos também no celular: cabe, botões com 40 px, fecha no ✕ e o foco volta
+    g.evaluate("window.scrollTo({ top: 0, behavior: 'instant' })")
+    g.get_by_role("button", name="Atalhos do teclado (?)").first.tap()
+    ajuda = g.get_by_role("dialog", name="Atalhos do teclado")
+    ajuda.wait_for()
+    g.wait_for_timeout(350)
+    r = g.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not g.evaluate(_PEQUENOS), g.evaluate(_PEQUENOS)
+    assert not _estreitos(g, ".ed-ajuda .btn"), _estreitos(g, ".ed-ajuda .btn")
+    fechar = ajuda.get_by_role("button", name="Fechar")
+    c = _caixa(fechar)
+    assert g.evaluate(f"() => !!document.elementFromPoint({c['x'] + c['width'] / 2}, {c['y'] + c['height'] / 2})?.closest('.ed-ajuda')"), \
+        "a ajuda fica por cima da barra de baixo"
+    e = _caixa(ajuda.get_by_role("button", name="Entendi"))
+    assert g.evaluate(f"() => !!document.elementFromPoint({e['x'] + e['width'] / 2}, {e['y'] + e['height'] / 2})?.closest('.ed-ajuda')"), \
+        "nada da tela cobre o Entendi"
+    fechar.tap()
+    ajuda.wait_for(state="detached")
+    assert g.evaluate("() => document.activeElement?.getAttribute('aria-label')") == "Atalhos do teclado (?)"
+    ctx.close()
+
+
 def _confirmar_marcador(g, rotulo):
     """#309 (revisão): mudar o marcador muda o que o site vende, e o painel pergunta antes."""
     g.get_by_role("dialog", name=re.compile("^Passar ")).get_by_role("button", name=rotulo, exact=True).click()

@@ -160,11 +160,25 @@ export class Ponte {
     return null
   }
   retangulo(sel: Sel): DOMRect | null { return this.no(sel)?.getBoundingClientRect() || null }
+  /** Até onde vai o que fica preso no topo da página (o cabeçalho do site é `position: sticky`): o que está embaixo
+   *  dele não está à vista, e o ponteiro em cima dele não está em cima de seção nenhuma. */
+  topoPreso(): number {
+    const t = this.doc.querySelector('body > header, header.topo')
+    if (!t) return 0
+    const p = this.win.getComputedStyle(t).position
+    return p === 'sticky' || p === 'fixed' ? Math.max(0, t.getBoundingClientRect().bottom) : 0
+  }
   rolarAte(sel: Sel) {
     const n = this.no(sel)
     if (!n) return
     const r = n.getBoundingClientRect()
-    if (r.top < 0 || r.bottom > this.win.innerHeight) n.scrollIntoView({ block: r.height > this.win.innerHeight ? 'start' : 'center' })
+    const topo = this.topoPreso()
+    const h = this.win.innerHeight
+    if (r.top >= topo && r.bottom <= h) return
+    // a peça no meio do que sobra embaixo do cabeçalho preso; a mais alta que isso, com o começo à vista. Na hora, sem
+    // a rolagem suave do site (o painel mede onde a peça ficou logo em seguida)
+    const dy = r.height > h - topo ? r.top - topo - 8 : r.top + r.height / 2 - (topo + (h - topo) / 2)
+    this.win.scrollBy({ top: dy, behavior: 'instant' })
   }
   /** Quantos h1 a página tem na prévia, fora o de `exceto` (as faixas escondidas não contam). */
   contarH1(exceto?: string): number {
@@ -548,7 +562,8 @@ export class Ponte {
       if (!p) return
       const h = this.win.innerHeight
       const m = Math.min(64, h / 6)
-      const dy = p.y < m ? -Math.ceil((m - p.y) / 3) : p.y > h - m ? Math.ceil((p.y - (h - m)) / 3) : 0
+      const topo = this.topoPreso() + m            // o cabeçalho preso conta como borda de cima
+      const dy = p.y < topo ? -Math.ceil((topo - p.y) / 3) : p.y > h - m ? Math.ceil((p.y - (h - m)) / 3) : 0
       if (dy) { this.win.scrollBy(0, dy); this.alvoDoPonteiro() }
       this.quadro = this.win.requestAnimationFrame(passo)
     }
@@ -611,11 +626,13 @@ export class Ponte {
       }
       return { d: lista.length, marca: lista[lista.length - 1], como: 'depois' }
     }
-    const el = comoElemento(this.doc.elementFromPoint(x, y))
+    // embaixo do cabeçalho preso (a prévia rolada por dentro), o ponto é da seção que passa ali, não do cabeçalho
+    const el = y < this.topoPreso() ? null : comoElemento(this.doc.elementFromPoint(x, y))
     let sec = el?.closest('[data-ed-s]') || null
-    if (!sec || !lista.includes(sec)) {        // fora das seções (cabeçalho, rodapé): a mais perto
+    if (!sec || !lista.includes(sec)) {        // fora das seções (cabeçalho, rodapé): a que passa nessa altura, ou a mais perto
       const r0 = lista[0].getBoundingClientRect()
-      sec = y < r0.top ? lista[0] : lista[lista.length - 1]
+      sec = lista.find(s => { const b = s.getBoundingClientRect(); return y >= b.top && y < b.bottom })
+        || (y < r0.top ? lista[0] : lista[lista.length - 1])
     }
     const idx = lista.indexOf(sec)
     const r = sec.getBoundingClientRect()

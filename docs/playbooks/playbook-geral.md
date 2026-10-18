@@ -167,7 +167,7 @@ pedem acesso de operador.
 | Site | **Produtos da loja** | `/ops/site/produtos` | título, preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298), e **Como vendemos** (dropshipping ou em estoque, #309) | operador+ (mudar: gerente+) |
 | Site | **Estoque do site** | `/ops/site/estoque` (um produto: `/ops/site/estoque/<endereço>`) | o que é **dropshipping** e o que é **em estoque** (interno: o cliente nunca vê), o item do Estoque ligado a cada produto ou opção e **quanto tem** em cada local (*Galpão 5 · Pista 3*); ligar, criar o item a partir do produto e contar um local por vez (#309) | operador+ (contar); ligar, desligar e mudar o marcador: gerente+ |
 | Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
-| Site | **Editor do site** | `/ops/site/editor` | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
+| Site | **Editor do site** | `/ops/site/editor` (uma página: `/ops/site/editor/<n>`) | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta, no computador (Celular 390 px ou Computador 1280 px reduzido para caber) e no celular; **?** mostra os atalhos (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, o **selo digital e carimbo de tempo** (#110), modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111) e **Anular** (#109) | gerente+ |
@@ -702,7 +702,7 @@ abre o card dele).
 | **Serviços e cartões do site** (#297, #312) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também. **Adicionar serviço**, em cima, começa por **"Em qual página do site?"** (Arrive and Drive, Academy, Pro Team, For Beginners ou Só na área do cliente) e, quando a página tem dois jeitos, **"Como ele entra na página?"**: no Arrive and Drive, **kart** (reserva online) ou **add-on do dia** (Lead and Follow); na Academy, **plano mensal** ou **cartão de preço**; no Pro Team e no For Beginners, cartão de preço. A tela mostra o que já está naquela página hoje (na Academy com plano ativo, os cartões aparecem como **escondidos pelo plano ativo**, porque a página mostra os planos); o kart que já tem serviço ativo aparece com o nome do serviço de hoje e não se escolhe de novo (dois serviços com o mesmo kart tiram o kart do site); com um add-on ativo, o segundo não se cria. A mesma trava vale no card de edição (o seletor **Kart do site** mostra o kart ocupado e não deixa escolher), no **Reativar** (travado, com o nome de quem já usa a chave) e no servidor: a API e o Claude recebem a recusa com o que fazer. Dois repetidos que já existam continuam editáveis, para dar para desativar um. Cada serviço da lista diz onde aparece hoje: **no site: Arrive and Drive · kart 4-stroke**, **Academy · plano mensal**, **só na área do cliente** ou, em vermelho, **fora do site** (com o motivo) | Site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
 | **Estoque do site** (#309) | cada produto da loja é **dropshipping** (o padrão: o fornecedor envia e o site segue a caixa "Em estoque") ou **em estoque** (o box envia). Em estoque, o produto (ou cada tamanho) liga a **um item do Estoque**: um saldo só, o mesmo do Balcão, da contagem e de Compras, contado no Galpão e na Pista (o trailer fica fora). Sem saldo, o site mostra "Out of stock" sozinho; a venda paga no site **sai do estoque sozinha**; sem saldo na hora de pagar, o pagamento entra e o pedido vira **"Resolver: sem estoque"**. O cliente nunca vê o marcador nem a quantidade | Site › Estoque do site · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
-| **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem, se escondem e têm o texto escrito no lugar, com preço, plano, kart e reserva travados porque vêm do painel); desfazer e refazer, Camadas para quem usa teclado, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
+| **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem, se escondem e têm o texto escrito no lugar, com preço, plano, kart e reserva travados porque vêm do painel); desfazer e refazer, Camadas para quem usa teclado, **?** com todos os atalhos, no computador em 390 ou 1280 px (reduzido para caber) e no celular com a peça sempre acima da barra de baixo, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
 | **Blog do site** (#172) | os artigos do `/blog/` ficam no banco e se escrevem no painel: título, categoria, endereço, resumo, o que o Google mostra, capa (WebP sem a localização do celular) e texto com títulos, listas, links e fotos, com prévia no visual do site. O operador escreve o rascunho; **só o ADMIN** (ou o acesso livre) publica e tira do ar. Cada publicação guarda uma versão | Site › Blog · seção 6, "Blog do site" |
 | **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
 | **Aluno recorrente** (#314) | Academy (Kart School) com plano: marca na área do cliente sem pagar a sessão do pacote do mês; acima do pacote, a **sessão extra** sai numa invoice do QuickBooks (mensal ÷ sessões ou o valor combinado, sem depósito). O cliente vê só "Included in your plan" ou "Extra session"; o contador é da equipe. Marca **vários dias num pedido** (até 12: "Every Wed", "This weekend"…), e as extras do pedido saem numa invoice só. **Cliente novo** paga no Stripe (carrinho) com o Stripe ligado; o carrinho recusa a sessão do aluno recorrente | [playbook-vendas.md](playbook-vendas.md), seção 5, "Aluno recorrente" |
@@ -753,21 +753,37 @@ editor do site ele abre uma mini visualização de como é o site público. E da
 ela precisa editar. Ela edita, ela puxa, ela arrasta, ela solta, ela insere alguma coisa com o mouse, por exemplo, usando
 o mouse e teclado, sem precisar de preencher cards para aquilo ali. … É como se fosse um Canva."*
 
-**Onde:** Site › **Editor do site** (`/ops/site/editor`). Ver é do operador; criar, mudar, publicar e voltar versão é do
-gerente (tudo na auditoria). O operador vê a prévia, as Camadas e a aba Página, sem mudar nada.
+**Onde:** Site › **Editor do site** (`/ops/site/editor`; uma página: `/ops/site/editor/<n>`). Ver é do operador; criar,
+mudar, publicar e voltar versão é do gerente (tudo na auditoria). O operador vê a prévia, as Camadas, a aba Página e a
+ajuda dos atalhos, sem mudar nada. A aba do navegador diz o nome da página aberta (*Summer Camp · Editor do site*).
+
+**Como ficou** (o #315 entrou em 5 partes, uma por PR):
+1. **A lona e a seleção**: a prévia de verdade é a área de trabalho; clicar seleciona, a barra muda o resto, as Camadas
+   substituem os cards, o rascunho salva sozinho e duas pessoas não apagam o que a outra fez.
+2. **Texto no lugar e histórico**: escrever direto na prévia, colar limpo, foto por clique ou soltando o arquivo,
+   desfazer e refazer, os atalhos.
+3. **Arrastar e soltar**: na prévia, da paleta para a prévia e no celular (tocar e segurar, "toque onde quer pôr").
+4. **O texto das faixas originais**: a página que já existia também se escreve no lugar, com o dado do painel travado,
+   os textos órfãos e o preço escrito à mão como pendência.
+5. **O fechamento**: o modo Computador reduzido para caber, a ajuda **?**, no celular a peça escolhida sempre acima da
+   barra de baixo, o movimento da tela e o título da aba.
 
 **A tela**
-- No meio, a **prévia**: a página do site de verdade, desenhada do rascunho (o cabeçalho, o rodapé, as fotos, os preços
-  do painel). É nela que se trabalha. No computador, **Celular** (390 px) ou **Computador** (1280 px, reduzida para caber).
+- No meio, a **prévia** (a lona): a página do site de verdade, desenhada do rascunho (o cabeçalho, o rodapé, as fotos, os
+  preços do painel). É nela que se trabalha.
+- No computador, **Celular** mostra a página com 390 px e **Computador** com 1280 px de verdade (o site muda de desenho
+  como muda para quem visita), **reduzida para caber** na prévia. Reduzida, tudo continua no lugar: o clique, a barra, o
+  arrastar e a linha azul caem onde o mouse está, e o contorno da seleção fica mais grosso para não sumir.
 - Do lado (no computador) ou nas folhas de baixo (no celular), três abas: **Inserir** (a paleta), **Camadas** (a página em
-  lista) e **Página** (título da aba, descrição, endereço, pendências, versões).
+  lista) e **Página** (título da aba, descrição, endereço, pendências, versões e **Atalhos do teclado (?)**).
 - Em cima: **← Páginas**, o nome da página, o estado (rascunho, no ar, no ar com mudanças), **salvo / salvando… / não
-  salvou**, **↶ Desfazer** e **↷ Refazer**, as pendências e **Publicar**.
+  salvou**, **↶ Desfazer** e **↷ Refazer**, **?** (a ajuda dos atalhos), Celular/Computador, as pendências e **Publicar**.
 
 **Clicar, escrever e mudar (sem formulário)**
 - **Clique** numa peça da prévia para selecionar: ela ganha o contorno azul e a **barra** aparece em cima dela (no celular, a
-  barra fica presa embaixo da tela). Clique no fundo de uma seção para selecionar a seção. **Esc** sobe da peça para a
-  seção e depois tira a seleção.
+  barra fica presa embaixo da tela; veja "No celular"). Clique no fundo de uma seção para selecionar a seção. **Esc**
+  sobe da peça para a seção e depois tira a seleção. A barra acompanha a peça quando a prévia rola; se a peça sai da
+  prévia (rolou para cima ou para baixo), a barra fica na borda da prévia, à mão.
 - **Clique de novo** (ou duplo clique, ou **Enter**, ou **Escrever** na barra) para **escrever no lugar**: o título, o
   texto, o texto do botão, os itens da lista (Enter cria o próximo), a pergunta e a resposta das perguntas frequentes e a
   legenda da foto. **Esc**, **Enter** (fora do texto longo) ou **Pronto** saem do texto. O que se cola vira texto limpo
@@ -792,25 +808,41 @@ gerente (tudo na auditoria). O operador vê a prévia, as Camadas e a aba Págin
 **Arrastar, soltar e inserir**
 - **No computador**: arraste uma peça da prévia para outro lugar (na mesma coluna, para a outra coluna ou para outra
   seção) e uma seção inteira para cima ou para baixo; a **linha azul** mostra onde vai cair e a prévia rola sozinha perto
-  da borda. Arraste uma peça da aba **Inserir** até a prévia, ou **clique** nela para pôr logo depois do que está
-  selecionado. Uma peça solta em cima de uma faixa original vira uma seção nova antes ou depois dela.
+  da borda (o cabeçalho do site, que fica preso em cima, conta como borda: passar por cima dele rola para cima). Arraste
+  uma peça da aba **Inserir** até a prévia, ou **clique** nela para pôr logo depois do que está selecionado. Uma peça
+  solta em cima de uma faixa original vira uma seção nova antes ou depois dela.
 - **Fotos**: solte um arquivo do computador direto na prévia (vira uma imagem ali) ou em cima de uma imagem (troca a foto
   dela). A foto sobe em WebP de até 1600 px, sem a localização do celular; a barra da foto já abre a **descrição** para
   escrever.
-- **No celular**: toque para selecionar; **toque e segure** uma peça para arrastá-la; para inserir, **+ Inserir**, toque
-  na peça e **toque na página onde quer pôr** (Cancelar desiste). Sem tocar (teclado, ou tela de até 900 px com mouse),
-  o botão do aviso, **Pôr depois do selecionado** (ou **Pôr no fim da página**, sem nada selecionado), põe a peça. As
-  folhas de Inserir, Camadas e Página fecham com **Esc** ou no **✕**, e o foco volta para o botão que as abriu.
 - **Camadas** faz tudo isso com botões, para quem usa teclado ou leitor de tela: escolher (escolher de novo escreve),
   ↑ ↓ (desligados quando não há para onde ir), ← →, Esconder e Apagar. O foco fica na peça mesmo quando ela muda de
   coluna ou de seção. O leitor de tela ouve onde cada peça foi parar, e o mesmo aviso duas vezes seguidas também é lido.
 
-**Teclado** (a lista também está em Página › **Atalhos do teclado**): **↑ ↓** o anterior e o próximo · **Enter**
-escreve · **Esc** sai do texto e sobe · **Alt+↑ ↓** move · **Alt+← →** muda de coluna · **Ctrl+Z** desfaz ·
-**Ctrl+Shift+Z** (ou Ctrl+Y) refaz · **Ctrl+D** duplica · **Delete** apaga · **Ctrl+B / I / K** negrito, itálico e link
-no texto · **Ctrl+S** salva já. Desfazer guarda até 100 passos; a digitação seguida no mesmo lugar é um passo só. Com a
-peça escolhida, o **Tab** chega na barra antes dos links da prévia; ali as setas não trocam a peça, e Duplicar, Apagar
-e ↑ ↓ deixam o foco na barra. ↓ nas peças diz o nome, o que ela mostra e onde está (seção, coluna, posição).
+**No celular** (e em tela de até 900 px)
+- A prévia ocupa a largura toda; nada rola para o lado em 360 e 390 px e todo botão tem pelo menos 40 px.
+- **Toque** para selecionar; a **barra fica presa embaixo**. A página **rola sozinha para a peça tocada ficar inteira
+  acima da barra**, também quando a barra cresce (o balão do link, a descrição da foto, um aviso) e quando o teclado
+  abre para escrever; uma peça mais alta que o espaço fica com o começo à vista.
+- **Toque e segure** uma peça para arrastá-la. Para inserir, **+ Inserir**, toque na peça e **toque na página onde quer
+  pôr** (Cancelar desiste). Sem tocar (teclado, ou mouse numa tela estreita), o botão do aviso, **Pôr depois do
+  selecionado** (ou **Pôr no fim da página**, sem nada selecionado), põe a peça.
+- As folhas de Inserir, Camadas e Página fecham com **Esc** ou no **✕**, e o foco volta para o botão que as abriu.
+
+**Atalhos** — **?** (fora de um texto em edição) ou o botão **?** de cima abre a **ajuda dos atalhos**, com a lista
+completa; **Esc**, **✕** ou **Entendi** fecham e o foco volta para onde estava (o Esc da ajuda não mexe na seleção).
+- Com uma peça escolhida: **↑ ↓** a anterior e a próxima · **Enter** escreve (na seção, vai para a primeira peça) ·
+  **Esc** sobe um nível · **Alt+↑ ↓** move · **Alt+← →** muda de coluna · **Ctrl+D** duplica · **Delete** (ou
+  Backspace) apaga (a faixa original esconde).
+- Escrevendo: **Esc** sai do texto · **Enter** sai do texto curto (no texto longo é parágrafo novo; na lista, o próximo
+  item) · **Ctrl+B / I** negrito e itálico no texto longo · **Ctrl+K** link no texto marcado.
+- Sempre: **Ctrl+Z** desfaz · **Ctrl+Shift+Z** (ou Ctrl+Y) refaz · **Ctrl+S** salva já · **Esc** fecha a folha do
+  celular e cancela o "toque onde quer pôr". No Mac, ⌘ no lugar de Ctrl.
+- Desfazer guarda até 100 passos; a digitação seguida no mesmo lugar é um passo só. Com a peça escolhida, o **Tab** chega
+  na barra antes dos links da prévia; ali as setas não trocam a peça, e Duplicar, Apagar e ↑ ↓ deixam o foco na barra.
+  ↓ nas peças diz o nome, o que ela mostra e onde está (seção, coluna, posição).
+
+**Movimento**: a barra, as folhas e a ajuda entram com um esmaecer curto (só transparência e deslocamento, nas durações
+padrão do painel); com **"reduzir movimento"** ligado no aparelho, nada se mexe, nem a rolagem suave da prévia.
 
 **Página nova:** em **Adicionar página** (em cima da lista, #312) › **Nova página**, o título da aba e o endereço (ex.: `/summer-camp/`; vazio, sai do título). Ela já
 nasce com um título nível 1 e um botão. O endereço não muda depois de publicada. Endereços do sistema (`/ops/`,

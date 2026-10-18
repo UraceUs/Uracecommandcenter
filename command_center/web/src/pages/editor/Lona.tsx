@@ -2,7 +2,11 @@
  *
  * Um iframe da mesma origem com a página do site de verdade, desenhada do rascunho (`previa?editar=1`). Em
  * sandbox (sem formulário, janela nova nem navegar o painel). No computador alterna entre 390 px (celular) e
- * 1280 px (computador, reduzido com transform para caber); no celular ocupa a largura toda. */
+ * 1280 px (computador): a página tem a largura de verdade (as media queries do site valem) e o `transform: scale`
+ * reduz o iframe para caber na lona. A conta das coordenadas fica toda aqui: lá dentro o ponto é o da página (sem
+ * a escala, com a rolagem dela), aqui fora é o da tela (com a escala); `paraDentro`, `paraFora` e `naTela` passam
+ * de um para o outro. Reduzida, a página ganha `ed-reduzida` no <html> (o contorno da seleção engrossa para não sumir).
+ * No celular ocupa a largura toda. */
 import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react'
 import { tr } from '../../i18n'
 import { Ponte, type Ganchos } from './ponte'
@@ -13,6 +17,10 @@ export interface LonaApi {
   paraDentro(x: number, y: number): { x: number; y: number } | null
   /** Do retângulo da prévia para o do painel, relativo à lona. */
   paraFora(r: DOMRect): { top: number; left: number; bottom: number; right: number } | null
+  /** Do retângulo da prévia para o da tela do painel (clientX/Y). */
+  naTela(r: DOMRect): { top: number; left: number; bottom: number; right: number } | null
+  /** A caixa da lona na tela e a escala da prévia (1 no celular e no modo Celular). */
+  caixa(): { top: number; bottom: number; escala: number } | null
   tamanho(): { w: number; h: number }
   recarregar(): void
 }
@@ -52,11 +60,16 @@ export function Lona({ ref, src, tela, estreito, editar, ganchos, dica, aoLigar,
   const escala = pc && tam.w ? Math.min(1, tam.w / 1280) : 1
   const esquerda = Math.max(0, (tam.w - largura * escala) / 2)
 
+  // reduzida (o modo Computador numa lona estreita), o contorno e a linha de soltar engrossam (editor-previa.css)
+  const reduzida = escala < 0.8
+  useEffect(() => { iframe.current?.contentDocument?.documentElement.classList.toggle('ed-reduzida', reduzida) }, [reduzida, vez])
+
   function ligar() {
     ponte.current?.desligar()
     ponte.current = null
     const doc = iframe.current?.contentDocument
     if (!doc || !doc.getElementById('conteudo')) return
+    doc.documentElement.classList.toggle('ed-reduzida', reduzida)
     const p = new Ponte(doc, ganchos, editar, dica)
     p.ligar()
     ponte.current = p
@@ -76,11 +89,19 @@ export function Lona({ ref, src, tela, estreito, editar, ganchos, dica, aoLigar,
       return { top: f.top - m.top + r.top * escala, left: f.left - m.left + r.left * escala,
         bottom: f.top - m.top + r.bottom * escala, right: f.left - m.left + r.right * escala }
     },
+    naTela: r => {
+      const f = iframe.current?.getBoundingClientRect()
+      return f ? { top: f.top + r.top * escala, left: f.left + r.left * escala, bottom: f.top + r.bottom * escala, right: f.left + r.right * escala } : null
+    },
+    caixa: () => {
+      const m = moldura.current?.getBoundingClientRect()
+      return m ? { top: m.top, bottom: m.bottom, escala } : null
+    },
     tamanho: () => tam,
     recarregar: () => { ponte.current?.desligar(); ponte.current = null; setVez(x => x + 1) },
   }), [escala, tam])
 
-  return <div className={`ed-lona${pc ? ' ed-lona-pc' : ''}`} ref={moldura}>
+  return <div className={`ed-lona${pc ? ' ed-lona-pc' : ''}`} ref={moldura} data-escala={escala.toFixed(3)}>
     {tam.w > 0 && <iframe key={vez} ref={iframe} className="ed-iframe" title={tr("Página em edição")} sandbox="allow-same-origin allow-scripts"
       src={`${src}?editar=1${vez ? `&vez=${vez}` : ''}`} onLoad={ligar}
       style={{ width: largura, height: tam.h / escala, left: esquerda, transform: escala < 1 ? `scale(${escala})` : undefined }} />}

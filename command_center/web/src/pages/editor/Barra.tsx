@@ -99,6 +99,9 @@ export function Barra({ w, it, t, trava, nome, editando, h1Ocupado, erro, pode, 
     let top = ancora.top - b.height - 10
     if (top < 6) top = ancora.bottom + 10
     if (top + b.height > H - 6) top = Math.max(6, Math.min(ancora.top + 6, H - b.height - 6))
+    // a peça rolou para fora da prévia (por cima ou por baixo): a barra fica na borda da lona, nunca por cima do topo
+    // do editor nem abaixo da lona
+    top = Math.max(6, Math.min(top, H - b.height - 6))
     const left = Math.max(6, Math.min(ancora.left, W - b.width - 6))
     setPos(p => p && p.top === top && p.left === left ? p : { top, left })
   }, [ancora, limites, estreito, pop, w, it, t, trava, editando, erro])
