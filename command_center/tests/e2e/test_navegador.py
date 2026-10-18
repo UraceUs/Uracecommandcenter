@@ -918,6 +918,17 @@ def test_integracoes_mostra_o_dialpad_sem_a_chave(servidor, navegador):
 
 
 # ------------------------------------------------------------------ waiver nativa (#85)
+def _dia_us(iso):
+    """A data do dia (AAAA-MM-DD) como a área do cliente escreve: "Oct 18, 2027"."""
+    from datetime import date
+    return date.fromisoformat(iso[:10]).strftime("%b %-d, %Y")
+
+
+# Revisão do #332: o celular do cliente num fuso UTC+13 (Auckland). A data sem hora (validade, nascimento) é o dia
+# do calendário da Flórida; com meio-dia local, ela saía um dia antes.
+FUSO_LONGE = "Pacific/Auckland"
+
+
 def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(servidor, navegador):
     # 1. nasce desligada; o ADMIN liga pela tela (os modelos a semente já "importou")
     a = entrar(navegador, servidor, "italo@urace.us")
@@ -927,7 +938,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a.get_by_role("dialog").get_by_role("button", name="Ligar", exact=True).click()
     a.get_by_text("Ligada: o cliente já vê").wait_for()
     # 2. o responsável de um piloto menor assina pelo celular
-    c = navegador.new_page(viewport={"width": 360, "height": 800})
+    c = navegador.new_page(viewport={"width": 360, "height": 800}, timezone_id=FUSO_LONGE)
     c.erros_js = []
     c.on("pageerror", lambda e: c.erros_js.append(str(e)))
     cliente_pela_api(c, servidor, "Rita Waiver", "rita.e2e@example.com", piloto="Rafa Waiver")
@@ -943,7 +954,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
         for (let i = 0; i < d.length; i += 4) if (d[i] < 128) return true; return false }""")   # tinta: não é página em branco
     c.locator(".pdf-folha canvas").nth(2).wait_for()
     c.get_by_text(re.compile(r"Scroll through every page to continue: \d of 3 read")).wait_for()
-    assert c.get_by_role("button", name="Sign the waiver").is_disabled()
+    assert c.get_by_role("button", name="Review before signing").is_disabled()
     c.locator(".pdf-caixa").evaluate("e => e.scrollTo(0, e.scrollHeight)")      # pular direto para o fim não conta a do meio
     assert not c.get_by_text("All 3 pages read.").is_visible()
     c.locator(".pdf-caixa").evaluate("""async e => { for (let y = 0; y <= e.scrollHeight; y += 120) {
@@ -955,21 +966,19 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     assert len([t for n, t in _cabecalhos(c) if n == 1]) == 1
     r = c.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
-    # #108: o e-mail da conta é confirmado por código (uma vez) e a assinatura pede um código novo
-    assert c.get_by_role("button", name="Sign the waiver").is_disabled()
+    # #108: o e-mail da conta é confirmado por código (uma vez); #112: a revisão vem antes do código de assinar
+    assert c.get_by_role("button", name="Review before signing").is_disabled()
     c.get_by_role("button", name="Send the code to my email").click()
     c.get_by_label("Code sent to").wait_for()
     c.get_by_label("Code sent to").fill(codigo_do_email("rita.e2e@example.com"))
     c.get_by_role("button", name="Confirm email").click()
-    c.get_by_role("button", name="Send me the signing code").click()
-    c.get_by_label("Signing code sent to").wait_for()
-    c.get_by_label("Signing code sent to").fill(codigo_do_email("rita.e2e@example.com"))
-    c.get_by_role("button", name="Sign the waiver").click()
-    assert "Check both boxes" in c.get_by_role("alert").inner_text()
+    c.get_by_role("button", name="Review before signing").click()
+    assert "Check both boxes" in c.get_by_role("alert").inner_text(), "o servidor confere tudo já na revisão"
+    assert c.get_by_role("button", name="I agree — sign the waiver").count() == 0, "sem revisão não há o botão final"
     # #105: pelo menor, só pai ou mãe — "Other" explica e não deixa assinar
     c.get_by_label("Other (grandparent").check()
     c.get_by_text("Only a parent (mother or father) can sign").wait_for()
-    assert c.get_by_role("button", name="Sign the waiver").is_disabled()
+    assert c.get_by_role("button", name="Review before signing").is_disabled()
     c.get_by_label("Mother").check()
     c.get_by_label("I am the parent (natural guardian) of Rafa Waiver").check()
     c.get_by_label("I read and understand English").check()          # #119
@@ -983,12 +992,44 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     for i in range(1, 13):
         c.mouse.move(quadro["x"] + 20 + i * 22, quadro["y"] + 110 - (i % 4) * 18, steps=2)
     c.mouse.up()
-    c.get_by_role("button", name="Sign the waiver").click()
+    # #112: o passo 1 mostra o resumo; "Go back" volta ao formulário sem perder nada; o clique final é outro botão
+    with c.expect_response(lambda x: x.url.endswith("/waiver/review") and x.status == 201) as resposta:
+        c.get_by_role("button", name="Review before signing").click()
+    resumo = resposta.value.json()
+    rev = c.locator("section.portal-revisao")
+    c.get_by_role("heading", name="Review and sign", level=2).wait_for()
+    texto = rev.inner_text()
+    assert f"{_dia_us(resumo['valid_until'])} (" in texto, ("o dia da validade, mesmo em " + FUSO_LONGE, resumo["valid_until"], texto)
+    assert f"born {_dia_us(resumo['driver_birth_date'])}" in texto, (resumo["driver_birth_date"], texto)
+    for trecho in ("Rafa Waiver", "Parent (natural guardian)", "Mother", "Rita Waiver", "I am the parent (natural guardian) of Rafa Waiver",
+                   "same legal effect as a handwritten signature"):
+        assert trecho in texto, (trecho, texto)
+    assert rev.locator("img.portal-revisao-assinatura").evaluate("i => i.complete && i.naturalWidth > 0"), "a assinatura desenhada aparece"
+    assert not c.get_by_label("Your full name").is_visible(), "o formulário sai da frente no resumo"
+    final = c.get_by_role("button", name="I agree — sign the waiver")
+    assert final.is_disabled(), "sem o código do e-mail não assina"
+    for largura in (360, 390):                       # o resumo no celular: um h1, sem pular nível, nada de lado, toque de 40 px
+        c.set_viewport_size({"width": largura, "height": 800})
+        cab = _cabecalhos(c)
+        assert [n for n, _ in cab] == [1, 2], cab
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not c.evaluate(_PEQUENOS), (largura, c.evaluate(_PEQUENOS))
+    c.get_by_role("button", name="Go back").click()
+    assert c.get_by_label("Your full name").input_value() == "Rita Waiver", "voltar não perde o que foi preenchido"
+    assert c.get_by_role("heading", name="Review and sign").count() == 0
+    c.get_by_role("button", name="Review before signing").click()
+    c.get_by_role("button", name="Send me the signing code").click()
+    c.get_by_label("Signing code sent to").wait_for()
+    c.get_by_label("Signing code sent to").fill(codigo_do_email("rita.e2e@example.com"))
+    c.get_by_role("button", name="I agree — sign the waiver").click()
     c.get_by_text("Signed. The waiver for Rafa Waiver is valid until").wait_for()
+    assert f"valid until {_dia_us(resumo['valid_until'])}" in c.get_by_role("status").first.inner_text()
     pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
     assert pdf.ok and pdf.body().startswith(b"%PDF")
     c.get_by_role("button", name="Back to Drivers").click()
     c.get_by_text("Waiver: signed").wait_for()
+    assert c.get_by_text(f"valid until {_dia_us(resumo['valid_until'])}").count() == 1, "na lista dos pilotos, o mesmo dia"
     # 2b. #104: um piloto ADULTO que não é a Rita assina a própria waiver — a Rita não assina por ele
     csrf = next(k["value"] for k in c.context.cookies() if k["name"] == "cp_csrf")
     r = c.request.post(servidor + "/api/portal/drivers", data={"name": "Beto Adulto", **PILOTO_OK, "birth_date": "1990-02-02"},
@@ -1006,8 +1047,8 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a.locator("article.cd", has_text="Rafa Waiver").get_by_role("button", name="Trilha").click()
     a.get_by_text(re.compile(r"trilha íntegra · \d+ eventos no total")).wait_for()
     passos = a.locator("ol li").all_inner_texts()
-    for passo in ("abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas", "código enviado", "código confirmado",
-                  "revisou e confirmou", "assinou", "PDF baixado"):
+    for passo in ("abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas", "revisou o resumo", "código enviado",
+                  "código confirmado", "assinou", "PDF baixado"):
         assert any(x.startswith(passo) for x in passos), (passo, passos)
     assert any(x.startswith("abriu a tela de assinar") and "relatado pela tela" in x for x in passos), passos
     assert any(x.startswith("PDF baixado") and "depois de assinar" in x for x in passos), passos
@@ -1118,7 +1159,7 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     msg = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines() if "gabi.convite.e2e" in x][-1]
     assert msg["subject"] == "Sign your URACE waiver"
     link = re.search(r"https://my\.urace\.us/ops(/portal/invite/\S+)", msg["text"]).group(1)
-    c = navegador.new_page(viewport={"width": 360, "height": 800})
+    c = navegador.new_page(viewport={"width": 360, "height": 800}, timezone_id=FUSO_LONGE)
     c.erros_js = []
     c.on("pageerror", lambda e: c.erros_js.append(str(e)))
     c.goto(servidor + link)
@@ -1135,7 +1176,7 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     c.get_by_label("I read and understand English").check()
     c.get_by_label("I have read this waiver").check()
     c.get_by_label("I agree to sign electronically").check()
-    c.get_by_label("Your full name").fill("Gabi Convite")
+    c.get_by_label("Your full name").fill("Gabriela Convite")       # #112: outro nome que o do convite: pede confirmação
     c.locator("canvas.portal-assinatura").scroll_into_view_if_needed()
     quadro = c.locator("canvas.portal-assinatura").bounding_box()
     c.mouse.move(quadro["x"] + 20, quadro["y"] + 110)
@@ -1143,12 +1184,31 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     for i in range(1, 13):
         c.mouse.move(quadro["x"] + 20 + i * 22, quadro["y"] + 110 - (i % 4) * 18, steps=2)
     c.mouse.up()
-    assert c.get_by_role("button", name="Sign the waiver").is_disabled(), "sem o código do e-mail não assina"
+    assert c.get_by_role("button", name="Send me the signing code").count() == 0, "o código vem no resumo, depois da revisão"
+    with c.expect_response(lambda x: x.url.endswith("/review") and x.status == 201) as resposta:
+        c.get_by_role("button", name="Review before signing").click()
+    resumo = resposta.value.json()
+    c.get_by_role("heading", name="Review and sign", level=2).wait_for()
+    c.get_by_text("is different from the name on file").wait_for()
+    assert f"{_dia_us(resumo['valid_until'])} (" in c.locator("section.portal-revisao").inner_text(), resumo["valid_until"]
+    assert "Gabriela Convite" in c.locator("section.portal-revisao").inner_text() and "Gabi Convite" in c.locator("section.portal-revisao").inner_text()
     c.get_by_role("button", name="Send me the signing code").click()
     c.get_by_label("Signing code sent to").wait_for()
     c.get_by_label("Signing code sent to").fill(codigo_do_email("gabi.convite.e2e@example.com"))
-    c.get_by_role("button", name="Sign the waiver").click()
+    final = c.get_by_role("button", name="I agree — sign the waiver")
+    assert final.is_disabled(), "nome diferente: só assina depois de confirmar"
+    caixa = c.get_by_label("Yes, sign with the name I typed")
+    assert caixa.locator("xpath=..").bounding_box()["height"] >= 40
+    for largura in (360, 390):
+        c.set_viewport_size({"width": largura, "height": 800})
+        assert [n for n, _ in _cabecalhos(c)] == [1, 2], _cabecalhos(c)
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not c.evaluate(_PEQUENOS), (largura, c.evaluate(_PEQUENOS))
+    caixa.check()
+    final.click()
     c.get_by_text("Signed. The waiver for Gabi Convite is valid until").wait_for()
+    assert f"valid until {_dia_us(resumo['valid_until'])}" in c.get_by_role("status").first.inner_text()
     pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
     assert pdf.ok and pdf.body().startswith(b"%PDF")
     # o link não vale duas vezes
@@ -1184,7 +1244,7 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     a.get_by_text(re.compile(r"trilha íntegra")).wait_for()
     passos = list(dict.fromkeys(x.split(" · ")[0] for x in a.locator("ol li").all_inner_texts()))   # na ordem da 1ª vez
     assert passos[:8] == ["convite enviado por e-mail", "abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas",
-                          "código enviado", "código confirmado", "revisou e confirmou", "assinou"], passos
+                          "revisou o resumo", "código enviado", "código confirmado", "assinou"], passos
     assert "anulada" in passos[8:] and "PDF baixado" in passos[8:], passos
     if not estava:
         a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
