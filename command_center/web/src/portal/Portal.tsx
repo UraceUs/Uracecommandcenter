@@ -10,6 +10,7 @@ import { Icon } from '../components/Icon'
 import { Pista } from '../components/Pista'
 import { Agendar, CartaoSessao, Sessoes } from './Agendar'
 import { haDias, papi, PortalError, type Account, type AgendaCfg, type Driver, type Painel, type WaiverPiloto, type Waivers } from './api'
+import { dataUS } from './datas'
 import { ddiDe, PAISES } from './paises'
 import { guardarVisual, visual3d, visualSite } from './visual'
 import '../styles/portal-3d.css'
@@ -38,8 +39,6 @@ const MENU: [string, string, string, string][] = [   // rota, rótulo, rótulo c
   ['dashboard', 'Dashboard', 'Home', 'home'], ['book', 'Book a session', 'Book', 'cal'], ['sessions', 'My sessions', 'Sessions', 'list'],
   ['drivers', 'Drivers', 'Drivers', 'people'], ['history', 'Service history', 'History', 'clock'], ['account', 'Account', 'Account', 'user'],
 ]
-const dataUS = (iso: string | null) => iso ? new Date(iso.length === 10 ? iso + 'T12:00:00' : iso)
-  .toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' }) : '—'
 const SITUACAO: Record<string, [string, string]> = { ok: ['Measurements up to date', 'ok'], aviso: ['Update measurements soon', 'warn'],
   vencida: ['Measurements expired', 'crit'], faltando: ['Profile incomplete', 'crit'] }
 

@@ -8,6 +8,7 @@
  * #112: dois passos, como na conta: "Review before signing" e o resumo, com o código e o "I agree — sign the waiver". */
 import { useEffect, useState, type FormEvent } from 'react'
 import { papi, PortalError, type ConviteWaiver, type RevisaoWaiver } from './api'
+import { dataUS } from './datas'
 import { Revisao } from './RevisaoWaiver'
 import { VisorPdf } from './VisorPdf'
 import { Quadro } from './Waiver'
@@ -16,8 +17,6 @@ const BASE = '/ops/api/portal'
 const TIPO = { adult: 'Adult release and waiver', parental: 'Parental consent and waiver (minor)' }
 const PARENTESCO: [string, string][] = [['mother', 'Mother'], ['father', 'Father'], ['legal_guardian', 'Court-appointed legal guardian'],
   ['other', 'Other (grandparent, step-parent, relative, coach…)']]
-const dataUS = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso)
-  .toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })
 
 export function ConviteWaiverPagina({ token }: { token: string }) {
   const caminho = `/invite/${encodeURIComponent(token)}`

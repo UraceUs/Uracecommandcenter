@@ -917,6 +917,17 @@ def test_integracoes_mostra_o_dialpad_sem_a_chave(servidor, navegador):
 
 
 # ------------------------------------------------------------------ waiver nativa (#85)
+def _dia_us(iso):
+    """A data do dia (AAAA-MM-DD) como a área do cliente escreve: "Oct 18, 2027"."""
+    from datetime import date
+    return date.fromisoformat(iso[:10]).strftime("%b %-d, %Y")
+
+
+# Revisão do #332: o celular do cliente num fuso UTC+13 (Auckland). A data sem hora (validade, nascimento) é o dia
+# do calendário da Flórida; com meio-dia local, ela saía um dia antes.
+FUSO_LONGE = "Pacific/Auckland"
+
+
 def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(servidor, navegador):
     # 1. nasce desligada; o ADMIN liga pela tela (os modelos a semente já "importou")
     a = entrar(navegador, servidor, "italo@urace.us")
@@ -926,7 +937,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a.get_by_role("dialog").get_by_role("button", name="Ligar", exact=True).click()
     a.get_by_text("Ligada: o cliente já vê").wait_for()
     # 2. o responsável de um piloto menor assina pelo celular
-    c = navegador.new_page(viewport={"width": 360, "height": 800})
+    c = navegador.new_page(viewport={"width": 360, "height": 800}, timezone_id=FUSO_LONGE)
     c.erros_js = []
     c.on("pageerror", lambda e: c.erros_js.append(str(e)))
     cliente_pela_api(c, servidor, "Rita Waiver", "rita.e2e@example.com", piloto="Rafa Waiver")
@@ -981,10 +992,14 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
         c.mouse.move(quadro["x"] + 20 + i * 22, quadro["y"] + 110 - (i % 4) * 18, steps=2)
     c.mouse.up()
     # #112: o passo 1 mostra o resumo; "Go back" volta ao formulário sem perder nada; o clique final é outro botão
-    c.get_by_role("button", name="Review before signing").click()
+    with c.expect_response(lambda x: x.url.endswith("/waiver/review") and x.status == 201) as resposta:
+        c.get_by_role("button", name="Review before signing").click()
+    resumo = resposta.value.json()
     rev = c.locator("section.portal-revisao")
     c.get_by_role("heading", name="Review and sign", level=2).wait_for()
     texto = rev.inner_text()
+    assert f"{_dia_us(resumo['valid_until'])} (" in texto, ("o dia da validade, mesmo em " + FUSO_LONGE, resumo["valid_until"], texto)
+    assert f"born {_dia_us(resumo['driver_birth_date'])}" in texto, (resumo["driver_birth_date"], texto)
     for trecho in ("Rafa Waiver", "Parent (natural guardian)", "Mother", "Rita Waiver", "I am the parent (natural guardian) of Rafa Waiver",
                    "same legal effect as a handwritten signature"):
         assert trecho in texto, (trecho, texto)
@@ -1008,10 +1023,12 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     c.get_by_label("Signing code sent to").fill(codigo_do_email("rita.e2e@example.com"))
     c.get_by_role("button", name="I agree — sign the waiver").click()
     c.get_by_text("Signed. The waiver for Rafa Waiver is valid until").wait_for()
+    assert f"valid until {_dia_us(resumo['valid_until'])}" in c.get_by_role("status").first.inner_text()
     pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
     assert pdf.ok and pdf.body().startswith(b"%PDF")
     c.get_by_role("button", name="Back to Drivers").click()
     c.get_by_text("Waiver: signed").wait_for()
+    assert c.get_by_text(f"valid until {_dia_us(resumo['valid_until'])}").count() == 1, "na lista dos pilotos, o mesmo dia"
     # 2b. #104: um piloto ADULTO que não é a Rita assina a própria waiver — a Rita não assina por ele
     csrf = next(k["value"] for k in c.context.cookies() if k["name"] == "cp_csrf")
     r = c.request.post(servidor + "/api/portal/drivers", data={"name": "Beto Adulto", **PILOTO_OK, "birth_date": "1990-02-02"},
@@ -1141,7 +1158,7 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     msg = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines() if "gabi.convite.e2e" in x][-1]
     assert msg["subject"] == "Sign your URACE waiver"
     link = re.search(r"https://my\.urace\.us/ops(/portal/invite/\S+)", msg["text"]).group(1)
-    c = navegador.new_page(viewport={"width": 360, "height": 800})
+    c = navegador.new_page(viewport={"width": 360, "height": 800}, timezone_id=FUSO_LONGE)
     c.erros_js = []
     c.on("pageerror", lambda e: c.erros_js.append(str(e)))
     c.goto(servidor + link)
@@ -1167,9 +1184,12 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
         c.mouse.move(quadro["x"] + 20 + i * 22, quadro["y"] + 110 - (i % 4) * 18, steps=2)
     c.mouse.up()
     assert c.get_by_role("button", name="Send me the signing code").count() == 0, "o código vem no resumo, depois da revisão"
-    c.get_by_role("button", name="Review before signing").click()
+    with c.expect_response(lambda x: x.url.endswith("/review") and x.status == 201) as resposta:
+        c.get_by_role("button", name="Review before signing").click()
+    resumo = resposta.value.json()
     c.get_by_role("heading", name="Review and sign", level=2).wait_for()
     c.get_by_text("is different from the name on file").wait_for()
+    assert f"{_dia_us(resumo['valid_until'])} (" in c.locator("section.portal-revisao").inner_text(), resumo["valid_until"]
     assert "Gabriela Convite" in c.locator("section.portal-revisao").inner_text() and "Gabi Convite" in c.locator("section.portal-revisao").inner_text()
     c.get_by_role("button", name="Send me the signing code").click()
     c.get_by_label("Signing code sent to").wait_for()
@@ -1187,6 +1207,7 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     caixa.check()
     final.click()
     c.get_by_text("Signed. The waiver for Gabi Convite is valid until").wait_for()
+    assert f"valid until {_dia_us(resumo['valid_until'])}" in c.get_by_role("status").first.inner_text()
     pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
     assert pdf.ok and pdf.body().startswith(b"%PDF")
     # o link não vale duas vezes
