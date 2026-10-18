@@ -14,8 +14,9 @@ primeira linha mexida.
 - Os eventos de antes se ligam à waiver pelo **escopo** (conta + piloto + modelo desde a última assinatura da
   conta, nas últimas 24 h; ou o convite inteiro). O `signed` lista em `detail.covers` os ids que cobre: nada
   precisa de UPDATE.
-- **Depois de assinar** (PDF baixado, anulada; e-mail da cópia, conferência no balcão e pacote de prova nas
-  próximas tarefas) não entram no PDF selado, que não muda: ficam aqui, com o `waiver_id`, e no painel.
+- **Depois de assinar** (PDF baixado, anulada, a cópia por e-mail — #114, com o message-id, ou a falha —; a
+  conferência no balcão e o pacote de prova nas próximas tarefas) não entram no PDF selado, que não muda: ficam
+  aqui, com o `waiver_id`, e no painel.
 """
 import hashlib
 import json
@@ -35,13 +36,14 @@ EVENTOS = {
     "reviewed": "Signer reviewed the summary (driver, signer, relationship, typed name, signature) before the final click",
     "signed": "Signed",
     "copy_emailed": "Signed copy emailed to the signer",
+    "copy_email_failed": "Signed copy could not be emailed",
     "id_checked": "Photo ID checked at the track",
     "voided": "Voided by URACE",
     "downloaded": "Signed PDF downloaded",
     "evidence_exported": "Evidence package exported",
 }
 ANTES = ("invite_sent", "screen_opened", "pdf_delivered", "all_pages_viewed", "code_sent", "code_verified", "reviewed")
-DEPOIS = ("copy_emailed", "id_checked", "voided", "downloaded", "evidence_exported")
+DEPOIS = ("copy_emailed", "copy_email_failed", "id_checked", "voided", "downloaded", "evidence_exported")
 DA_TELA = {"screen_opened", "all_pages_viewed"}           # o que só o navegador sabe
 FLUXOS = ("account", "invite", "staff")
 JANELA_HORAS = 24                                        # a mesma da leitura (#107)

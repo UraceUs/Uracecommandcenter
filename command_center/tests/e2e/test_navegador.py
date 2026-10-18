@@ -34,7 +34,7 @@ def codigo_do_email(para):
     """O código de 6 dígitos do último e-mail que o servidor "mandou" para `para` (#108)."""
     import json
     linhas = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()]
-    return re.search(r"\b(\d{6})\b", [x for x in linhas if x["to"] == para][-1]["text"]).group(1)
+    return re.search(r"\b(\d{6})\b", [x for x in linhas if x["to"] == para and "code" in x["subject"].lower()][-1]["text"]).group(1)
 
 
 # Toda tela do menu. Rota com :id usa o 1 que a semente cria.
@@ -1027,9 +1027,34 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     assert f"valid until {_dia_us(resumo['valid_until'])}" in c.get_by_role("status").first.inner_text()
     pdf = c.request.get(servidor.replace("/ops", "") + c.get_by_role("link", name="Download the signed PDF").get_attribute("href"))
     assert pdf.ok and pdf.body().startswith(b"%PDF")
+    # #114: a cópia sai do noreply@ para quem assinou, com o PDF assinado anexado (e-mail falso: nada sai da máquina)
+    c.get_by_text("A copy of the signed PDF is on its way to r").wait_for()
+    import hashlib
+    copia = [json.loads(x) for x in open(EMAILS, encoding="utf-8").read().splitlines()
+             if '"rita.e2e@example.com"' in x and "Your signed URACE waiver" in x][-1]
+    assert copia["from"] == "noreply@urace.us" and copia["reply_to"] == "support@urace.us"
+    assert copia["attachments"][0]["sha256"] == hashlib.sha256(pdf.body()).hexdigest(), "o anexo é o PDF assinado"
     c.get_by_role("button", name="Back to Drivers").click()
     c.get_by_text("Waiver: signed").wait_for()
     assert c.get_by_text(f"valid until {_dia_us(resumo['valid_until'])}").count() == 1, "na lista dos pilotos, o mesmo dia"
+    # #114: todas as waivers da conta, com o download e a cópia; pedir outra cópia logo em seguida espera
+    c.get_by_role("link", name="Signed waivers").click()
+    c.get_by_role("heading", name="Waivers", level=1).wait_for()
+    item = c.locator(".portal-waiver-item", has_text="Rafa Waiver")
+    item.get_by_text("Copy emailed to r").wait_for()
+    assert "Valid" in item.inner_text() and item.get_by_role("link", name="Download PDF").count() == 1
+    assert f"valid until {_dia_us(resumo['valid_until'])}" in item.inner_text(), ("o mesmo dia em " + FUSO_LONGE, item.inner_text())
+    item.get_by_role("button", name="Email me a copy").click()
+    c.get_by_role("alert").get_by_text("We just emailed a copy").wait_for()
+    for largura in (360, 390):
+        c.set_viewport_size({"width": largura, "height": 800})
+        assert [n for n, _ in _cabecalhos(c)] == [1, 2], _cabecalhos(c)
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], (largura, r)
+        assert not c.evaluate(_PEQUENOS), (largura, c.evaluate(_PEQUENOS))
+    c.set_viewport_size({"width": 360, "height": 800})
+    c.goto(servidor + "/portal/drivers")
+    c.get_by_text("Waiver: signed").wait_for()
     # 2b. #104: um piloto ADULTO que não é a Rita assina a própria waiver — a Rita não assina por ele
     csrf = next(k["value"] for k in c.context.cookies() if k["name"] == "cp_csrf")
     r = c.request.post(servidor + "/api/portal/drivers", data={"name": "Beto Adulto", **PILOTO_OK, "birth_date": "1990-02-02"},
@@ -1048,7 +1073,7 @@ def test_waiver_nativa_admin_liga_o_responsavel_assina_no_celular_e_a_equipe_ve(
     a.get_by_text(re.compile(r"trilha íntegra · \d+ eventos no total")).wait_for()
     passos = a.locator("ol li").all_inner_texts()
     for passo in ("abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas", "revisou o resumo", "código enviado",
-                  "código confirmado", "assinou", "PDF baixado"):
+                  "código confirmado", "assinou", "cópia por e-mail", "PDF baixado"):
         assert any(x.startswith(passo) for x in passos), (passo, passos)
     assert any(x.startswith("abriu a tela de assinar") and "relatado pela tela" in x for x in passos), passos
     assert any(x.startswith("PDF baixado") and "depois de assinar" in x for x in passos), passos
@@ -1220,6 +1245,14 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     a.get_by_role("button", name=re.compile(r"^Waivers \(1\)")).click()
     a.locator(".convite-waiver .chip", has_text="assinado").wait_for()
     assert "área do cliente" in a.locator("table.tbl tr", has_text="gabi.convite.e2e@example.com").inner_text()
+    # #114: o card mostra a cópia que saiu; "Reenviar cópia" mostra o e-mail que assinou antes do clique
+    linha = a.locator("table.tbl tr", has_text="gabi.convite.e2e@example.com")
+    linha.get_by_text("cópia por e-mail para g").wait_for()
+    linha.get_by_role("button", name="✉ Reenviar cópia").click()
+    dlg = a.get_by_role("dialog")
+    assert "gabi.convite.e2e@example.com" in dlg.inner_text() and "o e-mail que assinou" in dlg.inner_text()
+    dlg.get_by_role("button", name="Reenviar cópia").click()
+    a.get_by_text("Uma cópia acabou de sair").wait_for()               # a automática saiu agora: espera um minuto
     # #109: a assinada não vai para a lixeira; o gerente anula com motivo e ela continua no card, marcada
     linha = a.locator("table.tbl tr", has_text="gabi.convite.e2e@example.com")
     linha.get_by_role("button", name="Anular").click()
@@ -1245,7 +1278,7 @@ def test_convite_da_waiver_sai_do_card_e_o_adulto_assina_pelo_link_sem_conta(ser
     passos = list(dict.fromkeys(x.split(" · ")[0] for x in a.locator("ol li").all_inner_texts()))   # na ordem da 1ª vez
     assert passos[:8] == ["convite enviado por e-mail", "abriu a tela de assinar", "recebeu o PDF", "leu todas as páginas",
                           "revisou o resumo", "código enviado", "código confirmado", "assinou"], passos
-    assert "anulada" in passos[8:] and "PDF baixado" in passos[8:], passos
+    assert "anulada" in passos[8:] and "PDF baixado" in passos[8:] and "cópia por e-mail" in passos[8:], passos
     if not estava:
         a.request.post(servidor + "/api/site/waiver-nativa/ligar", data={"ligada": False}, headers=csrf)
     a.close(); c.close()

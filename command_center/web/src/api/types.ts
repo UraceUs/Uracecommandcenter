@@ -71,6 +71,8 @@ export interface Waiver {
   source?: string | null
   /** #109: a anulação (a waiver não muda; quem anulou, quando e por quê vêm de waiver_voids) */
   voided_at?: string | null; voided_by?: string | null; void_reason?: string | null
+  /** #114: a última cópia por e-mail da assinada no próprio sistema (ou a falha) */
+  copy?: { status: 'sent' | 'failed'; at: string; to: string | null; message_id?: string | null; by?: string | null } | null
   client_name?: string | null; client_pilot?: string | null; links?: Link[]
 }
 

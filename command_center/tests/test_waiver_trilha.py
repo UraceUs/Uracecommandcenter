@@ -110,7 +110,7 @@ def test_assinatura_pelo_convite_gera_a_sequencia_inteira_na_ordem(cli):  # noqa
     assert r.status_code == 201, r.text
     con = conectar()
     w = um(con, "SELECT * FROM waivers WHERE client_id=? AND source='urace'", (cid,))
-    evs = [e for e in tw.da_waiver(con, w["id"])]
+    evs = [e for e in tw.da_waiver(con, w["id"]) if e["phase"] != "after"]
     assert [e["event"] for e in evs] == ["invite_sent", "screen_opened", "pdf_delivered", "all_pages_viewed", "reviewed",
                                          "code_sent", "code_verified", "signed"], [e["event"] for e in evs]
     assert all(e["invite_id"] and e["flow"] == "invite" and e["client_id"] == cid for e in evs)
@@ -121,7 +121,8 @@ def test_assinatura_pelo_convite_gera_a_sequencia_inteira_na_ordem(cli):  # noqa
     # o PDF do convite baixado depois de assinar vai para a trilha, fora do PDF selado
     assert cli.get(f"{P}/invite/{token}/signed.pdf").status_code == 200
     depois = [e for e in tw.da_waiver(con, w["id"]) if e["phase"] == "after"]
-    assert [e["event"] for e in depois] == ["downloaded"] and depois[0]["detail"] == {"by": "signer"}
+    assert [e["event"] for e in depois] == ["copy_emailed", "downloaded"] and depois[1]["detail"] == {"by": "signer"}
+    assert depois[0]["flow"] == "invite" and depois[0]["invite_id"] == evs[0]["invite_id"], "#114: a cópia, no escopo do convite"
 
 
 def test_irmaos_cada_assinatura_cobre_so_os_passos_dela(cli):  # noqa: F811
@@ -254,10 +255,11 @@ def test_depois_de_assinar_baixar_e_anular_ficam_na_trilha_e_o_painel_mostra(cli
     d = r.json()
     assert d["cadeia"]["ok"] and d["cadeia"]["total"] == len(todos(conectar(), "SELECT id FROM waiver_events"))
     fases = [(e["phase"], e["event"]) for e in d["eventos"]]
-    assert fases == [("before", x) for x in ANTES] + [("signed", "signed"), ("after", "downloaded"), ("after", "downloaded"),
-                                                      ("after", "voided")], fases
+    assert fases == [("before", x) for x in ANTES] + [("signed", "signed"), ("after", "copy_emailed"), ("after", "downloaded"),
+                                                      ("after", "downloaded"), ("after", "voided")], fases
     depois = [e for e in d["eventos"] if e["phase"] == "after"]
-    assert [e["flow"] for e in depois] == ["account", "staff", "staff"] and depois[2]["detail"]["reason"] == "assinada pelo responsável errado"
+    assert [e["flow"] for e in depois] == ["account", "account", "staff", "staff"]
+    assert depois[3]["detail"]["reason"] == "assinada pelo responsável errado"
     assert open(um(conectar(), "SELECT pdf_path FROM waivers WHERE id=?", (wid,))["pdf_path"], "rb").read() == pdf_antes, \
         "o que vem depois não toca o PDF selado"
     assert cli.get(f"{S}/waiver-nativa/999999/eventos").status_code == 404

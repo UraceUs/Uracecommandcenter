@@ -15,6 +15,8 @@ import { daysUntil, fmtDate, fmtDateTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/Perguntar'
 import { useToast } from '../components/Toast'
 import { TextoComVoz } from '../components/Voz'
+import { SituacaoDaCopia } from '../components/CopiaDaWaiver'
+import { useReenviarCopia } from '../components/reenviarCopia'
 import { ESTADO_PEDIDO } from '../components/pedidoSite'
 import { tr, LOCALE } from '../i18n'
 
@@ -64,6 +66,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   const [qr, setQr] = useState(false)
+  const reenviarCopia = useReenviarCopia(reload)          // #114
   if (error && !data) return <ErrorState error={error} retry={reload} />
   if (loading && !data) return <Loading rows={8} />
   if (!data) return null
@@ -217,7 +220,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'waivers' && can('OPERATOR') && <ConviteWaiver cid={c.id} onMuda={reload} />}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Signatário")}</th><th>{tr("Modelo")}</th><th>{tr("Status")}</th><th>{tr("Enviada")}</th><th>{tr("Assinada")}</th><th>{tr("Expira")}</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum envelope para este e-mail.")}</Empty></td></tr>}
-        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}{w.source === 'urace' && <div className="small muted">{tr("área do cliente")}</div>}</td><td>{w.voided_at ? <><Status s="voided" label={tr("anulada")} /><div className="small muted">{tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div></> : <Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} />}</td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.source === 'urace' ? tr("PDF assinado na área do cliente (com página de certificado)") : w.pdf_path ? tr("PDF assinado guardado no card") : tr("Baixar PDF assinado do DocuSign")}>{tr("⬇ PDF")}{w.pdf_path ? ' ✓' : ''}</a>} {w.source === 'urace' && w.status === 'completed' && !w.voided_at && can('MANAGER') && <button className="btn sm danger" onClick={() => anularWaiver(w)} title={tr("Tirar de vigor, com motivo: a waiver fica no card e no backup")}>{tr("Anular")}</button>} <SysLink links={w.links} /></td></tr>)}
+        {data.waivers.map(w => <tr key={w.id}><td>{w.signer_name}<div className="small muted">{w.signer_email}</div></td><td>{w.template}{w.source === 'urace' && <div className="small muted">{tr("área do cliente")}</div>}{w.source === 'urace' && w.status === 'completed' && <SituacaoDaCopia c={w.copy} />}</td><td>{w.voided_at ? <><Status s="voided" label={tr("anulada")} /><div className="small muted">{tr("por {0} em {1}: {2}", w.voided_by || '—', fmtDate(w.voided_at), w.void_reason || '')}</div></> : <Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} />}</td><td className="mono">{fmtDate(w.sent_at)}</td><td className="mono">{fmtDate(w.completed_at)}</td><td className="mono">{fmtDate(w.expires_at)}</td><td className="nowrap">{w.status === 'completed' && <a className="btn sm" href={`/ops/api/waivers/${w.id}/download`} title={w.source === 'urace' ? tr("PDF assinado na área do cliente (com página de certificado)") : w.pdf_path ? tr("PDF assinado guardado no card") : tr("Baixar PDF assinado do DocuSign")}>{tr("⬇ PDF")}{w.pdf_path ? ' ✓' : ''}</a>} {w.source === 'urace' && w.status === 'completed' && !w.voided_at && can('OPERATOR') && <button className="btn sm" onClick={() => reenviarCopia(w)} title={tr("Manda de novo o PDF assinado ao e-mail que assinou")}>{tr("✉ Reenviar cópia")}</button>} {w.source === 'urace' && w.status === 'completed' && !w.voided_at && can('MANAGER') && <button className="btn sm danger" onClick={() => anularWaiver(w)} title={tr("Tirar de vigor, com motivo: a waiver fica no card e no backup")}>{tr("Anular")}</button>} <SysLink links={w.links} /></td></tr>)}
       </tbody></table></div>}
       {tab === 'emails' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Quando")}</th><th>{tr("Caixa")}</th><th>{tr("Assunto")}</th><th>{tr("De")}</th><th>{tr("Prioridade")}</th><th>{tr("Tratado")}</th><th></th></tr></thead><tbody>
         {data.emails.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum e-mail vinculado.")}</Empty></td></tr>}

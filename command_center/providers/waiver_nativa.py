@@ -405,8 +405,10 @@ def situacao(con, conta_id):
                       "status": "signed" if w else "none", "waiver_id": w["id"] if w else None,
                       "signed_at": w["completed_at"] if w else None, "valid_until": w["expires_at"] if w else None})
     c = um(con, "SELECT email, email_verified_at FROM portal_accounts WHERE id=?", (conta_id,))
+    assinadas = um(con, """SELECT COUNT(*) AS n FROM waivers w JOIN portal_pilots p ON p.id = w.pilot_id
+                           WHERE w.source='urace' AND w.status='completed' AND p.account_id=?""", (conta_id,))["n"]
     return {"enabled": ativa, "drivers": saida, "email": c["email"] if c else None,
-            "email_verified": bool(c and c["email_verified_at"])}
+            "email_verified": bool(c and c["email_verified_at"]), "signed_total": assinadas}
 
 
 # ------------------------------------------------------------------ assinar
@@ -628,6 +630,32 @@ def da_conta(con, conta_id, wid):
                       WHERE w.id=? AND w.source='urace' AND p.account_id=?""", (wid, conta_id))
 
 
+# ------------------------------------------------------------------ histórico na área do cliente (#114, lacuna E-2)
+HISTORICO_SQL = """SELECT w.id, w.template AS kind, w.completed_at AS signed_at, w.expires_at AS valid_until, w.signer_name,
+                          w.pilot_id, p.birth_date, COALESCE(json_extract(w.audit, '$.driver_name'), p.name) AS driver,
+                          json_extract(w.audit, '$.template_name') AS document,
+                          CASE WHEN json_extract(w.audit, '$.invitation_id') IS NULL THEN 'account' ELSE 'invite' END AS signed_via,
+                          v.at AS voided_at
+                     FROM waivers w JOIN portal_pilots p ON p.id = w.pilot_id LEFT JOIN waiver_voids v ON v.waiver_id = w.id
+                    WHERE w.source='urace' AND w.status='completed' AND p.account_id=?
+                    ORDER BY w.completed_at DESC, w.id DESC"""
+
+
+def item_do_historico(con, r):
+    """Uma waiver da lista da conta: vigente, vencida ou anulada (só o que existe: a data, o modelo, a cópia)."""
+    from command_center.providers import copia_waiver
+    hoje = portal.hoje()
+    fez_18 = (r["kind"] == "parental" and r["birth_date"]
+              and portal.idade(date.fromisoformat(r["birth_date"])) >= portal.MAIORIDADE)
+    status = "voided" if r["voided_at"] else "expired" if r["valid_until"] < hoje.isoformat() or fez_18 else "valid"
+    c = copia_waiver.ultima(con, r["id"])
+    return {"id": r["id"], "kind": r["kind"], "document": r["document"] or NOME.get(r["kind"]), "driver": r["driver"],
+            "signer_name": r["signer_name"], "signed_at": r["signed_at"], "valid_until": r["valid_until"], "status": status,
+            "voided_at": r["voided_at"], "signed_via": r["signed_via"],
+            "copy": {"status": c["status"], "at": c["at"], "to": c["to"]} if c else None,
+            "pdf": f"/ops/api/portal/waivers/{r['id']}/pdf"}
+
+
 def listar(con, limit=50, offset=0):
     """As assinadas aqui, das mais novas para as mais velhas, paginadas."""
     total = um(con, "SELECT COUNT(*) AS n FROM waivers WHERE source='urace'")["n"]
@@ -636,6 +664,9 @@ def listar(con, limit=50, offset=0):
                                  v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason
                             FROM waivers w LEFT JOIN waiver_voids v ON v.waiver_id = w.id WHERE w.source='urace'
                           ORDER BY w.completed_at DESC, w.id DESC LIMIT ? OFFSET ?""", (limit, offset))
+    from command_center.providers import copia_waiver
+    for w in itens:
+        w["copy"] = copia_waiver.ultima(con, w["id"])           # #114: a última cópia por e-mail (ou a falha)
     return {"itens": itens, "total": total, "limit": limit, "offset": offset}
 
 

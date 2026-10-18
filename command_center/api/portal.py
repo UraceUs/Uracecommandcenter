@@ -19,7 +19,7 @@ import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from command_center.api import auth
@@ -792,9 +792,9 @@ def revisar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(clie
 
 
 @r.post("/drivers/{pid}/waiver", status_code=201)
-def assinar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(cliente_atual),
+def assinar_waiver(pid: int, dados: WaiverIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
                    con: sqlite3.Connection = Depends(get_db)):
-    from command_center.providers import waiver_nativa as wn
+    from command_center.providers import codigos, copia_waiver, waiver_nativa as wn
     try:
         w = wn.assinar(con, cid, pid, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except LookupError:
@@ -804,7 +804,9 @@ def assinar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(clie
     _aud(con, request, "portal.waiver.sign", cid, {"piloto": pid, "waiver": w["id"], "modelo": w["template"],
                                                    "sha256": w["doc_sha256"]})
     con.commit()
-    return {"waiver_id": w["id"], "signed_at": w["completed_at"], "valid_until": w["expires_at"], **wn.situacao(con, cid)}
+    tarefas.add_task(copia_waiver.em_segundo_plano, w["id"])       # #114: a cópia por e-mail, fora da resposta
+    return {"waiver_id": w["id"], "signed_at": w["completed_at"], "valid_until": w["expires_at"],
+            "copy_to": codigos.mascarar(w["signer_email"]), **wn.situacao(con, cid)}
 
 
 class EventoTelaIn(BaseModel):
@@ -846,8 +848,38 @@ def waiver_evento(pid: int, dados: EventoTelaIn, request: Request, cid=Depends(c
     return {"ok": True, "id": e["id"]}
 
 
+@r.get("/waivers/history")
+def waivers_historico(response: Response, limit: int = Query(20, ge=1, le=100), offset: int = Query(0, ge=0, le=10**9),
+                      cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """#114 (lacuna E-2): todas as waivers assinadas pela conta (pelos pilotos dela), vigentes, vencidas e anuladas,
+    das mais novas para as mais velhas, paginadas (`X-Total-Count`), cada uma com o download e a última cópia por e-mail."""
+    from command_center.api.cache_api import paginar
+    from command_center.providers import waiver_nativa as wn
+    linhas = paginar(con, wn.HISTORICO_SQL, (cid,), response, limit, offset)
+    return {"items": [wn.item_do_historico(con, x) for x in linhas], "total": int(response.headers["X-Total-Count"]),
+            "limit": limit, "offset": offset}
+
+
+@r.post("/waivers/{wid}/email")
+def waiver_por_email(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+    """#114: "Email me a copy". Vai sempre para o e-mail que assinou (`signer_email`), nunca para outro."""
+    from command_center.providers import copia_waiver, waiver_nativa as wn
+    if not wn.da_conta(con, cid, wid):
+        raise HTTPException(404, "Waiver not found.")
+    try:
+        r = copia_waiver.mandar(con, wid, "cliente", conta=cid, ip=auth._ip(request),
+                                user_agent=request.headers.get("user-agent"))
+    except copia_waiver.NaoEnvia as e:
+        raise HTTPException(409, str(e))
+    except copia_waiver.Cedo as e:
+        raise HTTPException(429, str(e))
+    if not r["ok"]:
+        raise HTTPException(503, "We could not email the copy right now. Try again in a few minutes, or download it.")
+    return {"sent_to": r["sent_to"], "at": r["at"]}
+
+
 @r.get("/waivers/{wid}/pdf")
-def waiver_assinada_pdf(wid: int, request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def waiver_assinada_pdf(request: Request, wid: int = Path(..., ge=1, le=2**63 - 1), cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """O PDF assinado (documento + página de assinatura e certificado), só da própria conta."""
     from command_center.providers import trilha_waiver as tw, waiver_nativa as wn
     w = wn.da_conta(con, cid, wid)
@@ -956,15 +988,18 @@ def convite_revisar(token: str, dados: ConviteAssinarIn, request: Request, con: 
 
 
 @r.post("/invite/{token}/sign", status_code=201)
-def convite_assinar(token: str, dados: ConviteAssinarIn, request: Request, con: sqlite3.Connection = Depends(get_db)):
-    from command_center.providers import convite_waiver as cw, waiver_nativa as wn
+def convite_assinar(token: str, dados: ConviteAssinarIn, request: Request, tarefas: BackgroundTasks,
+                    con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import codigos, convite_waiver as cw, copia_waiver, waiver_nativa as wn
     try:
         w, _inv = cw.assinar(con, token, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except cw.LinkInvalido as e:
         raise _convite_recusado(con, request, e)
     except wn.ErroWaiver as e:
         raise HTTPException(400, str(e))
-    return {"signed_at": w["completed_at"], "valid_until": w["expires_at"], "driver": w["minor_name"] or _inv["driver_name"]}
+    tarefas.add_task(copia_waiver.em_segundo_plano, w["id"])       # #114: o link morre em 72 h; a cópia fica com quem assinou
+    return {"signed_at": w["completed_at"], "valid_until": w["expires_at"], "driver": w["minor_name"] or _inv["driver_name"],
+            "copy_to": codigos.mascarar(w["signer_email"])}
 
 
 @r.get("/invite/{token}/signed.pdf")

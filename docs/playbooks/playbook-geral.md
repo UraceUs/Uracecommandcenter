@@ -460,6 +460,31 @@ deixa a pessoa desfazer uma assinatura feita por erro quando o sistema não deu 
 - **Se o cliente disser "assinei e não foi":** ele parou no resumo. Falta pedir o código, digitar e tocar
   **I agree — sign the waiver**.
 
+#### Cópia por e-mail e as waivers na área do cliente (#114)
+
+- **Logo depois de assinar** (pela área do cliente ou pelo convite), sai um e-mail **do noreply@** para **quem
+  assinou**, com o **PDF assinado anexado** (o mesmo arquivo do download, conferido pelo hash). A resposta do
+  cliente cai no **support@** (Reply-To). A tela de "Signed" diz para onde a cópia foi (mascarado).
+- **Para quem:** sempre o e-mail que assinou (o da conta, confirmado por código, ou o do convite). Nem o cliente
+  nem a equipe escolhem outro destino; se o card mudou de e-mail depois, a cópia continua indo para o que assinou.
+- **Se o Gmail falhar** (recusa, rede caída ou lenta), a assinatura **vale do mesmo jeito**: fica registrado "a
+  cópia por e-mail não saiu" e dá para reenviar. O PDF que não bate mais com o hash gravado não sai.
+- **Na trilha** (Site › Waiver › Trilha): **cópia por e-mail**, com a hora, para quem e o **message-id** do Gmail;
+  ou **a cópia por e-mail não saiu**, com o motivo. Nada disso entra no PDF nem muda a waiver.
+- **Reenviar:**
+  - o cliente, em **Drivers › Signed waivers** (`/ops/portal/waivers`), botão **Email me a copy** (10 min depois
+    da última cópia que **saiu**; se a automática falhou, pode pedir na hora; até 3 por dia por waiver). Se quem
+    pede é outra conta que vê a waiver (o piloto dela, assinada pelo convite), a cópia vai do mesmo jeito para
+    quem assinou, e a trilha registra que o pedido veio daquela conta;
+  - a equipe, no card › aba **Waivers** (operador+) ou em **Site › Waiver › Assinadas aqui** (gerente+), botão
+    **✉ Reenviar cópia**: a janela mostra o e-mail que assinou antes de mandar (uma por minuto, até 10 por dia).
+    O card e a lista mostram a última cópia ("cópia por e-mail para m•••@… em …" ou "não saiu").
+  - A **anulada** não se reenvia; o PDF dela continua para baixar.
+- **Signed waivers** (área do cliente): todas as waivers assinadas no próprio sistema pelos pilotos da conta,
+  **vigentes, vencidas e anuladas** (a parental aparece vencida quando o piloto faz 18), das mais novas para as
+  mais velhas, 10 por página, cada uma com **Download PDF** e a última cópia. Só a própria conta vê e baixa.
+  Quem assinou pelo convite (sem conta) tem a cópia no e-mail, que fica depois que o link vence em 72 h.
+
 #### Waiver assinada no próprio sistema: nunca se apaga, se anula (#109)
 
 Dono, 06/10: *"nunca apagar"*. A waiver assinada na área do cliente ou pelo convite é o registro
@@ -525,9 +550,9 @@ com **hora, IP e aparelho**, e nenhum se muda nem se apaga (o próprio banco rec
   por hora**, por conta (ou convite), piloto e modelo; no certificado, o mesmo passo repetido vira **uma linha só**
   ("×N", com a hora do primeiro e a do último). Irmãos abertos em duas abas: cada certificado leva os passos do
   seu piloto.
-- **Depois de assinar** (PDF baixado pelo cliente ou pela equipe, anulada; e, nas próximas tarefas,
-  cópia por e-mail, documento conferido no balcão e pacote de prova) **não** entra no PDF, que não muda:
-  fica só na trilha.
+- **Depois de assinar** (cópia por e-mail, com o message-id, ou a falha (#114); PDF baixado pelo cliente ou
+  pela equipe; anulada; e, nas próximas tarefas, documento conferido no balcão e pacote de prova) **não** entra
+  no PDF, que não muda: fica só na trilha.
 - **Onde ver:** Site › Waiver › Assinadas aqui › **Trilha** (gerente+): os passos de antes, a assinatura e
   o que veio depois, e se a trilha inteira está **íntegra** (cada passo leva o hash do anterior; uma linha
   mexida aparece como "trilha com linha mexida no evento #n").
@@ -1197,6 +1222,7 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | mandar / reenviar o convite | `POST /clients/{id}/waiver-invite` com `{"email": "<o e-mail do card>"}` (operador; o e-mail confere com o card) |
 | versões do modelo da waiver nativa e o PDF de cada uma (#116) | `GET /site/waiver-nativa/versoes?kind=&limit=&offset=` · `GET /site/waiver-nativa/versoes/{id}/pdf` (gerente) |
 | trilha de eventos de uma waiver assinada no sistema e se a cadeia está íntegra (#111) | `GET /site/waiver-nativa/{id}/eventos` (gerente) |
+| reenviar a cópia por e-mail de uma waiver assinada no sistema, ao e-mail que assinou (#114) | `POST /waivers/{id}/copy` (operador) |
 | dia do box | `GET /meu-dia` (operador; é a tela inicial do mecânico e do coach) |
 | mandar comando à IA do painel | `POST /ai/commands` (operador) |
 | propostas esperando decisão | `GET /ai/actions?status=PROPOSED` (logado) |

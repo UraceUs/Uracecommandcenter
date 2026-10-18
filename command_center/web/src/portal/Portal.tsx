@@ -22,6 +22,7 @@ const Reservar = lazy(() => import('./Reservar').then(m => ({ default: m.Reserva
 const Acompanhar = lazy(() => import('./Reservar').then(m => ({ default: m.Acompanhar })))
 const AcompanharGrupo = lazy(() => import('./AgendarVarios').then(m => ({ default: m.AcompanharGrupo })))   // #314: o pedido de vários dias
 const ConviteWaiverPagina = lazy(() => import('./Convite').then(m => ({ default: m.ConviteWaiverPagina })))   // #135: o link do e-mail
+const MinhasWaivers = lazy(() => import('./Waivers').then(m => ({ default: m.MinhasWaivers })))   // #114: todas as waivers da conta
 
 type Estado = Account | null | undefined           // undefined = carregando; null = sem sessão
 
@@ -296,7 +297,7 @@ function useWaivers() {
 function LinhaWaiver({ w }: { w: WaiverPiloto }) {
   const dezoito = w.turns_18_on && <div className="small">{w.driver} turns 18 on <b>{dataUS(w.turns_18_on)}</b>: from that day the adult waiver applies, signed by {w.driver}.</div>
   return <>{dezoito}{w.status === 'signed'
-    ? <div className="small">Waiver: <b>signed</b>, valid until <b>{dataUS(w.valid_until)}</b> · <a href={`/ops/api/portal/waivers/${w.waiver_id}/pdf`}>Download PDF</a></div>
+    ? <div className="small">Waiver: <b>signed</b>, valid until <b>{dataUS(w.valid_until)}</b> · <a href={`/ops/api/portal/waivers/${w.waiver_id}/pdf`}>Download PDF</a> · <Link to="/portal/waivers">All waivers</Link></div>
     : w.own_signature_required ? <div className="small">Waiver: <b>not signed</b> · {w.driver} is an adult and signs their own waiver (their own account, or in person at the track).</div>
     : <div className="small">Waiver: <b>not signed</b>{w.kind ? <> · <Link to={`/portal/drivers/${w.driver_id}/waiver`}>Sign now</Link></> : ' · add the date of birth first'}</div>}</>
 }
@@ -462,7 +463,8 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
   const waiverDe = (id: number) => waivers?.enabled ? waivers.drivers.find(w => w.driver_id === id) : undefined
   return <div className="stack" style={{ gap: 18 }}>
     <div className="portal-piloto-topo"><div className="grow"><h1 className="h1">Drivers</h1><p className="muted" style={{ margin: '4px 0 0' }}>The people who drive the kart: your child or children, or you. The account holder stays the responsible adult.</p></div>
-      {editando === null && <button className="btn sm" onClick={() => setEditando('novo')}>+ Add a driver</button>}</div>
+      <div className="row wrap" style={{ gap: 8 }}>{waivers && (waivers.enabled || !!waivers.signed_total) && <Link className="btn sm ghost" to="/portal/waivers">Signed waivers</Link>}
+        {editando === null && <button className="btn sm" onClick={() => setEditando('novo')}>+ Add a driver</button>}</div></div>
     {conta.drivers.map(p => editando === p.id
       ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} />
       : <article className="card card-b portal-piloto" key={p.id}>
@@ -593,6 +595,7 @@ export function PortalApp() {
       <Route path="plans/:id" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><Acompanhar plano /></Suspense>} />
       <Route path="drivers" element={<Pilotos conta={conta} onSalvo={setConta} />} />
       <Route path="drivers/:pid/waiver" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><AssinarWaiver conta={conta} /></Suspense>} />
+      <Route path="waivers" element={<Suspense fallback={<div className="state"><span className="spin" /></div>}><MinhasWaivers /></Suspense>} />
       <Route path="history" element={<Historico />} />
       <Route path="account" element={<Conta conta={conta} setConta={setConta} />} />
       <Route path="*" element={<Navigate to="/portal/dashboard" replace />} />

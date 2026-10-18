@@ -119,10 +119,11 @@ def liga(cli):
 
 
 def ultimo_codigo(email):
-    """O código do último e-mail mandado para `email` (o arquivo do CC_EMAIL_FAKE)."""
+    """O código do último e-mail de código mandado para `email` (o arquivo do CC_EMAIL_FAKE). #114: depois de assinar
+    sai também a cópia da waiver para o mesmo e-mail; ela não é e-mail de código."""
     import re
     linhas = [json.loads(x) for x in open(os.environ["CC_EMAIL_FAKE"], encoding="utf-8").read().splitlines()]
-    return re.search(r"\b(\d{6})\b", [x for x in linhas if x["to"] == email][-1]["text"]).group(1)
+    return re.search(r"\b(\d{6})\b", [x for x in linhas if x["to"] == email and "code" in x["subject"].lower()][-1]["text"]).group(1)
 
 
 def confirma_email(cli, h):
