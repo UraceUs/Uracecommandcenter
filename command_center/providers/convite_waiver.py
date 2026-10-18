@@ -407,8 +407,9 @@ def _conferir_codigo(con, inv, codigo):
 
 def _preparar(con, token, dados):
     """O que a revisão e o clique final conferem igual (#112: tudo, menos o código do e-mail)."""
-    from command_center.providers import revisao_waiver as rv
+    from command_center.providers import revisao_waiver as rv, selo_waiver
     inv = conferir(con, token)
+    selo_waiver.exigir()                                   # #110: sem selo, 503 antes de qualquer passo (e do código)
     if not dados.get("read_and_agree") or not dados.get("consent_esign"):
         raise wn.ErroWaiver("Check both boxes to sign: that you read and agree, and that you agree to sign electronically.")
     if not dados.get("english_understood"):
@@ -497,12 +498,17 @@ def assinar(con, token, dados, ip=None, aparelho=None):
             raise LinkInvalido("This link was already used: the waiver is signed.", "used", inv)
         rv.marcar_usada(c2, rev["id"])
 
-    w = wn.gravar(con, x["base"], m, trilha, png, client_id=inv["client_id"], pilot_id=x["pilot_id"],
-                  signer_name=inv["signer_name"], signer_email=inv["email"],
-                  link_reason=f"assinada pelo convite #{inv['id']}, enviado ao e-mail do card", link_by="human",
-                  resumo=f"waiver de {inv['signer_name']} assinada pelo convite por e-mail ({inv['driver_name']})",
-                  antes=marcar_usado, eventos={"fluxo": "invite", "cobrir": dict(invite_id=inv["id"]), "ids": ids,
-                                               "ip": ip, "user_agent": aparelho, "detalhe": wn._no_signed(revisao)})
+    from command_center.providers import selo_waiver
+    try:
+        w = wn.gravar(con, x["base"], m, trilha, png, client_id=inv["client_id"], pilot_id=x["pilot_id"],
+                      signer_name=inv["signer_name"], signer_email=inv["email"],
+                      link_reason=f"assinada pelo convite #{inv['id']}, enviado ao e-mail do card", link_by="human",
+                      resumo=f"waiver de {inv['signer_name']} assinada pelo convite por e-mail ({inv['driver_name']})",
+                      antes=marcar_usado, eventos={"fluxo": "invite", "cobrir": dict(invite_id=inv["id"]), "ids": ids,
+                                                   "ip": ip, "user_agent": aparelho, "detalhe": wn._no_signed(revisao)})
+    except selo_waiver.SeloIndisponivel:                  # #110: a TSA caiu depois do código; quem assina não o perde
+        con.execute("UPDATE waiver_invite_codes SET used_at=NULL WHERE id=? AND used_at=?", (cod["id"], cod["used_at"]))
+        raise
     con.execute("UPDATE waiver_invites SET waiver_id=? WHERE id=?", (w["id"], inv["id"]))
     auditar(con, "waiver.invite.signed", f"invite:{inv['id']}", entity_type="client", entity_id=inv["client_id"],
             detail={"invite": inv["id"], "waiver": w["id"], "kind": tipo, "sha256": w["doc_sha256"]}, ip=ip)

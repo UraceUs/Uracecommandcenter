@@ -4480,5 +4480,16 @@
 "✉ Reenviar cópia": "✉ Resend copy",
 "Manda de novo o PDF assinado ao e-mail que assinou": "Sends the signed PDF again to the email that signed",
 "a cópia por e-mail não saiu": "emailed copy failed",
-"para {0}": "to {0}"
+"para {0}": "to {0}",
+"Selo digital e carimbo de tempo": "Digital seal and time-stamp",
+"selo configurado": "seal configured",
+"selo não configurado": "seal not configured",
+"O PDF assinado sai com o selo digital da URACE (PAdES) e o carimbo de tempo de uma autoridade externa (RFC 3161). Mudar 1 byte do arquivo quebra o selo, e a hora da assinatura vem de fora do servidor.": "The signed PDF carries URACE's digital seal (PAdES) and a time-stamp from an external authority (RFC 3161). Changing 1 byte of the file breaks the seal, and the signing time comes from outside the server.",
+"Raiz do selo (SHA-256):": "Seal root (SHA-256):",
+"Certificado de selo válido até {0}. No Adobe, a identidade aparece como desconhecida (certificado próprio); a integridade e o carimbo aparecem válidos.": "Seal certificate valid until {0}. In Adobe the identity shows as unknown (our own certificate); integrity and the time-stamp show as valid.",
+"Sem o selo, a assinatura não liga; se já estiver ligada, o cliente lê \"Online signing is temporarily unavailable\" e nada é gravado. Quem configura é o administrador, no servidor.": "Without the seal, signing cannot be turned on; if it is already on, the client reads \"Online signing is temporarily unavailable\" and nothing is saved. The administrator sets it up on the server.",
+"Carimbo de tempo, nesta ordem (10 s cada): {0}": "Time-stamp, in this order (10 s each): {0}",
+"A chave do selo fica em {0} e não vai no backup do banco: guarde uma cópia fora da VPS.": "The seal key is in {0} and is not in the database backup: keep a copy outside the VPS.",
+"Configure o selo da waiver primeiro": "Set up the waiver seal first",
+"selada · carimbo de tempo {0}": "sealed · time-stamp {0}"
 }

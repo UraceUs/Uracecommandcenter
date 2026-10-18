@@ -41,6 +41,9 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
   com o PDF só leitura); reimportar acrescenta a versão nova e a anterior continua consultável. A
   assinatura guarda o hash e o id da versão que valia. O modelo parental passa pela conferência do aviso
   do §744.301(3) (`aviso_744`), que só barra quando o texto aprovado pelo advogado está configurado.
+- **Selo e carimbo de tempo** (#110): o PDF final sai selado (PAdES, certificado de selo da URACE, DocMDP "nenhuma
+  alteração") com o carimbo de uma TSA externa (RFC 3161); o token fica também em `waiver_timestamps`. Sem selo
+  configurado ou sem TSA, não assina (503) e o cliente não perde o código do e-mail (`selo_waiver`).
 
 Nasce DESLIGADA (`booking_config.waiver_native = 0`): quem liga é o ADMIN, depois do sim do
 advogado. Nada aqui toca o DocuSign além de LER os dois modelos na importação.
@@ -155,6 +158,11 @@ def ligada(con):
 def ligar(con, ligado, por):
     if ligado and not all(modelo(con, k) for k in MODELOS):
         raise ValueError("importe os dois modelos do DocuSign antes de ligar")
+    if ligado:                                     # #110: sem o selo, nenhuma assinatura sairia (503)
+        from command_center.providers import selo_waiver
+        e = selo_waiver.estado()
+        if not e["configured"]:
+            raise ValueError(f"configure o selo da waiver antes de ligar: {e['reason']}")
     if ligado:                                     # #116: só barra com o texto aprovado pelo advogado configurado
         a = aviso_do_atual(con)
         if a["configured"] and not a["ok"]:
@@ -439,8 +447,10 @@ def _nome(v):
 def _preparar(con, conta_id, pid, dados):
     """O que a revisão e o clique final conferem igual (#112: tudo, menos o código do e-mail)."""
     from command_center.providers import revisao_waiver as rv
+    from command_center.providers import selo_waiver
     if not ligada(con):
         raise ErroWaiver("Online waiver signing is not available yet. Our team will send you the waiver.")
+    selo_waiver.exigir()                                   # #110: sem selo, 503 antes de qualquer passo (e do código)
     if not dados.get("read_and_agree") or not dados.get("consent_esign"):
         raise ErroWaiver("Check both boxes to sign: that you read and agree, and that you agree to sign electronically.")
     if not dados.get("english_understood"):
@@ -511,7 +521,7 @@ def revisar(con, conta_id, pid, dados, ip=None, aparelho=None):
 def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
     """Assina a waiver do piloto `pid` pela conta `conta_id`. Devolve a linha de `waivers`.
     #112: só com a revisão (`review_id`) desta conta e piloto, válida, nunca usada e com o mesmo conteúdo."""
-    from command_center.providers import codigos, revisao_waiver as rv, trilha_waiver as tw
+    from command_center.providers import codigos, revisao_waiver as rv, selo_waiver, trilha_waiver as tw
     x = _preparar(con, conta_id, pid, dados)
     c, p, tipo, m, nome, png, ids = x["c"], x["p"], x["tipo"], x["m"], x["nome"], x["png"], x["ids"]
     rev = rv.exigir(con, dados.get("review_id"), "account", ids, m["sha256"], x["conteudo"], dados.get("name_mismatch_confirmed"))
@@ -551,14 +561,18 @@ def assinar(con, conta_id, pid, dados, ip=None, aparelho=None):
         "signature_png_sha256": _sha(png), "valid_until": ate, "valid_until_reason": ate_motivo,
         "review": revisao, "reviewed_at_utc": revisao["reviewed_at"], "confirmed_at_utc": revisao["confirmed_at"],
     }
-    return gravar(con, x["base"], m, trilha, png, client_id=p.get("client_id"), pilot_id=pid,
-                  signer_name=c["name"], signer_email=c["email"],
-                  link_reason="assinada na área do cliente" if p.get("client_id") else None,
-                  link_by="sync" if p.get("client_id") else None,
-                  resumo=f"waiver de {c['name']} assinada na área do cliente ({p['name']})",
-                  antes=lambda c2: rv.marcar_usada(c2, rev["id"]),
-                  eventos={"fluxo": "account", "cobrir": dict(account_id=conta_id, pilot_id=pid, kind=tipo), "ids": ids,
-                           "ip": ip, "user_agent": aparelho, "detalhe": _no_signed(revisao)})
+    try:
+        return gravar(con, x["base"], m, trilha, png, client_id=p.get("client_id"), pilot_id=pid,
+                      signer_name=c["name"], signer_email=c["email"],
+                      link_reason="assinada na área do cliente" if p.get("client_id") else None,
+                      link_by="sync" if p.get("client_id") else None,
+                      resumo=f"waiver de {c['name']} assinada na área do cliente ({p['name']})",
+                      antes=lambda c2: rv.marcar_usada(c2, rev["id"]),
+                      eventos={"fluxo": "account", "cobrir": dict(account_id=conta_id, pilot_id=pid, kind=tipo), "ids": ids,
+                               "ip": ip, "user_agent": aparelho, "detalhe": _no_signed(revisao)})
+    except selo_waiver.SeloIndisponivel:
+        codigos.devolver(con, cod)                # #110: a TSA caiu depois do código; o cliente não perde o código
+        raise
 
 
 def _no_signed(revisao):
@@ -568,24 +582,30 @@ def _no_signed(revisao):
 
 
 def pdf_final(base, trilha, png):
-    """Monta e guarda o PDF assinado (o modelo + página de certificado); põe o hash na trilha."""
-    final = _pdf_assinado(base, trilha, png)
+    """Monta, sela e guarda o PDF assinado (o modelo + página de certificado). Devolve (caminho, token do carimbo).
+    #110: o selo PAdES e o carimbo de tempo entram ANTES do hash: `document_sha256` é o hash do arquivo selado, e
+    `trilha["seal"]` (a TSA, a hora dela, os hashes) vai para a linha da waiver no INSERT. Sem selo ou sem TSA,
+    `SeloIndisponivel` antes de gravar qualquer arquivo."""
+    from command_center.providers import selo_waiver
+    selado, info, token = selo_waiver.selar(_pdf_assinado(base, trilha, png))
+    trilha["seal"] = info
     caminho = os.path.join(pasta(), f"urace-{trilha['signature_id']}.pdf")
     with open(caminho, "wb") as f:
-        f.write(final)
+        f.write(selado)
     os.chmod(caminho, 0o400)                      # #109: só leitura, nem o dono do processo regrava
-    trilha["document_sha256"] = _sha(final)
-    return caminho
+    trilha["document_sha256"] = _sha(selado)
+    return caminho, token
 
 
 def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_email, link_reason, link_by, resumo,
-           caminho=None, antes=None, eventos=None):
+           antes=None, eventos=None):
     """Grava a waiver assinada na MESMA tabela das do DocuSign (card, anexo e agenda tratam igual).
     `antes(con)` roda dentro da mesma transação, antes do INSERT (o convite se marca usado ali).
     #109: a trilha inteira vai também para o `audit_logs` (append-only), na mesma transação: a linha da
     waiver é imutável por trigger e o audit_logs guarda uma segunda cópia que ninguém reescreve.
     #111: `eventos` = {fluxo, cobrir, ids, ip, user_agent}. Os eventos de antes (pelo escopo `cobrir`) vão
-    para a trilha e para o certificado; o `signed` entra em `waiver_events`, na mesma transação, com os ids."""
+    para a trilha e para o certificado; o `signed` entra em `waiver_events`, na mesma transação, com os ids.
+    #110: o PDF é selado antes da transação (`pdf_final`); o token do carimbo vai para `waiver_timestamps` nela."""
     from command_center.db import auditar, transacao
     from command_center.providers import trilha_waiver as tw
     tipo = trilha["template"]
@@ -598,7 +618,7 @@ def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_e
         from command_center.providers import aviso_744
         a = aviso_744.conferir(base)
         trilha.setdefault("notice_744_check", {k: a.get(k) for k in ("configured", "ok", "approved_sha256", "notice_pt", "body_pt")})
-    caminho = caminho or pdf_final(base, trilha, png)
+    caminho, token = pdf_final(base, trilha, png)
     quando = agora()
     with transacao(con):
         if antes:
@@ -611,6 +631,10 @@ def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_e
                       link_reason=link_reason, link_by=link_by, synced_at=quando)
         con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id) VALUES ('waiver', ?, 'urace', ?)",
                     (wid, trilha["signature_id"]))
+        selo = trilha["seal"]
+        inserir(con, "waiver_timestamps", waiver_id=wid, signature_id=trilha["signature_id"], tsa_url=selo["tsa_url"],
+                gen_time=selo["gen_time"], serial=selo["serial"], policy=selo.get("policy"), token_sha256=selo["token_sha256"],
+                token=token, seal_cert_sha256=selo["seal_cert_sha256"], document_sha256=trilha["document_sha256"])
         quem = f"portal:{trilha['account_id']}" if trilha.get("account_id") else f"invite:{trilha.get('invitation_id')}"
         auditar(con, "waiver.signed.trail", quem, entity_type="waiver", entity_id=wid, detail=trilha, ip=trilha.get("ip"))
         if eventos:
@@ -661,8 +685,10 @@ def listar(con, limit=50, offset=0):
     total = um(con, "SELECT COUNT(*) AS n FROM waivers WHERE source='urace'")["n"]
     itens = todos(con, """SELECT w.id, w.client_id, w.pilot_id, w.signer_name, w.signer_email, w.minor_name, w.template,
                                  w.completed_at, w.expires_at, w.doc_sha256,
-                                 v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason
-                            FROM waivers w LEFT JOIN waiver_voids v ON v.waiver_id = w.id WHERE w.source='urace'
+                                 v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason,
+                                 t.gen_time AS sealed_at, t.tsa_url AS seal_tsa
+                            FROM waivers w LEFT JOIN waiver_voids v ON v.waiver_id = w.id
+                            LEFT JOIN waiver_timestamps t ON t.waiver_id = w.id WHERE w.source='urace'
                           ORDER BY w.completed_at DESC, w.id DESC LIMIT ? OFFSET ?""", (limit, offset))
     from command_center.providers import copia_waiver
     for w in itens:
@@ -818,8 +844,9 @@ def _pdf_assinado(base, t, png):
             linha(f"Event chain: each event above is kept in URACE's append-only, hash-chained record; hash of the last one: "
                   f"{t['events_chain_hash']}", 8, "Helvetica-Oblique", 11)
     y -= 6
-    linha("URACE.US INC · Orlando, FL · The SHA-256 of this complete file is kept in URACE's records to show it "
-          "has not been altered.", 8, "Helvetica-Oblique", 11)
+    linha("URACE.US INC · Orlando, FL · This file carries URACE's digital seal (PAdES, SHA-256) and a time-stamp from an "
+          "independent RFC 3161 time-stamping authority. Any change after signing breaks the seal, and the SHA-256 of this "
+          "complete file is kept in URACE's records to show it has not been altered.", 8, "Helvetica-Oblique", 11)
     cv.showPage()
     cv.save()
 

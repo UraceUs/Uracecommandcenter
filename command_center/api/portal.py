@@ -112,6 +112,15 @@ def _aud(con, request, evento, conta_id, detalhe=None):
             detail=detalhe or {}, ip=auth._ip(request))
 
 
+def _selo_fora(con, request, e, fluxo, etapa, ator, entity_type=None, entity_id=None, detalhe=None):
+    """#110: sem o selo configurado ou sem TSA, a waiver não se assina. Nada foi gravado (nem o código gasto); a
+    falha vai para a auditoria (`waiver.seal_failed`, com o motivo para a equipe) e o cliente lê a mensagem clara."""
+    from command_center.providers import selo_waiver
+    auditar(con, "waiver.seal_failed", ator, entity_type=entity_type, entity_id=entity_id,
+            detail={"flow": fluxo, "stage": etapa, "reason": e.motivo[:600], **(detalhe or {})}, ip=auth._ip(request))
+    return HTTPException(503, selo_waiver.MENSAGEM, headers={"Retry-After": "120"})
+
+
 # ------------------------------------------------------------------ cadastro e login
 class CadastroIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -780,7 +789,7 @@ def waiver_modelo_pdf(kind: str, request: Request, driver: int | None = Query(No
 def revisar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(cliente_atual),
                    con: sqlite3.Connection = Depends(get_db)):
     """#112, passo 1: confere tudo menos o código e devolve o resumo que a tela mostra antes do clique final."""
-    from command_center.providers import revisao_waiver as rv, waiver_nativa as wn
+    from command_center.providers import revisao_waiver as rv, selo_waiver, waiver_nativa as wn
     try:
         return wn.revisar(con, cid, pid, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except LookupError:
@@ -789,18 +798,22 @@ def revisar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(clie
         raise HTTPException(400, str(e))
     except rv.Demais as e:
         raise HTTPException(429, str(e))
+    except selo_waiver.SeloIndisponivel as e:
+        raise _selo_fora(con, request, e, "account", "review", f"portal:{cid}", "portal_account", cid, {"pilot_id": pid})
 
 
 @r.post("/drivers/{pid}/waiver", status_code=201)
 def assinar_waiver(pid: int, dados: WaiverIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
                    con: sqlite3.Connection = Depends(get_db)):
-    from command_center.providers import codigos, copia_waiver, waiver_nativa as wn
+    from command_center.providers import codigos, copia_waiver, selo_waiver, waiver_nativa as wn
     try:
         w = wn.assinar(con, cid, pid, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except LookupError:
         raise HTTPException(404, "Driver not found.")
     except wn.ErroWaiver as e:
         raise HTTPException(400, str(e))
+    except selo_waiver.SeloIndisponivel as e:
+        raise _selo_fora(con, request, e, "account", "sign", f"portal:{cid}", "portal_account", cid, {"pilot_id": pid})
     _aud(con, request, "portal.waiver.sign", cid, {"piloto": pid, "waiver": w["id"], "modelo": w["template"],
                                                    "sha256": w["doc_sha256"]})
     con.commit()
@@ -912,6 +925,14 @@ class ConviteAssinarIn(BaseModel):
     name_mismatch_confirmed: bool = False
 
 
+def _selo_do_convite(con, request, e, token, etapa):
+    """#110 pelo convite: a auditoria vai para o card do convite (o link em si nunca)."""
+    from command_center.providers import convite_waiver as cw
+    inv = cw.achar(con, token)
+    return _selo_fora(con, request, e, "invite", etapa, f"invite:{inv['id']}" if inv else "invite",
+                      "client" if inv else None, inv["client_id"] if inv else None, {"invite": inv["id"] if inv else None})
+
+
 def _convite_recusado(con, request, e):
     """410 para link usado, trocado, vencido ou de card que mudou; 404 para o que não é link nosso.
     A tentativa num convite conhecido vai para a auditoria do card (o link em si nunca)."""
@@ -976,7 +997,7 @@ def convite_evento(token: str, dados: EventoTelaIn, request: Request, con: sqlit
 @r.post("/invite/{token}/review", status_code=201)
 def convite_revisar(token: str, dados: ConviteAssinarIn, request: Request, con: sqlite3.Connection = Depends(get_db)):
     """#112, passo 1 pelo convite: confere tudo menos o código e devolve o resumo."""
-    from command_center.providers import convite_waiver as cw, revisao_waiver as rv, waiver_nativa as wn
+    from command_center.providers import convite_waiver as cw, revisao_waiver as rv, selo_waiver, waiver_nativa as wn
     try:
         return cw.revisar(con, token, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except cw.LinkInvalido as e:
@@ -985,18 +1006,22 @@ def convite_revisar(token: str, dados: ConviteAssinarIn, request: Request, con: 
         raise HTTPException(400, str(e))
     except rv.Demais as e:
         raise HTTPException(429, str(e))
+    except selo_waiver.SeloIndisponivel as e:
+        raise _selo_do_convite(con, request, e, token, "review")
 
 
 @r.post("/invite/{token}/sign", status_code=201)
 def convite_assinar(token: str, dados: ConviteAssinarIn, request: Request, tarefas: BackgroundTasks,
                     con: sqlite3.Connection = Depends(get_db)):
-    from command_center.providers import codigos, convite_waiver as cw, copia_waiver, waiver_nativa as wn
+    from command_center.providers import codigos, convite_waiver as cw, copia_waiver, selo_waiver, waiver_nativa as wn
     try:
         w, _inv = cw.assinar(con, token, dados.model_dump(), ip=auth._ip(request), aparelho=request.headers.get("user-agent"))
     except cw.LinkInvalido as e:
         raise _convite_recusado(con, request, e)
     except wn.ErroWaiver as e:
         raise HTTPException(400, str(e))
+    except selo_waiver.SeloIndisponivel as e:
+        raise _selo_do_convite(con, request, e, token, "sign")
     tarefas.add_task(copia_waiver.em_segundo_plano, w["id"])       # #114: o link morre em 72 h; a cópia fica com quem assinou
     return {"signed_at": w["completed_at"], "valid_until": w["expires_at"], "driver": w["minor_name"] or _inv["driver_name"],
             "copy_to": codigos.mascarar(w["signer_email"])}
