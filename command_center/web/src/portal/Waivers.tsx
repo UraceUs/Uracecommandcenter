@@ -7,10 +7,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { papi, PortalError, type WaiverDaConta } from './api'
+import { dataUS } from './datas'
 
 const POR_PAGINA = 10
-const dataUS = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso)
-  .toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })
 const SITUACAO: Record<WaiverDaConta['status'], [string, string]> = { valid: ['Valid', 'ok'], expired: ['Expired', 'neutral'], voided: ['Voided by URACE', 'crit'] }
 
 function Copia({ c }: { c: WaiverDaConta['copy'] }) {

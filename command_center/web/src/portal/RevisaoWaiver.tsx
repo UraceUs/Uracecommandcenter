@@ -7,9 +7,7 @@
  * algo, a revisão é feita de novo (o servidor recusa o clique final com conteúdo diferente do revisado). */
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { RevisaoWaiver } from './api'
-
-const dataUS = (iso: string) => new Date(iso.length === 10 ? iso + 'T12:00:00' : iso)
-  .toLocaleDateString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric' })
+import { dataUS } from './datas'
 
 export function Revisao({ r, assinatura, nomeConfirmado, onNomeConfirmado, codigo, podeAssinar, indo, erro, onVoltar, onAssinar }: {
   r: RevisaoWaiver; assinatura: string; nomeConfirmado: boolean; onNomeConfirmado: (v: boolean) => void

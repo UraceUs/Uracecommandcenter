@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { papi, PortalError, type Account, type RevisaoWaiver, type WaiverModelo, type Waivers } from './api'
+import { dataUS } from './datas'
 import { Revisao } from './RevisaoWaiver'
 import { VisorPdf } from './VisorPdf'
 
@@ -133,7 +134,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   if (feita) return <div className="stack" style={{ gap: 18 }}>
     {topo}
     <div className="banner ok" role="status"><span className="bi" aria-hidden="true">✓</span><div className="grow">
-      Signed. The waiver for {piloto.name} is valid until <b>{new Date(feita.valid_until + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</b>.</div></div>
+      Signed. The waiver for {piloto.name} is valid until <b>{dataUS(feita.valid_until)}</b>.</div></div>
     {feita.copy_to && <p className="small" style={{ margin: 0 }}>A copy of the signed PDF is on its way to <b>{feita.copy_to}</b>. You can also find it
       any time in <Link to="/portal/waivers">Waivers</Link>.</p>}
     <div className="row wrap" style={{ gap: 8 }}>
