@@ -26,35 +26,67 @@ def guardar_o_real():
 
 
 def criar_selo(pasta):
+    """A raiz e o selo pelo `selo_waiver.criar`, e a raiz da TSA falsa entre as raízes de TSA aceitas (`tsa/`)."""
     from command_center.providers import selo_waiver
-    return selo_waiver.criar(str(pasta))
+    r = selo_waiver.criar(str(pasta))
+    confiar_na_tsa_falsa(pasta)
+    return r
+
+
+def confiar_na_tsa_falsa(pasta):
+    """Põe a raiz da TSA falsa em `<pasta>/tsa/`, como o administrador põe a da FreeTSA no VPS."""
+    import os
+    from cryptography.hazmat.primitives import serialization
+    d = os.path.join(str(pasta), "tsa")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "tsa-de-teste.pem"), "wb") as f:
+        f.write(raiz_tsa().public_bytes(serialization.Encoding.PEM))
 
 
 @lru_cache(maxsize=1)
 def _material_tsa():
     """(raiz da TSA, certificado da TSA, chave RSA da TSA): uma vez por execução (gerar RSA custa)."""
-    from cryptography.hazmat.primitives.asymmetric import ec, rsa
-    from cryptography.x509.oid import ExtendedKeyUsageOID
-    from command_center.providers import selo_waiver as sw
-    k_raiz = ec.generate_private_key(ec.SECP256R1())
-    raiz = sw.emitir(sw._nome("URACE TEST TSA Root"), sw._nome("URACE TEST TSA Root"), k_raiz.public_key(), k_raiz, 1, ca=True)
-    k_tsa = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    cert = sw.emitir(sw._nome("URACE TEST Time Stamping Authority"), raiz.subject, k_tsa.public_key(), k_raiz, 1,
-                     eku=[ExtendedKeyUsageOID.TIME_STAMPING], emissor_cert=raiz)
-    return raiz, cert, k_tsa
+    return _gerar_tsa("URACE TEST Time Stamping Authority")
 
 
 def raiz_tsa():
     return _material_tsa()[0]
 
 
-def tsa():
+def _gerar_tsa(nome):
+    from cryptography.hazmat.primitives.asymmetric import ec, rsa
+    from cryptography.x509.oid import ExtendedKeyUsageOID
+    from command_center.providers import selo_waiver as sw
+    k_raiz = ec.generate_private_key(ec.SECP256R1())
+    raiz = sw.emitir(sw._nome(f"{nome} Root"), sw._nome(f"{nome} Root"), k_raiz.public_key(), k_raiz, 1, ca=True)
+    k_tsa = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    cert = sw.emitir(sw._nome(nome), raiz.subject, k_tsa.public_key(), k_raiz, 1,
+                     eku=[ExtendedKeyUsageOID.TIME_STAMPING], emissor_cert=raiz)
+    return raiz, cert, k_tsa
+
+
+def _carimbador(material, fixed_dt=None):
     from pyhanko.sign.timestamps.dummy_client import DummyTimeStamper
     from pyhanko_certvalidator.registry import SimpleCertificateStore
     from command_center.providers import selo_waiver as sw
-    raiz, cert, chave = _material_tsa()
+    raiz, cert, chave = material
     return DummyTimeStamper(tsa_cert=sw._asn1(cert), tsa_key=sw._asn1(chave=chave),
-                            certs_to_embed=SimpleCertificateStore.from_certs([sw._asn1(raiz)]))
+                            certs_to_embed=SimpleCertificateStore.from_certs([sw._asn1(raiz)]), fixed_dt=fixed_dt)
+
+
+def tsa(fixed_dt=None):
+    """A TSA falsa de confiança dos testes (a raiz dela está em `tsa/`). `fixed_dt`: a hora que ela carimba."""
+    return _carimbador(_material_tsa(), fixed_dt)
+
+
+@lru_cache(maxsize=1)
+def _material_desconhecido():
+    return _gerar_tsa("Unknown TSA (not trusted)")
+
+
+def tsa_desconhecida(fixed_dt=None):
+    """Uma "TSA" que ninguém conhece (a de quem tem a chave do selo e quer escolher a hora)."""
+    return _carimbador(_material_desconhecido(), fixed_dt)
 
 
 class TsaQueFalha:

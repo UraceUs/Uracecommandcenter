@@ -99,7 +99,7 @@ def test_o_pdf_assinado_sai_selado_com_carimbo_e_o_pyhanko_valida(cli):  # noqa:
     trilha = json.loads(um(con, "SELECT detail FROM audit_logs WHERE event='waiver.signed.trail'")["detail"])
     assert trilha["seal"] == selo and trilha["document_sha256"] == w["doc_sha256"]
     # o selo é o próprio validador da URACE também (o que `selo-waiver conferir` usa)
-    assert sw.validar(pdf, raizes=[selo_teste.raiz_tsa()])["ok"] is True
+    assert sw.validar(pdf)["ok"] is True
     from command_center.tests.test_waiver_nativa import certificado
     assert "RFC 3161 time-stamping authority" in certificado(w["pdf_path"])
     # a lista de Site › Waiver mostra quando foi carimbada
@@ -119,7 +119,7 @@ def test_um_byte_mudado_quebra_o_selo():
     ruim[i] ^= 0x01
     _s, st2 = _valida(bytes(ruim))
     assert not st2.intact and not st2.bottom_line
-    assert sw.validar(bytes(ruim), raizes=[selo_teste.raiz_tsa()])["ok"] is False
+    assert sw.validar(bytes(ruim))["ok"] is False
 
 
 def test_a_tabela_do_carimbo_e_append_only(cli):  # noqa: F811
@@ -209,7 +209,7 @@ def test_ligar_exige_o_selo_e_site_waiver_mostra_o_estado(cli, tmp_path, monkeyp
     real = os.environ["CC_WAIVER_SEAL_DIR"]
     monkeypatch.setenv("CC_WAIVER_SEAL_DIR", str(tmp_path / "selo"))
     d = cli.get(f"{S}/waiver-nativa").json()["selo"]
-    assert d["configured"] is False and "selo-waiver criar" in d["reason"]
+    assert d["configured"] is False and "selo-waiver criar" in d["reason"] and d["code"] == "missing"
     r = cli.post(f"{S}/waiver-nativa/ligar", json={"ligada": True}, headers=h)
     assert r.status_code == 409 and "selo" in r.json()["detail"]
     assert cli.get(f"{S}/waiver-nativa").json()["ligada"] is False
@@ -237,6 +237,7 @@ def test_criar_nunca_sobrescreve_e_a_chave_fica_so_para_o_dono(tmp_path):
     assert e["configured"] and e["root_sha256"] == r["root_sha256"] and e["seal_sha256"] == r["seal_sha256"]
     os.chmod(onde / "seal-key.pem", 0o644)
     assert not sw.estado(str(onde))["configured"] and "chmod 600" in sw.estado(str(onde))["reason"]
+    assert sw.estado(str(onde))["code"] == "key_open", "a tela traduz pelo código, não pelo texto do servidor"
     os.chmod(onde / "seal-key.pem", 0o600)
     # uma só das três peças também não se cria por cima
     (onde / "seal-key.pem").unlink()
@@ -271,7 +272,7 @@ def test_as_tsas_vem_da_lista_e_a_que_esta_fora_passa_para_a_proxima(monkeypatch
         monkeypatch.setenv("CC_WAIVER_TSA", f" http://127.0.0.1:{fechada}/tsr , {tsa.url}")
         selado, info, tok = sw.selar(sw.pdf_de_teste())
         assert info["tsa_url"] == tsa.url and tsa.pedidos == 1, "um pedido só por selo (sem o de estimar tamanho)"
-        assert sw.validar(selado, raizes=[selo_teste.raiz_tsa()])["ok"]
+        assert sw.validar(selado)["ok"]
         monkeypatch.setenv("CC_WAIVER_TSA", f"http://127.0.0.1:{fechada}/tsr")
         with pytest.raises(sw.SeloIndisponivel, match="nenhuma TSA"):
             sw.selar(sw.pdf_de_teste())
@@ -291,6 +292,7 @@ def test_manage_selo_waiver_criar_e_conferir(tmp_path, monkeypatch, capsys):
     assert sw.impressao(sw.estado()["root_sha256"]) in saida and "GUARDE UMA CÓPIA" in saida
     assert manage.main(["manage", "selo-waiver", "criar"]) == 1
     assert "Nada foi mudado" in capsys.readouterr().out
+    selo_teste.confiar_na_tsa_falsa(tmp_path / "selo")          # a raiz da TSA (no VPS: a da FreeTSA) em selo/tsa/
     tsa = selo_teste.TsaFalsa()
     try:
         monkeypatch.setenv("CC_WAIVER_TSA", tsa.url)
@@ -310,3 +312,201 @@ def test_manage_selo_waiver_criar_e_conferir(tmp_path, monkeypatch, capsys):
         tsa.parar()
     con = conectar()
     assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='waiver.seal_created'")
+
+
+# ------------------------------------------------------------------ revisão do #335
+def _selar_com(pdf, chave, cert, cadeia, carimbador):
+    """Sela como o `selar`, mas com a chave, o certificado e a TSA que quiser (o que um falsificador faria)."""
+    from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+    from pyhanko.sign import fields, signers
+    from pyhanko_certvalidator.registry import SimpleCertificateStore
+    s = signers.SimpleSigner(signing_cert=sw._asn1(cert), signing_key=sw._asn1(chave=chave),
+                             cert_registry=SimpleCertificateStore.from_certs([sw._asn1(c) for c in cadeia]))
+    meta = signers.PdfSignatureMetadata(field_name=sw.CAMPO, certify=True, docmdp_permissions=fields.MDPPerm.NO_CHANGES,
+                                        subfilter=fields.SigSeedSubFilter.PADES, md_algorithm="sha256")
+    return signers.PdfSigner(meta, signer=s, timestamper=carimbador).sign_pdf(
+        IncrementalPdfFileWriter(io.BytesIO(pdf)), bytes_reserved=sw.RESERVA).getvalue()
+
+
+def test_waiver_adulterada_e_reselada_por_uma_ca_publica_nao_confere(monkeypatch):
+    """Achado 1: com a raiz da URACE e as ~150 do certifi no mesmo contexto, um certificado S/MIME de qualquer CA pública
+    "selava" uma waiver adulterada, até no campo URACE-Seal, e o conferir dizia ok. O selo só vale pela raiz da URACE."""
+    from datetime import datetime, timedelta
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+    k_ca = ec.generate_private_key(ec.SECP256R1())
+    ca = sw.emitir(sw._nome("Public CA (test)"), sw._nome("Public CA (test)"), k_ca.public_key(), k_ca, 5, ca=True)
+    k = ec.generate_private_key(ec.SECP256R1())
+    agora = datetime.now(timezone.utc)
+    smime = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "intruso@example.com")]))
+             .issuer_name(ca.subject).public_key(k.public_key()).serial_number(x509.random_serial_number())
+             .not_valid_before(agora - timedelta(hours=1)).not_valid_after(agora + timedelta(days=30))
+             .add_extension(x509.KeyUsage(True, True, False, False, False, False, False, False, False), critical=True)
+             .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.EMAIL_PROTECTION]), critical=False)
+             .sign(k_ca, hashes.SHA256()))
+    # o pior caso: a CA do intruso está entre as públicas E entre as raízes de TSA aceitas
+    publicas = sw._raizes_publicas()
+    monkeypatch.setattr(sw, "_raizes_publicas", lambda: [*publicas, sw._asn1(ca)])
+    monkeypatch.setattr(sw, "raizes_tsa", lambda: [sw._asn1(selo_teste.raiz_tsa()), sw._asn1(ca)])
+    adulterada = sw.pdf_de_teste().replace(b"Not a waiver", b"ADULTERADA!!")
+    forjada = _selar_com(adulterada, k, smime, [ca], selo_teste.tsa())
+    v = sw.validar(forjada)
+    assert v["ok"] is False and v["trusted"] is False and v["issued_by_root"] is False, v
+    assert v["intact"] is True, "o arquivo forjado está íntegro: o que falha é quem selou"
+    assert "não é da URACE" in v["reason"]
+    # e o selo de verdade continua valendo
+    assert sw.validar(sw.selar(sw.pdf_de_teste())[0])["ok"] is True
+
+
+def test_carimbo_de_tsa_desconhecida_com_hora_escolhida_nao_sela_nem_confere(monkeypatch):
+    """Achado 2: quem tem a chave do selo (ou um MITM no HTTP da DigiCert) carimbava com uma TSA própria e a hora que
+    quisesse. Agora o selar confere o carimbo logo depois (TSA das raízes aceitas) e passa para a próxima."""
+    from datetime import datetime
+    em_2024 = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(sw, "_carimbadores", lambda: [("urn:minha-tsa", selo_teste.tsa_desconhecida(em_2024))])
+    with pytest.raises(sw.SeloIndisponivel, match="TSA desconhecida"):
+        sw.selar(sw.pdf_de_teste())
+    # o PDF que alguém montasse assim, por fora, também não confere
+    chave, selo, raiz = sw._carregar()
+    forjado = _selar_com(sw.pdf_de_teste(), chave, selo, [raiz], selo_teste.tsa_desconhecida(em_2024))
+    v = sw.validar(forjado)
+    assert v["ok"] is False and v["timestamp"]["trusted"] is False and v["timestamp"]["time"].startswith("2024-01-01")
+    assert v["issued_by_root"] is True and "TSA conhecida" in v["reason"]
+
+
+def test_carimbo_de_tsa_aceita_mas_com_a_hora_fora_nao_sela_e_passa_para_a_proxima(monkeypatch):
+    from datetime import datetime
+    em_2024 = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    monkeypatch.setattr(sw, "_carimbadores", lambda: [("urn:atrasada", selo_teste.tsa(em_2024))])
+    with pytest.raises(sw.SeloIndisponivel, match="min do relógio"):
+        sw.selar(sw.pdf_de_teste())
+    monkeypatch.setattr(sw, "_carimbadores", lambda: [("urn:atrasada", selo_teste.tsa(em_2024)),
+                                                      ("urn:certa", selo_teste.tsa())])
+    selado, info, _t = sw.selar(sw.pdf_de_teste())
+    assert info["tsa_url"] == "urn:certa" and sw.validar(selado)["ok"] is True
+    # montado por fora, com a hora do carimbo longe da que o selo declara: não confere
+    chave, selo, raiz = sw._carregar()
+    v = sw.validar(_selar_com(sw.pdf_de_teste(), chave, selo, [raiz], selo_teste.tsa(em_2024)))
+    assert v["ok"] is False and v["timestamp"]["trusted"] is True and v["times_match"] is False
+
+
+def test_pela_api_tsa_desconhecida_da_503_e_nada_se_grava(cli, monkeypatch):  # noqa: F811
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    corpo = _ate_o_clique_final(cli, hc, pid)
+    monkeypatch.setattr(sw, "_carimbadores", lambda: [("urn:minha-tsa", selo_teste.tsa_desconhecida())])
+    r = cli.post(f"{P}/drivers/{pid}/waiver", json=corpo, headers=hc)
+    assert r.status_code == 503 and r.json()["detail"].startswith(MENSAGEM)
+    con = conectar()
+    _nada_gravado(con)
+    assert um(con, "SELECT used_at FROM portal_codes WHERE purpose='waiver_sign' ORDER BY id DESC LIMIT 1")["used_at"] is None
+
+
+def test_transacao_que_falha_depois_de_selar_nao_deixa_pdf_orfao(cli, monkeypatch):  # noqa: F811
+    """Achado 3: enquanto a TSA demora, outra aba conclui a mesma revisão; o pedido falha DENTRO da transação, e o PDF
+    selado (com nome, nascimento e assinatura) ficava no disco, 0400, sem linha nenhuma."""
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    corpo = _ate_o_clique_final(cli, hc, pid)
+    carimbador = selo_teste.tsa()
+    original = carimbador.request_tsa_response
+
+    def no_meio(req):
+        c = conectar()                                   # a outra aba gasta a revisão enquanto esta espera a TSA
+        c.execute("UPDATE waiver_reviews SET used_at='2026-10-18T00:00:00.000Z' WHERE used_at IS NULL")
+        c.close()
+        return original(req)
+    carimbador.request_tsa_response = no_meio
+    monkeypatch.setattr(sw, "_carimbadores", lambda: [("urn:lenta", carimbador)])
+    r = cli.post(f"{P}/drivers/{pid}/waiver", json=corpo, headers=hc)
+    assert r.status_code == 400, r.text
+    con = conectar()
+    assert um(con, "SELECT COUNT(*) AS n FROM waivers WHERE source='urace'")["n"] == 0
+    assert not _assinados(), "o PDF selado cuja linha não entrou sai do disco"
+
+
+def test_codigo_gasto_por_outro_pedido_no_meio_nao_vale_duas_vezes(cli, monkeypatch):  # noqa: F811
+    """O UPDATE do código só pega o que ainda está livre: dois pedidos com o mesmo código não passam os dois (e o
+    `devolver` de um nunca reabre o código que o outro gastou)."""
+    from command_center.providers import codigos
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    corpo = _ate_o_clique_final(cli, hc, pid)
+    con = conectar()
+    conta = um(con, "SELECT account_id FROM portal_codes WHERE purpose='waiver_sign' ORDER BY id DESC LIMIT 1")["account_id"]
+    velha = um(con, "SELECT * FROM portal_codes WHERE purpose='waiver_sign' ORDER BY id DESC LIMIT 1")
+    con.execute("UPDATE portal_codes SET used_at='2026-10-18T00:00:00.000Z' WHERE id=?", (velha["id"],))   # o outro pedido
+    real = codigos.um
+    monkeypatch.setattr(codigos, "um", lambda c, sql, a=(): velha if "FROM portal_codes" in sql else real(c, sql, a))
+    with pytest.raises(codigos.ErroCodigo, match="expired"):
+        codigos.conferir(con, conta, "waiver_sign", corpo["sign_code"])
+    assert um(con, "SELECT used_at FROM portal_codes WHERE id=?", (velha["id"],))["used_at"] == "2026-10-18T00:00:00.000Z"
+
+
+def test_codigo_do_convite_gasto_no_meio_nao_vale_duas_vezes(cli, monkeypatch):  # noqa: F811
+    from command_center.providers import convite_waiver as cw
+    from command_center.tests import test_convite_waiver as tc
+    from command_center.providers import waiver_nativa as wn
+    liga(cli)
+    cid = tc.card(name="Bruno Adulto", email="bruno@example.com", pilot_name=None, pilot_dob="1990-02-02")
+    assert tc.manda(cli, equipe(cli), cid, "bruno@example.com").status_code == 201
+    token = tc.token_do_email("bruno@example.com")
+    cli.cookies.clear()
+    assert cli.post(f"{P}/invite/{token}/code").status_code == 200
+    con = conectar()
+    inv = cw.achar(con, token)
+    velha = um(con, "SELECT * FROM waiver_invite_codes WHERE invite_id=? ORDER BY id DESC LIMIT 1", (inv["id"],))
+    con.execute("UPDATE waiver_invite_codes SET used_at='2026-10-18T00:00:00.000Z' WHERE id=?", (velha["id"],))
+    real = cw.um
+    monkeypatch.setattr(cw, "um", lambda c, sql, a=(): velha if "FROM waiver_invite_codes" in sql else real(c, sql, a))
+    with pytest.raises(wn.ErroWaiver):
+        cw._conferir_codigo(con, inv, tc.codigo_do_email("bruno@example.com"))
+    assert um(con, "SELECT used_at FROM waiver_invite_codes WHERE id=?", (velha["id"],))["used_at"] == "2026-10-18T00:00:00.000Z"
+
+
+def test_criar_que_falha_no_meio_nao_deixa_peca_solta(tmp_path, monkeypatch):
+    onde = tmp_path / "selo"
+    real, vezes = sw._gravar, []
+
+    def falha_na_terceira(caminho, dados, modo):
+        vezes.append(caminho)
+        if len(vezes) == 3:
+            raise OSError("disco cheio (teste)")
+        return real(caminho, dados, modo)
+    monkeypatch.setattr(sw, "_gravar", falha_na_terceira)
+    with pytest.raises(OSError, match="disco cheio"):
+        sw.criar(str(onde))
+    assert os.listdir(onde) == [], "nem a chave nem o certificado ficam sozinhos"
+    monkeypatch.setattr(sw, "_gravar", real)
+    assert sw.criar(str(onde)) and sw.estado(str(onde))["configured"], "e o criar continua possível"
+
+
+def test_conferir_pdf_de_antes_da_troca_do_selo_com_a_raiz_antiga(tmp_path, monkeypatch, capsys):
+    from command_center import manage
+    antiga = os.path.join(os.environ["CC_WAIVER_SEAL_DIR"], "root-cert.pem")
+    (tmp_path / "antes.pdf").write_bytes(sw.selar(sw.pdf_de_teste())[0])
+    monkeypatch.setenv("CC_DB_PATH", str(tmp_path / "cc.sqlite"))
+    monkeypatch.setenv("CC_WAIVER_SEAL_DIR", str(tmp_path / "selo-novo"))         # o selo foi trocado
+    selo_teste.criar_selo(tmp_path / "selo-novo")
+    assert manage.main(["manage", "selo-waiver", "conferir", str(tmp_path / "antes.pdf")]) == 1
+    assert "não é da URACE" in capsys.readouterr().out
+    assert manage.main(["manage", "selo-waiver", "conferir", str(tmp_path / "antes.pdf"), "--raiz", antiga]) == 0
+    assert "o arquivo não mudou desde a assinatura" in capsys.readouterr().out
+
+
+def test_usuario_e_senha_da_url_da_tsa_nao_aparecem(cli, monkeypatch):  # noqa: F811
+    com_senha = "https://usuario:segredo-da-tsa@tsa.example.com/tsr"
+    monkeypatch.setenv("CC_WAIVER_TSA", com_senha)
+    assert sw.estado()["tsa"] == ["https://***@tsa.example.com/tsr"]
+    liga(cli)
+    hc, (pid,) = cliente(cli)
+    corpo = _ate_o_clique_final(cli, hc, pid)
+    monkeypatch.setattr(sw, "_carimbadores", lambda: [(com_senha, selo_teste.TsaQueFalha().carimbador)])
+    assert cli.post(f"{P}/drivers/{pid}/waiver", json=corpo, headers=hc).status_code == 503
+    con = conectar()
+    detalhe = um(con, "SELECT detail FROM audit_logs WHERE event='waiver.seal_failed' ORDER BY id DESC LIMIT 1")["detail"]
+    assert "segredo-da-tsa" not in detalhe and "***@tsa.example.com" in detalhe
+    equipe(cli)
+    assert "segredo-da-tsa" not in cli.get(f"{S}/waiver-nativa").text

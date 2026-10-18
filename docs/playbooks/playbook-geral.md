@@ -538,6 +538,12 @@ sai **selado**, como o "tamper-evident seal" do DocuSign:
 - **O carimbo de tempo** vem de uma autoridade externa (RFC 3161), não do relógio do servidor: DigiCert e, se ela
   não responder em 10 s, FreeTSA (a lista fica em `CC_WAIVER_TSA`, no `adminai.env`). O carimbo vai dentro do
   PDF e também na tabela `waiver_timestamps`, que não muda nem se apaga.
+- **Só vale carimbo de autoridade conhecida.** Logo depois de selar, o sistema confere o carimbo: a autoridade tem
+  de vir de uma **raiz de TSA aceita** e a hora dela tem de estar a até **5 minutos** do relógio da VPS. Senão,
+  tenta a próxima da lista (e, sem nenhuma, a assinatura não acontece). As raízes aceitas são a **DigiCert Trusted
+  Root G4** (já vem com o sistema, conferida pela impressão SHA-256 `55:2F:7B:DC:…:C8:99:88`) e os arquivos `.pem`
+  da pasta `~/.urace/waivers/selo/tsa/` (ou `CC_WAIVER_TSA_ROOTS`): é lá que entra a raiz da **FreeTSA** (passo 2
+  abaixo). Outra autoridade em `CC_WAIVER_TSA` só vale com a raiz dela nessa pasta.
 - **Dono, 06/10:** certificado próprio da URACE + carimbo gratuito. No **Adobe**, o selo aparece com a identidade
   **desconhecida** (o certificado é nosso, não está na lista do Adobe); a integridade e o carimbo aparecem
   válidos. O certificado pago reconhecido pelo Adobe fica para depois.
@@ -558,9 +564,16 @@ sai **selado**, como o "tamper-evident seal" do DocuSign:
    certificado de selo em `~/.urace/waivers/selo/` (`seal-key.pem` só para o dono do processo, `seal-cert.pem`,
    `root-cert.pem`) e mostra a **impressão SHA-256 da raiz**: anote. Nunca sobrescreve: se já existe, avisa e
    não muda nada. A chave da raiz **não é guardada** (ninguém emite outro selo com ela).
-2. `~/.urace/cc-venv/bin/python -m command_center.manage selo-waiver conferir`: sela um PDF de teste com a
-   autoridade de verdade, valida e diz se o relógio da VPS bate com o dela.
-3. `timedatectl`: tem de dizer `System clock synchronized: yes` e `NTP service: active`. A hora da assinatura no
+2. A raiz pública da FreeTSA, baixada do site dela (o repositório não a traz porque não deu para conferir a
+   original daqui):
+   `mkdir -p ~/.urace/waivers/selo/tsa && curl -fsS -o ~/.urace/waivers/selo/tsa/freetsa-cacert.pem https://freetsa.org/files/cacert.pem && openssl x509 -in ~/.urace/waivers/selo/tsa/freetsa-cacert.pem -noout -subject -fingerprint -sha256`
+   Confira que o assunto é o da FreeTSA e compare a impressão SHA-256 com a que a FreeTSA publica no site dela
+   (`https://freetsa.org`); anote a impressão junto com a da raiz do selo.
+   Sem esse arquivo, a FreeTSA não vale e só a DigiCert carimba.
+3. `~/.urace/cc-venv/bin/python -m command_center.manage selo-waiver conferir`: sela um PDF de teste com a
+   autoridade de verdade, valida (o selo pela raiz da URACE e o carimbo pelas raízes de TSA) e diz se o relógio
+   da VPS bate com o dela. Mostra também as raízes de TSA aceitas.
+4. `timedatectl`: tem de dizer `System clock synchronized: yes` e `NTP service: active`. A hora da assinatura no
    certificado é a do servidor; a do carimbo é a da autoridade, e as duas têm de bater.
 
 **Backup da chave do selo.** A pasta `~/.urace/waivers/selo/` **não vai no backup do banco** (#299) nem no Drive.
@@ -574,7 +587,10 @@ guarde a antiga para conferir os PDFs de antes).
 
 **Conferir um PDF assinado:** abra no Adobe Reader (painel **Assinaturas**: "o documento não foi modificado" e o
 carimbo de tempo) ou, na VPS, `~/.urace/cc-venv/bin/python -m command_center.manage selo-waiver conferir <arquivo.pdf>`
-(só lê: diz se está íntegro pela raiz da URACE e mostra a hora do carimbo).
+(só lê). Ele diz se o arquivo está **íntegro**, se o selo é **da URACE** (o certificado tem de vir da raiz do selo:
+uma assinatura de outra empresa, mesmo de uma autoridade conhecida, não vale) e se o carimbo é de uma autoridade
+aceita, com a hora batendo com a do selo. **Depois de trocar o selo**, os PDFs de antes se conferem com a raiz
+antiga: `… selo-waiver conferir <arquivo.pdf> --raiz <root-cert.pem antigo>`.
 
 #### Trilha de eventos da waiver assinada no próprio sistema (#111)
 

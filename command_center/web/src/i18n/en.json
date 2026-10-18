@@ -4491,5 +4491,13 @@
 "Carimbo de tempo, nesta ordem (10 s cada): {0}": "Time-stamp, in this order (10 s each): {0}",
 "A chave do selo fica em {0} e não vai no backup do banco: guarde uma cópia fora da VPS.": "The seal key is in {0} and is not in the database backup: keep a copy outside the VPS.",
 "Configure o selo da waiver primeiro": "Set up the waiver seal first",
-"selada · carimbo de tempo {0}": "sealed · time-stamp {0}"
+"selada · carimbo de tempo {0}": "sealed · time-stamp {0}",
+"Falta a chave ou um dos certificados do selo no servidor.": "The seal key or one of its certificates is missing on the server.",
+"A chave do selo pode ser lida por outros usuários do servidor (precisa de chmod 600).": "The seal key can be read by other users on the server (it needs chmod 600).",
+"Os arquivos do selo no servidor não abrem.": "The seal files on the server cannot be opened.",
+"A chave do selo não é a do certificado de selo.": "The seal key does not match the seal certificate.",
+"O certificado de selo não foi emitido pela raiz guardada.": "The seal certificate was not issued by the stored root.",
+"O certificado de selo está fora da validade.": "The seal certificate is outside its validity period.",
+"O selo não está configurado.": "The seal is not configured.",
+"Só vale o carimbo de uma autoridade com raiz aceita: {0}": "Only a time-stamp from an authority with an accepted root is valid: {0}"
 }

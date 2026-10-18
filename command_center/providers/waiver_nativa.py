@@ -597,6 +597,16 @@ def pdf_final(base, trilha, png):
     return caminho, token
 
 
+def _apagar_orfao(caminho):
+    """O PDF selado (com nome, nascimento e assinatura) cuja linha não entrou no banco: não é registro de nada e não
+    pode ficar no disco. Ele é 0400: volta a 0600 para sair."""
+    try:
+        os.chmod(caminho, 0o600)
+        os.remove(caminho)
+    except OSError:
+        pass
+
+
 def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_email, link_reason, link_by, resumo,
            antes=None, eventos=None):
     """Grava a waiver assinada na MESMA tabela das do DocuSign (card, anexo e agenda tratam igual).
@@ -620,31 +630,35 @@ def gravar(con, base, m, trilha, png, client_id, pilot_id, signer_name, signer_e
         trilha.setdefault("notice_744_check", {k: a.get(k) for k in ("configured", "ok", "approved_sha256", "notice_pt", "body_pt")})
     caminho, token = pdf_final(base, trilha, png)
     quando = agora()
-    with transacao(con):
-        if antes:
-            antes(con)
-        wid = inserir(con, "waivers", client_id=client_id, signer_name=signer_name, signer_email=signer_email,
-                      template=tipo, status="completed", sent_at=quando, completed_at=quando, expires_at=trilha["valid_until"],
-                      minor_name=trilha["driver_name"] if tipo == "parental" else None, pdf_path=caminho,
-                      subject=f"{m['name']} — {trilha['driver_name']}"[:200], source="urace", pilot_id=pilot_id,
-                      doc_sha256=trilha["document_sha256"], audit=json.dumps(trilha, ensure_ascii=False),
-                      link_reason=link_reason, link_by=link_by, synced_at=quando)
-        con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id) VALUES ('waiver', ?, 'urace', ?)",
-                    (wid, trilha["signature_id"]))
-        selo = trilha["seal"]
-        inserir(con, "waiver_timestamps", waiver_id=wid, signature_id=trilha["signature_id"], tsa_url=selo["tsa_url"],
-                gen_time=selo["gen_time"], serial=selo["serial"], policy=selo.get("policy"), token_sha256=selo["token_sha256"],
-                token=token, seal_cert_sha256=selo["seal_cert_sha256"], document_sha256=trilha["document_sha256"])
-        quem = f"portal:{trilha['account_id']}" if trilha.get("account_id") else f"invite:{trilha.get('invitation_id')}"
-        auditar(con, "waiver.signed.trail", quem, entity_type="waiver", entity_id=wid, detail=trilha, ip=trilha.get("ip"))
-        if eventos:
-            tw.registrar(con, "signed", eventos["fluxo"], ip=eventos.get("ip"), user_agent=eventos.get("user_agent"),
-                         detail={"covers": [e["id"] for e in cob], "document_sha256": trilha["document_sha256"],
-                                 "template_sha256": trilha["template_sha256"], **(eventos.get("detalhe") or {})},
-                         waiver_id=wid, signature_id=trilha["signature_id"], **eventos["ids"])
-        if client_id:
-            from command_center.api import motor
-            motor.registrar_evento(con, "waiver.completed", "waiver", wid, client_id, resumo)
+    try:
+        with transacao(con):
+            if antes:
+                antes(con)
+            wid = inserir(con, "waivers", client_id=client_id, signer_name=signer_name, signer_email=signer_email,
+                          template=tipo, status="completed", sent_at=quando, completed_at=quando, expires_at=trilha["valid_until"],
+                          minor_name=trilha["driver_name"] if tipo == "parental" else None, pdf_path=caminho,
+                          subject=f"{m['name']} — {trilha['driver_name']}"[:200], source="urace", pilot_id=pilot_id,
+                          doc_sha256=trilha["document_sha256"], audit=json.dumps(trilha, ensure_ascii=False),
+                          link_reason=link_reason, link_by=link_by, synced_at=quando)
+            con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id) VALUES ('waiver', ?, 'urace', ?)",
+                        (wid, trilha["signature_id"]))
+            selo = trilha["seal"]
+            inserir(con, "waiver_timestamps", waiver_id=wid, signature_id=trilha["signature_id"], tsa_url=selo["tsa_url"],
+                    gen_time=selo["gen_time"], serial=selo["serial"], policy=selo.get("policy"), token_sha256=selo["token_sha256"],
+                    token=token, seal_cert_sha256=selo["seal_cert_sha256"], document_sha256=trilha["document_sha256"])
+            quem = f"portal:{trilha['account_id']}" if trilha.get("account_id") else f"invite:{trilha.get('invitation_id')}"
+            auditar(con, "waiver.signed.trail", quem, entity_type="waiver", entity_id=wid, detail=trilha, ip=trilha.get("ip"))
+            if eventos:
+                tw.registrar(con, "signed", eventos["fluxo"], ip=eventos.get("ip"), user_agent=eventos.get("user_agent"),
+                             detail={"covers": [e["id"] for e in cob], "document_sha256": trilha["document_sha256"],
+                                     "template_sha256": trilha["template_sha256"], **(eventos.get("detalhe") or {})},
+                             waiver_id=wid, signature_id=trilha["signature_id"], **eventos["ids"])
+            if client_id:
+                from command_center.api import motor
+                motor.registrar_evento(con, "waiver.completed", "waiver", wid, client_id, resumo)
+    except BaseException:
+        _apagar_orfao(caminho)              # revisão do #335: a transação não gravou; o PDF selado não fica sem dono
+        raise
     return um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
 
 

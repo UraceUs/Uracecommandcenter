@@ -401,7 +401,9 @@ def _conferir_codigo(con, inv, codigo):
     if not secrets.compare_digest(_sha(f"{inv['id']}:{limpo}"), c["code_hash"]):
         con.execute("UPDATE waiver_invite_codes SET attempts=attempts+1 WHERE id=?", (c["id"],))
         raise wn.ErroWaiver("That code is not right. Check the email and try again.")
-    con.execute("UPDATE waiver_invite_codes SET used_at=? WHERE id=?", (agora_iso, c["id"]))
+    cur = con.execute("UPDATE waiver_invite_codes SET used_at=? WHERE id=? AND used_at IS NULL", (agora_iso, c["id"]))
+    if cur.rowcount != 1:                                 # outro pedido gastou o mesmo código no meio (revisão do #335)
+        raise wn.ErroWaiver("Ask for the signing code: we send it to your email.")
     return {**c, "used_at": agora_iso}
 
 

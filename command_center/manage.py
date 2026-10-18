@@ -10,7 +10,7 @@
     python3 -m command_center.manage suits-restaurar ID [ID ...]
     python3 -m command_center.manage selo-waiver criar      # #110: raiz e selo da waiver nativa (nunca sobrescreve)
     python3 -m command_center.manage selo-waiver conferir   # sela um PDF de teste com a TSA configurada e valida
-    python3 -m command_center.manage selo-waiver conferir ARQUIVO.pdf   # confere o selo de uma waiver assinada
+    python3 -m command_center.manage selo-waiver conferir ARQUIVO.pdf [--raiz RAIZ.pem]   # confere uma waiver assinada
 """
 import sys
 from getpass import getpass
@@ -109,23 +109,25 @@ def _suits(con, cmd, args):
     return 0
 
 
-def _conferir_pdf(sw, caminho):
-    """O selo de um PDF já assinado (só lê): íntegro, válido, pela raiz da URACE, e o carimbo."""
+def _conferir_pdf(sw, caminho, raiz=None):
+    """O selo de um PDF já assinado (só lê): íntegro, válido, pela raiz da URACE (a guardada, ou `--raiz` para os PDFs
+    de antes de trocar o selo), e o carimbo de uma TSA conhecida."""
     try:
+        r = sw.carregar_raiz(raiz) if raiz else None
         with open(caminho, "rb") as f:
-            v = sw.validar(f.read())
-    except OSError as e:
+            v = sw.validar(f.read(), raiz=r)
+    except (OSError, ValueError) as e:
         print(f"❌ não abre: {e}")
         return 1
     ts = v.get("timestamp") or {}
-    print(f"{caminho}: íntegro={v['intact']} válido={v.get('valid')} confiável={v.get('trusted')} cobertura={v.get('coverage')} "
+    print(f"{caminho}: íntegro={v['intact']} válido={v.get('valid')} da URACE={v.get('issued_by_root')} cobertura={v.get('coverage')} "
           f"DocMDP={v.get('docmdp')} · carimbo {ts.get('time') or '—'} íntegro={ts.get('intact')} válido={ts.get('valid')} "
           f"confiável={ts.get('trusted')}")
     print("✅ selo e carimbo conferem: o arquivo não mudou desde a assinatura" if v["ok"] else f"❌ {v['reason']}")
     return 0 if v["ok"] else 1
 
 
-def _selo_waiver(con, sub, arquivo=None):
+def _selo_waiver(con, sub, arquivo=None, raiz=None):
     """#110: o selo PAdES da waiver nativa. `criar` gera a raiz e o selo no VPS (a chave fica em ~/.urace, nunca no
     repositório, e nada que exista é sobrescrito); `conferir` sela um PDF de teste com a TSA de verdade e valida."""
     from datetime import datetime, timezone
@@ -146,7 +148,7 @@ def _selo_waiver(con, sub, arquivo=None):
         print("   GUARDE UMA CÓPIA da pasta inteira fora da VPS (no gerenciador de senhas do dono): ela não vai no backup do banco.")
         return 0
     if sub == "conferir" and arquivo:
-        return _conferir_pdf(sw, arquivo)
+        return _conferir_pdf(sw, arquivo, raiz)
     if sub == "conferir":
         e = sw.estado()
         if not e["configured"]:
@@ -155,11 +157,13 @@ def _selo_waiver(con, sub, arquivo=None):
         print(f"selo: {e['seal_subject']} · vale até {e['seal_not_after']}")
         print(f"raiz SHA-256: {sw.impressao(e['root_sha256'])}")
         print(f"TSAs (CC_WAIVER_TSA): {', '.join(e['tsa'])}")
+        print(f"raízes de TSA aceitas: {', '.join(e['tsa_roots']) or 'nenhuma'} (pasta {sw.pasta_raizes_tsa()})")
         try:
             selado, info, token = sw.selar(sw.pdf_de_teste())
         except sw.SeloIndisponivel as x:
             print(f"❌ {x.motivo}")
-            print("   Sem TSA, nenhuma waiver se assina online (o cliente vê 'temporarily unavailable'). Confira a rede do VPS.")
+            print("   Sem TSA que confira, nenhuma waiver se assina online (o cliente vê 'temporarily unavailable'). Confira a rede")
+            print(f"   do VPS e as raízes de TSA em {sw.pasta_raizes_tsa()} (a da FreeTSA vai lá: playbook geral, Site › Waiver).")
             return 1
         v = sw.validar(selado)
         ts = v.get("timestamp") or {}
@@ -173,7 +177,7 @@ def _selo_waiver(con, sub, arquivo=None):
             print(f"relógio do VPS a {desvio:.0f} s da hora da TSA (NTP ok)")
         print("✅ selo e carimbo conferem" if v["ok"] else f"❌ {v['reason']}")
         return 0 if v["ok"] else 1
-    print("uso: selo-waiver criar | selo-waiver conferir [ARQUIVO.pdf]")
+    print("uso: selo-waiver criar | selo-waiver conferir [ARQUIVO.pdf [--raiz RAIZ.pem]]")
     return 1
 
 
@@ -212,7 +216,15 @@ def main(argv):
     elif cmd in ("suits-suspeitos", "suits-descartar", "suits-restaurar"):
         return _suits(con, cmd, argv[2:])
     elif cmd == "selo-waiver":
-        return _selo_waiver(con, argv[2] if len(argv) > 2 else "", argv[3] if len(argv) > 3 else None)
+        resto = argv[3:]
+        raiz = None
+        if "--raiz" in resto:
+            i = resto.index("--raiz")
+            if i + 1 >= len(resto):
+                sys.exit("--raiz pede o caminho do root-cert.pem")
+            raiz = resto[i + 1]
+            del resto[i:i + 2]
+        return _selo_waiver(con, argv[2] if len(argv) > 2 else "", resto[0] if resto else None, raiz)
     elif cmd == "conferir-chat":
         return _conferir_chat(con, int(argv[2]) if len(argv) > 2 else 7)
     else:

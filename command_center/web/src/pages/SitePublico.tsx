@@ -792,8 +792,20 @@ interface Conferencia { configured: boolean; ok: boolean | null; reason: string;
 interface Aviso744 extends Conferencia { path: string; approved_text: string | null; approved_sha256: string | null }
 /* #110: o PDF assinado sai selado (PAdES, com o certificado de selo da URACE) e com o carimbo de tempo de uma TSA externa
  * (RFC 3161). A chave fica no servidor, fora do repositório e do backup do banco. Sem ela, a assinatura não liga. */
-interface Selo { configured: boolean; reason: string; dir: string; tsa: string[]; field: string; seal_subject?: string
-  seal_sha256?: string; seal_not_after?: string; root_sha256?: string }
+interface Selo { configured: boolean; code: string; reason: string; dir: string; tsa: string[]; tsa_roots: string[]; field: string
+  seal_subject?: string; seal_sha256?: string; seal_not_after?: string; root_sha256?: string }
+
+/* o motivo vem como código do servidor e é traduzido aqui (o texto do servidor fica para a auditoria) */
+function motivoDoSelo(code: string) {
+  const r: Record<string, string> = {
+    missing: tr("Falta a chave ou um dos certificados do selo no servidor."),
+    key_open: tr("A chave do selo pode ser lida por outros usuários do servidor (precisa de chmod 600)."),
+    unreadable: tr("Os arquivos do selo no servidor não abrem."),
+    key_mismatch: tr("A chave do selo não é a do certificado de selo."),
+    wrong_root: tr("O certificado de selo não foi emitido pela raiz guardada."),
+    expired: tr("O certificado de selo está fora da validade.") }
+  return r[code] || tr("O selo não está configurado.")
+}
 interface WN { ligada: boolean; modelos: ModeloW[]; assinadas: { itens: Assinada[]; total: number; limit: number; offset: number }; aviso_744: Aviso744
   selo: Selo }
 interface VersaoM { id: number; kind: 'adult' | 'parental'; sha256: string; name: string; pages: number | null; imported_at: string
@@ -833,10 +845,11 @@ function SeloDaWaiver({ s }: { s: Selo }) {
           <p className="small muted" style={{ margin: 0 }}>{tr("Certificado de selo válido até {0}. No Adobe, a identidade aparece como desconhecida (certificado próprio); a integridade e o carimbo aparecem válidos.", fmtDate(s.seal_not_after))}</p>
         </>
         : <>
-          <p className="small" style={{ margin: 0, overflowWrap: 'anywhere' }}><b>{s.reason}</b></p>
+          <p className="small" style={{ margin: 0, overflowWrap: 'anywhere' }}><b>{motivoDoSelo(s.code)}</b></p>
           <p className="small muted" style={{ margin: 0 }}>{tr("Sem o selo, a assinatura não liga; se já estiver ligada, o cliente lê \"Online signing is temporarily unavailable\" e nada é gravado. Quem configura é o administrador, no servidor.")}</p>
         </>}
       <p className="small muted" style={{ margin: 0, overflowWrap: 'anywhere' }}>{tr("Carimbo de tempo, nesta ordem (10 s cada): {0}", s.tsa.join(' · '))}</p>
+      <p className="small muted" style={{ margin: 0, overflowWrap: 'anywhere' }}>{tr("Só vale o carimbo de uma autoridade com raiz aceita: {0}", s.tsa_roots.join(' · ') || '—')}</p>
       <p className="small muted" style={{ margin: 0, overflowWrap: 'anywhere' }}>{tr("A chave do selo fica em {0} e não vai no backup do banco: guarde uma cópia fora da VPS.", s.dir)}</p>
     </div>
   </Section>
