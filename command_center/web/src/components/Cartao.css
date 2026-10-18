@@ -34,11 +34,14 @@
 .cd-mini .cd-bloco{padding:8px 10px;border-radius:var(--r)}
 .cd-mini .cd-grande{font-size:20px}
 .cd-mini .cd-lista li{min-height:36px;font-size:13.5px}
+.cd-mini .cd-acoes{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.cd-mini .cd-acoes .btn{min-height:40px;font-size:13.5px}
 .cd-sec{margin:4px 0 0;font-size:14px;text-align:left}
 .cd-lista li.cd-li-forma{flex-wrap:wrap}
 .cd-li-forma>.grow{flex:1 1 200px}
 .cd-li-picker{flex:1 1 100%;min-width:0}
 .cd-largo{grid-column:1/-1}
 .cd-dentro{padding:12px}
+.cd-apagado>*{opacity:.6}
+.cd.cd-on{border-color:var(--accent);box-shadow:var(--shadow),0 0 0 2px var(--accent-wash)}
 .cd-marca{gap:8px}.cd-marca input{width:20px;height:20px;margin:0}
 @media(prefers-reduced-motion:reduce){.cd-prog-b i{transition:none}}

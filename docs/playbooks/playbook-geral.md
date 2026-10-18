@@ -270,8 +270,9 @@ pedido, uma oportunidade…) usa o mesmo cartão, lido sempre de cima para baixo
    ação da tela (Nova oportunidade, Adicionar serviço…), um por tela.
 
 Cada parte só aparece quando o painel tem o dado: o cartão não inventa campo. Com muitas colunas no computador, a lista
-continua **tabela** (Clientes, invoices, tarefas do Asana); no celular, cada linha dela vira o mesmo cartão, com a
-pílula em cima, o nome centrado e o resto em linhas. As listas simples (`Bloqueios`, os modelos da waiver, as
+continua **tabela** (Clientes, as tarefas do Asana, os envelopes do DocuSign, as invoices do QuickBooks); no celular,
+cada linha dela vira o mesmo cartão, com a pílula em cima, o nome centrado, o número principal no bloco (o próximo
+serviço, a data, o saldo) e o resto em linhas. As listas simples (`Bloqueios`, os modelos da waiver, as
 leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas com o mesmo acabamento. Funciona no tema claro e no escuro, sem rolar para o lado no celular.
 
 | Tela | O bloco grande mostra | As ações |
@@ -280,7 +281,7 @@ leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas 
 | Site › Contas de clientes | — (a lista mostra os pilotos, a sugestão e o card) | **Vincular a este** ou **Criar cliente**; **Vincular** ao escolhido em *Outro cliente*; ligada: **Desvincular** (gerente) |
 | Site › Pedidos do site | o total, com o nº do pedido e a hora | **Resolvido** (sem estoque), **Página do pedido ↗**, **Copiar o link**, **Venda** |
 | Site › Security deposit | o que segue retido | **Conferir no Stripe**, **Devolver pelo Stripe** (gerente) |
-| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale | **Card**, **PDF**, **Anular** (gerente) |
+| Site › Waiver › Assinadas aqui | o dia em que assinou e até quando vale | **Card**, **PDF**, **Trilha** (abre a trilha de eventos dentro do cartão), **Anular** (gerente) |
 | Site › Serviços e preços / Cartões das páginas | o preço | **Salvar**, **Desativar**/**Reativar** (ou **Esconder**/**Mostrar**, ↑ ↓) |
 | Site › Produtos da loja | o preço | **Editar** |
 | Site › Estoque do site | quanto tem (Galpão + Pista) | **Passar a dropshipping**/**em estoque**, **Abrir o produto** |
@@ -295,6 +296,16 @@ leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas 
 | Compras | o total (ou a previsão de entrega) | o cartão inteiro abre a compra |
 | Checklists › Modelos | quantos itens | **Começar hoje**, **Editar** (gerente; aberto, o cartão ocupa a linha inteira) |
 | Corridas (e os pilotos dentro da corrida) | a data | o cartão abre a corrida; o piloto convidado tem a situação e **✦ Prévia de custo** |
+| Precisa de atenção (e Hoje, compacto) | — (os fatos do aviso na lista) | o que abrir (**Abrir cliente**, **Ver aprovações**…), o sistema de origem ↗, **✦ Instruir a IA**, **ocultar** |
+| Suits › Pedidos / Leads / Fornecedores | o dia do pedido / — / quantos pedidos | o pedido abre inteiro; **Virar pedido**, **Perdido**; **Editar** |
+| Funil do Kommo | o valor do lead | o cartão inteiro abre a conversa |
+| Equipe › Pessoas | — | o cartão inteiro abre a conversa com a pessoa |
+| Cofre | — (o usuário e, depois de **Ver senha**, a senha na lista, cada uma com **Copiar**) | **Ver senha**, **Editar**, **Arquivar** |
+| Integrações | há quanto tempo o sistema respondeu | o erro em vermelho e os detalhes técnicos dentro do cartão |
+
+Ficam no jeito delas, porque ali o cartão atrapalharia: as **conversas** (Chat do Kommo, chat da Equipe, a IA), que são
+lista de mensagens; as **linhas do tempo** e a **Agenda de vendas**, que andam pela hora; os **calendários** (a semana e o
+mês do Meu dia, o mês das Corridas); os **números** do Hoje e dos painéis; e as janelas de formulário.
 
 ### Endereços antigos
 
