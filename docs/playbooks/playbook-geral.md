@@ -491,7 +491,10 @@ Dono, 06/10: *"sim, no check-in"*. A equipe confere o documento com foto de quem
 
 - **Onde:** **Balcão** › abrir o cliente (QR, pilotos de hoje ou nome) › quadro **Waiver · Conferir documento**
   (operador+, mecânico e coach também). Aparecem as waivers que valem **para aquele card**: a assinada no sistema e a
-  do DocuSign; nunca a de outro card. A parental de quem já fez 18 não aparece (não vale mais).
+  do DocuSign (só waiver de verdade, adult ou parental: um envelope como o Membership Agreement não conta); nunca a de
+  outro card. A parental de quem já fez 18 não aparece (não vale mais): pela data gravada na própria waiver ou, na do
+  DocuSign, pela do card. A assinada por um piloto da área do cliente **segue o piloto**: religado a outro card, ela vai
+  junto; vínculo feito à mão pela equipe (aba Waivers do card) vale mais. Card VIP sem waiver: o quadro diz que dispensa.
 - **O que se grava:** o tipo de documento (carteira de motorista, passaporte, State ID ou outro documento oficial com
   foto), se o nome confere e, pelo menor, se a idade confere com o nascimento declarado. **Nem foto nem número do
   documento.** Vira o evento **documento conferido no balcão** (ou **documento não conferiu no balcão**) na trilha da
@@ -499,7 +502,9 @@ Dono, 06/10: *"sim, no check-in"*. A equipe confere o documento com foto de quem
   `waiver.id_check`.
 - **Não conferiu:** registra e alerta. Aparece em **Precisa de atenção** ("o documento com foto não conferiu com a
   waiver", com o link do balcão do cliente) e **nada é bloqueado sozinho**: a equipe decide (conferir de novo, anular
-  e pedir outra, ou seguir). Sai da lista quando a conferência seguinte bate ou quando a waiver é anulada.
+  e pedir outra, ou seguir). O aviso fica no card a que a waiver vale **agora** (religada, card unido ou piloto
+  religado: vai junto). Sai da lista quando a conferência seguinte bate, e sai sozinho (fica em "mostrar ocultos",
+  com o motivo) quando a waiver é anulada, ocultada, fica sem card ou deixa de valer.
 - **Nascimento travado:** com a waiver assinada no sistema **valendo**, o cliente não muda a data de nascimento do
   piloto (ela decidiu entre parental e adult e está no documento assinado). A área do cliente mostra o campo travado
   com a explicação; se tentar, o servidor recusa (409) e a tentativa fica na Auditoria

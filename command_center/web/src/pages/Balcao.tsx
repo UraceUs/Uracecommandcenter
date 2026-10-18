@@ -23,7 +23,7 @@ import { fmtDate, fmtDateTime } from '../components/fmt'
 import type { Client } from '../api/types'
 
 type Modo = 'cobrar' | 'guardar'
-interface Cliente { id: number; nome: string; responsavel: string }
+interface Cliente { id: number; nome: string; responsavel: string; vip?: boolean }
 interface Item { id: number; name: string; price: number | null; unit: string; qbo_item_id: string | null; qbo_item_name: string | null
   codigos: string[]; nosso: number; do_cliente?: number }
 interface Linha { id: number; qty: number; unit_price: number; name: string; total: number }
@@ -36,7 +36,8 @@ interface Leitura { id: number; name: string; mode: string; qty: number; at: str
 interface IdCheck { event_id: number; at: string; ok: boolean; document_type: string | null; name_matches: boolean | null
   minor_age_matches: boolean | null; by: string | null }
 interface WaiverCard { id: number; source: 'urace' | 'docusign'; kind: string | null; minor: boolean; signer_name: string | null
-  driver: string | null; driver_birth_date: string | null; driver_age: number | null; signed_at: string | null
+  driver: string | null; driver_birth_date: string | null; driver_age: number | null; driver_birth_date_from: 'waiver' | 'card' | null
+  signed_at: string | null
   valid_until: string | null; id_check: IdCheck | null }
 interface Estado { cliente: Cliente; data: string; invoices: InvPecas[]; leituras: Leitura[]; gerente: boolean
   guardado: { item_id: number; name: string; qty: number; local: string }[]; waivers?: WaiverCard[] }
@@ -576,7 +577,9 @@ function ConferirDocumento({ w, clientId, onFeito, onFechar }: { w: WaiverCard; 
     </div>
     <SimNao rotulo={tr("O nome no documento confere com {0}?", w.signer_name || tr("quem assinou"))} valor={nome} onMuda={setNome} />
     {w.minor && <SimNao rotulo={w.driver_birth_date
-      ? tr("A idade de {0} confere com o nascimento declarado ({1}, {2} anos)?", w.driver || tr("o piloto"), fmtDate(w.driver_birth_date), w.driver_age ?? '?')
+      ? (w.driver_birth_date_from === 'waiver'
+        ? tr("A idade de {0} confere com o nascimento declarado na waiver ({1}, {2} anos)?", w.driver || tr("o piloto"), fmtDate(w.driver_birth_date), w.driver_age ?? '?')
+        : tr("A idade de {0} confere com o nascimento do card ({1}, {2} anos)?", w.driver || tr("o piloto"), fmtDate(w.driver_birth_date), w.driver_age ?? '?'))
       : tr("A idade de {0} confere com a de menor de 18 declarada na waiver?", w.driver || tr("o piloto"))} valor={idade} onMuda={setIdade} />}
     <div className="row wrap" style={{ justifyContent: 'flex-end', gap: 8 }}>
       <button type="button" className="btn" onClick={onFechar}>{tr("Cancelar")}</button>
@@ -585,17 +588,22 @@ function ConferirDocumento({ w, clientId, onFeito, onFechar }: { w: WaiverCard; 
   </div></Scrim>
 }
 
-function WaiverDoCard({ waivers, clientId, onMudou }: { waivers: WaiverCard[]; clientId: number; onMudou: (ws: WaiverCard[]) => void }) {
+const MODELO: Record<string, string> = { parental: tr("parental (menor)"), adult: tr("adult") }
+
+function WaiverDoCard({ waivers, clientId, vip, onMudou }: { waivers: WaiverCard[]; clientId: number; vip?: boolean; onMudou: (ws: WaiverCard[]) => void }) {
   const [aberta, setAberta] = useState<WaiverCard | null>(null)
   return <Section title={tr("Waiver · Conferir documento")} count={waivers.length}>
-    {!waivers.length ? <Banner tone="warn">{tr("Nenhuma waiver valendo neste card. Peça a assinatura antes da pista (convite por e-mail no card).")}</Banner>
+    {!waivers.length ? (vip ? <p className="small muted" style={{ margin: 0 }}>{tr("Cliente VIP: dispensa a waiver. Não há documento a conferir aqui.")}</p>
+      : <Banner tone="warn">{tr("Nenhuma waiver valendo neste card. Peça a assinatura antes da pista (convite por e-mail no card).")}</Banner>)
       : <div className="stack" style={{ gap: 10 }}>{waivers.map(w => {
         const c = w.id_check
         return <div key={w.id} className="card card-b stack wv-item" style={{ gap: 6 }}>
-          <h3 style={{ margin: 0 }}>{w.driver || tr("Piloto")} · {w.minor ? tr("parental (menor)") : tr("adult")}</h3>
+          <h3 style={{ margin: 0 }}>{w.driver || tr("Piloto")}{w.kind ? ` · ${MODELO[w.kind] || w.kind}` : ''}</h3>
           <div className="small">{tr("Assinou:")} <b>{w.signer_name || '—'}</b> · {w.source === 'urace' ? tr("assinada no sistema") : tr("DocuSign")}
             {w.valid_until ? <> · {tr("vale até {0}", fmtDate(w.valid_until))}</> : null}</div>
-          {w.minor && w.driver_birth_date && <div className="small">{tr("Nascimento declarado: {0} ({1} anos)", fmtDate(w.driver_birth_date), w.driver_age ?? '?')}</div>}
+          {w.minor && w.driver_birth_date && <div className="small">{w.driver_birth_date_from === 'waiver'
+            ? tr("Nascimento declarado na waiver: {0} ({1} anos)", fmtDate(w.driver_birth_date), w.driver_age ?? '?')
+            : tr("Nascimento no card: {0} ({1} anos)", fmtDate(w.driver_birth_date), w.driver_age ?? '?')}</div>}
           <div>{!c ? <Chip tone="warn">{tr("documento ainda não conferido")}</Chip>
             : c.ok ? <Chip tone="ok" glyph="✓">{tr("documento conferido · {0} · {1} · {2}", nomeDoc(c.document_type), fmtDateTime(c.at), c.by || '—')}</Chip>
             : <Chip tone="crit" glyph="✕">{tr("não conferiu · {0} · {1} · {2}", nomeDoc(c.document_type), fmtDateTime(c.at), c.by || '—')}</Chip>}</div>
@@ -729,7 +737,7 @@ export function Balcao() {
         <Link className="btn sm ghost" to={`/clients/${est.cliente.id}`}>{tr("Card")}</Link>
         <button className="btn sm ghost" onClick={() => nav('/balcao')}>{tr("Trocar cliente")}</button>
       </div>
-      <WaiverDoCard waivers={est.waivers || []} clientId={est.cliente.id} onMudou={ws => setEst(e => e ? { ...e, waivers: ws } : e)} />
+      <WaiverDoCard waivers={est.waivers || []} clientId={est.cliente.id} vip={est.cliente.vip} onMudou={ws => setEst(e => e ? { ...e, waivers: ws } : e)} />
       {est.guardado.length > 0 && <Banner tone="warn">{tr("Guardado deste cliente com a gente:")} {est.guardado.map(g => `${g.name} (${g.qty} · ${g.local})`).join(', ')}{tr(". Não cobre o que é dele.")}</Banner>}
       <Section title={tr("Invoice de peças")}>
         {!est.invoices.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nenhuma peça cobrada hoje.")}</p>

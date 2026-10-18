@@ -280,3 +280,147 @@ def test_vigente_do_card_usa_o_nascimento_do_piloto_da_conta(con):
     nativa(con, cid, template="parental", pilot_id=pid, expires_at=(_hoje() + timedelta(days=200)).isoformat())
     con.commit()
     assert cw._vigente_do_card(con, cid, "parental") is None
+
+
+# ------------------------------------------------------------------ revisão do #336: o card certo, sempre
+def _aviso(con, wid, ocultos=False):
+    from command_center.api import atencao
+    return [i for i in atencao.coletar(con, incluir_ocultos=ocultos) if i["key"] == f"waiver-documento:waiver:{wid}"]
+
+
+def _nao_conferiu(cli):  # noqa: F811
+    """Uma waiver do DocuSign casada no card errado (A), que não conferiu no balcão. Devolve (h, a, b, wid)."""
+    usuarios()
+    con = conectar()
+    a = card(con, name="Card Errado", email="errado@example.com", pilot_name="Piloto Errado")
+    b = card(con, name="Card Certo", email="certo@example.com", pilot_name="Piloto Certo")
+    wid = docusign(con, a, signer_name="Pessoa Certa")
+    con.commit(); con.close()
+    h = equipe(cli, "op@urace.us")
+    assert confere(cli, h, wid, a, name_matches=False).json()["event"] == "id_check_failed"
+    return h, a, b, wid
+
+
+def test_o_aviso_segue_a_waiver_religada_a_outro_card(cli):  # noqa: F811
+    h, a, b, wid = _nao_conferiu(cli)
+    hg = equipe(cli, "ger@urace.us")
+    assert cli.post(f"{API}/waivers/{wid}/link", json={"client_id": b}, headers=hg).status_code == 200
+    (it,) = _aviso(conectar(), wid)
+    assert it["client_id"] == b and it["link"] == f"/balcao/{b}" and it["title"].startswith("Piloto Certo:"), it
+    h = equipe(cli, "op@urace.us")
+    assert confere(cli, h, wid, a).status_code == 404 and confere(cli, h, wid, b).status_code == 201
+    assert not _aviso(conectar(), wid), "conferiu pelo card certo: sai da atenção"
+
+
+def test_o_aviso_vai_para_o_card_que_ficou_ao_unir(cli):  # noqa: F811
+    from command_center.providers import identidade
+    h, a, b, wid = _nao_conferiu(cli)
+    con = conectar()
+    assert identidade.unir(con, b, a, "teste", "duplicado")
+    con.commit()
+    (it,) = _aviso(con, wid)
+    assert it["client_id"] == b and it["link"] == f"/balcao/{b}"
+
+
+@pytest.mark.parametrize("como", ["oculta", "sem card", "vencida"])
+def test_o_aviso_some_sozinho_quando_a_waiver_sai_do_balcao(cli, monkeypatch, como):  # noqa: F811
+    h, a, b, wid = _nao_conferiu(cli)
+    con = conectar()
+    if como == "oculta":
+        con.execute("UPDATE waivers SET hidden=1 WHERE id=?", (wid,))
+    elif como == "sem card":
+        con.execute("UPDATE waivers SET client_id=NULL, link_by='human', link_reason='desvinculado' WHERE id=?", (wid,))
+    else:
+        depois = _hoje() + timedelta(days=400)
+        monkeypatch.setattr(portal, "hoje", lambda: depois)
+    con.commit()
+    assert not _aviso(con, wid), como
+    (it,) = _aviso(con, wid, ocultos=True)
+    motivo = {"oculta": "a waiver foi ocultada", "sem card": "a waiver não está ligada a nenhum card",
+              "vencida": "a waiver não vale mais (vencida ou de quem fez 18)"}[como]
+    assert it["dismissed"] == {"by": None, "at": None, "reason": motivo, "auto": True}
+
+
+def test_o_aviso_nao_vale_para_documento_interno(cli):  # noqa: F811
+    h, a, b, wid = _nao_conferiu(cli)
+    con = conectar()
+    con.execute("UPDATE waivers SET internal=1 WHERE id=?", (wid,))
+    con.commit()
+    assert not _aviso(con, wid, ocultos=True), "documento da empresa não é waiver de cliente (como as outras regras)"
+
+
+def test_envelope_que_nao_e_waiver_nao_esconde_a_do_docusign(con):
+    a = card(con)
+    real = docusign(con, a)                                        # a waiver adult, de 30 dias atrás
+    quando = (_hoje() - timedelta(days=3)).isoformat() + "T15:00:00Z"
+    docusign(con, a, template="other", subject="Please DocuSign: Membership Agreement", completed_at=quando, sent_at=quando)
+    docusign(con, a, template=None, completed_at=quando, sent_at=quando)
+    con.commit()
+    assert [(w["id"], w["kind"]) for w in balcao.waivers_do_card(con, a)] == [(real, "adult")]
+
+
+def test_parental_do_docusign_de_quem_fez_18_sai_do_balcao_e_o_nascimento_e_o_do_card(con):
+    fez = card(con, pilot_dob=_nasc(19))
+    docusign(con, fez, template="parental", minor_name="Davi Teste")
+    menor = card(con, name="Outra Familia", email="outra@example.com", pilot_dob=_nasc(15))
+    w = docusign(con, menor, template="parental", minor_name="Ana Outra")
+    con.commit()
+    assert balcao.waivers_do_card(con, fez) == []
+    (x,) = balcao.waivers_do_card(con, menor)
+    assert x["id"] == w and x["driver_birth_date"] == _nasc(15) and x["driver_birth_date_from"] == "card"
+    nat = nativa(con, menor, template="parental", audit=json.dumps({"driver_name": "Ana Outra", "driver_birth_date": _nasc(15, dias=2)}))
+    con.commit()
+    y = next(v for v in balcao.waivers_do_card(con, menor) if v["id"] == nat)
+    assert y["driver_birth_date"] == _nasc(15, dias=2) and y["driver_birth_date_from"] == "waiver"
+
+
+def test_piloto_religado_a_outro_card_leva_a_waiver_junto(cli):  # noqa: F811
+    from command_center.providers import vinculo_site
+    usuarios()
+    con = conectar()
+    a = card(con, name="Card Errado", email="errado@example.com", pilot_name="Outro Piloto")
+    b = card(con, name="Rosa Teste", email="rosa2@example.com", pilot_name="Davi Teste")
+    conta = inserir(con, "portal_accounts", name="Rosa Teste", email="rosa2@example.com", pw_salt="x", pw_hash="x",
+                    birth_date=_nasc(40), terms_accepted_at=_hoje().isoformat())
+    pid = inserir(con, "portal_pilots", account_id=conta, name="Davi Teste", birth_date=_nasc(30), client_id=a)
+    wid = nativa(con, a, pilot_id=pid, link_by="sync")            # assinada quando o piloto estava (errado) no card A
+    con.commit()
+    antes = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
+    vinculo_site.desvincular_driver(con, pid)
+    con.commit()
+    assert balcao.waivers_do_card(con, a) == [], "solto do card, a waiver não fica no card antigo"
+    vinculo_site.vincular_driver(con, pid, b, None)
+    con.commit()
+    assert [w["id"] for w in balcao.waivers_do_card(con, a)] == []
+    assert [w["id"] for w in balcao.waivers_do_card(con, b)] == [wid]
+    assert um(con, "SELECT * FROM waivers WHERE id=?", (wid,)) == antes, "nada escrito na waiver assinada"
+    con.close()
+    h = equipe(cli, "op@urace.us")
+    assert confere(cli, h, wid, a).status_code == 404
+    r = confere(cli, h, wid, b)
+    assert r.status_code == 201 and um(conectar(), "SELECT client_id FROM waiver_events WHERE id=?",
+                                       (r.json()["event_id"],))["client_id"] == b
+    # vínculo feito à mão pela equipe vale mais que o do piloto
+    hg = equipe(cli, "ger@urace.us")
+    assert cli.post(f"{API}/waivers/{wid}/link", json={"client_id": a}, headers=hg).status_code == 200
+    con = conectar()
+    assert [w["id"] for w in balcao.waivers_do_card(con, a)] == [wid] and balcao.waivers_do_card(con, b) == []
+
+
+def test_a_parental_vale_pelo_nascimento_gravado_nela(cli):  # noqa: F811
+    """O card diz 16 e o piloto da conta diz 18: o convite mandou a parental pelo nascimento do card, e é ele que está
+    na waiver. Ela continua valendo: o card mostra que já há waiver válida e um segundo convite não assina outra."""
+    from command_center.providers import convite_waiver as cw
+    con = conectar()
+    cid = card(con, pilot_dob=_nasc(16))
+    conta = inserir(con, "portal_accounts", name="Rosa Teste", email="rosa@example.com", pw_salt="x", pw_hash="x",
+                    birth_date=_nasc(40), terms_accepted_at=_hoje().isoformat())
+    pid = inserir(con, "portal_pilots", account_id=conta, name="Davi Teste", birth_date=_nasc(18, dias=3), client_id=cid)
+    w = nativa(con, cid, template="parental", pilot_id=pid,
+               audit=json.dumps({"driver_name": "Davi Teste", "driver_birth_date": _nasc(16)}))
+    con.commit()
+    v = cw._vigente_do_card(con, cid, "parental")
+    assert v and v["id"] == w
+    assert cw.destino(con, cid)["valid_waiver_until"] == v["expires_at"]
+    from command_center.providers import waiver_nativa as wn
+    assert wn.vigente(con, pid)["id"] == w

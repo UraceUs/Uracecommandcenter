@@ -98,7 +98,7 @@ def cliente_pelo_codigo(con, codigo):
 
 def resumo_cliente(c):
     return {"id": c["id"], "nome": c["pilot_name"] or c["name"], "responsavel": c["name"],
-            "pilot_name": c["pilot_name"], "email": c["email"]}
+            "pilot_name": c["pilot_name"], "email": c["email"], "vip": bool(c.get("vip"))}
 
 
 # ------------------------------------------------------------------ código de barras da peça
@@ -132,24 +132,41 @@ class ForaDeVigor(ErroBalcao):
     """A waiver é deste card, mas não está valendo (vencida, anulada, oculta, ou parental de quem já fez 18): 409."""
 
 
+def card_da_waiver(con, w):
+    """O card a que a waiver vale AGORA. A nativa assinada por um piloto da área do cliente segue o piloto: religado a
+    outro card (`vinculo_site.vincular_driver`), ela vai junto; solto, fica sem card. Vínculo feito à mão pela equipe
+    (`link_by='human'`, POST /waivers/{wid}/link) e a do DocuSign ficam no `client_id` da waiver, que unir cards também
+    move. Nada aqui escreve na waiver: a linha assinada é imutável (#109)."""
+    if w.get("source") == "urace" and w.get("pilot_id") and w.get("link_by") != "human":
+        p = um(con, "SELECT client_id FROM portal_pilots WHERE id=?", (w["pilot_id"],))
+        if p:
+            return p["client_id"]
+    return w.get("client_id")
+
+
 def _nativas_do_card(con, client_id):
-    hoje = portal.hoje().isoformat()
     from command_center.providers import waiver_nativa as wn
-    ws = todos(con, f"""SELECT * FROM waivers WHERE client_id=? AND source='urace' AND status='completed'
-                        AND COALESCE(hidden,0)=0 AND NOT {waiver_anulada()} AND expires_at >= ?
-                        ORDER BY completed_at DESC, id DESC""", (client_id, hoje))
-    return [w for w in ws if not wn.parental_de_maior(con, w)]
+    ws = todos(con, f"""SELECT * FROM waivers WHERE source='urace' AND status='completed' AND COALESCE(hidden,0)=0
+                        AND COALESCE(internal,0)=0 AND NOT {waiver_anulada()} AND expires_at >= ?
+                        AND (client_id=? OR pilot_id IN (SELECT id FROM portal_pilots WHERE client_id=?))
+                        ORDER BY completed_at DESC, id DESC""", (portal.hoje().isoformat(), client_id, client_id))
+    return [w for w in ws if card_da_waiver(con, w) == client_id and not wn.parental_de_maior(con, w)]
 
 
 def _docusign_do_card(con, client_id):
-    """A do DocuSign que vale: assinada, nem oculta nem anulada, dentro da validade (ou, sem data de validade, assinada
-    há menos de um ano, a mesma régua do "serviço sem waiver" da atenção)."""
+    """A do DocuSign que vale: waiver de verdade (adult ou parental; um envelope 'other', como o Membership Agreement,
+    não conta nem esconde a waiver), assinada, nem oculta nem anulada, dentro da validade (ou, sem data de validade,
+    assinada há menos de um ano, a mesma régua do "serviço sem waiver" da atenção). A parental de quem já fez 18 pelo
+    nascimento do card não vale mais."""
+    from command_center.providers import waiver_nativa as wn
     hoje = portal.hoje()
-    return um(con, f"""SELECT * FROM waivers WHERE client_id=? AND COALESCE(source,'')<>'urace' AND status='completed'
-                       AND COALESCE(hidden,0)=0 AND COALESCE(internal,0)=0 AND NOT {waiver_anulada()}
-                       AND (expires_at >= ? OR (expires_at IS NULL AND COALESCE(completed_at, sent_at) >= ?))
-                       ORDER BY COALESCE(completed_at, sent_at) DESC, id DESC LIMIT 1""",
-              (client_id, hoje.isoformat(), (hoje - timedelta(days=365)).isoformat()))
+    ws = todos(con, f"""SELECT * FROM waivers WHERE client_id=? AND COALESCE(source,'')<>'urace' AND status='completed'
+                        AND template IN ('adult','parental') AND COALESCE(hidden,0)=0 AND COALESCE(internal,0)=0
+                        AND NOT {waiver_anulada()}
+                        AND (expires_at >= ? OR (expires_at IS NULL AND COALESCE(completed_at, sent_at) >= ?))
+                        ORDER BY COALESCE(completed_at, sent_at) DESC, id DESC""",
+               (client_id, hoje.isoformat(), (hoje - timedelta(days=365)).isoformat()))
+    return next((w for w in ws if not wn.parental_de_maior(con, w)), None)
 
 
 def ultima_conferencia(con, wid):
@@ -168,7 +185,11 @@ def _waiver_publica(con, w, card):
     trilha = json.loads(w["audit"] or "{}") if nativa else {}
     menor = w["template"] == "parental"
     piloto = trilha.get("driver_name") or w.get("minor_name") or card.get("pilot_name") or card.get("name")
-    nasc = (trilha.get("driver_birth_date") or (card.get("pilot_dob") or "").strip()[:10] or None) if menor else None
+    # o nascimento que a waiver gravou (declarado ao assinar) ou, sem ele (a do DocuSign), o que o card diz
+    nasc, origem = None, None
+    if menor:
+        nasc, origem = (trilha.get("driver_birth_date"), "waiver") if trilha.get("driver_birth_date") else \
+            ((card.get("pilot_dob") or "").strip()[:10] or None, "card")
     idade = None
     if nasc:
         try:
@@ -177,6 +198,7 @@ def _waiver_publica(con, w, card):
             nasc = None
     return {"id": w["id"], "source": "urace" if nativa else "docusign", "kind": w["template"], "minor": menor,
             "signer_name": w["signer_name"], "driver": piloto, "driver_birth_date": nasc, "driver_age": idade,
+            "driver_birth_date_from": origem if nasc else None,
             "signed_at": w["completed_at"], "valid_until": w["expires_at"], "id_check": ultima_conferencia(con, w["id"])}
 
 
@@ -198,23 +220,23 @@ def conferir_documento(con, wid, client_id, documento, nome_confere, idade_confe
     from command_center.providers import trilha_waiver as tw
     if documento not in DOCUMENTOS:
         raise ErroBalcao("tipo de documento inválido")
-    w = um(con, "SELECT * FROM waivers WHERE id=? AND client_id=?", (wid, client_id))
-    if not w:
-        raise LookupError("waiver")                     # de outro card: igual a não existir
-    if wid not in {x["id"] for x in waivers_do_card(con, client_id)}:
-        raise ForaDeVigor("Esta waiver não está valendo (vencida, anulada ou parental de quem já fez 18). "
-                          "Confira a waiver em vigor do card.")
-    menor = w["template"] == "parental"
-    if menor and idade_confere is None:
-        raise ErroBalcao("Piloto menor: diga se a idade dele confere com o nascimento declarado.")
-    if not menor:
-        idade_confere = None
-    ok = bool(nome_confere) and (not menor or bool(idade_confere))
     usuario = usuario or {}
-    detalhe = {"document_type": documento, "name_matches": bool(nome_confere), "minor_age_matches": idade_confere,
-               "checked": "signer", "waiver_source": "urace" if w.get("source") == "urace" else "docusign",
-               "by": usuario.get("name"), "user_id": usuario.get("id")}
-    with transacao(con, imediata=True):
+    with transacao(con, imediata=True):        # card e vigência conferidos com a trava de escrita já pega
+        w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
+        if not w or card_da_waiver(con, w) != client_id:
+            raise LookupError("waiver")                 # de outro card: igual a não existir
+        if wid not in {x["id"] for x in waivers_do_card(con, client_id)}:
+            raise ForaDeVigor("Esta waiver não está valendo (vencida, anulada, oculta ou parental de quem já fez 18). "
+                              "Confira a waiver em vigor do card.")
+        menor = w["template"] == "parental"
+        if menor and idade_confere is None:
+            raise ErroBalcao("Piloto menor: diga se a idade dele confere com o nascimento.")
+        if not menor:
+            idade_confere = None
+        ok = bool(nome_confere) and (not menor or bool(idade_confere))
+        detalhe = {"document_type": documento, "name_matches": bool(nome_confere), "minor_age_matches": idade_confere,
+                   "checked": "signer", "waiver_source": "urace" if w.get("source") == "urace" else "docusign",
+                   "by": usuario.get("name"), "user_id": usuario.get("id")}
         e = tw.registrar(con, "id_checked" if ok else "id_check_failed", "staff", ip=ip, user_agent=user_agent,
                          detail=detalhe, waiver_id=wid, client_id=client_id, pilot_id=w["pilot_id"], kind=w["template"])
         auditar(con, "waiver.id_check", f"user:{usuario.get('id')}", user_id=usuario.get("id"), entity_type="waiver",

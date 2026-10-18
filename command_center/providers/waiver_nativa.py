@@ -369,12 +369,16 @@ def validade(tipo, nascimento, dia):
 
 def parental_de_maior(con, w):
     """A parental `w` já não vale porque o piloto fez 18, mesmo que a data gravada seja mais longa (assinada antes
-    da regra do #106). O nascimento é o do piloto da área do cliente a que ela vale (`pilot_id`); sem ele (convite de
-    um card sem conta), o do card. #117: `vigente`, o convite (`_vigente_do_card`) e o balcão usam esta mesma conta."""
+    da regra do #106). O nascimento é, primeiro, o gravado na trilha da própria waiver (`driver_birth_date`: imutável,
+    foi ele que decidiu o modelo); sem ele, o do piloto da área do cliente (`pilot_id`) e, por fim, o do card (a do
+    DocuSign). #117: `vigente`, o convite (`_vigente_do_card`) e o balcão usam esta mesma conta."""
     if not w or w.get("template") != "parental":
         return False
-    nasc = None
-    if w.get("pilot_id"):
+    try:
+        nasc = (json.loads(w.get("audit") or "{}") or {}).get("driver_birth_date")
+    except (TypeError, ValueError):
+        nasc = None
+    if not nasc and w.get("pilot_id"):
         p = um(con, "SELECT birth_date FROM portal_pilots WHERE id=?", (w["pilot_id"],))
         nasc = p["birth_date"] if p else None
     if not nasc and w.get("client_id"):

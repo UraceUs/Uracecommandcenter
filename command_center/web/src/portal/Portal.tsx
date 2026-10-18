@@ -472,7 +472,7 @@ function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => 
       <div className="row wrap" style={{ gap: 8 }}>{waivers && (waivers.enabled || !!waivers.signed_total) && <Link className="btn sm ghost" to="/portal/waivers">Signed waivers</Link>}
         {editando === null && <button className="btn sm" onClick={() => setEditando('novo')}>+ Add a driver</button>}</div></div>
     {conta.drivers.map(p => editando === p.id
-      ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} nascimentoTravado={waiverDe(p.id)?.status === 'signed'} />
+      ? <FormPiloto key={p.id} piloto={p} onSalvo={onSalvo} onFechar={() => setEditando(null)} nascimentoTravado={waivers?.drivers.find(w => w.driver_id === p.id)?.status === 'signed'} />
       : <article className="card card-b portal-piloto" key={p.id}>
         <div className="portal-piloto-topo"><div className="grow"><h2 className="h3" style={{ margin: 0 }}>{p.name}{p.is_self && <span className="small muted"> · you</span>}</h2>
           <DadosDoPiloto p={p} completo />{waiverDe(p.id) && <LinhaWaiver w={waiverDe(p.id)!} />}

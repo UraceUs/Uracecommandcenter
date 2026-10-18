@@ -4482,7 +4482,6 @@
 "a cópia por e-mail não saiu": "emailed copy failed",
 "para {0}": "to {0}",
 "A idade de {0} confere com a de menor de 18 declarada na waiver?": "Does {0}'s age match a minor under 18, as declared on the waiver?",
-"A idade de {0} confere com o nascimento declarado ({1}, {2} anos)?": "Does {0}'s age match the declared date of birth ({1}, {2} years old)?",
 "Assinou:": "Signed by:",
 "Carteira de motorista": "Driver's license",
 "Conferir de novo": "Check again",
@@ -4490,7 +4489,6 @@
 "Conferir o documento de {0}": "Check {0}'s photo ID",
 "Documento conferido.": "ID checked.",
 "Gravar conferência": "Save ID check",
-"Nascimento declarado: {0} ({1} anos)": "Declared date of birth: {0} ({1} years old)",
 "Nenhuma waiver valendo neste card. Peça a assinatura antes da pista (convite por e-mail no card).": "No valid waiver on this card. Get it signed before going on track (email invite on the card).",
 "Não confere": "Does not match",
 "O nome no documento confere com {0}?": "Does the name on the ID match {0}?",
@@ -4515,5 +4513,10 @@
 "idade do menor confere": "minor's age matches",
 "idade do menor não confere": "minor's age does not match",
 "nome confere": "name matches",
-"nome não confere": "name does not match"
+"nome não confere": "name does not match",
+"Cliente VIP: dispensa a waiver. Não há documento a conferir aqui.": "VIP client: no waiver required. There is no ID to check here.",
+"A idade de {0} confere com o nascimento declarado na waiver ({1}, {2} anos)?": "Does {0}'s age match the date of birth declared on the waiver ({1}, {2} years old)?",
+"A idade de {0} confere com o nascimento do card ({1}, {2} anos)?": "Does {0}'s age match the date of birth on the card ({1}, {2} years old)?",
+"Nascimento declarado na waiver: {0} ({1} anos)": "Date of birth declared on the waiver: {0} ({1} years old)",
+"Nascimento no card: {0} ({1} anos)": "Date of birth on the card: {0} ({1} years old)"
 }

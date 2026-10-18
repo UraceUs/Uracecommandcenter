@@ -292,7 +292,7 @@ pelo nome), o quadro **"Waiver · Conferir documento"** mostra a waiver que vale
 sistema e a do DocuSign. A de outro cliente nunca aparece aqui.
 
 1. Confira o nome do piloto e quem assinou: o **adulto** assina a própria (adult); pelo **menor**, assina o pai ou a
-   mãe (parental), e o quadro mostra o **nascimento declarado** e a idade.
+   mãe (parental), e o quadro mostra o nascimento e a idade: o **declarado na waiver** ou, na do DocuSign, o **do card**.
 2. Peça o **documento com foto de quem assinou** e toque em **Conferir documento**.
 3. Escolha o tipo: **Carteira de motorista**, **Passaporte**, **State ID** ou **Outro documento oficial com foto**.
 4. Responda **O nome no documento confere?** e, pelo menor, **A idade confere com o nascimento declarado?**
@@ -305,7 +305,7 @@ sistema e a do DocuSign. A de outro cliente nunca aparece aqui.
 Não conferiu? Grave **Não confere** assim mesmo. O sistema **não bloqueia nada sozinho**: o aviso vai para
 **Precisa de atenção** e o gerente decide (conferir de novo, anular a waiver e pedir outra, ou seguir). Conferiu de
 novo e bateu, o aviso sai. Sem waiver valendo, o quadro avisa: peça a assinatura antes da pista (o convite por e-mail
-sai do card).
+sai do card). Cliente **VIP** dispensa a waiver: o quadro diz isso e não há o que conferir.
 
 Cada **invoice de peças** é um cartão: em cima a situação (**aberta · não enviada**, **enviada**), o cliente, o
 **total no bloco grande** e as peças, uma por linha (quantas × preço). Se o QuickBooks recusou, a linha vermelha diz

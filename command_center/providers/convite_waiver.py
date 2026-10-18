@@ -133,7 +133,7 @@ def _do_card(con, client_id):
 def _vigente_do_card(con, client_id, tipo):
     """A waiver nativa deste card e modelo que ainda vale. #117: como `wn.vigente`, a parental deixa de valer quando
     o piloto faz 18, mesmo com a data gravada mais longa (assinada antes da regra do #106)."""
-    w = um(con, f"""SELECT id, expires_at, template, pilot_id, client_id FROM waivers WHERE client_id=? AND source='urace'
+    w = um(con, f"""SELECT id, expires_at, template, pilot_id, client_id, audit FROM waivers WHERE client_id=? AND source='urace'
                        AND status='completed' AND template=? AND COALESCE(hidden,0)=0 AND NOT {waiver_anulada()}
                        AND expires_at >= ? ORDER BY completed_at DESC LIMIT 1""",
            (client_id, tipo, portal.hoje().isoformat()))
