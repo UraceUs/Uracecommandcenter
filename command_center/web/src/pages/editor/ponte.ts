@@ -626,8 +626,10 @@ export class Ponte {
       }
       return { d: lista.length, marca: lista[lista.length - 1], como: 'depois' }
     }
-    // embaixo do cabeçalho preso (a prévia rolada por dentro), o ponto é da seção que passa ali, não do cabeçalho
-    const el = y < this.topoPreso() ? null : comoElemento(this.doc.elementFromPoint(x, y))
+    // com o ponteiro em cima do cabeçalho preso (a prévia rolada por dentro), o alvo é o que aparece logo embaixo
+    // dele: a linha azul fica à vista e a peça cai no que a pessoa vê, nunca na última seção da página
+    y = Math.max(y, this.topoPreso() + 1)
+    const el = comoElemento(this.doc.elementFromPoint(x, y))
     let sec = el?.closest('[data-ed-s]') || null
     if (!sec || !lista.includes(sec)) {        // fora das seções (cabeçalho, rodapé): a que passa nessa altura, ou a mais perto
       const r0 = lista[0].getBoundingClientRect()

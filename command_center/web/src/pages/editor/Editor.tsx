@@ -294,10 +294,12 @@ export function EditorDePagina({ id }: { id: number }) {
       if (t) setLimites(o => o.w === t.w && o.h === t.h ? o : t)
     })
   }
-  /** A peça escolhida inteira à vista na tela do painel (a prévia já rolou por dentro até ela). No celular, a barra
-   *  presa embaixo não cobre a peça: a página rola até a peça ficar entre o topo e a barra; se a página não rola mais,
-   *  a prévia rola por dentro o que faltou. A peça mais alta que o espaço fica com o começo à vista. Sem animação (a
-   *  rolagem é para já, e o leitor de tela não perde o lugar). */
+  /** A peça escolhida à vista na tela do painel (a prévia já rolou por dentro até ela, `rolarAte`).
+   *  - No computador, só a página do painel rola, e só para a parte da peça que a lona mostra ficar na tela.
+   *  - No celular, a barra presa embaixo não cobre a peça: a página rola até a peça ficar entre o topo e a barra; se a
+   *    página não rola mais, a prévia rola por dentro o que faltou, sem a peça passar para baixo do cabeçalho preso
+   *    do site. A peça mais alta que o espaço fica com o começo à vista.
+   *  Sem animação (a rolagem é para já, e o leitor de tela não perde o lugar). */
   function aVista() {
     cancelAnimationFrame(quadroLivre.current)
     quadroLivre.current = requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -308,16 +310,24 @@ export function EditorDePagina({ id }: { id: number }) {
       const cx = lona.current?.caixa()
       if (!el || !cx || !pt) return
       const barra = doca.current?.getBoundingClientRect()
+      const celular = !!barra?.height
       const topo = Math.max(topoPreso(), 0) + 8
-      const baixo = (barra?.height ? barra.top : window.innerHeight) - 8
-      const dy = el.bottom > baixo ? Math.min(el.bottom - baixo, el.top - topo) : el.top < topo ? el.top - topo : 0
+      const baixo = (celular ? barra.top : window.innerHeight) - 8
+      // no computador conta só o que a lona mostra da peça (o resto, a prévia rola por dentro)
+      const cima = celular ? el.top : Math.max(el.top, cx.top)
+      const fundo = celular ? el.bottom : Math.min(el.bottom, cx.bottom)
+      const dy = fundo > baixo ? Math.min(fundo - baixo, cima - topo) : cima < topo ? cima - topo : 0
       if (Math.abs(dy) <= 1) return
       const antes = window.scrollY
       window.scrollBy({ top: dy, behavior: 'instant' })
       const subiu = window.scrollY - antes            // a lona e a peça subiram isso na tela (desceram, se negativo)
-      // a prévia rola por dentro o que faltou: para cima sem a peça passar do começo da lona (nem do topo preso)
-      const cabe = dy > 0 ? Math.min(dy - subiu, (el.top - subiu) - Math.max(cx.top - subiu, topo)) : dy - subiu
-      if (Math.abs(cabe) > 1) pt.win.scrollBy({ top: cabe / cx.escala, behavior: 'instant' })
+      if (celular) {
+        // a prévia rola por dentro o que faltou: para cima sem a peça passar do começo da lona, do cabeçalho preso do
+        // site nem do topo preso do painel
+        const teto = Math.max(cx.top - subiu + pt.topoPreso() * cx.escala, topo)
+        const cabe = dy > 0 ? Math.min(dy - subiu, (el.top - subiu) - teto) : dy - subiu
+        if (Math.abs(cabe) > 1) pt.win.scrollBy({ top: cabe / cx.escala, behavior: 'instant' })
+      }
       reposicionar()
     }))
   }
@@ -546,7 +556,8 @@ export function EditorDePagina({ id }: { id: number }) {
   function teclar(e: KeyboardEvent) {
     const mod = e.ctrlKey || e.metaKey
     const k = e.key.toLowerCase()
-    if (e.key === '?' && !mod && !e.altKey) { e.preventDefault(); setAjuda(true); return }
+    // "?" abre a ajuda; vale com AltGr (no Windows o AltGr chega como Ctrl+Alt), só não com ⌘
+    if (e.key === '?' && !e.metaKey) { e.preventDefault(); setAjuda(true); return }
     if (mod && k === 'z' && !e.shiftKey) { e.preventDefault(); desfazer(); return }
     if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); desfazer(false); return }
     if (mod && k === 's') { e.preventDefault(); enviar(); return }
@@ -585,7 +596,8 @@ export function EditorDePagina({ id }: { id: number }) {
   useEffect(() => {
     const f = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (ajudaRef.current) return                    // a ajuda dos atalhos está aberta: as teclas são dela
+      // a ajuda dos atalhos está aberta: as teclas são dela (o Esc fecha também quando o foco saiu dela)
+      if (ajudaRef.current) { if (e.key === 'Escape') { e.preventDefault(); setAjuda(false) } return }
       if (e.key === 'Escape' && fecharSeFolha.current()) { e.preventDefault(); return }      // Esc fecha a folha do celular
       if (t?.closest('input, textarea, select, [contenteditable]') && !((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's')) return
       if (t?.closest('button, a, summary') && (e.key === 'Enter' || e.key === ' ')) return

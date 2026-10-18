@@ -1,6 +1,7 @@
 /* Editor do site como o Canva (#315, etapa 5): a ajuda dos atalhos. Abre com "?" (na prévia ou no painel, fora de um
  * texto em edição) ou no botão "?" de cima. É um diálogo: título h3, o foco entra nele e fica preso (Tab e
- * Shift+Tab dão a volta), Esc ou Fechar fecham e o foco volta para onde estava. A lista é a das teclas que o editor
+ * Shift+Tab dão a volta; o clique num texto dela deixa o foco no próprio diálogo, `tabIndex=-1`), Esc ou Fechar
+ * fecham e o foco volta para onde estava. A lista é a das teclas que o editor
  * atende de verdade (`teclar` em Editor.tsx e `aoTeclar` em ponte.ts): mudou uma tecla lá, muda aqui. */
 import { Fragment, useEffect, useRef, type KeyboardEvent as KE } from 'react'
 import { Scrim } from '../../components/ui'
@@ -64,7 +65,7 @@ export function Atalhos({ fechar }: { fechar: () => void }) {
     else if (!e.shiftKey && (i === fs.length - 1 || i < 0)) { e.preventDefault(); fs[0].focus() }
   }
   return <Scrim className="modal-scrim ed-ajuda-fundo" onMouseDown={fechar}>
-    <div ref={caixa} className="modal ed-ajuda" role="dialog" aria-modal="true" aria-labelledby="ed-ajuda-h" onMouseDown={e => e.stopPropagation()} onKeyDown={teclar}>
+    <div ref={caixa} className="modal ed-ajuda" role="dialog" aria-modal="true" aria-labelledby="ed-ajuda-h" tabIndex={-1} onMouseDown={e => e.stopPropagation()} onKeyDown={teclar}>
       <button ref={primeiro} type="button" className="btn ghost sm close" aria-label={tr("Fechar")} onClick={fechar}>✕</button>
       <h3 id="ed-ajuda-h">{tr("Atalhos do teclado")}</h3>
       {GRUPOS.map(([g, linhas]) => <section key={g} className="ed-ajuda-grupo" aria-label={g}>

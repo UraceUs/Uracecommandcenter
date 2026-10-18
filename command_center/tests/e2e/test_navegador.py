@@ -4563,6 +4563,35 @@ def test_editor_canva_interrogacao_abre_a_ajuda_dos_atalhos(servidor, navegador)
     g.keyboard.press("Escape")
     ajuda.wait_for(state="detached")
     assert g.evaluate("() => document.activeElement?.getAttribute('aria-label')") == "Atalhos do teclado (?)"
+    # revisão do #339: clicar num texto da ajuda (o título, uma linha) não tira o foco dela, e o Esc ainda fecha
+    for onde in ("h3", "dd"):
+        botao.click()
+        ajuda.wait_for()
+        ajuda.locator(onde).first.click()
+        assert g.evaluate("() => !!document.activeElement?.closest('[role=dialog]')"), f"o foco fica na ajuda ({onde})"
+        g.keyboard.press("Escape")
+        ajuda.wait_for(state="detached")
+        assert g.evaluate("() => document.activeElement?.getAttribute('aria-label')") == "Atalhos do teclado (?)", onde
+    # revisão do #339: "?" com AltGr (teclado ABNT2; no Windows o Chrome marca Ctrl+Alt) também abre; dentro de um
+    # campo de escrever, não
+    altgr = "{ key: '?', code: 'KeyW', ctrlKey: true, altKey: true, bubbles: true, cancelable: true }"
+    g.locator(".ed-lado").get_by_role("button", name=re.compile("^Página")).click()
+    campo = g.get_by_label("Título da aba")
+    campo.focus()
+    campo.evaluate(f"n => n.dispatchEvent(new KeyboardEvent('keydown', {altgr}))")
+    g.wait_for_timeout(200)
+    assert ajuda.count() == 0, "no campo, o ? é só uma letra"
+    g.evaluate("document.activeElement.blur()")
+    g.evaluate(f"() => document.body.dispatchEvent(new KeyboardEvent('keydown', {altgr}))")
+    ajuda.wait_for()
+    g.keyboard.press("Escape")
+    ajuda.wait_for(state="detached")
+    _lona(g).locator('[data-ed-w="heq1"]').click()           # e de dentro da prévia
+    previa = next(f for f in g.frames if "/previa" in f.url)
+    previa.evaluate(f"() => document.body.dispatchEvent(new KeyboardEvent('keydown', {altgr}))")
+    ajuda.wait_for()
+    g.keyboard.press("Escape")
+    ajuda.wait_for(state="detached")
     _salvo(g)
     assert "Why?" in str(_rascunho(g, servidor, pid))
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
@@ -4593,6 +4622,130 @@ def test_editor_canva_titulo_da_aba_e_descricao_da_tela(servidor, navegador):
     g.wait_for_function(f"() => document.querySelector('meta[name=description]').content === {json.dumps(lista)}")
     g.locator("nav.tabs").get_by_role("link", name="Painel do site").click()
     g.wait_for_function(f"() => document.querySelector('meta[name=description]').content === {json.dumps(padrao)}")
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+_MARCA = """() => { const d = document.querySelector('iframe.ed-iframe').contentDocument
+  const n = d.querySelector('.ed-solta-antes, .ed-solta-depois, .ed-solta-dentro')
+  if (!n) return null
+  const r = n.getBoundingClientRect()
+  return { id: n.getAttribute('data-ed-w') || n.getAttribute('data-ed-col') || n.getAttribute('data-ed-s'), top: r.top, bottom: r.bottom,
+           sec: n.closest('[data-ed-s]')?.getAttribute('data-ed-s'), topo: d.querySelector('header.topo').getBoundingClientRect().bottom,
+           alto: d.defaultView.innerHeight } }"""
+
+
+def test_editor_canva_arrastar_por_cima_do_cabecalho_preso_cai_no_que_se_ve(servidor, navegador):
+    """#315, etapa 5 (revisão do #339): com a prévia rolada por dentro, o cabeçalho do site fica preso em cima das
+    seções. Arrastar uma peça da paleta por cima dele mostra a linha azul no que aparece logo embaixo (à vista) e a peça
+    cai ali: antes caía na última seção da página. No modo Computador, o cabeçalho conta como a borda de cima e a
+    prévia rola para cima."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    pid = _pagina_do_editor(g, servidor, csrf, "Header Drop Kart Camp e2e", "/header-drop-e2e/", _secoes_e2e("hd", 6))
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator('[data-ed-w="hdt0"]').wait_for()
+    g.get_by_role("button", name="Celular").click()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentWindow.innerWidth === 390")
+    g.wait_for_timeout(200)
+    g.evaluate("""() => { const w = document.querySelector('iframe.ed-iframe').contentWindow
+      const topo = w.document.querySelector('header.topo').getBoundingClientRect().bottom
+      const r = w.document.querySelector('[data-ed-s="hds3"]').getBoundingClientRect()
+      w.scrollBy({ top: r.top - topo + 40, behavior: 'instant' }) }""")           # o bloco 3 começa 40 px embaixo dele
+    g.wait_for_timeout(200)
+    # a linha azul do instante em que o botão do mouse solta (antes de o editor tratar o soltar)
+    g.evaluate("_m => addEventListener('pointerup', () => { window.__marca = (" + _MARCA + ")() }, true)", None)
+    quadro = _caixa(g.locator("iframe.ed-iframe"))
+    topo = g.evaluate("document.querySelector('iframe.ed-iframe').contentDocument.querySelector('header.topo').getBoundingClientRect().bottom")
+    pal = _caixa(g.locator(".ed-peca", has_text="Botão"))
+    g.mouse.move(pal["x"] + 20, pal["y"] + pal["height"] / 2)
+    g.mouse.down()
+    g.mouse.move(pal["x"] + 60, pal["y"] + 30, steps=4)
+    g.mouse.move(quadro["x"] + 100, quadro["y"] + topo / 2, steps=10)        # no meio do cabeçalho preso
+    g.mouse.up()
+    marca = g.evaluate("window.__marca")
+    assert marca, "a linha azul aparece"
+    assert marca["top"] >= marca["topo"] - 1 and marca["top"] < marca["alto"], f"a linha fica à vista, embaixo do cabeçalho: {marca}"
+    assert marca["sec"] != "hds5", f"não cai na última seção: {marca}"
+    _salvo(g)
+    onde = [(sc["id"], k, i) for sc in _rascunho(g, servidor, pid)["itens"] for k, col in enumerate(sc["itens"])
+            for i, w in enumerate(col) if w["tipo"] == "botao"]
+    assert len(onde) == 1 and onde[0][0] == marca["sec"], (onde, marca)
+    # Computador (reduzido): o cabeçalho tem duas linhas e é a borda de cima; parado em cima dele, a prévia sobe
+    g.get_by_role("button", name="Computador").click()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentWindow.innerWidth === 1280")
+    g.wait_for_timeout(300)
+    g.evaluate("document.querySelector('.ed-lona').scrollIntoView({ block: 'start' })")
+    g.evaluate("document.querySelector('iframe.ed-iframe').contentWindow.scrollTo({ top: 600, behavior: 'instant' })")
+    g.wait_for_timeout(200)
+    quadro = _caixa(g.locator("iframe.ed-iframe"))
+    escala = quadro["width"] / 1280
+    topo = g.evaluate("document.querySelector('iframe.ed-iframe').contentDocument.querySelector('header.topo').getBoundingClientRect().bottom")
+    assert topo > 80, f"o cabeçalho do computador passa da faixa de 64 px da borda: {topo}"
+    sy = "document.querySelector('iframe.ed-iframe').contentWindow.scrollY"
+    antes = g.evaluate(sy)
+    pal = _caixa(g.locator(".ed-peca", has_text="Botão"))
+    g.mouse.move(pal["x"] + 20, pal["y"] + pal["height"] / 2)
+    g.mouse.down()
+    g.mouse.move(pal["x"] + 60, pal["y"] + 30, steps=4)
+    g.mouse.move(quadro["x"] + 300, quadro["y"] + (topo - 6) * escala, steps=8)   # em cima da linha de baixo do cabeçalho
+    g.wait_for_timeout(1200)
+    depois = g.evaluate(sy)
+    marca = g.evaluate(_MARCA)
+    g.mouse.move(pal["x"] + 20, pal["y"] + pal["height"] / 2, steps=4)          # de volta à paleta: não põe nada
+    g.mouse.up()
+    assert depois < antes - 20, f"a prévia rola para cima com o ponteiro no cabeçalho: {antes} -> {depois}"
+    assert marca and marca["top"] >= marca["topo"] - 1, f"a linha continua à vista: {marca}"
+    assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
+    g.close()
+
+
+def test_editor_canva_setas_ate_uma_secao_mais_alta_que_a_previa_mostram_o_comeco_dela(servidor, navegador):
+    """#315, etapa 5 (revisão do #339): ir com ↓ (ou pelas Camadas) até uma seção mais alta que a prévia rola até o
+    começo dela ficar logo embaixo do cabeçalho preso do site, à vista (antes ficava escondido embaixo dele). A
+    seleção tem o anel branco por dentro do azul (não some no fundo vermelho)."""
+    g = entrar(navegador, servidor, largura=1280, altura=900)
+    csrf = _csrf(g)
+    longo = "".join(f"<p>Tall block paragraph {k} with some words.</p>" for k in range(5))
+    itens = [
+        {"id": "ta0", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [[
+            {"id": "tah1", "tipo": "titulo", "texto": "Tall Kart Camp", "nivel": 1},
+            {"id": "tap0", "tipo": "texto", "html": "<p>Short words.</p>"}]]},
+        {"id": "ta1", "tipo": "secao", "fundo": "marca", "espaco": "g", "colunas": 1,
+         "itens": [[{"id": f"tal{k}", "tipo": "texto", "html": longo} for k in range(12)]]},
+        {"id": "ta2", "tipo": "secao", "fundo": "clara", "espaco": "m", "colunas": 1, "itens": [[
+            {"id": "tap2", "tipo": "texto", "html": "<p>After words.</p>"}]]}]
+    pid = _pagina_do_editor(g, servidor, csrf, "Tall Section Kart Camp e2e", "/tall-section-e2e/", itens)
+    abrir(g, servidor, f"/site/editor/{pid}")
+    lona = _lona(g)
+    lona.locator('[data-ed-w="tap0"]').wait_for()
+    g.get_by_role("button", name="Computador").click()
+    g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentWindow.innerWidth === 1280")
+    g.wait_for_timeout(300)
+    alto = g.evaluate("""() => { const w = document.querySelector('iframe.ed-iframe').contentWindow
+      return w.document.querySelector('[data-ed-s="ta1"]').getBoundingClientRect().height - w.innerHeight }""")
+    assert alto > 100, "a seção do meio é mais alta que a prévia"
+    pos = """() => { const d = document.querySelector('iframe.ed-iframe').contentDocument
+      const n = d.querySelector('.ed-sel'); if (!n) return null
+      return { id: n.getAttribute('data-ed-s') || n.getAttribute('data-ed-w'), top: n.getBoundingClientRect().top,
+               topo: d.querySelector('header.topo').getBoundingClientRect().bottom, anel: getComputedStyle(n).boxShadow } }"""
+    lona.locator('[data-ed-w="tap0"]').click()
+    g.evaluate("document.activeElement.blur && document.activeElement.blur()")
+    g.keyboard.press("ArrowDown")                                       # do último texto da seção 1 para a seção 2
+    g.wait_for_timeout(700)
+    r = g.evaluate(pos)
+    assert r["id"] == "ta1", r
+    assert r["top"] >= r["topo"] - 1, f"o começo da seção alta fica à vista, embaixo do cabeçalho: {r}"
+    assert "255, 255, 255" in r["anel"], f"o anel branco da seleção: {r['anel']}"
+    # pelas Camadas, depois de rolar a prévia para o fim
+    g.evaluate("document.querySelector('iframe.ed-iframe').contentWindow.scrollTo({ top: 99999, behavior: 'instant' })")
+    lona.locator('[data-ed-w="tap2"]').click()
+    g.locator(".ed-lado").get_by_role("button", name="Camadas", exact=True).click()
+    g.locator('.ed-camadas [data-camada="ta1"]').click()
+    g.wait_for_timeout(700)
+    r = g.evaluate(pos)
+    assert r["id"] == "ta1" and r["top"] >= r["topo"] - 1, f"pelas Camadas também: {r}"
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()
 
