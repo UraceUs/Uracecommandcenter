@@ -1,5 +1,6 @@
 /* Editor do site como o Canva (#315): a página em si, fora da prévia. O título da aba e a descrição (o que o
- * Google mostra), o endereço, o que falta para publicar, Voltar ao original / Tirar do ar e as versões. */
+ * Google mostra), o endereço, o que falta para publicar, Voltar ao original / Tirar do ar, as versões e o botão da
+ * ajuda dos atalhos (a mesma do "?"). */
 import { fmtDateTime } from '../../components/fmt'
 import { tr } from '../../i18n'
 import type { Pagina, Seo } from './tipos'
@@ -21,9 +22,11 @@ interface Props {
   abrirVersoes(): void
   voltarVersao(id: number): void
   recarregar(): void
+  /** Abre a ajuda dos atalhos (a mesma do "?"). */
+  ajuda(): void
 }
 
-export function PaginaPainel({ p, seo, gerente, problemas, erros, orfaos, descartar, mudarSeo, despublicar, versoes, abrirVersoes, voltarVersao, recarregar }: Props) {
+export function PaginaPainel({ p, seo, gerente, problemas, erros, orfaos, descartar, mudarSeo, despublicar, versoes, abrirVersoes, voltarVersao, recarregar, ajuda }: Props) {
   return <div className="stack" style={{ gap: 12 }}>
     <label className="fld"><span>{tr("Título da aba")} <i>{tr("10 a 70 letras; o Google mostra")}</i></span>
       <input value={seo.title} disabled={!gerente} onChange={e => mudarSeo({ title: e.target.value })} /></label>
@@ -46,12 +49,6 @@ export function PaginaPainel({ p, seo, gerente, problemas, erros, orfaos, descar
         : versoes.map(x => <div key={x.id} className="row wrap" style={{ gap: 8 }}><span className="small grow">{fmtDateTime(x.published_at)} · {x.por || '—'} · {x.title}</span>
           {gerente && <button type="button" className="btn sm ghost" onClick={() => voltarVersao(x.id)}>{tr("Voltar a esta versão")}</button>}</div>)}
     </div>
-    <details className="ed-atalhos"><summary className="btn sm ghost">{tr("Atalhos do teclado")}</summary>
-      <ul className="small">
-        <li><kbd>Enter</kbd> {tr("escrever no que está selecionado")} · <kbd>Esc</kbd> {tr("sair do texto, depois subir para a seção")}</li>
-        <li><kbd>↑</kbd> <kbd>↓</kbd> {tr("o anterior e o próximo")} · <kbd>Alt</kbd>+<kbd>↑</kbd> <kbd>↓</kbd> {tr("mover")} · <kbd>Alt</kbd>+<kbd>←</kbd> <kbd>→</kbd> {tr("mudar de coluna")}</li>
-        <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> {tr("desfazer")} · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> {tr("refazer")} · <kbd>Ctrl</kbd>+<kbd>D</kbd> {tr("duplicar")} · <kbd>Delete</kbd> {tr("apagar")}</li>
-        <li><kbd>Ctrl</kbd>+<kbd>B</kbd> <kbd>I</kbd> <kbd>K</kbd> {tr("negrito, itálico e link no texto")} · <kbd>Ctrl</kbd>+<kbd>S</kbd> {tr("salvar já")}</li>
-      </ul></details>
+    <div><button type="button" className="btn sm ghost" aria-haspopup="dialog" onClick={ajuda}>{tr("Atalhos do teclado (?)")}</button></div>
   </div>
 }

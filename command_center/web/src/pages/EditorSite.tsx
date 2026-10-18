@@ -12,6 +12,7 @@ import { Cartao } from '../components/Cartao'
 import { useToast } from '../components/Toast'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
+import { useDescricao } from '../titulo'
 import type { Pagina, Saida } from './editor/tipos'
 
 const ESTADO: Record<string, [string, 'neutral' | 'ok' | 'warn']> = {
@@ -24,6 +25,7 @@ export function PaginasDoEditor() {
   const toast = useToast()
   const l = useGet<{ paginas: Pick<Pagina, 'id' | 'path' | 'base' | 'title' | 'estado' | 'published_at' | 'updated_at'>[]; existentes: { caminho: string; titulo: string }[] }>('/site/editor/paginas')
   const [nova, setNova] = useState({ title: '', path: '' })
+  useDescricao(tr("Editor do site da URACE: as páginas do site público no editor (novas e as que já existiam), para abrir na prévia e mudar como no Canva."))
   async function criar(corpo: Record<string, string>) {
     try { const r = await api.post<Saida>('/site/editor/paginas', corpo); toast(tr("Página aberta no editor: nada muda no site até publicar."), 'ok'); nav(`/site/editor/${r.pagina.id}`) }
     catch (er) { toast((er as ApiError).message, 'crit') }
