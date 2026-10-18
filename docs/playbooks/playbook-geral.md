@@ -739,7 +739,7 @@ abre o card dele).
 | **Serviços e cartões do site** (#297, #312) | tudo o que o site mostra com preço sai do painel: o cartão de cada kart do Arrive and Drive (nome, linha de baixo, aviso, kart próprio, preço, depósito) e os cartões da Academy, do Pro Team e do For Beginners. Criar, mudar, esconder (não apaga) e reordenar; `{kart}` no preço é o menor preço de kart do painel, ao vivo — e o "Starting at" das outras páginas também. **Adicionar serviço**, em cima, começa por **"Em qual página do site?"** (Arrive and Drive, Academy, Pro Team, For Beginners ou Só na área do cliente) e, quando a página tem dois jeitos, **"Como ele entra na página?"**: no Arrive and Drive, **kart** (reserva online) ou **add-on do dia** (Lead and Follow); na Academy, **plano mensal** ou **cartão de preço**; no Pro Team e no For Beginners, cartão de preço. A tela mostra o que já está naquela página hoje (na Academy com plano ativo, os cartões aparecem como **escondidos pelo plano ativo**, porque a página mostra os planos); o kart que já tem serviço ativo aparece com o nome do serviço de hoje e não se escolhe de novo (dois serviços com o mesmo kart tiram o kart do site); com um add-on ativo, o segundo não se cria. A mesma trava vale no card de edição (o seletor **Kart do site** mostra o kart ocupado e não deixa escolher), no **Reativar** (travado, com o nome de quem já usa a chave) e no servidor: a API e o Claude recebem a recusa com o que fazer. Dois repetidos que já existam continuam editáveis, para dar para desativar um. Cada serviço da lista diz onde aparece hoje: **no site: Arrive and Drive · kart 4-stroke**, **Academy · plano mensal**, **só na área do cliente** ou, em vermelho, **fora do site** (com o motivo) | Site › Serviços e preços · Cartões das páginas |
 | **Produtos da loja** (#298) | os produtos da loja do site ficam no banco e se mudam no painel: nome, preço e promoção, fotos (WebP sem a localização do celular), texto, opções, estoque e categorias. **Frete fixo por unidade** cobrado no Stripe com "Ship to me" (vazio = combinar à parte; 0 = grátis) e **depósito de segurança** por unidade. Esconder não apaga | Site › Produtos da loja · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
 | **Estoque do site** (#309) | cada produto da loja é **dropshipping** (o padrão: o fornecedor envia e o site segue a caixa "Em estoque") ou **em estoque** (o box envia). Em estoque, o produto (ou cada tamanho) liga a **um item do Estoque**: um saldo só, o mesmo do Balcão, da contagem e de Compras, contado no Galpão e na Pista (o trailer fica fora). Sem saldo, o site mostra "Out of stock" sozinho; a venda paga no site **sai do estoque sozinha**; sem saldo na hora de pagar, o pagamento entra e o pedido vira **"Resolver: sem estoque"**. O cliente nunca vê o marcador nem a quantidade | Site › Estoque do site · [playbook-vendas.md](playbook-vendas.md), seção 5.3 |
-| **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem e se escondem); desfazer e refazer, Camadas para quem usa teclado, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
+| **Editor do site** (#300, #315) | a página do site abre numa prévia de verdade e é ali que se mexe, como no Canva: clicar seleciona, clicar de novo escreve no lugar, a barra em cima da peça muda o resto, arrastar move, a paleta põe título, texto, imagem, botão, lista, espaço, perguntas, e os karts, produtos e cartões do painel. Página nova ou uma que já existe (as faixas dela se movem, se escondem e têm o texto escrito no lugar, com preço, plano, kart e reserva travados porque vêm do painel); desfazer e refazer, Camadas para quem usa teclado, rascunho que salva sozinho, publicar conferindo as regras do site, versões para voltar | Site › Editor do site · seção 6, "Editor do site" |
 | **Blog do site** (#172) | os artigos do `/blog/` ficam no banco e se escrevem no painel: título, categoria, endereço, resumo, o que o Google mostra, capa (WebP sem a localização do celular) e texto com títulos, listas, links e fotos, com prévia no visual do site. O operador escreve o rascunho; **só o ADMIN** (ou o acesso livre) publica e tira do ar. Cada publicação guarda uma versão | Site › Blog · seção 6, "Blog do site" |
 | **Backup do banco** (#299) | todo dia: cópia conferida na VPS (03:15) e cópia cifrada no Google Drive (04:00), 30 dias + 1 por mês por 12 meses; aviso em Integrações quando falha ou falta | seção 10.1 |
 | **Aluno recorrente** (#314) | Academy (Kart School) com plano: marca na área do cliente sem pagar a sessão do pacote do mês; acima do pacote, a **sessão extra** sai numa invoice do QuickBooks (mensal ÷ sessões ou o valor combinado, sem depósito). O cliente vê só "Included in your plan" ou "Extra session"; o contador é da equipe. Marca **vários dias num pedido** (até 12: "Every Wed", "This weekend"…), e as extras do pedido saem numa invoice só. **Cliente novo** paga no Stripe (carrinho) com o Stripe ligado; o carrinho recusa a sessão do aluno recorrente | [playbook-vendas.md](playbook-vendas.md), seção 5, "Aluno recorrente" |
@@ -819,7 +819,8 @@ gerente (tudo na auditoria). O operador vê a prévia, as Camadas e a aba Págin
   página. Em toda peça: **↑ ↓** (sobe e desce; no começo ou no fim da coluna passa para a seção vizinha), **← →** (muda de
   coluna), **Duplicar** e **Apagar**.
 - Na **seção**: **fundo** (claro, escuro, vermelho, cinza), **espaço** P/M/G, **1, 2 ou 3 colunas** (no celular viram
-  uma só), ↑ ↓, Duplicar e Apagar. Na **faixa original**: **Esconder/Mostrar** e ↑ ↓.
+  uma só), ↑ ↓, Duplicar e Apagar. Na **faixa original**: **Esconder/Mostrar** e ↑ ↓; no **texto da faixa
+  original**, **Escrever** e **Voltar ao texto da página** (veja "O texto das faixas originais", abaixo).
 - **Karts e preços**, **Produtos da loja** e **Cartões de uma página** vêm do painel e não se escrevem na prévia: a barra
   leva para **Serviços e preços**, **Produtos da loja** ou **Cartões das páginas**, onde se mudam (NO FAKE DATA, uma fonte
   só). Sem nada para mostrar, a prévia mostra um marcador tracejado dizendo de onde vem; no site, não aparece nada.
@@ -856,8 +857,36 @@ são caminhos do próprio blog).
 
 **Página que já existe** (home, Arrive and Drive, Academy, Pro Team, For Beginners, Career, About, os serviços…): em
 **Adicionar página › Abrir uma página do site**, as faixas dela viram **Faixa original 1, 2, 3…**. Elas continuam vivas (preço do painel,
-agenda, cartões): movem, **escondem** (na prévia ficam apagadas, no site somem) e ganham seções novas entre elas. O texto
-de dentro delas ainda não se escreve na prévia (vem numa próxima etapa). Sem mexer, a página sai igual à de antes.
+agenda, cartões): movem, **escondem** (na prévia ficam apagadas, no site somem) e ganham seções novas entre elas. Sem
+mexer, a página sai igual à de antes, byte a byte.
+
+**O texto das faixas originais** (#315, etapa 4)
+- O texto de dentro da faixa também se escreve no lugar: **clique** num título (H1, H2, H3), num parágrafo, num item de
+  lista, numa pergunta ou resposta das perguntas frequentes, numa legenda ou no texto de um botão para selecionar (a barra
+  diz **Texto da faixa original N**); **clique de novo** (ou **Enter**, ou **Escrever**) para escrever. Só texto (o que se
+  cola vira uma linha), **até 400 letras**. **Desfazer** e **Refazer** valem como nos elementos; **Voltar ao texto da
+  página** (na barra) desfaz a troca daquele texto. Nas Camadas, a faixa diz quantos textos foram trocados.
+- O título, o nível e a ordem dos títulos não mudam: o H1 trocado continua sendo o H1 da página (as pendências contam
+  ele; uma seção nova com outro H1 trava o Publicar). A pergunta frequente trocada também vai para o que o Google lê da
+  página (os dados estruturados).
+- **O que vem do painel fica travado** (NO FAKE DATA, uma fonte só): os **planos e cartões** (Academy, Pro Team, For
+  Beginners e o título de cada grupo de planos), todo **preço** (o "Starting at" da home, o "From … per driver" e o
+  "Investment", qualquer texto com `$`), a **reserva** do Arrive and Drive (os karts e a agenda), os **artigos do blog**
+  da home, os **produtos da loja**, **formulários** e as palavras e nomes de **pessoas de verdade** (depoimentos e
+  campeões). Na prévia o mouse mostra que não se escreve ali; clicar seleciona a faixa e a barra diz **de onde vem e onde
+  se muda** (Serviços e preços, Cartões das páginas, Site › Blog, Produtos da loja). O servidor também recusa.
+- **Texto órfão**: se a página do código mudar o texto que foi trocado (o time mudou o site), a troca não entra mais (o
+  site mostra o texto novo do código) e vira pendência **"texto(s) órfão(s)"**. Em **Página**, **Descartar os textos
+  órfãos** tira a troca; escreva de novo, se quiser, no texto novo.
+- **Preço só do painel**: um texto escrito com preço (`$99`, `US$ 99`, `USD 99`, `99 dollars`), numa faixa original ou
+  num título, texto, botão, lista ou pergunta, salva no rascunho mas vira pendência: *"O preço vem de Serviços e preços /
+  Loja; escreva sem o valor"*. Os karts, produtos e cartões que mostram o preço do painel não contam.
+- **Cada faixa tem a sua âncora** (o `id` ou o título dela), não a posição: quando o banco tira uma faixa da página (a
+  home sem artigo no ar perde a faixa do blog), as outras continuam com as trocas e o "escondido" delas. A faixa que
+  saiu aparece nas Camadas como **Faixa que saiu da página do código**, no mesmo lugar, e volta sozinha quando o dado
+  volta; se ela tinha texto trocado, ele vira texto órfão até voltar ou ser descartado.
+- O que o Google lê da página (os dados estruturados) segue o texto trocado da pergunta frequente e do H1 (o nome do
+  serviço e o da trilha); um parágrafo igual em outra faixa, ou o texto de cima do H1, não mexe nisso.
 
 **Rascunho, salvar e publicar**
 - Tudo **salva sozinho no rascunho** ("salvando…" vira "salvo"); a prévia troca só a seção que mudou, sem recarregar.
@@ -873,6 +902,8 @@ de dentro delas ainda não se escreve na prévia (vem numa próxima etapa). Sem 
   - título sem pular nível (depois do nível 1 vem o 2; os cartões de karts e planos já têm o nível 3 dentro);
   - nenhum título vazio, botão com texto e link, pergunta com a resposta;
   - imagem com a foto e com a descrição;
+  - nenhum texto órfão nas faixas originais (a página do código mudou: descarte em Página);
+  - nenhum preço escrito à mão (o preço vem de Serviços e preços ou da Loja);
   - título da aba de 10 a 70 letras e descrição de 50 a 170.
 - Cada publicação vira uma **versão**: em Página › **Versões publicadas**, **Voltar a esta versão** traz uma antiga para o
   rascunho (e tira os erros do rascunho de antes). Confira e publique de novo. Com o salvar ainda em andamento, a tela

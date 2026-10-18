@@ -1,6 +1,8 @@
 /* Editor do site como o Canva (#315): a barra do que está selecionado. Botões e amostras, sem formulário: o texto
  * se escreve na própria prévia. No computador ela flutua em cima da peça; no celular fica presa embaixo.
- * Só o link do botão, o link do texto e a descrição da foto pedem uma linha para escrever (num balão na barra). */
+ * Só o link do botão, o link do texto e a descrição da foto pedem uma linha para escrever (num balão na barra).
+ * Etapa 4: o texto de uma faixa original (Escrever, Voltar ao texto da página) e, no bloco de dado da faixa, de onde
+ * ele vem e onde se muda. */
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../components/Icon'
@@ -23,6 +25,8 @@ export interface AcoesBarra {
   linkNoTexto(url: string): void
   trocarFoto(): void
   legenda(): void
+  /** O texto da faixa original volta a ser o da página do código. */
+  doCodigo(): void
   fechar(): void
 }
 
@@ -31,6 +35,10 @@ export interface Ancora { top: number; bottom: number; left: number; right: numb
 interface Props {
   w: W | null
   it: Item | null
+  /** Um texto de faixa original (etapa 4): `mudou` quando já está trocado. */
+  t?: { mudou: boolean } | null
+  /** O bloco de dado clicado na faixa original (preço, plano, reserva…). */
+  trava?: string | null
   nome: string
   editando: boolean
   /** A página já tem um h1 (fora este elemento): o H1 fica desligado. */
@@ -52,6 +60,16 @@ const CATS: [string, string][] = [['', tr("Todas")], ['chassis', 'Chassis'], ['c
   ['parts', 'Parts'], ['tires', 'Tires'], ['custom-kart-suits', 'Custom kart suits'], ['official-urace-products', 'Official URACE products'],
   ['kart-driver-training', 'Programs']]
 const PG_CARTOES: [string, string][] = [['academy', 'Academy'], ['pro-team', 'Pro Team'], ['for-beginners', 'For Beginners']]
+/** Etapa 4: o bloco de dado de uma faixa original → por que não se escreve e onde se muda. */
+const TRAVAS: Record<string, [string, string | null, string]> = {
+  cartoes: [tr("Os planos e os cartões vêm do painel (NO FAKE DATA): mudam em Cartões das páginas e em Serviços e preços."), '/site/cartoes', tr("Cartões das páginas ↗")],
+  precos: [tr("O preço vem do painel (NO FAKE DATA): muda em Serviços e preços."), '/site/servicos', tr("Serviços e preços ↗")],
+  reserva: [tr("Os karts, os preços e a agenda vêm do painel: mudam em Serviços e preços."), '/site/servicos', tr("Serviços e preços ↗")],
+  blog: [tr("Os artigos vêm do blog: mudam em Site › Blog."), '/site/blog', tr("Blog ↗")],
+  loja: [tr("Os produtos vêm da loja: mudam em Produtos da loja."), '/site/produtos', tr("Produtos da loja ↗")],
+  pessoas: [tr("Palavras e nomes de pessoas de verdade (depoimentos, campeões): não se reescrevem no editor."), null, ''],
+  formulario: [tr("Formulário do sistema: o texto dele não se escreve no editor."), null, ''],
+}
 
 function B({ on, rotulo, onClick, disabled, children, className }: { on?: boolean; rotulo: string; onClick: () => void; disabled?: boolean; children: ReactNode; className?: string }) {
   return <button type="button" className={`btn sm ${on ? 'on' : 'ghost'}${className ? ' ' + className : ''}`} aria-pressed={on === undefined ? undefined : on}
@@ -59,7 +77,7 @@ function B({ on, rotulo, onClick, disabled, children, className }: { on?: boolea
 }
 const G = ({ children, rotulo }: { children: ReactNode; rotulo: string }) => <div className="ed-grupo" role="group" aria-label={rotulo}>{children}</div>
 
-export function Barra({ w, it, nome, editando, h1Ocupado, erro, pode, a, estreito, ancora, limites, balao }: Props) {
+export function Barra({ w, it, t, trava, nome, editando, h1Ocupado, erro, pode, a, estreito, ancora, limites, balao }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const [pop, setPop] = useState<Balao | null>(null)
@@ -83,7 +101,7 @@ export function Barra({ w, it, nome, editando, h1Ocupado, erro, pode, a, estreit
     if (top + b.height > H - 6) top = Math.max(6, Math.min(ancora.top + 6, H - b.height - 6))
     const left = Math.max(6, Math.min(ancora.left, W - b.width - 6))
     setPos(p => p && p.top === top && p.left === left ? p : { top, left })
-  }, [ancora, limites, estreito, pop, w, it, editando, erro])
+  }, [ancora, limites, estreito, pop, w, it, t, trava, editando, erro])
 
   function abrir(q: Balao) {
     if (pop === q) { setPop(null); return }
@@ -175,8 +193,19 @@ export function Barra({ w, it, nome, editando, h1Ocupado, erro, pode, a, estreit
       <G rotulo={tr("Colunas")}>{[1, 2, 3].map(n => <B key={n} on={it.colunas === n} rotulo={tr("{0} coluna(s)", n)} onClick={() => a.mudarS({ colunas: n })}>{tr("{0} col.", n)}</B>)}</G>
     </>
   } else if (it?.tipo === 'original') {
-    miolo = <G rotulo={tr("Faixa")}><B rotulo={it.oculto ? tr("Mostrar a faixa") : tr("Esconder a faixa")} onClick={a.oculto}>
-      <Icon name="eye" size={16} /> {it.oculto ? tr("Mostrar") : tr("Esconder")}</B></G>
+    const tv = trava ? TRAVAS[trava] : null
+    miolo = <>
+      <G rotulo={tr("Faixa")}><B rotulo={it.oculto ? tr("Mostrar a faixa") : tr("Esconder a faixa")} onClick={a.oculto}>
+        <Icon name="eye" size={16} /> {it.oculto ? tr("Mostrar") : tr("Esconder")}</B></G>
+      {tv && <G rotulo={tr("Bloco travado")}><p className="ed-trava-msg" role="status"><Icon name="lock" size={14} /> {tv[0]}</p>
+        {tv[1] && <Link className="btn sm ghost" to={tv[1]}>{tv[2]}</Link>}</G>}</>
+  } else if (t) {
+    miolo = <>
+      <G rotulo={tr("Texto")}>
+        {editando ? <B rotulo={tr("Pronto: sair do texto")} onClick={a.parar}><Icon name="check" size={16} /> {tr("Pronto")}</B>
+          : <B rotulo={tr("Escrever no lugar")} onClick={a.editar}><Icon name="pencil" size={16} /> {tr("Escrever")}</B>}
+        {t.mudou && <B rotulo={tr("Voltar ao texto da página")} onClick={a.doCodigo}>{tr("Voltar ao texto da página")}</B>}</G>
+      <span className="small muted ed-barra-dica">{tr("Só texto, até 400 letras")}</span></>
   }
 
   return <div ref={ref} className={`ed-barra${estreito ? ' ed-barra-baixo' : ''}`} role="toolbar" aria-label={tr("Opções: {0}", nome)}

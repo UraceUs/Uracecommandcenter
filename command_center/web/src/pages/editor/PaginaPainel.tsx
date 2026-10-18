@@ -12,6 +12,9 @@ interface Props {
   gerente: boolean
   problemas: string[]
   erros: string[]
+  /** Quantos textos órfãos (etapa 4: a página do código mudou e a troca não acha mais o texto). */
+  orfaos: number
+  descartar(): void
   mudarSeo(x: Partial<Seo>): void
   despublicar(): void
   versoes: Versao[] | null
@@ -20,7 +23,7 @@ interface Props {
   recarregar(): void
 }
 
-export function PaginaPainel({ p, seo, gerente, problemas, erros, mudarSeo, despublicar, versoes, abrirVersoes, voltarVersao, recarregar }: Props) {
+export function PaginaPainel({ p, seo, gerente, problemas, erros, orfaos, descartar, mudarSeo, despublicar, versoes, abrirVersoes, voltarVersao, recarregar }: Props) {
   return <div className="stack" style={{ gap: 12 }}>
     <label className="fld"><span>{tr("Título da aba")} <i>{tr("10 a 70 letras; o Google mostra")}</i></span>
       <input value={seo.title} disabled={!gerente} onChange={e => mudarSeo({ title: e.target.value })} /></label>
@@ -29,7 +32,8 @@ export function PaginaPainel({ p, seo, gerente, problemas, erros, mudarSeo, desp
     <label className="fld"><span>{tr("Endereço")} {(p.base || p.published) && <i>{tr("não muda depois de publicada")}</i>}</span>
       <input value={seo.path} disabled={!gerente || !!p.base || !!p.published} onChange={e => mudarSeo({ path: e.target.value })} /></label>
     {(problemas.length > 0 || erros.length > 0) && <div className="ed-problemas" role="status"><b>{tr("Antes de publicar:")}</b><ul>
-      {erros.map(x => <li key={'e' + x}>{x}</li>)}{problemas.map(x => <li key={x}>{x}</li>)}</ul></div>}
+      {erros.map(x => <li key={'e' + x}>{x}</li>)}{problemas.map(x => <li key={x}>{x}</li>)}</ul>
+      {gerente && orfaos > 0 && <button type="button" className="btn sm" onClick={descartar}>{tr("Descartar os textos órfãos ({0})", orfaos)}</button>}</div>}
     {gerente && <div className="row wrap" style={{ gap: 8 }}>
       {p.published && <button type="button" className="btn ghost" onClick={despublicar}>{p.base ? tr("Voltar ao original") : tr("Tirar do ar")}</button>}
       {p.published && <a className="btn ghost" href={p.path} target="_blank" rel="noreferrer">{tr("Ver no site ↗")}</a>}
