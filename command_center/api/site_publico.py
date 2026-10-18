@@ -685,11 +685,11 @@ class WaiverNativaIn(BaseModel):
 @r.get("/waiver-nativa")
 def waiver_nativa(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0, le=10**9),
                   con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
-    """Ligada ou não, os dois modelos importados (nome, hash, quando, versão), as assinadas aqui (paginadas) e
-    a conferência do aviso §744.301(3) no parental atual (#116)."""
-    from command_center.providers import waiver_nativa as wn
+    """Ligada ou não, os dois modelos importados (nome, hash, quando, versão), as assinadas aqui (paginadas),
+    a conferência do aviso §744.301(3) no parental atual (#116) e o estado do selo PAdES (#110, sem falar com a TSA)."""
+    from command_center.providers import selo_waiver, waiver_nativa as wn
     return {"ligada": wn.ligada(con), "modelos": wn.modelos(con), "assinadas": wn.listar(con, limit, offset),
-            "aviso_744": wn.aviso(con)}
+            "aviso_744": wn.aviso(con), "selo": selo_waiver.estado()}
 
 
 @r.get("/waiver-nativa/{wid}/eventos")

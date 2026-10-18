@@ -11,6 +11,8 @@ import os
 import shutil
 import tempfile
 
+import pytest
+
 # #125: todo mkdtemp/NamedTemporaryFile dos testes cai numa pasta desta execução, que sai inteira
 # no fim. Antes cada suíte deixava ~500 MB no /tmp — e o deploy do VPS roda a suíte a cada deploy.
 _TMP = tempfile.mkdtemp(prefix="cc-testes-")
@@ -25,6 +27,26 @@ for k in list(os.environ):
     # ANTHROPIC_/CLAUDE_CODE_OAUTH_TOKEN (#152): com a chave no ambiente, o AI Command iria ao Claude de verdade
     # CC_GOOGLE_ (#220): o cliente OAuth Web e o endereço do Google; o teste usa o Google falso
     if k.startswith(("ASANA_", "DOCUSIGN_", "QBO_", "GOOGLE_CLIENT", "OPENCLAW_GATEWAY", "ANTHROPIC_", "CC_GOOGLE_")) \
-            or k in ("APLICAR", "CLAUDE_CODE_OAUTH_TOKEN", "CC_IA_MOTOR"):
+            or k in ("APLICAR", "CLAUDE_CODE_OAUTH_TOKEN", "CC_IA_MOTOR", "CC_WAIVER_TSA", "CC_WAIVER_SEAL_DIR"):
         del os.environ[k]
 os.environ["CC_AUTOSYNC"] = "0"          # teste não roda o laço de sincronia
+
+
+# #110: o PDF da waiver nativa sai selado (PAdES + carimbo RFC 3161). Em teste, todo teste tem um selo de TESTE
+# (gerado uma vez por execução, em pasta temporária, nunca no repositório) e a TSA falsa do pyHanko no lugar da
+# real: o CI não tem rede. O teste "sem selo" aponta CC_WAIVER_SEAL_DIR para uma pasta vazia.
+@pytest.fixture(scope="session")
+def _pasta_do_selo(tmp_path_factory):
+    from command_center.tests import selo_teste
+    pasta = tmp_path_factory.mktemp("selo-de-teste") / "selo"
+    selo_teste.criar_selo(pasta)
+    return str(pasta)
+
+
+@pytest.fixture(autouse=True)
+def _selo_de_teste(_pasta_do_selo, monkeypatch):
+    from command_center.providers import selo_waiver
+    from command_center.tests import selo_teste
+    selo_teste.guardar_o_real()
+    monkeypatch.setenv("CC_WAIVER_SEAL_DIR", _pasta_do_selo)
+    monkeypatch.setattr(selo_waiver, "_carimbadores", lambda: [("urn:test:tsa-falsa", selo_teste.tsa())])

@@ -80,5 +80,13 @@ def conferir(con, conta_id, finalidade, codigo):
         con.execute("UPDATE portal_codes SET attempts=attempts+1 WHERE id=?", (c["id"],))
         con.commit()                                          # a tentativa errada conta mesmo se o pedido falhar
         raise ErroCodigo("That code is not right. Check the email and try again.")
-    con.execute("UPDATE portal_codes SET used_at=? WHERE id=?", (agora, c["id"]))
+    cur = con.execute("UPDATE portal_codes SET used_at=? WHERE id=? AND used_at IS NULL", (agora, c["id"]))
+    if cur.rowcount != 1:                                     # outro pedido gastou o mesmo código no meio (revisão do #335)
+        raise ErroCodigo("This code has expired. Ask for a new one.")
     return {**dict(c), "used_at": agora}
+
+
+def devolver(con, c):
+    """#110: o código conferido volta a valer quando a assinatura não chegou a acontecer por falha nossa (o selo ou a
+    TSA). Só desfaz o `used_at` que o próprio `conferir` gravou; as tentativas erradas continuam contadas."""
+    con.execute("UPDATE portal_codes SET used_at=NULL WHERE id=? AND used_at=?", (c["id"], c["used_at"]))
