@@ -19,10 +19,11 @@ import { tr } from '../i18n'
 import { CAMERA, novoDetector, temCamera, vibrar } from '../components/Leitor'
 import { Picker } from '../components/Unir'
 import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
+import { fmtDate, fmtDateTime } from '../components/fmt'
 import type { Client } from '../api/types'
 
 type Modo = 'cobrar' | 'guardar'
-interface Cliente { id: number; nome: string; responsavel: string }
+interface Cliente { id: number; nome: string; responsavel: string; vip?: boolean }
 interface Item { id: number; name: string; price: number | null; unit: string; qbo_item_id: string | null; qbo_item_name: string | null
   codigos: string[]; nosso: number; do_cliente?: number }
 interface Linha { id: number; qty: number; unit_price: number; name: string; total: number }
@@ -30,9 +31,17 @@ interface InvPecas { id: number; client_id: number; cliente: string | null; serv
   doc_number: string | null; total: number; qbo_error: string | null; sent_to: string | null; linhas: Linha[]
   paga?: boolean; cartao?: boolean; paid_at?: string | null }
 interface Leitura { id: number; name: string; mode: string; qty: number; at: string; undone_at: string | null; por: string | null; travada?: number }
+/* #117: as waivers que valem para o card aberto (a nativa e a do DocuSign; nunca a de outro card) e a última
+ * conferência do documento com foto de quem assinou. */
+interface IdCheck { event_id: number; at: string; ok: boolean; document_type: string | null; name_matches: boolean | null
+  minor_age_matches: boolean | null; by: string | null }
+interface WaiverCard { id: number; source: 'urace' | 'docusign'; kind: string | null; minor: boolean; signer_name: string | null
+  driver: string | null; driver_birth_date: string | null; driver_age: number | null; driver_birth_date_from: 'waiver' | 'card' | null
+  signed_at: string | null
+  valid_until: string | null; id_check: IdCheck | null }
 interface Estado { cliente: Cliente; data: string; invoices: InvPecas[]; leituras: Leitura[]; gerente: boolean
-  guardado: { item_id: number; name: string; qty: number; local: string }[] }
-type Lido = { tipo: 'cliente'; cliente: Cliente } | { tipo: 'peca'; codigo: string; item: Item } | { tipo: 'desconhecido'; codigo: string }
+  guardado: { item_id: number; name: string; qty: number; local: string }[]; waivers?: WaiverCard[] }
+type Lido = { tipo: 'cliente'; cliente: Cliente; waivers?: WaiverCard[] } | { tipo: 'peca'; codigo: string; item: Item } | { tipo: 'desconhecido'; codigo: string }
 
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 const LOCAIS: [string, string][] = [['sede', tr("Galpão")], ['trailer', tr("Trailer")], ['pista', tr("Pista")]]
@@ -524,6 +533,88 @@ function DeQuemE({ item, onEscolher, onFechar }: { item: Item; onEscolher: (id: 
   </div></Scrim>
 }
 
+/* #117 (dono, 06/10: "sim, no check-in"): a equipe confere o documento com foto de quem assinou a waiver.
+ * Só o tipo e o que conferiu: nem foto nem número do documento. Não conferiu? Fica registrado e aparece em
+ * "Precisa de atenção"; nada é bloqueado sozinho, a equipe decide. */
+const DOCUMENTOS: [string, string][] = [['drivers_license', tr("Carteira de motorista")], ['passport', tr("Passaporte")],
+  ['state_id', tr("State ID")], ['other_government_id', tr("Outro documento oficial com foto")]]
+const nomeDoc = (k: string | null) => DOCUMENTOS.find(([c]) => c === k)?.[1] || k || '—'
+
+function SimNao({ rotulo, valor, onMuda }: { rotulo: string; valor: boolean | null; onMuda: (v: boolean) => void }) {
+  return <div className="wv-pergunta" role="radiogroup" aria-label={rotulo}>
+    <span>{rotulo}</span>
+    <div className="wv-sim-nao">
+      <button type="button" role="radio" aria-checked={valor === true} className={`btn${valor === true ? ' on' : ''}`} onClick={() => onMuda(true)}>{tr("Sim, confere")}</button>
+      <button type="button" role="radio" aria-checked={valor === false} className={`btn${valor === false ? ' on' : ''}`} onClick={() => onMuda(false)}>{tr("Não confere")}</button>
+    </div>
+  </div>
+}
+
+function ConferirDocumento({ w, clientId, onFeito, onFechar }: { w: WaiverCard; clientId: number; onFeito: (ws: WaiverCard[]) => void; onFechar: () => void }) {
+  const toast = useToast()
+  const [doc, setDoc] = useState<string | null>(null)
+  const [nome, setNome] = useState<boolean | null>(null)
+  const [idade, setIdade] = useState<boolean | null>(null)
+  const [indo, setIndo] = useState(false)
+  const pronto = !!doc && nome !== null && (!w.minor || idade !== null)
+  async function gravar() {
+    setIndo(true)
+    try {
+      const r = await api.post<{ ok: boolean; waivers: WaiverCard[] }>(`/balcao/waivers/${w.id}/id-check`,
+        { client_id: clientId, document_type: doc, name_matches: nome, minor_age_matches: w.minor ? idade : null })
+      toast(r.ok ? tr("Documento conferido.") : tr("Registrado: o documento não conferiu. Aparece em Precisa de atenção; a equipe decide."), r.ok ? 'ok' : 'warn')
+      onFeito(r.waivers); onFechar()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Scrim onMouseDown={onFechar}><div className="modal stack wv-doc" style={{ maxWidth: 520, gap: 12 }} onMouseDown={e => e.stopPropagation()}
+    role="dialog" aria-modal="true" aria-labelledby="wv-doc-h">
+    <h3 id="wv-doc-h" style={{ margin: 0 }}>{tr("Conferir o documento de {0}", w.signer_name || tr("quem assinou"))}</h3>
+    <p className="small muted" style={{ margin: 0 }}>{tr("Peça o documento com foto de quem assinou a waiver. Não fotografe e não anote o número: o sistema guarda só o tipo e o que conferiu.")}</p>
+    <div className="wv-pergunta" role="radiogroup" aria-label={tr("Tipo de documento")}>
+      <span>{tr("Tipo de documento")}</span>
+      <div className="wv-opcoes">{DOCUMENTOS.map(([k, r]) => <button key={k} type="button" role="radio" aria-checked={doc === k}
+        className={`btn${doc === k ? ' on' : ''}`} onClick={() => setDoc(k)}>{r}</button>)}</div>
+    </div>
+    <SimNao rotulo={tr("O nome no documento confere com {0}?", w.signer_name || tr("quem assinou"))} valor={nome} onMuda={setNome} />
+    {w.minor && <SimNao rotulo={w.driver_birth_date
+      ? (w.driver_birth_date_from === 'waiver'
+        ? tr("A idade de {0} confere com o nascimento declarado na waiver ({1}, {2} anos)?", w.driver || tr("o piloto"), fmtDate(w.driver_birth_date), w.driver_age ?? '?')
+        : tr("A idade de {0} confere com o nascimento do card ({1}, {2} anos)?", w.driver || tr("o piloto"), fmtDate(w.driver_birth_date), w.driver_age ?? '?'))
+      : tr("A idade de {0} confere com a de menor de 18 declarada na waiver?", w.driver || tr("o piloto"))} valor={idade} onMuda={setIdade} />}
+    <div className="row wrap" style={{ justifyContent: 'flex-end', gap: 8 }}>
+      <button type="button" className="btn" onClick={onFechar}>{tr("Cancelar")}</button>
+      <button type="button" className="btn primary" disabled={indo || !pronto} onClick={gravar}>{indo ? <span className="spin" /> : tr("Gravar conferência")}</button>
+    </div>
+  </div></Scrim>
+}
+
+const MODELO: Record<string, string> = { parental: tr("parental (menor)"), adult: tr("adult") }
+
+function WaiverDoCard({ waivers, clientId, vip, onMudou }: { waivers: WaiverCard[]; clientId: number; vip?: boolean; onMudou: (ws: WaiverCard[]) => void }) {
+  const [aberta, setAberta] = useState<WaiverCard | null>(null)
+  return <Section title={tr("Waiver · Conferir documento")} count={waivers.length}>
+    {!waivers.length ? (vip ? <p className="small muted" style={{ margin: 0 }}>{tr("Cliente VIP: dispensa a waiver. Não há documento a conferir aqui.")}</p>
+      : <Banner tone="warn">{tr("Nenhuma waiver valendo neste card. Peça a assinatura antes da pista (convite por e-mail no card).")}</Banner>)
+      : <div className="stack" style={{ gap: 10 }}>{waivers.map(w => {
+        const c = w.id_check
+        return <div key={w.id} className="card card-b stack wv-item" style={{ gap: 6 }}>
+          <h3 style={{ margin: 0 }}>{w.driver || tr("Piloto")}{w.kind ? ` · ${MODELO[w.kind] || w.kind}` : ''}</h3>
+          <div className="small">{tr("Assinou:")} <b>{w.signer_name || '—'}</b> · {w.source === 'urace' ? tr("assinada no sistema") : tr("DocuSign")}
+            {w.valid_until ? <> · {tr("vale até {0}", fmtDate(w.valid_until))}</> : null}</div>
+          {w.minor && w.driver_birth_date && <div className="small">{w.driver_birth_date_from === 'waiver'
+            ? tr("Nascimento declarado na waiver: {0} ({1} anos)", fmtDate(w.driver_birth_date), w.driver_age ?? '?')
+            : tr("Nascimento no card: {0} ({1} anos)", fmtDate(w.driver_birth_date), w.driver_age ?? '?')}</div>}
+          <div>{!c ? <Chip tone="warn">{tr("documento ainda não conferido")}</Chip>
+            : c.ok ? <Chip tone="ok" glyph="✓">{tr("documento conferido · {0} · {1} · {2}", nomeDoc(c.document_type), fmtDateTime(c.at), c.by || '—')}</Chip>
+            : <Chip tone="crit" glyph="✕">{tr("não conferiu · {0} · {1} · {2}", nomeDoc(c.document_type), fmtDateTime(c.at), c.by || '—')}</Chip>}</div>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <button type="button" className={`btn${c ? '' : ' primary'}`} onClick={() => setAberta(w)}>{c ? tr("Conferir de novo") : tr("Conferir documento")}</button></div>
+        </div>
+      })}</div>}
+    {aberta && <ConferirDocumento w={aberta} clientId={clientId} onFeito={onMudou} onFechar={() => setAberta(null)} />}
+  </Section>
+}
+
 export function Balcao() {
   const { can } = useAuth()
   const { clientId } = useParams()
@@ -646,6 +737,7 @@ export function Balcao() {
         <Link className="btn sm ghost" to={`/clients/${est.cliente.id}`}>{tr("Card")}</Link>
         <button className="btn sm ghost" onClick={() => nav('/balcao')}>{tr("Trocar cliente")}</button>
       </div>
+      <WaiverDoCard waivers={est.waivers || []} clientId={est.cliente.id} vip={est.cliente.vip} onMudou={ws => setEst(e => e ? { ...e, waivers: ws } : e)} />
       {est.guardado.length > 0 && <Banner tone="warn">{tr("Guardado deste cliente com a gente:")} {est.guardado.map(g => `${g.name} (${g.qty} · ${g.local})`).join(', ')}{tr(". Não cobre o que é dele.")}</Banner>}
       <Section title={tr("Invoice de peças")}>
         {!est.invoices.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nenhuma peça cobrada hoje.")}</p>

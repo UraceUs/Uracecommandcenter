@@ -24,8 +24,8 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 17/10/2026 (#313, o cartão do padrão D em todo o painel; antes, #312, a inserção sempre no topo e o
-> **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
+> Atualizado em 18/10/2026 (#117, conferir o documento da waiver no balcão e o nascimento travado; antes, #313, o
+> cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
 > painel. Se a tela mudar e este texto não, vale a tela; avise quem cuida do painel para corrigir aqui.
 
 ---
@@ -172,7 +172,7 @@ pedem acesso de operador.
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111) e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
-| Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar | operador+ |
+| Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar; no cliente aberto, **Waiver · Conferir documento** (#117) | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
 | Logística | **Checklists** | `/ops/checklists` | os checklists do dia, do kart e os trimestrais | operador+ |
 | Pedidos e compras | **Pedidos** | `/ops/pedidos` | a lista do que a equipe **precisa** que se compre | todos |
@@ -485,6 +485,32 @@ deixa a pessoa desfazer uma assinatura feita por erro quando o sistema não deu 
   mais velhas, 10 por página, cada uma com **Download PDF** e a última cópia. Só a própria conta vê e baixa.
   Quem assinou pelo convite (sem conta) tem a cópia no e-mail, que fica depois que o link vence em 72 h.
 
+#### Conferir o documento no balcão e o nascimento travado (#117)
+
+Dono, 06/10: *"sim, no check-in"*. A equipe confere o documento com foto de quem assinou.
+
+- **Onde:** **Balcão** › abrir o cliente (QR, pilotos de hoje ou nome) › quadro **Waiver · Conferir documento**
+  (operador+, mecânico e coach também). Aparecem as waivers que valem **para aquele card**: a assinada no sistema e a
+  do DocuSign (só waiver de verdade, adult ou parental: um envelope como o Membership Agreement não conta); nunca a de
+  outro card. A parental de quem já fez 18 não aparece (não vale mais): pela data gravada na própria waiver ou, na do
+  DocuSign, pela do card. A assinada por um piloto da área do cliente **segue o piloto**: religado a outro card, ela vai
+  junto; vínculo feito à mão pela equipe (aba Waivers do card) vale mais. Card VIP sem waiver: o quadro diz que dispensa.
+- **O que se grava:** o tipo de documento (carteira de motorista, passaporte, State ID ou outro documento oficial com
+  foto), se o nome confere e, pelo menor, se a idade confere com o nascimento declarado. **Nem foto nem número do
+  documento.** Vira o evento **documento conferido no balcão** (ou **documento não conferiu no balcão**) na trilha da
+  waiver (Site › Waiver › Trilha, depois de assinar; não entra no PDF selado nem muda a waiver) e a Auditoria
+  `waiver.id_check`.
+- **Não conferiu:** registra e alerta. Aparece em **Precisa de atenção** ("o documento com foto não conferiu com a
+  waiver", com o link do balcão do cliente) e **nada é bloqueado sozinho**: a equipe decide (conferir de novo, anular
+  e pedir outra, ou seguir). O aviso fica no card a que a waiver vale **agora** (religada, card unido ou piloto
+  religado: vai junto). Sai da lista quando a conferência seguinte bate, e sai sozinho (fica em "mostrar ocultos",
+  com o motivo) quando a waiver é anulada, ocultada, fica sem card ou deixa de valer.
+- **Nascimento travado:** com a waiver assinada no sistema **valendo**, o cliente não muda a data de nascimento do
+  piloto (ela decidiu entre parental e adult e está no documento assinado). A área do cliente mostra o campo travado
+  com a explicação; se tentar, o servidor recusa (409) e a tentativa fica na Auditoria
+  (`portal.driver.birth_date_locked`). O resto do piloto continua editável. Se a data está errada, um **gerente anula**
+  a waiver (abaixo) e o cliente corrige a data e assina outra. Vencida ou anulada, a data volta a mudar.
+
 #### Waiver assinada no próprio sistema: nunca se apaga, se anula (#109)
 
 Dono, 06/10: *"nunca apagar"*. A waiver assinada na área do cliente ou pelo convite é o registro
@@ -551,8 +577,8 @@ com **hora, IP e aparelho**, e nenhum se muda nem se apaga (o próprio banco rec
   ("×N", com a hora do primeiro e a do último). Irmãos abertos em duas abas: cada certificado leva os passos do
   seu piloto.
 - **Depois de assinar** (cópia por e-mail, com o message-id, ou a falha (#114); PDF baixado pelo cliente ou
-  pela equipe; anulada; e, nas próximas tarefas, documento conferido no balcão e pacote de prova) **não** entra
-  no PDF, que não muda: fica só na trilha.
+  pela equipe; anulada; documento conferido, ou que não conferiu, no balcão (#117); e, na próxima tarefa, pacote de
+  prova) **não** entra no PDF, que não muda: fica só na trilha.
 - **Onde ver:** Site › Waiver › Assinadas aqui › **Trilha** (gerente+): os passos de antes, a assinatura e
   o que veio depois, e se a trilha inteira está **íntegra** (cada passo leva o hash do anterior; uma linha
   mexida aparece como "trilha com linha mexida no evento #n").
