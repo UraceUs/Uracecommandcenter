@@ -47,8 +47,10 @@ def _dados():
 
 
 def _original(caminho, host):
+    """A página do código, com o que o painel decide nela (o preço do kart, os produtos): a mesma no salvar, no
+    publicar e na prévia (as chaves dos textos das faixas e os blocos travados saem iguais nas três)."""
     from command_center.api import vitrine
-    html = vitrine.html_da_pagina(caminho, host)
+    html = vitrine._com_o_painel(lambda: vitrine.html_da_pagina(caminho, host))
     return ed.extrair(html) if html else {"secoes": [], "titulo": "", "descricao": "", "ld": [], "scripts": []}
 
 
@@ -65,7 +67,8 @@ def desenhar(pagina, host, conteudo=None, titulo=None, descricao=None, indexar=T
     if orig is False:
         orig = _orig(pagina, host)
     corpo = ed.corpo(conteudo, _dados(), orig["secoes"] if orig else (), marcar=marcar)
-    schemas = list(orig["ld"]) if orig else [_negocio(host)]
+    # #315, etapa 4: o JSON-LD da página do código diz o mesmo que ela, com os textos trocados (as perguntas frequentes)
+    schemas = ed.ld_com_textos(orig["ld"], ed.trocas(conteudo, orig["secoes"])) if orig else [_negocio(host)]
     schemas += ed.ld_extra(conteudo)
     return layout(host=host, caminho=pagina["path"], titulo=titulo or pagina["title"], descricao=descricao or pagina["description"],
                   corpo=corpo, schemas=schemas, scripts=tuple(orig["scripts"]) if orig else (), indexar=indexar,
@@ -81,14 +84,17 @@ def _saida(p, host, orig=False, dados=None):
     """O que o painel recebe: a página, os problemas que impedem publicar e o resumo das seções originais."""
     if orig is False:
         orig = _orig(p, host)
+    secoes = orig["secoes"] if orig else []
+    textos = {it["indice"]: it.get("textos") for it in p["draft"]["itens"] if it["tipo"] == "original"}
     resumo = []
-    for s in (orig["secoes"] if orig else []):
-        t = re.search(r"<h[1-3][^>]*>(.*?)</h[1-3]>", s, re.S)
+    for i, s in enumerate(secoes):      # o nome da faixa é o primeiro título dela (já com o texto trocado)
+        t = re.search(r"<h[1-3][^>]*>(.*?)</h[1-3]>", ed.aplicar_textos(s, textos.get(i))[0], re.S)
         resumo.append(unescape(re.sub(r"<[^>]+>", "", t.group(1))).strip()[:80] if t else "")
     dados = _dados() if dados is None else dados
-    html = ed.corpo(p["draft"], dados, orig["secoes"] if orig else ())
-    return {"pagina": p, "problemas": ed.problemas(p["draft"], html, p["title"], p["description"]), "originais": resumo,
-            "previa": f"/ops/api/site/editor/paginas/{p['id']}/previa"}
+    html = ed.corpo(p["draft"], dados, secoes)
+    orfas = ed.orfaos(p["draft"], secoes)
+    return {"pagina": p, "problemas": ed.problemas(p["draft"], html, p["title"], p["description"], orfas),
+            "originais": resumo, "orfaos": orfas, "previa": f"/ops/api/site/editor/paginas/{p['id']}/previa"}
 
 
 def _aud(con, request, u, evento, pid, detalhe=None):
@@ -169,7 +175,8 @@ def salvar(pid: int, dados: SalvarIn, request: Request, con: sqlite3.Connection 
         p = es.uma(con, pid)
         orig = _orig(p, host)
         p = es.salvar(con, u["id"], pid, dados.model_dump(exclude_unset=True, exclude={"rev", "desenhar"}),
-                      len(orig["secoes"]) if orig else 0, existe=lambda c: vitrine.existe(c, host), rev=dados.rev, erros=erros)
+                      len(orig["secoes"]) if orig else 0, existe=lambda c: vitrine.existe(c, host), rev=dados.rev, erros=erros,
+                      originais=orig["secoes"] if orig else None)
     except es.Conflito as e:
         raise _conflito(e)
     except ed.ErroEditor as e:

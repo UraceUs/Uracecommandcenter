@@ -96,17 +96,19 @@ def criar_de_existente(con, por, caminho, extraido):
                    updated_by=por, updated_at=agora())
 
 
-def salvar(con, por, pid, d, n_originais=0, existe=None, rev=None, erros=None):
+def salvar(con, por, pid, d, n_originais=0, existe=None, rev=None, erros=None, originais=None):
     """O rascunho: o modelo validado, o título e a descrição. O endereço de página nova muda só antes de publicar.
 
     #315: o rascunho é tolerante (`ed.limpar(..., rascunho=True)`): o que não passa fica como estava e o motivo vai para
-    `erros` ({id do elemento: motivo}). `rev` é a revisão que o painel tem (None: não confere)."""
+    `erros` ({id do elemento: motivo}). `rev` é a revisão que o painel tem (None: não confere). `originais` (etapa 4): o
+    HTML das faixas da página do código, para conferir as trocas de texto (texto travado é recusado)."""
     p = uma(con, pid)
     _conferir_rev(p, rev)
     c = {}
     if "conteudo" in d:
         c["draft"] = json.dumps(ed.limpar(d["conteudo"], com_originais=bool(p["base"]), n_originais=n_originais,
-                                          rascunho=True, anterior=p["draft"], erros=erros), ensure_ascii=False)
+                                          rascunho=True, anterior=p["draft"], erros=erros, originais=originais),
+                                ensure_ascii=False)
     def pagina(nome, fazer):     # #315: no painel (com `erros`), o dado da página que não passa fica como estava
         try:
             v = fazer()

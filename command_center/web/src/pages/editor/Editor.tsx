@@ -7,7 +7,10 @@
  * barra em cima da peça muda o resto, arrastar move, a paleta põe peças novas e as Camadas fazem o mesmo com botões.
  * O rascunho salva sozinho (com a revisão: duas pessoas não apagam o que a outra fez) e a prévia troca só a seção que
  * mudou, sem recarregar. Publicar só com tudo salvo, sem erro e sem pendência: o que vai para o ar é o que a tela
- * mostra. */
+ * mostra.
+ *
+ * Etapa 4: o texto das faixas originais (a página do código) também se escreve no lugar; o bloco de dado delas (preço,
+ * plano, kart, reserva, blog, loja) fica travado e a barra diz onde ele se muda. */
 import { useEffect, useRef, useState, type KeyboardEvent as KE, type PointerEvent as PE } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
@@ -22,9 +25,9 @@ import { Barra, type AcoesBarra, type Ancora } from './Barra'
 import { Camadas } from './Camadas'
 import { Historico } from './historico'
 import { Lona, type LonaApi } from './Lona'
-import { acharS, acharW, alternarOculto, colunaW, DE_ESCREVER, duplicarS, duplicarW, existe, item, moverS, moverW, mudarS, mudarW,
-  NOMES, nomeDaPeca, nomeDe, novaSecao, novoWidget, ondeEsta, ordem, passoS, passoW, porSecao, porW, resumo, secaoDe, tirarS, tirarW,
-  widget, type Peca } from './modelo'
+import { acharS, acharW, alternarOculto, colunaW, DE_ESCREVER, descartarOrfaos, duplicarS, duplicarW, existe, item, moverS, moverW,
+  mudarS, mudarTexto, mudarW, NOMES, nomeDaPeca, nomeDe, novaSecao, novoWidget, ondeEsta, ordem, passoS, passoW, porSecao, porW, resumo,
+  secaoDe, textoDe, tirarS, tirarW, widget, type Peca } from './modelo'
 import { PaginaPainel, type Versao } from './PaginaPainel'
 import { Paleta } from './Paleta'
 import type { Ganchos, Ponte } from './ponte'
@@ -39,7 +42,12 @@ const DICAS: Record<string, string> = { titulo: tr("Escreva o título"), texto: 
   lista: tr("Escreva um item"), item: tr("Escreva um item"), pergunta: tr("A pergunta"), resposta: tr("A resposta"),
   imagem: tr("Solte uma foto aqui ou use Escolher foto"), faq: tr("Perguntas frequentes: use + Pergunta"),
   karts: tr("Sem karts para mostrar (vêm de Serviços e preços)"), produtos: tr("Nenhum produto em estoque nessa categoria (Produtos da loja)"),
-  cartoes: tr("Sem cartões nessa página (Cartões das páginas)"), espaco: '' }
+  cartoes: tr("Sem cartões nessa página (Cartões das páginas)"), espaco: '',
+  // etapa 4: o bloco de dado de uma faixa original (a dica quando o mouse para em cima)
+  'trava:cartoes': tr("Planos e cartões do painel: mudam em Serviços e preços e em Cartões das páginas"),
+  'trava:precos': tr("Preço do painel: muda em Serviços e preços"), 'trava:reserva': tr("Karts e agenda do painel: mudam em Serviços e preços"),
+  'trava:blog': tr("Artigos do blog: mudam em Site › Blog"), 'trava:loja': tr("Produtos da loja: mudam em Produtos da loja"),
+  'trava:pessoas': tr("Palavras e nomes de pessoas de verdade: não se reescrevem"), 'trava:formulario': tr("Formulário do sistema: não se escreve aqui") }
 const dica = (t: string) => DICAS[t] ?? ''
 
 /** Tela estreita (celular): a lona na largura toda, a barra embaixo e as folhas de Inserir, Camadas e Página. */
@@ -79,6 +87,8 @@ export function EditorDePagina({ id }: { id: number }) {
   const [saida, setSaida] = useState<Saida | null>(null)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [sel, setSel] = useState<Sel>(null)
+  // o bloco de dado clicado numa faixa original (a barra da faixa diz de onde ele vem)
+  const [trava, setTrava] = useState<string | null>(null)
   const [editando, setEditando] = useState<string | null>(null)
   const [aba, setAba] = useState<Aba>('inserir')
   const [folha, setFolha] = useState<Aba | null>(null)
@@ -260,8 +270,9 @@ export function EditorDePagina({ id }: { id: number }) {
       if (t) setLimites(o => o.w === t.w && o.h === t.h ? o : t)
     })
   }
-  function selecionar(s: Sel, rolar = false) {
+  function selecionar(s: Sel, rolar = false, bloco: string | null = null) {
     if (editRef.current && (!s || s.id !== editRef.current)) ponte()?.pararEdicao()
+    setTrava(s?.tipo === 's' ? bloco : null)
     if ((s?.id || null) !== (selRef.current?.id || null)) setBalao(null)
     selRef.current = s
     setSel(s)
@@ -272,7 +283,8 @@ export function EditorDePagina({ id }: { id: number }) {
   }
   function editarTexto(wid: string, ponto?: { x: number; y: number }, tudo = false) {
     const w = docRef.current && widget(docRef.current.c, wid)
-    if (!w || !gerente || !DE_ESCREVER.includes(w.tipo)) return
+    const doTexto = wid.includes('/')          // etapa 4: um texto de faixa original
+    if (!gerente || (!doTexto && (!w || !DE_ESCREVER.includes(w.tipo)))) return
     if (ponte()?.editarTexto(wid, ponto, tudo)) { editRef.current = wid; setEditando(wid); mudouNoTexto.current = false }
   }
 
@@ -287,14 +299,25 @@ export function EditorDePagina({ id }: { id: number }) {
         return
       }
       const ja = !!s && selRef.current?.tipo === s.tipo && selRef.current.id === s.id
-      selecionar(s)
-      if (s?.tipo === 'w' && (ev.duplo || ja)) editarTexto(s.id, { x: ev.x, y: ev.y })
+      selecionar(s, false, ev.trava || null)
+      if ((s?.tipo === 'w' || s?.tipo === 't') && (ev.duplo || ja)) editarTexto(s.id, { x: ev.x, y: ev.y })
     },
-    digitou(wid, valor) { mudouNoTexto.current = true; mudarC(c => mudarW(c, wid, valor), { chave: `tx:${wid}`, desenhar: false }) },
+    digitou(wid, valor) {
+      mudouNoTexto.current = true
+      if (wid.includes('/')) {      // o texto de uma faixa original: a faixa não volta do servidor (já está na prévia)
+        const orig = ponte()?.textoDoCodigo(wid) ?? ''
+        mudarC(c => mudarTexto(c, wid, valor.texto || '', orig), { chave: `tx:${wid}`, desenhar: false })
+        return
+      }
+      mudarC(c => mudarW(c, wid, valor), { chave: `tx:${wid}`, desenhar: false })
+    },
     saiuDaEdicao() {
+      const era = editRef.current
       editRef.current = null
       setEditando(null)
       hist.current.cortar()
+      // o texto da faixa original mostra o que o modelo guardou (vazio volta ao da página; até 400 letras)
+      if (era?.includes('/') && docRef.current) ponte()?.sincronizar(docRef.current.c)
       // o que mudou enquanto escrevia (o texto, ou o nível e a cor pela barra) volta desenhado pelo servidor
       if (mudouNoTexto.current || ponte()?.temPulada) { mudouNoTexto.current = false; agendar(true, 150) }
       reposicionar()
@@ -407,7 +430,7 @@ export function EditorDePagina({ id }: { id: number }) {
   }
   function mover(s: NonNullable<Sel>, passo: number) {
     const c0 = docRef.current?.c
-    if (!c0) return
+    if (!c0 || s.tipo === 't') return
     const volta = guardarFoco()
     if (s.tipo === 'w') {
       const c1 = mudarC(c => passoW(c, s.id, passo))
@@ -429,7 +452,7 @@ export function EditorDePagina({ id }: { id: number }) {
   }
   function duplicar(s: NonNullable<Sel>) {
     const c0 = docRef.current?.c
-    if (!c0) return
+    if (!c0 || s.tipo === 't') return
     const [c1, nid] = s.tipo === 'w' ? duplicarW(c0, s.id) : duplicarS(c0, s.id)
     if (c1 === c0) return
     const volta = guardarFoco()
@@ -439,7 +462,7 @@ export function EditorDePagina({ id }: { id: number }) {
   }
   function apagar(s: NonNullable<Sel>) {
     const c0 = docRef.current?.c
-    if (!c0) return
+    if (!c0 || s.tipo === 't') return
     const it = s.tipo === 's' ? item(c0, s.id) : null
     if (it?.tipo === 'original') { mudarC(c => alternarOculto(c, s.id)); return }
     const pai = s.tipo === 'w' ? secaoDe(c0, s.id) : null
@@ -455,7 +478,8 @@ export function EditorDePagina({ id }: { id: number }) {
     const c = docRef.current?.c
     if (!c) return
     const lista = ordem(c)
-    const s = selRef.current
+    const s0 = selRef.current
+    const s: Sel = s0?.tipo === 't' ? { tipo: 's', id: textoDe(s0.id).faixa } : s0      // do texto da faixa, anda a partir dela
     const i = s ? lista.findIndex(x => x.tipo === s.tipo && x.id === s.id) : -1
     const alvo = lista[Math.max(0, Math.min(lista.length - 1, i < 0 ? 0 : i + passo))]
     if (!alvo) return
@@ -483,6 +507,7 @@ export function EditorDePagina({ id }: { id: number }) {
       e.preventDefault()
       if (porTocar) setPorTocar(null)
       else if (s?.tipo === 'w' && c) { const sc = secaoDe(c, s.id); selecionar(sc ? { tipo: 's', id: sc.id } : null) }
+      else if (s?.tipo === 't') selecionar({ tipo: 's', id: textoDe(s.id).faixa })
       else selecionar(null)
       return
     }
@@ -497,7 +522,7 @@ export function EditorDePagina({ id }: { id: number }) {
     if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); coluna(s, e.key === 'ArrowLeft' ? -1 : 1); return }
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (s.tipo === 'w') editarTexto(s.id)
+      if (s.tipo === 'w' || s.tipo === 't') editarTexto(s.id)
       else { const it = item(c, s.id); const w = it?.tipo === 'secao' ? it.itens.flat()[0] : null; if (w) selecionar({ tipo: 'w', id: w.id }, true) }
       return
     }
@@ -657,6 +682,8 @@ export function EditorDePagina({ id }: { id: number }) {
   const c = doc.c
   const originais = atual.originais
   const listaErros = Object.values(erros)
+  const orfaos = atual.orfaos || {}
+  const nOrfaos = Object.values(orfaos).reduce((n, x) => n + x.length, 0)
   const pend = atual.problemas.length + listaErros.length
   const salvando = salvo === 'salvando' || versaoLocal.current !== versaoSalva.current
   const podePublicar = gerente && !salvando && salvo === 'salvo' && pend === 0
@@ -664,6 +691,9 @@ export function EditorDePagina({ id }: { id: number }) {
   // a barra do que está selecionado
   const w = sel?.tipo === 'w' ? widget(c, sel.id) : null
   const it = sel?.tipo === 's' ? item(c, sel.id) : null
+  // etapa 4: um texto de faixa original (a troca dele, se já tem)
+  const tt = sel?.tipo === 't' ? (() => { const { faixa, chave } = textoDe(sel.id); const o = item(c, faixa)
+    return o?.tipo === 'original' ? { mudou: !!o.textos?.[chave] } : null })() : null
   const lg = w ? acharW(c, w.id) : null
   const sIdx = it ? acharS(c, it.id) : -1
   const pode = w && lg ? { cima: passoW(c, w.id, -1) !== c, baixo: passoW(c, w.id, 1) !== c, esq: lg.c > 0, dir: lg.c < (c.itens[lg.s] as Secao).colunas - 1 }
@@ -688,10 +718,16 @@ export function EditorDePagina({ id }: { id: number }) {
     linkNoTexto: url => ponte()?.comando('createLink', url),
     trocarFoto: () => { if (w) { fotoPara.current = { tipo: 'troca', id: w.id }; arquivo.current?.click() } },
     legenda: () => { if (w) { mudarC(cc => mudarW(cc, w.id, { legenda: 'Caption' })); editarDepois.current = w.id } },
+    doCodigo: () => {             // o texto da faixa volta a ser o da página do código
+      if (sel?.tipo !== 't') return
+      ponte()?.pararEdicao()
+      mudarC(cc => mudarTexto(cc, sel.id, '', ponte()?.textoDoCodigo(sel.id) ?? ''), { desenhar: false, anuncio: tr("O texto voltou a ser o da página") })
+    },
     fechar: () => selecionar(null),
   }
-  const barra = gerente && sel && (w || it) ? <Barra key={sel.id} w={w} it={it} nome={nomeDe(c, sel, originais)} editando={!!editando && editando === w?.id}
-    h1Ocupado={(ponte()?.contarH1(w?.id) || 0) > 0} erro={w ? erros[w.id] : undefined} pode={pode} a={acoes} estreito={estreito}
+  const barra = gerente && sel && (w || it || tt) ? <Barra key={sel.id} w={w} it={it} t={tt} trava={trava} nome={nomeDe(c, sel, originais)}
+    editando={!!editando && editando === (w?.id || (tt ? sel.id : undefined))}
+    h1Ocupado={(ponte()?.contarH1(w?.id) || 0) > 0} erro={w ? erros[w.id] : it ? erros[it.id] : tt && sel ? erros[textoDe(sel.id).faixa] : undefined} pode={pode} a={acoes} estreito={estreito}
     ancora={ancora} limites={limites} balao={balao && balao.id === sel.id ? balao : null} /> : null
 
   const painel = (qual: Aba) => qual === 'inserir'
@@ -705,6 +741,7 @@ export function EditorDePagina({ id }: { id: number }) {
         }}
         passo={mover} coluna={coluna} apagar={apagar} oculto={x => mudarC(cc => alternarOculto(cc, x))} />
       : <PaginaPainel p={p} seo={doc.seo} gerente={gerente} problemas={atual.problemas} erros={listaErros} mudarSeo={mudarSeo}
+        orfaos={nOrfaos} descartar={() => mudarC(cc => descartarOrfaos(cc, orfaos), { desenhar: false, anuncio: tr("Textos órfãos descartados") })}
         despublicar={() => acao('despublicar', p.base ? tr("O site voltou à página original.") : tr("A página saiu do ar."))}
         versoes={versoes} abrirVersoes={abrirVersoes} voltarVersao={voltarVersao} recarregar={() => lona.current?.recarregar()} />
   const abas = (onde: 'lado' | 'folha') => <div className="seg ed-abas" role="group" aria-label={tr("Painéis do editor")}>

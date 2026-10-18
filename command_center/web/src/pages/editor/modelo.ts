@@ -217,7 +217,46 @@ export function ordem(c: Conteudo): NonNullable<Sel>[] {
 
 export function existe(c: Conteudo, sel: Sel): boolean {
   if (!sel) return false
-  return sel.tipo === 'w' ? !!acharW(c, sel.id) : acharS(c, sel.id) >= 0
+  return sel.tipo === 'w' ? !!acharW(c, sel.id) : acharS(c, sel.tipo === 't' ? textoDe(sel.id).faixa : sel.id) >= 0
+}
+
+// ------------------------------------------------------------------ etapa 4: o texto das faixas originais
+export const MAX_TEXTO_ORIGINAL = 400
+/** O id de um texto de faixa original (`o0/h1.0:1a2b3c4d`) → a faixa e a chave da folha. */
+export function textoDe(id: string): { faixa: string; chave: string } {
+  const i = id.indexOf('/')
+  return { faixa: id.slice(0, i), chave: id.slice(i + 1) }
+}
+/** Troca o texto de uma folha da faixa original. Vazio ou igual ao do código (`original`): volta ao do código (a
+ *  chave sai, como o servidor guarda). */
+export function mudarTexto(c: Conteudo, id: string, novo: string, original: string): Conteudo {
+  const { faixa, chave } = textoDe(id)
+  const s = acharS(c, faixa)
+  const o = c.itens[s]
+  if (!o || o.tipo !== 'original') return c
+  const t = novo.replace(/\s+/g, ' ').trim().slice(0, MAX_TEXTO_ORIGINAL)
+  const textos = { ...(o.textos || {}) }
+  if (!t || t === original.replace(/\s+/g, ' ').trim()) delete textos[chave]
+  else textos[chave] = t
+  if ((o.textos?.[chave] ?? null) === (textos[chave] ?? null)) return c
+  const n = copia(c)
+  const { textos: _fora, ...resto } = o
+  n.itens[s] = Object.keys(textos).length ? { ...resto, textos } : resto
+  return n
+}
+/** Tira as trocas que não acham mais o texto (os textos órfãos: a página do código mudou). */
+export function descartarOrfaos(c: Conteudo, orfaos: Record<string, string[]>): Conteudo {
+  let n = c
+  for (const [faixa, chaves] of Object.entries(orfaos)) {
+    const s = acharS(n, faixa)
+    const o = n.itens[s]
+    if (!o || o.tipo !== 'original' || !o.textos) continue
+    const textos = Object.fromEntries(Object.entries(o.textos).filter(([k]) => !chaves.includes(k)))
+    n = copia(n)
+    const { textos: _fora, ...resto } = o
+    n.itens[s] = Object.keys(textos).length ? { ...resto, textos } : resto
+  }
+  return n
 }
 
 const semTags = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
@@ -246,9 +285,10 @@ export function nomeDe(c: Conteudo, sel: Sel, originais: string[]): string {
     const w = widget(c, sel.id)
     return w ? NOMES[w.tipo] : ''
   }
-  const s = acharS(c, sel.id)
+  const s = acharS(c, sel.tipo === 't' ? textoDe(sel.id).faixa : sel.id)
   const it = c.itens[s]
   if (!it) return ''
+  if (it.tipo === 'original' && sel.tipo === 't') return tr("Texto da faixa original {0}", it.indice + 1)
   if (it.tipo === 'original') return tr("Faixa original {0}", it.indice + 1) + (originais[it.indice] ? ` · ${originais[it.indice]}` : '')
   return tr("Seção {0}", c.itens.slice(0, s + 1).filter(x => x.tipo === 'secao').length)
 }

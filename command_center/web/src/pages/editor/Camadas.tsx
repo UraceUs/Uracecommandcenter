@@ -29,7 +29,7 @@ export function Camadas({ c, originais, sel, erros, gerente, selecionar, passo, 
         <div className={`ed-camada${ehSel('s', it.id) ? ' on' : ''}${it.tipo === 'original' && it.oculto ? ' apagada' : ''}`}>
           <button type="button" className="ed-camada-nome" data-camada={it.id} aria-current={ehSel('s', it.id) || undefined} onClick={() => selecionar(si)}>
             <b>{nome}</b> <span className="small muted">{it.tipo === 'secao' ? `${NOMES_FUNDO[it.fundo] || ''} · ${tr("{0} col.", it.colunas)}`
-              : it.oculto ? tr("escondida") : ''}</span></button>
+              : [it.oculto ? tr("escondida") : '', it.textos ? tr("{0} texto(s) trocado(s)", Object.keys(it.textos).length) : ''].filter(Boolean).join(' · ')}</span></button>
           {gerente && <>
             <button type="button" className="btn sm ghost" aria-label={tr("Subir {0}", nome)} disabled={s === 0} onClick={() => passo(si, -1)}>↑</button>
             <button type="button" className="btn sm ghost" aria-label={tr("Descer {0}", nome)} disabled={s === c.itens.length - 1} onClick={() => passo(si, 1)}>↓</button>
