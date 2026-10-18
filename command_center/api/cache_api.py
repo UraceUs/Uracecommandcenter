@@ -55,8 +55,14 @@ class ETagAPI:
                 return
             corpo = b"".join(partes)
             proprio = next((v for k, v in inicio["headers"] if k.lower() == b"cache-control"), b"")
-            if inicio["status"] != 200 or b"no-store" in proprio.lower():
-                # #115: a rota que pede `no-store` (o PDF assinado, o pacote de prova) não fica no navegador nem ganha ETag
+            if b"no-store" in proprio.lower() and inicio["status"] == 200:
+                # #115: a rota que pede `no-store` (o PDF assinado, o pacote de prova) não fica no navegador nem ganha ETag;
+                # e continua `private` (nunca em cache compartilhado)
+                cab = [(k, v) for k, v in inicio["headers"] if k.lower() != b"cache-control"]
+                valor = proprio if b"private" in proprio.lower() else b"private, " + proprio
+                await send({**inicio, "headers": cab + [(b"cache-control", valor)]})
+                return await send({"type": "http.response.body", "body": corpo})
+            if inicio["status"] != 200:
                 await send(inicio)
                 return await send({"type": "http.response.body", "body": corpo})
             etag = _etag(corpo)

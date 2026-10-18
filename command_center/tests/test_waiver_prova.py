@@ -63,7 +63,8 @@ def test_o_zip_traz_tudo_da_lista_e_o_sha256sums_confere(cli):  # noqa: F811
     wid, _ = _assinada(cli)
     r = _baixa(cli, wid)
     assert r.headers["content-type"] == "application/zip"
-    assert r.headers["cache-control"] == "no-store", "pacote com dado de cliente: nunca em cache"
+    assert r.headers["cache-control"] == "private, no-store", "pacote com dado de cliente: nunca em cache"
+    assert "etag" not in r.headers
     assert f'filename="URACE-waiver-{wid}-evidence.zip"' in r.headers["content-disposition"]
     assert r.headers["x-content-sha256"] == hashlib.sha256(r.content).hexdigest()
     z, arq = _arquivos(r.content)
