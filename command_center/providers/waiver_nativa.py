@@ -44,6 +44,9 @@ O que garante que a assinatura vale (ESIGN Act / UETA da Flórida) e se defende 
 - **Selo e carimbo de tempo** (#110): o PDF final sai selado (PAdES, certificado de selo da URACE, DocMDP "nenhuma
   alteração") com o carimbo de uma TSA externa (RFC 3161); o token fica também em `waiver_timestamps`. Sem selo
   configurado ou sem TSA, não assina (503) e o cliente não perde o código do e-mail (`selo_waiver`).
+- **Pacote de prova** (#115): o gerente baixa um ZIP com tudo o que prova a assinatura (PDF, trilha, eventos, auditoria,
+  modelo, carimbo, certificados públicos, certificado avulso, descrição do sistema e a declaração em rascunho para o
+  advogado), sempre igual para o mesmo registro (`prova_waiver`).
 
 Nasce DESLIGADA (`booking_config.waiver_native = 0`): quem liga é o ADMIN, depois do sim do
 advogado. Nada aqui toca o DocuSign além de LER os dois modelos na importação.
