@@ -68,7 +68,7 @@ def desenhar(pagina, host, conteudo=None, titulo=None, descricao=None, indexar=T
         orig = _orig(pagina, host)
     corpo = ed.corpo(conteudo, _dados(), orig["secoes"] if orig else (), marcar=marcar)
     # #315, etapa 4: o JSON-LD da página do código diz o mesmo que ela, com os textos trocados (as perguntas frequentes)
-    schemas = ed.ld_com_textos(orig["ld"], ed.trocas(conteudo, orig["secoes"])) if orig else [_negocio(host)]
+    schemas = ed.ld_com_textos(orig["ld"], conteudo, orig["secoes"]) if orig else [_negocio(host)]
     schemas += ed.ld_extra(conteudo)
     return layout(host=host, caminho=pagina["path"], titulo=titulo or pagina["title"], descricao=descricao or pagina["description"],
                   corpo=corpo, schemas=schemas, scripts=tuple(orig["scripts"]) if orig else (), indexar=indexar,
@@ -85,6 +85,8 @@ def _saida(p, host, orig=False, dados=None):
     if orig is False:
         orig = _orig(p, host)
     secoes = orig["secoes"] if orig else []
+    # revisão do #337: cada faixa pela âncora (a posição de hoje); o painel recebe o rascunho já alinhado
+    p = {**p, "draft": ed.alinhar(p["draft"], secoes)}
     textos = {it["indice"]: it.get("textos") for it in p["draft"]["itens"] if it["tipo"] == "original"}
     resumo = []
     for i, s in enumerate(secoes):      # o nome da faixa é o primeiro título dela (já com o texto trocado)

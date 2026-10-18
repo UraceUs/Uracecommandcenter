@@ -92,7 +92,7 @@ def criar_de_existente(con, por, caminho, extraido):
         raise ErroEditor("não deu para abrir essa página no editor")
     return inserir(con, "site_pages", path=caminho, base=caminho, title=extraido["titulo"][:70] or caminho,
                    description=extraido["descricao"][:170],
-                   draft=json.dumps(ed.de_uma_pagina(len(extraido["secoes"])), ensure_ascii=False),
+                   draft=json.dumps(ed.de_uma_pagina(len(extraido["secoes"]), ed.ancoras(extraido["secoes"])), ensure_ascii=False),
                    updated_by=por, updated_at=agora())
 
 

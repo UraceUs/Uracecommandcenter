@@ -34,6 +34,12 @@ no que ela precisa editar … É como se fosse um Canva"*): a prévia virou a á
 - `aplicar_textos()` troca só onde o hash do texto do código bate. Se o código mudou, a troca fica de fora e aparece
   como **texto órfão** nas pendências (o painel descarta). Texto de até 400 caracteres, sempre escapado.
 - Sem troca, a faixa sai byte a byte igual à de antes.
+- Revisão do #337: a faixa original se acha pela **âncora** (o `id` ou o `aria-labelledby` da `<section>`, `ancoras()`),
+  não pela posição: a home sem artigo no ar perde a faixa do blog e as de baixo sobem, mas cada item continua na faixa
+  dele (`alinhar()`; o rascunho antigo, só com `indice`, ganha a âncora na leitura). A faixa que saiu da página fica no
+  rascunho no lugar dela, e as trocas dela viram texto órfão. Texto escrito com preço (`$99`, `USD 99`, `99 dollars`),
+  na faixa ou num elemento, é pendência: o preço vem do painel. O JSON-LD segue a folha (a pergunta frequente pela posição
+  dela na faixa da FAQ; o `name` do serviço e da trilha pelo h1), não o texto igual em outro lugar.
 """
 import functools
 import hashlib
@@ -59,6 +65,7 @@ MAX_POR_COLUNA = 30
 MAX_TEXTO_ORIGINAL = 400
 MAX_TEXTOS = 300             # trocas por faixa original
 CHAVE_TEXTO = re.compile(r"(h1|h2|h3|p|li|summary|figcaption|a)\.[0-9]{1,4}:[0-9a-f]{8}")
+ANCORA = re.compile(r"[A-Za-z0-9_.#~-]{1,80}")
 CAMINHO = re.compile(r"/(?:[a-z0-9]+(?:-[a-z0-9]+)*/)+")
 # o que não pode virar página nova: o painel, os arquivos, a loja, o blog, o carrinho, o pedido, as páginas legais
 RESERVADOS = ("/ops/", "/_s/", "/_f/", "/store/", "/blog/", "/cart/", "/order/", "/legal/", "/contact/", "/sitemap", "/robots")
@@ -195,21 +202,30 @@ def _elementos(conteudo):
             for c in it.get("itens") or [] if isinstance(c, list) for w in c if isinstance(w, dict)}
 
 
-def _textos(v, html, rascunho, problemas):
+def _textos(v, html, rascunho, problemas, conferir=False, antes=None):
     """#315, etapa 4: as trocas de texto de uma faixa original → o que se guarda. Chave no formato da folha, texto
     numa linha, até 400 caracteres (só texto: o desenho escapa). Com o HTML da faixa (`html`), a troca de um texto
-    travado (preço, plano, kart, reserva…) é recusada e a que volta ao texto do código sai. A chave que não existe mais
-    na faixa fica (é o texto órfão, avisado nas pendências)."""
+    travado (preço, plano, kart, reserva…) é recusada e a que volta ao texto do código sai.
+
+    `conferir` (o painel manda as faixas do código): a chave que não está na faixa (ou a faixa que saiu da página,
+    `html` None) só fica se já estava guardada (`antes`, as trocas de antes deste item): é o texto órfão, avisado nas
+    pendências. Chave nova que não existe não se guarda (ninguém enche o rascunho de texto inventado)."""
     if v in (None, {}):
         return {}
     if not isinstance(v, dict) or len(v) > MAX_TEXTOS:
         raise ErroEditor("textos da faixa original inválidos")
     folhas, travadas, _ = _analisar(html) if html is not None else ((), {}, ())
     do_codigo = {f.chave: f.texto for f in folhas}
+    antes = antes or {}
     out = {}
     for k, t in v.items():
         if not isinstance(k, str) or not CHAVE_TEXTO.fullmatch(k) or not isinstance(t, str):
             raise ErroEditor("textos da faixa original inválidos")
+        if conferir and k not in do_codigo and k not in travadas and k not in antes:
+            if not rascunho:
+                raise ErroEditor("esse texto não está na faixa original")
+            problemas.append("esse texto não está na faixa original (a página do código mudou): escreva de novo")
+            continue
         if k in travadas and k not in do_codigo:
             msg = f"esse texto vem do painel ({AREAS_TRAVADAS[travadas[k][0]]}): mude lá, não na faixa"
             if not rascunho:
@@ -239,6 +255,9 @@ def limpar(conteudo, com_originais=False, n_originais=0, rascunho=False, anterio
     if len(itens) > MAX_ITENS:
         raise ErroEditor(f"até {MAX_ITENS} seções por página")
     antes = _elementos(anterior) if rascunho else {}
+    anc = ancoras(originais) if originais is not None else None
+    # as faixas originais de antes (as trocas guardadas e a faixa que saiu da página), pela âncora
+    ant = {x["ancora"]: x for x in _alinhar_itens(anterior, anc)} if anc is not None and isinstance(anterior, dict) else {}
     out, vistos = [], set()
     for it in itens:
         if not isinstance(it, dict):
@@ -246,14 +265,36 @@ def limpar(conteudo, com_originais=False, n_originais=0, rascunho=False, anterio
         if it.get("tipo") == "original":
             if not com_originais:
                 raise ErroEditor("seção original só existe numa página que já está no site")
-            i = int(it.get("indice", -1))
-            if not 0 <= i < n_originais or i in vistos:
+            a = it.get("ancora") if isinstance(it.get("ancora"), str) and ANCORA.fullmatch(it["ancora"]) else None
+            if anc is None:                       # sem as faixas do código: confere só a posição
+                i = int(it.get("indice", -1))
+                if not 0 <= i < n_originais:
+                    raise ErroEditor("seção original inválida")
+            elif a is None:                       # o rascunho de antes da âncora: a posição dá a âncora
+                i = int(it.get("indice", -1))
+                if not 0 <= i < len(anc):
+                    if rascunho:
+                        continue                  # a faixa daquela posição não existe mais (nada guardado nela)
+                    raise ErroEditor("seção original inválida")
+                a = anc[i]
+            elif a in anc:
+                i = anc.index(a)
+            elif a in ant:                        # a faixa saiu da página do código: fica no lugar, sem desenho
+                i = None
+            else:
                 raise ErroEditor("seção original inválida")
-            vistos.add(i)
-            o = {"id": f"o{i}", "tipo": "original", "indice": i, "oculto": bool(it.get("oculto"))}
+            marca = a or i
+            if marca in vistos:
+                raise ErroEditor("seção original inválida")
+            vistos.add(marca)
+            o = {"id": f"o{i}" if i is not None else _id_ausente(a), "tipo": "original", "indice": -1 if i is None else i,
+                 "oculto": bool(it.get("oculto"))}
+            if a:
+                o["ancora"] = a
             probs = []
-            textos = _textos(it.get("textos"), originais[i] if originais is not None and i < len(originais) else None,
-                             rascunho, probs)
+            html = originais[i] if originais is not None and i is not None else None
+            textos = _textos(it.get("textos"), html, rascunho, probs, conferir=anc is not None,
+                             antes=(ant.get(a) or {}).get("textos"))
             if probs and erros is not None:
                 erros[o["id"]] = "; ".join(dict.fromkeys(probs))
             if textos:          # sem troca, o item fica como sempre foi (o rascunho antigo continua igual ao publicado)
@@ -298,14 +339,21 @@ def caminho_novo(v):
 
 
 # ------------------------------------------------------------------ as seções que a página já tem
+def _linhas(html):
+    """Onde começa cada linha, como o `HTMLParser.getpos()` conta: só o `\n` quebra linha (o `splitlines()` também
+    quebraria em `\r`, `\x0c`, `\u2028`… e as posições escorregariam, corrompendo o HTML)."""
+    out = [0]
+    for linha in html.split("\n"):
+        out.append(out[-1] + len(linha) + 1)
+    return out
+
+
 class _Secoes(HTMLParser):
     """Separa o `<main>` de uma página do site nas faixas de cima (`<section>` de primeiro nível)."""
     def __init__(self, html):
         super().__init__(convert_charrefs=False)
         self.html, self.pos, self.nivel, self.inicio, self.secoes = html, 0, 0, None, []
-        self._linhas = [0]
-        for linha in html.splitlines(keepends=True):
-            self._linhas.append(self._linhas[-1] + len(linha))
+        self._linhas = _linhas(html)
 
     def _onde(self):
         ln, col = self.getpos()
@@ -364,20 +412,25 @@ TRAVADOS = {
     "depoimentos": "pessoas",   # palavras de clientes de verdade: não se reescrevem
     "campeoes": "pessoas",      # nomes e resultados de pilotos de verdade
 }
-TAGS_TRAVADAS = {"form": "formulario", "fieldset": "formulario"}   # o que o formulário envia é do sistema
+TAGS_TRAVADAS = {"form": "formulario", "fieldset": "formulario",   # o que o formulário envia é do sistema
+                 "blockquote": "pessoas"}                          # a citação é a palavra de alguém de verdade
 AREAS_TRAVADAS = {"cartoes": "Serviços e preços / Cartões das páginas", "precos": "Serviços e preços",
                   "reserva": "Serviços e preços", "blog": "Site › Blog", "loja": "Produtos da loja",
                   "pessoas": "palavras e nomes de pessoas de verdade", "formulario": "formulário do sistema"}
-PRECO = re.compile(r"\$\s?\d")     # folha com preço escrito: o preço é do painel, não do texto
+# preço escrito ($99, US$ 99, USD 99, 99 USD, 99 dollars): o preço é do painel, não do texto (a folha do código com
+# preço fica travada; o texto novo com preço é pendência, `problemas()`)
+PRECO = re.compile(r"(?:US)?\$\s?\d|\bUSD\s?\d|\d\s?USD\b|\b\d[\d,.]*\s*dollars?\b", re.I)
+MSG_PRECO = "O preço vem de Serviços e preços / Loja; escreva sem o valor"
 _FOLHAS = {"h1", "h2", "h3", "p", "li", "summary", "figcaption", "a"}
 _VAZIAS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 
 
 class _Folha:
-    __slots__ = ("chave", "tag", "ini", "dentro", "fim", "texto")
+    __slots__ = ("chave", "tag", "ini", "dentro", "fim", "texto", "faq")
 
-    def __init__(self, chave, tag, ini, dentro, fim, texto):
+    def __init__(self, chave, tag, ini, dentro, fim, texto, faq=None):
         self.chave, self.tag, self.ini, self.dentro, self.fim, self.texto = chave, tag, ini, dentro, fim, texto
+        self.faq = faq      # (id da lista de perguntas, número da pergunta, "pergunta" ou "resposta"), ou None
 
 
 def _chave(tag, n, texto):
@@ -390,9 +443,8 @@ class _Analise(HTMLParser):
         super().__init__(convert_charrefs=False)
         self.html, self.pilha, self.cont, self.cont_trava = html, [], {}, {}
         self.folhas, self.travadas, self.blocos = [], {}, []     # blocos: [(posição do atributo, área)]
-        self._linhas = [0]
-        for linha in html.splitlines(keepends=True):
-            self._linhas.append(self._linhas[-1] + len(linha))
+        self.n_faq = {}                                           # perguntas vistas em cada lista (`div.faq`)
+        self._linhas = _linhas(html)
 
     def _onde(self):
         ln, col = self.getpos()
@@ -416,8 +468,19 @@ class _Analise(HTMLParser):
         cont = self.cont_trava if trava or area else self.cont
         cont[tag] = cont.get(tag, -1) + 1
         folha = tag in _FOLHAS and (tag != "a" or "btn" in classes)
+        # onde a folha está numa lista de perguntas frequentes (o JSON-LD da FAQ segue a posição, não o texto)
+        faq = pai["faq"] if pai else None
+        if tag == "div" and "faq" in classes:
+            faq = (a.get("id") or "faq", None, None)
+        elif faq and tag == "details":
+            self.n_faq[faq[0]] = self.n_faq.get(faq[0], -1) + 1
+            faq = (faq[0], self.n_faq[faq[0]], None)
+        elif faq and faq[1] is not None and tag == "summary":
+            faq = (faq[0], faq[1], "pergunta")
+        elif faq and faq[1] is not None and "faq-corpo" in classes:
+            faq = (faq[0], faq[1], "resposta")
         self.pilha.append({"tag": tag, "ini": ini, "dentro": ini + len(self.get_starttag_text()), "n": cont[tag],
-                           "folha": folha, "filhos": False, "texto": [], "trava": trava or area})
+                           "folha": folha, "filhos": False, "texto": [], "trava": trava or area, "faq": faq})
 
     def handle_startendtag(self, tag, attrs):
         if self.pilha:
@@ -456,7 +519,8 @@ class _Analise(HTMLParser):
             if not f["trava"]:                # a folha com preço é o próprio bloco travado
                 self.blocos.append((f["ini"] + 1 + len(tag), area))
             return
-        self.folhas.append(_Folha(chave, tag, f["ini"], f["dentro"], fim, texto))
+        faq = f["faq"] if f["faq"] and f["faq"][2] else None
+        self.folhas.append(_Folha(chave, tag, f["ini"], f["dentro"], fim, texto, faq))
 
 
 @functools.lru_cache(maxsize=256)
@@ -512,52 +576,140 @@ def marcar_original(html, i, oculto=False, textos=None):
 
 
 def orfaos(conteudo, originais):
-    """{id da faixa original: [chaves]} das trocas que não acham mais o texto (a página do código mudou)."""
+    """{id da faixa original: [chaves]} das trocas que não acham mais o texto: a página do código mudou o texto, ou a
+    faixa inteira saiu da página (todas as trocas dela)."""
     out = {}
-    for it in conteudo["itens"]:
-        if it["tipo"] == "original" and it.get("textos") and it["indice"] < len(originais):
-            o = aplicar_textos(originais[it["indice"]], it["textos"])[1]
-            if o:
-                out[it["id"]] = o
+    for it in alinhar(conteudo, originais)["itens"]:
+        if it["tipo"] != "original" or not it.get("textos"):
+            continue
+        o = list(it["textos"]) if not 0 <= it["indice"] < len(originais) else aplicar_textos(originais[it["indice"]], it["textos"])[1]
+        if o:
+            out[it["id"]] = o
     return out
 
 
-def trocas(conteudo, originais):
-    """{texto do código: texto novo} das trocas que valem (para o JSON-LD da página dizer o mesmo que ela)."""
-    out = {}
-    for it in conteudo["itens"]:
-        if it["tipo"] == "original" and it.get("textos") and it["indice"] < len(originais):
-            for f in _analisar(originais[it["indice"]])[0]:
-                if f.chave in it["textos"]:
-                    out[f.texto] = it["textos"][f.chave]
-    return out
-
-
-def ld_com_textos(lds, mapa):
-    """O JSON-LD da página do código com os textos trocados: o valor igual a um texto do código vira o novo (a
-    pergunta, o nome); na resposta das perguntas (`text`, que junta os parágrafos), o parágrafo trocado também."""
-    if not mapa:
+def ld_com_textos(lds, conteudo, originais):
+    """O JSON-LD da página do código dizendo o mesmo que ela, com as trocas que valem. Segue a **folha**, não o texto
+    igual em outro lugar:
+    - FAQPage: só a lista de perguntas que a alimenta (a da página com as mesmas perguntas do código, na mesma ordem);
+      a pergunta trocada vira o `name` dela, e o parágrafo trocado entra na resposta dela (`text`), pela posição.
+    - O h1: o `name` igual ao h1 do código (o do serviço, `Service`, e o último passo da trilha, `BreadcrumbList`)
+      vira o h1 novo, o que a página mostra. Nenhum outro texto (o eyebrow, um parágrafo igual) mexe no JSON-LD."""
+    faqs, h1 = {}, None           # faqs: {(faixa, lista): {pergunta: {"pergunta": texto do código, "nova": …, "resp": […]}}}
+    for it in alinhar(conteudo, originais)["itens"]:
+        if it["tipo"] != "original" or not 0 <= it["indice"] < len(originais):
+            continue
+        textos = it.get("textos") or {}
+        for f in _analisar(originais[it["indice"]])[0]:
+            novo = textos.get(f.chave)
+            if f.faq:
+                q = faqs.setdefault((it["indice"], f.faq[0]), {}).setdefault(f.faq[1], {"pergunta": None, "nova": None, "resp": []})
+                if f.faq[2] == "pergunta":
+                    q["pergunta"], q["nova"] = f.texto, novo
+                elif novo is not None:
+                    q["resp"].append((f.texto, novo))
+            elif f.tag == "h1" and novo is not None:
+                h1 = (f.texto, novo)
+    mudou = h1 or any(q["nova"] or q["resp"] for lista in faqs.values() for q in lista.values())
+    if not mudou:
         return list(lds)
+    lds = json.loads(json.dumps(list(lds)))
 
-    def troca(v, chave=None):
+    def faq_page(obj):
+        perguntas = obj.get("mainEntity") or []
+        nomes = [q.get("name") for q in perguntas if isinstance(q, dict)]
+        lista = next((x for x in faqs.values() if [x[k]["pergunta"] for k in sorted(x)] == nomes), None)
+        if lista is None:
+            return
+        for n, q in enumerate(perguntas):
+            d = lista[sorted(lista)[n]]
+            if d["nova"]:
+                q["name"] = d["nova"]
+            resp = q.get("acceptedAnswer") or {}
+            for velho, novo in d["resp"]:
+                if isinstance(resp.get("text"), str):
+                    resp["text"] = resp["text"].replace(velho, novo, 1)
+
+    def nome_h1(v):
         if isinstance(v, dict):
-            return {k: troca(x, k) for k, x in v.items()}
-        if isinstance(v, list):
-            return [troca(x) for x in v]
-        if isinstance(v, str):
-            if v in mapa:
-                return mapa[v]
-            if chave == "text":
-                for velho, novo in mapa.items():
-                    if len(velho) >= 20 and velho in v:
-                        v = v.replace(velho, novo)
-        return v
-    return [troca(x) for x in lds]
+            if v.get("@type") == "FAQPage":
+                return
+            if h1 and v.get("name") == h1[0] and v.get("@type") in ("Service", "ListItem", "Course", "SportsTeam"):
+                v["name"] = h1[1]
+            for x in v.values():
+                nome_h1(x)
+        elif isinstance(v, list):
+            for x in v:
+                nome_h1(x)
+    for obj in lds:
+        if isinstance(obj, dict) and obj.get("@type") == "FAQPage":
+            faq_page(obj)
+        nome_h1(obj)
+    return lds
 
 
-def de_uma_pagina(n):
-    """O conteúdo inicial de uma página que já existe: as faixas dela, na ordem, como seções originais."""
-    return {"itens": [{"id": f"o{i}", "tipo": "original", "indice": i, "oculto": False} for i in range(n)]}
+def de_uma_pagina(n, ancs=None):
+    """O conteúdo inicial de uma página que já existe: as faixas dela, na ordem, como seções originais (com a âncora
+    de cada uma, `ancoras()`)."""
+    return {"itens": [{"id": f"o{i}", "tipo": "original", "indice": i, "oculto": False,
+                       **({"ancora": ancs[i]} if ancs else {})} for i in range(n)]}
+
+
+def ancoras(secoes):
+    """A âncora de cada faixa da página do código, o que não muda quando outra faixa entra ou sai: o `id` da
+    `<section>` (`#reservar`), senão o `aria-labelledby` (`h-faq`), senão as classes (`.hero.hero-servico`). Repetida
+    na página, ganha `~2`, `~3`…"""
+    out, vistas = [], {}
+    for s in secoes:
+        m = re.match(r"\s*<section\b([^>]*)>", s)
+        attrs = dict(re.findall(r'([a-z-]+)="([^"]*)"', m.group(1))) if m else {}
+        a = (f"#{attrs['id']}" if attrs.get("id") else attrs.get("aria-labelledby")
+             or "." + ".".join((attrs.get("class") or "section").split()))
+        a = re.sub(r"[^A-Za-z0-9_.#-]", "", a)[:70] or "section"
+        vistas[a] = vistas.get(a, 0) + 1
+        out.append(a if vistas[a] == 1 else f"{a}~{vistas[a]}")
+    return out
+
+
+def _id_ausente(a):
+    return "x" + hashlib.sha256(a.encode()).hexdigest()[:8]
+
+
+def _alinhar_um(it, anc, vistas):
+    """Um item `original` com a posição de hoje (pela âncora), ou None. O rascunho antigo (sem âncora) ganha a da
+    posição dele; o que aponta para uma posição que não existe mais sai. A faixa que saiu da página fica, com `indice`
+    -1 (sem desenho; as trocas dela são texto órfão)."""
+    a = it.get("ancora")
+    if not a:
+        i = it.get("indice", -1)
+        if not isinstance(i, int) or not 0 <= i < len(anc):
+            return None
+        a = anc[i]
+    if a in vistas:
+        return None
+    vistas.add(a)
+    i = anc.index(a) if a in anc else None
+    return {**it, "id": f"o{i}" if i is not None else _id_ausente(a), "indice": -1 if i is None else i, "ancora": a}
+
+
+def _alinhar_itens(conteudo, anc):
+    vistas = set()
+    feitos = (_alinhar_um(it, anc, vistas) for it in (conteudo or {}).get("itens") or []
+              if isinstance(it, dict) and it.get("tipo") == "original")
+    return [x for x in feitos if x]
+
+
+def alinhar(conteudo, secoes):
+    """O conteúdo com cada faixa original na posição de hoje da página do código (ver `_alinhar_um`)."""
+    itens = conteudo.get("itens") or []
+    if not secoes or not any(it.get("tipo") == "original" for it in itens):
+        return conteudo
+    anc, vistas, out = ancoras(secoes), set(), []
+    for it in itens:
+        x = _alinhar_um(it, anc, vistas) if it.get("tipo") == "original" else it
+        if x:
+            out.append(x)
+    return {**conteudo, "itens": out}
 
 
 def pagina_nova(titulo):
@@ -644,9 +796,9 @@ def partes(conteudo, dados=None, originais=(), marcar=False):
     original sai com as trocas de texto dela (etapa 4) e, sem troca, igual à do código."""
     dados = dados or {}
     out, primeira = [], [True]
-    for it in conteudo["itens"]:
+    for it in alinhar(conteudo, originais)["itens"]:      # a faixa pela âncora; a que saiu da página não desenha
         if it["tipo"] == "original":
-            if it["indice"] < len(originais) and (marcar or not it.get("oculto")):
+            if 0 <= it["indice"] < len(originais) and (marcar or not it.get("oculto")):
                 html = originais[it["indice"]]
                 out.append((it["id"], marcar_original(html, it["indice"], it.get("oculto"), it.get("textos")) if marcar
                             else aplicar_textos(html, it.get("textos"))[0]))
@@ -680,12 +832,37 @@ def ld_extra(conteudo):
 
 
 # ------------------------------------------------------------------ as regras do site
+def _textos_escritos(conteudo):
+    """Todo texto que a equipe escreveu na página: as trocas das faixas originais e o texto dos elementos (título,
+    texto, botão, lista, perguntas). Não entra o que vem do banco (karts, produtos, cartões)."""
+    for it in conteudo["itens"]:
+        if it["tipo"] == "original":
+            yield from (it.get("textos") or {}).values()
+            continue
+        for c in it["itens"]:
+            for w in c:
+                if w["tipo"] in ("titulo", "botao"):
+                    yield w.get("texto") or ""
+                elif w["tipo"] == "texto":
+                    yield unescape(re.sub(r"<[^>]+>", " ", w.get("html") or ""))
+                elif w["tipo"] == "lista":
+                    yield from w.get("itens") or []
+                elif w["tipo"] == "faq":
+                    for x in w.get("itens") or []:
+                        yield x.get("pergunta") or ""
+                        yield x.get("resposta") or ""
+
+
+
 def problemas(conteudo, html_corpo, titulo, descricao, orfas=None):
     """O que impede publicar: as regras do site (CLAUDE.md) conferidas no HTML que o editor gerou (com as trocas de
     texto das faixas originais: o h1 trocado continua sendo o h1). `orfas` (etapa 4): as trocas que não acham mais o
     texto na página do código (`orfaos()`)."""
     out = []
     n_orfas = sum(len(x) for x in (orfas or {}).values())
+    com_preco = sum(1 for t in _textos_escritos(conteudo) if PRECO.search(t))
+    if com_preco:
+        out.append(f"{com_preco} texto(s) com preço escrito: {MSG_PRECO} (o site mostra o preço do painel)")
     if n_orfas:
         out.append(f"{n_orfas} texto(s) órfão(s) nas faixas originais: a página do código mudou e o texto escrito ali "
                    "não entra; escreva de novo ou descarte (aba Página)")

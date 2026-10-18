@@ -777,6 +777,15 @@ mexer, a página sai igual à de antes, byte a byte.
 - **Texto órfão**: se a página do código mudar o texto que foi trocado (o time mudou o site), a troca não entra mais (o
   site mostra o texto novo do código) e vira pendência **"texto(s) órfão(s)"**. Em **Página**, **Descartar os textos
   órfãos** tira a troca; escreva de novo, se quiser, no texto novo.
+- **Preço só do painel**: um texto escrito com preço (`$99`, `US$ 99`, `USD 99`, `99 dollars`), numa faixa original ou
+  num título, texto, botão, lista ou pergunta, salva no rascunho mas vira pendência: *"O preço vem de Serviços e preços /
+  Loja; escreva sem o valor"*. Os karts, produtos e cartões que mostram o preço do painel não contam.
+- **Cada faixa tem a sua âncora** (o `id` ou o título dela), não a posição: quando o banco tira uma faixa da página (a
+  home sem artigo no ar perde a faixa do blog), as outras continuam com as trocas e o "escondido" delas. A faixa que
+  saiu aparece nas Camadas como **Faixa que saiu da página do código**, no mesmo lugar, e volta sozinha quando o dado
+  volta; se ela tinha texto trocado, ele vira texto órfão até voltar ou ser descartado.
+- O que o Google lê da página (os dados estruturados) segue o texto trocado da pergunta frequente e do H1 (o nome do
+  serviço e o da trilha); um parágrafo igual em outra faixa, ou o texto de cima do H1, não mexe nisso.
 
 **Rascunho, salvar e publicar**
 - Tudo **salva sozinho no rascunho** ("salvando…" vira "salvo"); a prévia troca só a seção que mudou, sem recarregar.
@@ -793,6 +802,7 @@ mexer, a página sai igual à de antes, byte a byte.
   - nenhum título vazio, botão com texto e link, pergunta com a resposta;
   - imagem com a foto e com a descrição;
   - nenhum texto órfão nas faixas originais (a página do código mudou: descarte em Página);
+  - nenhum preço escrito à mão (o preço vem de Serviços e preços ou da Loja);
   - título da aba de 10 a 70 letras e descrição de 50 a 170.
 - Cada publicação vira uma **versão**: em Página › **Versões publicadas**, **Voltar a esta versão** traz uma antiga para o
   rascunho (e tira os erros do rascunho de antes). Confira e publique de novo. Com o salvar ainda em andamento, a tela

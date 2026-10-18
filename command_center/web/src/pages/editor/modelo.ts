@@ -289,6 +289,7 @@ export function nomeDe(c: Conteudo, sel: Sel, originais: string[]): string {
   const it = c.itens[s]
   if (!it) return ''
   if (it.tipo === 'original' && sel.tipo === 't') return tr("Texto da faixa original {0}", it.indice + 1)
+  if (it.tipo === 'original' && it.indice < 0) return tr("Faixa que saiu da página do código")
   if (it.tipo === 'original') return tr("Faixa original {0}", it.indice + 1) + (originais[it.indice] ? ` · ${originais[it.indice]}` : '')
   return tr("Seção {0}", c.itens.slice(0, s + 1).filter(x => x.tipo === 'secao').length)
 }

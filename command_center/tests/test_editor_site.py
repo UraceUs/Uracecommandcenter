@@ -739,3 +739,156 @@ def test_sem_troca_a_faixa_sai_igual_byte_a_byte(amb):
     assert all(s in publico for s in faixas[1:]), "as outras faixas não mudam"
     velho = re.search(r"<h1>(.*?)</h1>", faixas[0]).group(1)
     assert faixas[0].replace(f"<h1>{velho}</h1>", f"<h1>{NOVO_H1}</h1>") in publico, "na faixa 1, só o texto do h1"
+
+
+# ------------------------------------------------------------------ #315, etapa 4: a revisão do #337
+def _ld(html, tipo):
+    return [x for x in (json.loads(t) for t in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S))
+            if x.get("@type") == tipo]
+
+
+def test_faixa_se_acha_pela_ancora_quando_o_banco_tira_uma_faixa(amb, monkeypatch):
+    """A home sem artigo no ar perde a faixa do blog e as de baixo sobem uma posição. Cada item continua na faixa dele
+    (pela âncora, o `aria-labelledby`): a troca e o "escondido" da faixa de baixo continuam valendo, a troca da faixa do
+    blog vira texto órfão (visível), salvar de novo não dá 400, e o blog de volta volta com o texto trocado."""
+    from command_center.providers import blog
+    painel, site, con = amb
+    h = _entra(painel)
+    p = _abre(painel, h, "/")
+    pid, itens = p["pagina"]["id"], p["pagina"]["draft"]["itens"]
+    fx = _faixas("/")
+    anc = ed.ancoras(fx)
+    i_blog, i_fim = anc.index("h-blog"), len(fx) - 1
+    assert i_fim > i_blog and [x["ancora"] for x in itens] == anc, "a página aberta guarda a âncora de cada faixa"
+    k_fim = next(f.chave for f in ed._analisar(fx[i_fim])[0] if f.tag == "h2")
+    k_blog = next(f.chave for f in ed._analisar(fx[i_blog])[0] if f.tag == "h2")
+    i_depo = anc.index("h-depo")
+    itens = _com_textos(_com_textos(itens, i_fim, {k_fim: "Still curious? Ask us"}), i_blog, {k_blog: "Fresh from the track"})
+    itens = [{**x, "oculto": True} if x["indice"] == i_depo else x for x in itens]
+    assert _salvar(painel, h, pid, conteudo={"itens": itens}).json()["erros"] == {}
+    assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
+    assert "Still curious? Ask us" in site.get("/").text and "Fresh from the track" in site.get("/").text
+    no_ar = blog.publicados
+    monkeypatch.setattr(blog, "publicados", lambda con: [])      # o último artigo saiu do ar: 10 → 9 faixas
+    assert len(_faixas("/")) == len(fx) - 1
+    html = site.get("/").text
+    assert "Still curious? Ask us" in html and "Fresh from the track" not in html, "a troca segue a faixa dela"
+    assert 'aria-labelledby="h-depo"' not in html, "a faixa escondida continua escondida"
+    s = painel.get(f"/ops/api/site/editor/paginas/{pid}", headers=h).json()
+    blog_item = next(x for x in s["pagina"]["draft"]["itens"] if x["ancora"] == "h-blog")
+    assert blog_item["indice"] == -1 and s["orfaos"] == {blog_item["id"]: [k_blog]}
+    assert any("1 texto(s) órfão(s)" in x for x in s["problemas"]), s["problemas"]
+    r = _salvar(painel, h, pid, conteudo={"itens": s["pagina"]["draft"]["itens"]})
+    assert r.status_code == 200, r.text
+    assert r.json()["orfaos"] == {blog_item["id"]: [k_blog]}, "a faixa que saiu fica no rascunho, com a troca"
+    monkeypatch.setattr(blog, "publicados", no_ar)                # o artigo voltou
+    assert "Fresh from the track" in _previa(painel, h, pid).text and painel.get(
+        f"/ops/api/site/editor/paginas/{pid}", headers=h).json()["orfaos"] == {}
+
+
+def test_rascunho_antigo_so_com_indice_ganha_a_ancora(amb):
+    """O rascunho guardado antes da âncora (etapas 1 a 3: só `indice` e `oculto`) ganha a âncora na leitura e salva."""
+    painel, site, con = amb
+    h = _entra(painel)
+    p = _abre(painel, h, "/about/")
+    pid = p["pagina"]["id"]
+    velho = [{"id": f"o{x['indice']}", "tipo": "original", "indice": x["indice"], "oculto": x["indice"] == 1}
+             for x in p["pagina"]["draft"]["itens"]]
+    con.execute("UPDATE site_pages SET draft=? WHERE id=?", (json.dumps({"itens": velho}), pid))
+    con.commit()
+    s = painel.get(f"/ops/api/site/editor/paginas/{pid}", headers=h).json()
+    assert [x["ancora"] for x in s["pagina"]["draft"]["itens"]] == ed.ancoras(_faixas("/about/"))
+    assert s["pagina"]["draft"]["itens"][1]["oculto"] is True
+    r = _salvar(painel, h, pid, conteudo={"itens": velho})            # a tela antiga manda sem âncora: passa
+    assert r.status_code == 200 and all(x.get("ancora") for x in r.json()["pagina"]["draft"]["itens"]), r.text
+
+
+@pytest.mark.parametrize("escrito", ["Arrive and Drive now only $99 per driver", "From US$ 99 a session",
+                                     "Sessions at USD 99", "Sessions at 99 USD", "Just 99 dollars a lap"])
+def test_texto_novo_com_preco_e_pendencia(amb, escrito):
+    """NO FAKE DATA, uma fonte só: o preço vem do painel. O texto novo com preço (na faixa original ou num elemento)
+    salva no rascunho e trava o Publicar, dizendo onde o preço se muda."""
+    painel, site, con = amb
+    h = _entra(painel)
+    p = _abre(painel, h, "/about/")
+    pid = p["pagina"]["id"]
+    k = _folha("/about/", 0, "h1")
+    r = _salvar(painel, h, pid, conteudo={"itens": _com_textos(p["pagina"]["draft"]["itens"], 0, {k: escrito})})
+    assert r.status_code == 200 and r.json()["pagina"]["draft"]["itens"][0]["textos"] == {k: escrito}
+    assert any(ed.MSG_PRECO in x for x in r.json()["problemas"]), r.json()["problemas"]
+    pub = painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h)
+    assert pub.status_code == 400 and ed.MSG_PRECO in pub.json()["detail"]
+    assert escrito not in site.get("/about/").text
+
+
+def test_preco_escrito_nos_elementos_tambem_e_pendencia(amb):
+    painel, site, con = amb
+    h = _entra(painel)
+    pid = _nova(painel, h)["pagina"]["id"]
+    ws = [{"tipo": "titulo", "texto": "Only $99 today", "nivel": 2}, {"tipo": "texto", "html": "<p>Laps for <b>USD 50</b></p>"},
+          {"tipo": "botao", "texto": "Book for 99 dollars", "link": "/contact/"}, {"tipo": "lista", "itens": ["Kart $10"]},
+          {"tipo": "faq", "itens": [{"pergunta": "How much?", "resposta": "It is $719."}]}]
+    r = _salvar(painel, h, pid, description=DESC, conteudo={"itens": [_secao(H1, *ws)]})
+    assert r.status_code == 200
+    assert any(x.startswith("5 texto(s) com preço escrito") for x in r.json()["problemas"]), r.json()["problemas"]
+    r = _salvar(painel, h, pid, conteudo={"itens": [_secao(H1, {"tipo": "titulo", "texto": "Book a session", "nivel": 2},
+                                                          {"tipo": "karts"})]})
+    assert not any("preço" in x for x in r.json()["problemas"]), "os karts e preços do painel não contam"
+    assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
+
+
+def test_json_ld_segue_a_folha_e_nao_o_texto_igual(amb):
+    """Duas folhas com o mesmo texto ("We’re open every day…" na resposta da FAQ e na faixa de baixo): trocar a de
+    baixo não mexe no FAQPage; trocar a da FAQ mexe. O h1 trocado vira o `name` do serviço e da trilha; o eyebrow,
+    não."""
+    c = "/services/birthday-party/"
+    painel, site, con = amb
+    h = _entra(painel)
+    p = _abre(painel, h, c)
+    pid, itens = p["pagina"]["id"], p["pagina"]["draft"]["itens"]
+    fx = _faixas(c)
+    iguais = [(i, f) for i, s in enumerate(fx) for f in ed._analisar(s)[0] if f.texto.startswith("We’re open every day")]
+    (i_faq, f_faq), (i_baixo, f_baixo) = [x for x in iguais if x[1].faq][0], [x for x in iguais if not x[1].faq][0]
+    velho = f_faq.texto
+
+    def respostas():
+        return [q["acceptedAnswer"]["text"] for q in _ld(site.get(c).text, "FAQPage")[0]["mainEntity"]]
+    _salvar(painel, h, pid, conteudo={"itens": _com_textos(itens, i_baixo, {f_baixo.chave: "Closed on Mondays."})})
+    assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
+    assert velho in " ".join(respostas()) and "Closed on Mondays." not in " ".join(respostas())
+    _salvar(painel, h, pid, conteudo={"itens": _com_textos(itens, i_faq, {f_faq.chave: "Open daily, 9 AM to 9 PM."})})
+    painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h)
+    assert "Open daily, 9 AM to 9 PM." in " ".join(respostas()) and velho not in " ".join(respostas())
+    h1 = next(f for f in ed._analisar(fx[0])[0] if f.tag == "h1")
+    sobrancelha = next(f for f in ed._analisar(fx[0])[0] if f.tag == "p")
+    _salvar(painel, h, pid, conteudo={"itens": _com_textos(itens, 0, {h1.chave: "Kart birthday parties in Orlando",
+                                                                     sobrancelha.chave: "Parties · Orlando"})})
+    painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h)
+    html = site.get(c).text
+    assert _ld(html, "Service")[0]["name"] == "Kart birthday parties in Orlando"
+    assert _ld(html, "BreadcrumbList")[0]["itemListElement"][-1]["name"] == "Kart birthday parties in Orlando"
+    assert "Parties · Orlando" not in json.dumps(_ld(html, "Service") + _ld(html, "BreadcrumbList"), ensure_ascii=False)
+
+
+@pytest.mark.parametrize("quebra", ["\r", "\x0c", " ", "\x85", "\x1c"])
+def test_quebra_de_linha_estranha_nao_escorrega_a_posicao(quebra):
+    """O `HTMLParser` conta linha só no `\\n`: um `\\r`, `\\x0c` ou `\\u2028` no meio do texto não pode escorregar onde
+    a troca entra."""
+    s = f"<section class=\"faixa\">\n<p>One{quebra}two</p>\n<h2>Keep{quebra}this</h2>\n<p>Last line</p>\n</section>"
+    m = ed.marcar_original(s, 0)
+    assert re.sub(r' data-ed-(?:t|s|o)="[^"]*"', "", m) == s
+    k = next(f.chave for f in ed._analisar(s)[0] if f.texto == "Last line")
+    assert ed.aplicar_textos(s, {k: "New last"})[0] == s.replace("<p>Last line</p>", "<p>New last</p>")
+
+
+def test_citacao_trava_e_chave_inventada_nao_se_guarda(amb):
+    assert ed.TAGS_TRAVADAS.get("blockquote") == "pessoas"
+    m = ed.marcar_original("<section><blockquote><p>Best day ever</p></blockquote><p>Plain</p></section>", 0)
+    assert '<blockquote data-ed-trava="pessoas"' in m and "<p>Best day ever</p>" in m
+    painel, site, con = amb
+    h = _entra(painel)
+    p = _abre(painel, h, "/about/")
+    inventada = "p.99:0123abcd"
+    r = _salvar(painel, h, p["pagina"]["id"], conteudo={"itens": _com_textos(p["pagina"]["draft"]["itens"], 0, {inventada: "x" * 400})})
+    assert r.status_code == 200 and "não está na faixa" in r.json()["erros"]["o0"]
+    assert "textos" not in r.json()["pagina"]["draft"]["itens"][0], "chave que não existe e nunca foi guardada não entra"

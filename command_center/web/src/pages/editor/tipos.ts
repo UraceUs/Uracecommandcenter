@@ -7,7 +7,9 @@ export interface W { id: string; tipo: Tipo; texto?: string; nivel?: number; tam
 export interface Secao { id: string; tipo: 'secao'; fundo: string; espaco: string; colunas: number; itens: W[][] }
 /** A faixa da página do código. `textos` (etapa 4): as trocas do texto dela, pela chave da folha
  *  (`<tag>.<n>:<hash8>`, a que a prévia põe em `data-ed-t`). */
-export interface Original { id: string; tipo: 'original'; indice: number; oculto: boolean; textos?: Record<string, string> }
+/** `ancora` (revisão do #337): o que acha a faixa na página do código (o `id` ou o `aria-labelledby` dela), não a
+ *  posição; `indice` -1 é a faixa que saiu da página (fica no lugar, sem desenho, e as trocas dela são órfãs). */
+export interface Original { id: string; tipo: 'original'; indice: number; oculto: boolean; ancora?: string; textos?: Record<string, string> }
 export type Item = Secao | Original
 export interface Conteudo { itens: Item[] }
 /** Os dados da página (fora da prévia): o título da aba, a descrição e o endereço. */
