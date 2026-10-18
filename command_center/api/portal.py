@@ -388,6 +388,10 @@ def editar_piloto(pid: int, dados: PilotoIn, request: Request, cid=Depends(clien
     d.pop("is_self", None)
     try:
         mudou = portal.atualizar_piloto(con, cid, pid, d)
+    except portal.NascimentoTravado as e:          # #117: waiver assinada e valendo; anulada ou vencida, passa
+        _aud(con, request, "portal.driver.birth_date_locked", cid, {"piloto": pid})
+        con.commit()
+        raise HTTPException(409, str(e))
     except portal.ErroPortal as e:
         raise HTTPException(404 if "not found" in str(e) else 400, str(e))
     _aud(con, request, "portal.driver.update", cid, {"piloto": pid, "campos": mudou})

@@ -5437,3 +5437,84 @@ def test_revisao_cofre_arquivado_de_outra_chave_mostra_o_aviso(servidor, navegad
     assert cartao.locator(".cd-pill").inner_text().strip().lower() == "arquivado"
     assert cartao.locator(".cd-lista li", has=g.locator(".cd-ic.warn")).filter(has_text="outra chave").count() == 1, cartao.inner_text()
     g.close()
+
+
+# ------------------------------------------------------------------ waiver no balcão: conferir o documento (#117)
+@pytest.mark.parametrize("largura", [360, 390])
+def test_balcao_quadro_da_waiver_confere_o_documento_no_celular(servidor, navegador, largura):
+    """#117 (dono, 06/10: "sim, no check-in"): aberto o card no balcão, o quadro "Waiver · Conferir documento" mostra a
+    waiver que vale para ele (e só para ele); o operador confere o documento com foto de quem assinou (tipo, nome e,
+    pelo menor, a idade), sem foto nem número. Em 360 e 390 px: nada rola para o lado, um h1, sem pular nível, toque ≥ 40 px."""
+    import json as _json
+    import sqlite3
+    from datetime import date, datetime, timedelta
+    from zoneinfo import ZoneInfo
+    hoje = datetime.now(ZoneInfo("America/New_York")).date()
+    nasc = date(hoje.year - 12, hoje.month, min(hoje.day, 28)).isoformat()
+    piloto = f"Nina Conferencia {largura}"
+    con = sqlite3.connect(BANCO, timeout=10)
+    try:
+        cid = con.execute("SELECT id FROM clients WHERE pilot_name=?", (piloto,)).fetchone()
+        if cid:
+            cid = cid[0]
+        else:
+            cid = con.execute("""INSERT INTO clients (name, email, pilot_name, pilot_dob, status, source)
+                                 VALUES (?, ?, ?, ?, 'ACTIVE', 'manual')""",
+                              (f"Rosa Conferencia {largura}", f"rosa.conf{largura}.e2e@example.com", piloto, nasc)).lastrowid
+            quando = (hoje - timedelta(days=5)).isoformat() + "T15:00:00.000Z"
+            con.execute("""INSERT INTO waivers (client_id, signer_name, signer_email, template, status, sent_at, completed_at,
+                             expires_at, minor_name, source, doc_sha256, audit, pdf_path)
+                           VALUES (?, ?, ?, 'parental', 'completed', ?, ?, ?, ?, 'urace', ?, ?, '/nao/existe.pdf')""",
+                        (cid, f"Rosa Conferencia {largura}", f"rosa.conf{largura}.e2e@example.com", quando, quando,
+                         (hoje + timedelta(days=300)).isoformat(), piloto, "c" * 64,
+                         _json.dumps({"driver_name": piloto, "driver_birth_date": nasc})))
+            con.commit()
+    finally:
+        con.close()
+    pg = entrar(navegador, servidor, email="op@urace.us", largura=largura, altura=800)
+    abrir(pg, servidor, f"/balcao/{cid}")
+    pg.get_by_role("heading", name="Waiver · Conferir documento", level=2).wait_for()
+    quadro = pg.locator("section.card", has=pg.get_by_role("heading", name="Waiver · Conferir documento"))
+    quadro.get_by_role("heading", name=f"{piloto} · parental (menor)", level=3).wait_for()
+    quadro.get_by_text("documento ainda não conferido").wait_for()
+    assert "Nascimento declarado" in quadro.inner_text() and "(12 anos)" in quadro.inner_text()
+    cab = _cabecalhos(pg)
+    assert len([t for n, t in cab if n == 1]) == 1, cab
+    anterior = 0
+    for n, t in cab:
+        assert n <= anterior + 1, f"pulou de h{anterior} para h{n} ({t!r})"
+        anterior = n
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.evaluate(_PEQUENOS), pg.evaluate(_PEQUENOS)
+    # a janela: tipo de documento (lista fechada), o nome, a idade do menor; nada de foto nem número
+    quadro.get_by_role("button", name="Conferir documento").click()
+    dlg = pg.get_by_role("dialog")
+    dlg.get_by_role("heading", name=f"Conferir o documento de Rosa Conferencia {largura}", level=3).wait_for()
+    assert dlg.locator("input[type=file], input[type=text], textarea").count() == 0, "sem imagem e sem número"
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.evaluate(_PEQUENOS), pg.evaluate(_PEQUENOS)
+    gravar = dlg.get_by_role("button", name="Gravar conferência")
+    assert gravar.is_disabled()
+    dlg.get_by_role("radio", name="Passaporte").click()
+    dlg.get_by_role("radiogroup", name=f"O nome no documento confere com Rosa Conferencia {largura}?").get_by_role("radio", name="Sim, confere").click()
+    assert gravar.is_disabled(), "pelo menor, falta a idade"
+    idade = dlg.get_by_role("radiogroup", name=re.compile(f"A idade de {piloto} confere"))
+    idade.get_by_role("radio", name="Não confere" if largura == 390 else "Sim, confere").click()
+    with pg.expect_response(lambda x: x.url.endswith("/id-check") and x.status == 201):
+        gravar.click()
+    if largura == 390:       # não conferiu: registra e alerta; a waiver continua no quadro (nada é bloqueado)
+        pg.get_by_text("Registrado: o documento não conferiu.").wait_for()
+        quadro.get_by_text("não conferiu · Passaporte").wait_for()
+        assert quadro.get_by_role("button", name="Conferir de novo").count() == 1
+        att = pg.evaluate("fetch('/ops/api/needs-attention').then(r => r.json())")
+        (it,) = [i for i in att if i["key"].startswith("waiver-documento:") and piloto in i["title"]]
+        assert it["level"] == "HIGH" and it["link"] == f"/balcao/{cid}", it
+    else:
+        pg.get_by_text("Documento conferido.").wait_for()
+        quadro.get_by_text("documento conferido · Passaporte").wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()

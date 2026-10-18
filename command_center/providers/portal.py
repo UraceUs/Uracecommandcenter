@@ -58,6 +58,10 @@ class ErroPortal(ValueError):
     """Mensagem em inglês: é o que o cliente lê."""
 
 
+class NascimentoTravado(ErroPortal):
+    """#117: o nascimento decide entre parental e adult e está na waiver assinada; com ela valendo, não muda (409)."""
+
+
 def hoje():
     return datetime.now(FUSO).date()
 
@@ -387,6 +391,13 @@ def atualizar_piloto(con, cid, pid, d):
     if not p:
         raise ErroPortal("Driver not found.")                  # de outra conta: igual a não existir
     s = _dados_piloto(d, parcial=True)
+    if "birth_date" in s and s["birth_date"] != p["birth_date"]:
+        from command_center.providers import waiver_nativa as wn
+        if wn.vigente(con, pid):                     # #117: o nascimento está na waiver assinada e valendo
+            raise NascimentoTravado(
+                f"The date of birth of {p['name']} can't be changed while their signed waiver is valid: the date of birth "
+                "decided which waiver was signed (parental or adult) and it is on the signed document. If it is wrong, "
+                "contact URACE: our team voids that waiver and you sign a new one with the right date.")
     final = {**dict(p), **s}
     _exige_piloto({**final, "measures": json.loads(final["measures"]) if final.get("measures") else {}})
     if "measures" in s:              # salvar as medidas é confirmar que estão certas: a data renova

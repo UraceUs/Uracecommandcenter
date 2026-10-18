@@ -21,14 +21,23 @@ fica o erro na invoice e o botão de tentar de novo.
 O QR do cliente leva um **código aleatório** do card, não o id: ninguém chega ao card de
 outro trocando um número. Lido pela câmera de um celular qualquer, ele abre o card no painel,
 e o painel pede login.
+
+**Conferir o documento com foto (#117).** Ler o QR traz também as waivers que valem **deste card** (a nativa e a do
+DocuSign; nunca a de outro card). A equipe confere o documento de quem assinou: o tipo (lista fechada), se o nome
+confere e, pelo menor, se a idade confere. **Sem imagem e sem número do documento.** Vira um evento append-only da
+trilha (`id_checked` ou `id_check_failed`), nunca uma mudança na waiver (a linha assinada é imutável, #109), e a
+auditoria `waiver.id_check`. Não conferiu: registra e alerta em "Precisa de atenção"; nada é bloqueado sozinho, a
+equipe decide.
 """
 import io
+import json
 import re
 import secrets
 import sqlite3
+from datetime import date, timedelta
 
 from command_center import enderecos
-from command_center.db import agora, atualizar, auditar, inserir, todos, um
+from command_center.db import agora, atualizar, auditar, inserir, todos, transacao, um, waiver_anulada
 from command_center.providers import estoque, portal
 
 MODOS = ("cobrar", "guardar", "usar_do_cliente")
@@ -89,7 +98,7 @@ def cliente_pelo_codigo(con, codigo):
 
 def resumo_cliente(c):
     return {"id": c["id"], "nome": c["pilot_name"] or c["name"], "responsavel": c["name"],
-            "pilot_name": c["pilot_name"], "email": c["email"]}
+            "pilot_name": c["pilot_name"], "email": c["email"], "vip": bool(c.get("vip"))}
 
 
 # ------------------------------------------------------------------ código de barras da peça
@@ -113,15 +122,139 @@ def item_publico(con, it, client_id=None):
     return out
 
 
+# ------------------------------------------------------------------ waiver no balcão: conferir o documento (#117)
+# Padrão técnico (o dono decidiu "sim, no check-in" e deixou os detalhes): os documentos com foto que a equipe aceita.
+DOCUMENTOS = {"drivers_license": "Driver's license", "passport": "Passport", "state_id": "State ID",
+              "other_government_id": "Other government-issued photo ID"}
+
+
+class ForaDeVigor(ErroBalcao):
+    """A waiver é deste card, mas não está valendo (vencida, anulada, oculta, ou parental de quem já fez 18): 409."""
+
+
+def card_da_waiver(con, w):
+    """O card a que a waiver vale AGORA. A nativa assinada por um piloto da área do cliente segue o piloto: religado a
+    outro card (`vinculo_site.vincular_driver`), ela vai junto; solto, fica sem card. Vínculo feito à mão pela equipe
+    (`link_by='human'`, POST /waivers/{wid}/link) e a do DocuSign ficam no `client_id` da waiver, que unir cards também
+    move. Nada aqui escreve na waiver: a linha assinada é imutável (#109)."""
+    if w.get("source") == "urace" and w.get("pilot_id") and w.get("link_by") != "human":
+        p = um(con, "SELECT client_id FROM portal_pilots WHERE id=?", (w["pilot_id"],))
+        if p:
+            return p["client_id"]
+    return w.get("client_id")
+
+
+def _nativas_do_card(con, client_id):
+    from command_center.providers import waiver_nativa as wn
+    ws = todos(con, f"""SELECT * FROM waivers WHERE source='urace' AND status='completed' AND COALESCE(hidden,0)=0
+                        AND COALESCE(internal,0)=0 AND NOT {waiver_anulada()} AND expires_at >= ?
+                        AND (client_id=? OR pilot_id IN (SELECT id FROM portal_pilots WHERE client_id=?))
+                        ORDER BY completed_at DESC, id DESC""", (portal.hoje().isoformat(), client_id, client_id))
+    return [w for w in ws if card_da_waiver(con, w) == client_id and not wn.parental_de_maior(con, w)]
+
+
+def _docusign_do_card(con, client_id):
+    """A do DocuSign que vale: waiver de verdade (adult ou parental; um envelope 'other', como o Membership Agreement,
+    não conta nem esconde a waiver), assinada, nem oculta nem anulada, dentro da validade (ou, sem data de validade,
+    assinada há menos de um ano, a mesma régua do "serviço sem waiver" da atenção). A parental de quem já fez 18 pelo
+    nascimento do card não vale mais."""
+    from command_center.providers import waiver_nativa as wn
+    hoje = portal.hoje()
+    ws = todos(con, f"""SELECT * FROM waivers WHERE client_id=? AND COALESCE(source,'')<>'urace' AND status='completed'
+                        AND template IN ('adult','parental') AND COALESCE(hidden,0)=0 AND COALESCE(internal,0)=0
+                        AND NOT {waiver_anulada()}
+                        AND (expires_at >= ? OR (expires_at IS NULL AND COALESCE(completed_at, sent_at) >= ?))
+                        ORDER BY COALESCE(completed_at, sent_at) DESC, id DESC""",
+               (client_id, hoje.isoformat(), (hoje - timedelta(days=365)).isoformat()))
+    return next((w for w in ws if not wn.parental_de_maior(con, w)), None)
+
+
+def ultima_conferencia(con, wid):
+    """A última conferência de documento desta waiver (ou None): o que a tela mostra e o que a atenção olha."""
+    e = um(con, """SELECT id, at, event, detail FROM waiver_events WHERE waiver_id=? AND event IN ('id_checked','id_check_failed')
+                   ORDER BY id DESC LIMIT 1""", (wid,))
+    if not e:
+        return None
+    d = json.loads(e["detail"] or "{}")
+    return {"event_id": e["id"], "at": e["at"], "ok": e["event"] == "id_checked", "document_type": d.get("document_type"),
+            "name_matches": d.get("name_matches"), "minor_age_matches": d.get("minor_age_matches"), "by": d.get("by")}
+
+
+def _waiver_publica(con, w, card):
+    nativa = w.get("source") == "urace"
+    trilha = json.loads(w["audit"] or "{}") if nativa else {}
+    menor = w["template"] == "parental"
+    piloto = trilha.get("driver_name") or w.get("minor_name") or card.get("pilot_name") or card.get("name")
+    # o nascimento que a waiver gravou (declarado ao assinar) ou, sem ele (a do DocuSign), o que o card diz
+    nasc, origem = None, None
+    if menor:
+        nasc, origem = (trilha.get("driver_birth_date"), "waiver") if trilha.get("driver_birth_date") else \
+            ((card.get("pilot_dob") or "").strip()[:10] or None, "card")
+    idade = None
+    if nasc:
+        try:
+            idade = portal.idade(date.fromisoformat(nasc))
+        except ValueError:
+            nasc = None
+    return {"id": w["id"], "source": "urace" if nativa else "docusign", "kind": w["template"], "minor": menor,
+            "signer_name": w["signer_name"], "driver": piloto, "driver_birth_date": nasc, "driver_age": idade,
+            "driver_birth_date_from": origem if nasc else None,
+            "signed_at": w["completed_at"], "valid_until": w["expires_at"], "id_check": ultima_conferencia(con, w["id"])}
+
+
+def waivers_do_card(con, client_id):
+    """As waivers que valem para ESTE card, para conferir o documento no balcão: a nativa e a do DocuSign.
+    Nunca a de outro card (dono: "nunca colocar serviço de um cliente no card de outro")."""
+    c = um(con, "SELECT * FROM clients WHERE id=?", (client_id,))
+    if not c:
+        return []
+    ws = _nativas_do_card(con, client_id)
+    d = _docusign_do_card(con, client_id)
+    return [_waiver_publica(con, w, c) for w in (ws + ([d] if d else []))]
+
+
+def conferir_documento(con, wid, client_id, documento, nome_confere, idade_confere=None, usuario=None, ip=None,
+                       user_agent=None):
+    """A equipe conferiu o documento com foto de quem assinou a waiver `wid`, do card `client_id`. Grava o evento na
+    trilha e a auditoria, na mesma transação. Não bloqueia nada: `id_check_failed` só registra e alerta."""
+    from command_center.providers import trilha_waiver as tw
+    if documento not in DOCUMENTOS:
+        raise ErroBalcao("tipo de documento inválido")
+    usuario = usuario or {}
+    with transacao(con, imediata=True):        # card e vigência conferidos com a trava de escrita já pega
+        w = um(con, "SELECT * FROM waivers WHERE id=?", (wid,))
+        if not w or card_da_waiver(con, w) != client_id:
+            raise LookupError("waiver")                 # de outro card: igual a não existir
+        if wid not in {x["id"] for x in waivers_do_card(con, client_id)}:
+            raise ForaDeVigor("Esta waiver não está valendo (vencida, anulada, oculta ou parental de quem já fez 18). "
+                              "Confira a waiver em vigor do card.")
+        menor = w["template"] == "parental"
+        if menor and idade_confere is None:
+            raise ErroBalcao("Piloto menor: diga se a idade dele confere com o nascimento.")
+        if not menor:
+            idade_confere = None
+        ok = bool(nome_confere) and (not menor or bool(idade_confere))
+        detalhe = {"document_type": documento, "name_matches": bool(nome_confere), "minor_age_matches": idade_confere,
+                   "checked": "signer", "waiver_source": "urace" if w.get("source") == "urace" else "docusign",
+                   "by": usuario.get("name"), "user_id": usuario.get("id")}
+        e = tw.registrar(con, "id_checked" if ok else "id_check_failed", "staff", ip=ip, user_agent=user_agent,
+                         detail=detalhe, waiver_id=wid, client_id=client_id, pilot_id=w["pilot_id"], kind=w["template"])
+        auditar(con, "waiver.id_check", f"user:{usuario.get('id')}", user_id=usuario.get("id"), entity_type="waiver",
+                entity_id=wid, detail={**detalhe, "result": "ok" if ok else "failed", "event_id": e["id"],
+                                       "client_id": client_id, "template": w["template"]}, ip=ip)
+    return {"ok": ok, "event": e["event"], "event_id": e["id"], "at": e["at"]}
+
+
 def ler(con, texto, client_id=None):
-    """O que o leitor mandou: o QR de um cliente, uma peça conhecida ou um código novo."""
+    """O que o leitor mandou: o QR de um cliente, uma peça conhecida ou um código novo.
+    #117: o QR do cliente traz também as waivers que valem para o card dele (e só dele)."""
     t = (texto or "").strip()
     m = RX_QR.search(t.upper())
     if m:
         c = cliente_pelo_codigo(con, m.group(1))
         if not c:
             raise ErroBalcao("QR de cliente não reconhecido")
-        return {"tipo": "cliente", "cliente": resumo_cliente(c)}
+        return {"tipo": "cliente", "cliente": resumo_cliente(c), "waivers": waivers_do_card(con, c["id"])}
     cod = _codigo(t)
     b = um(con, "SELECT b.item_id FROM stock_barcodes b JOIN stock_items i ON i.id=b.item_id "
                 "WHERE b.code=? AND i.active=1", (cod,))
@@ -431,6 +564,7 @@ def do_cliente(con, client_id, data=None):
     invs = todos(con, """SELECT * FROM parts_invoices WHERE client_id=? AND ((status='aberta' AND paid_at IS NULL) OR service_date=?)
                          ORDER BY id DESC""", (client_id, data))
     return {"cliente": resumo_cliente(c), "data": data, "qr": url_do_cliente(codigo_do_cliente(con, client_id)),
+            "waivers": waivers_do_card(con, client_id),                 # #117: conferir o documento
             "invoices": [invoice_publica(con, p) for p in invs],
             "leituras": [dict(x) for x in leituras], "guardado": estoque.do_cliente(con, client_id)["pecas"]}
 

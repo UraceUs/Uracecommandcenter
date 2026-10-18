@@ -346,6 +346,44 @@ def _coletar(con):
                                   (x["peca"] or f"código novo {x['code']}") + (f" · {x['por']}" if x["por"] else ""))
                                  for x in pend[:6]]))
 
+    # ---- 4f2c. balcão (#117): o documento com foto não conferiu com a waiver. Registra e alerta; a equipe decide
+    # (conferir de novo, anular e pedir outra, ou seguir). O aviso é do card a que a waiver vale AGORA (religada à mão,
+    # card unido, piloto religado: vai junto). Some quando a última conferência confere; some sozinho (fica em "mostrar
+    # ocultos", com o motivo) quando a waiver é anulada, ocultada, fica sem card ou deixa de valer no balcão.
+    from command_center.providers import balcao as _bal
+    for e in todos(con, """SELECT e.id, e.at, e.waiver_id, e.detail FROM waiver_events e JOIN waivers w ON w.id = e.waiver_id
+                            WHERE e.event = 'id_check_failed' AND COALESCE(w.internal,0)=0
+                              AND e.id = (SELECT MAX(x.id) FROM waiver_events x WHERE x.waiver_id = e.waiver_id
+                                           AND x.event IN ('id_checked', 'id_check_failed'))
+                            ORDER BY e.id"""):
+        w = um(con, f"SELECT *, {waiver_anulada('waivers')} AS anulada FROM waivers WHERE id=?", (e["waiver_id"],))
+        cid = _bal.card_da_waiver(con, w)
+        c = um(con, "SELECT id, name, pilot_name FROM clients WHERE id=?", (cid,)) if cid else None
+        if w["anulada"]:
+            oculto = "a waiver foi anulada"
+        elif w["hidden"]:
+            oculto = "a waiver foi ocultada"
+        elif not c:
+            oculto = "a waiver não está ligada a nenhum card"
+        elif w["id"] not in {x["id"] for x in _bal.waivers_do_card(con, c["id"])}:
+            oculto = "a waiver não vale mais (vencida ou de quem fez 18)"
+        else:
+            oculto = None
+        d = json.loads(e["detail"] or "{}")
+        quem = (c and (c["pilot_name"] or c["name"])) or w["signer_name"] or f"waiver {w['id']}"
+        falhou = (["o nome não confere"] if not d.get("name_matches") else []) \
+            + (["a idade do menor não confere"] if d.get("minor_age_matches") is False else [])
+        itens.append(dict(key=_chave("waiver-documento", "waiver", w["id"]), level="HIGH",
+                          title=f"{quem}: o documento com foto não conferiu com a waiver",
+                          why=f"Na conferência do balcão, {d.get('by') or 'a equipe'} marcou: {' e '.join(falhou) or 'não confere'}. "
+                              "O sistema não bloqueia nada: a equipe decide (conferir de novo, anular a waiver e pedir outra, ou seguir).",
+                          entity={"type": "waiver", "id": w["id"]}, client_id=c["id"] if c else None,
+                          link=f"/balcao/{c['id']}" if c else None, action="Decidir no balcão",
+                          facts=[("Assina", w["signer_name"] or "—"), ("Modelo", w["template"] or "—"),
+                                 ("Documento", _bal.DOCUMENTOS.get(d.get("document_type"), d.get("document_type") or "—")),
+                                 ("Quando", _dbr(_dia_fl(e["at"])))],
+                          auto_oculto=oculto))
+
     # ---- 4f3. checklists (#92): começado e não concluído num dia que já passou
     from command_center.providers import checklists as _ck
     soltos = _ck.incompletos(con)
