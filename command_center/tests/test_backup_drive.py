@@ -185,3 +185,29 @@ def test_erro_de_permissao_explica_o_que_fazer(monkeypatch):
     with pytest.raises(RuntimeError) as e:
         backup_drive._pedir("https://x", "tok")
     assert "google_auth.py" in str(e.value) and "ESCRITA" in str(e.value)
+
+
+def test_a_listagem_do_drive_nao_manda_espaco_cru_na_url(monkeypatch):
+    """16/10: "URL can't contain control characters … orderBy=createdTime desc" — a cópia do
+    Drive falhava toda noite. Nenhuma URL pedida ao Drive pode ter espaço sem codificar."""
+    vistas = []
+
+    class Resposta:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"files": []}'
+
+    def abrir(req, timeout=None):
+        vistas.append(req.full_url)
+        return Resposta()
+
+    monkeypatch.setattr(backup_drive.urllib.request, "urlopen", abrir)
+    assert backup_drive.listar("tok", "pasta-1") == []
+    backup_drive.achar_pasta("tok", "Backup urace command center")
+    assert vistas and all(" " not in u for u in vistas), vistas
+    assert "orderBy=createdTime%20desc" in vistas[0]

@@ -120,8 +120,10 @@ def pasta(token, nome=PASTA, criar=True):
 
 def listar(token, pasta_id):
     q = f"'{pasta_id}' in parents and trashed = false"
-    r = _pedir(f"{API}/files?q={urllib.parse.quote(q)}"
-               "&fields=files(id,name,size,createdTime)&orderBy=createdTime desc", token)
+    # tudo codificado: o espaço cru do "createdTime desc" derrubava a listagem desde 16/10
+    params = urllib.parse.urlencode({"q": q, "fields": "files(id,name,size,createdTime)",
+                                     "orderBy": "createdTime desc"}, quote_via=urllib.parse.quote)
+    r = _pedir(f"{API}/files?{params}", token)
     return r.get("files", [])
 
 
