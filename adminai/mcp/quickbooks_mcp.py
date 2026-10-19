@@ -635,6 +635,47 @@ def enviar_invoice_sistema(invoice_id):
             "email_status": r.get("EmailStatus")}
 
 
+def item_avulso_sistema(nome, preco, descricao=None, requestid=None):
+    """#341: o item da linha que não existe no catálogo (a linha livre do rascunho do balcão, ou a peça do estoque
+    ainda sem item). Pelo nome: se já existe um ativo, usa esse (não duplica); senão cria do jeito do item novo do
+    balcão (Service, sem imposto, a conta de receita de `_conta_receita`, a mesma de `criar_item_peca_sistema`).
+    A `requestid` vai no POST /item: se a resposta se perde, a nova tentativa devolve o mesmo item."""
+    nome = (nome or "").strip().replace(PROIBIDO_NO_NOME, " -")[:100]
+    if not nome:
+        raise ErroFerramenta("nome de item vazio")
+    achados = _query(f"select * from Item where Name = '{_esc(nome)}' maxresults 20").get("Item", [])
+    ativos = [i for i in achados if i.get("Active") is not False and i.get("Type") != "Category"]
+    if ativos:
+        return {**_resumo_item(ativos[0]), "ja_existia": True}
+    corpo = {"Name": nome, "Type": "Service", "Taxable": False, "UnitPrice": float(preco or 0),
+             "IncomeAccountRef": _conta_receita()}
+    if descricao:
+        corpo["Description"] = descricao[:4000]
+    item = _req("/item", "POST", corpo, params={"requestid": requestid} if requestid else None).get("Item", {})
+    return {**_resumo_item(item), "ja_existia": False}
+
+
+def invoice_rascunho_sistema(cliente_id, linhas, memo, data, requestid):
+    """#341: a invoice do rascunho do balcão, numa chamada só e SEM enviar (o envio é outro clique, como o da invoice
+    de peças do dia). Idempotente como a do #310: a `requestid` vai no POST /invoice e o QuickBooks devolve a resposta
+    original quando ela se repete. `InvoiceNaoCriada` só quando é certo que nada foi criado (erro antes do POST ou
+    recusa 4xx); qualquer outro erro não prova nada, e quem chamou tenta de novo com a MESMA requestid."""
+    try:
+        if not linhas:
+            raise ErroFerramenta("invoice sem linha")
+        corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas), "TxnDate": data, "DueDate": data,
+                 "DocNumber": _proximo_doc_number(), "CustomerMemo": {"value": memo[:1000]}, "PrivateNote": memo[:4000]}
+    except Exception as e:                                       # antes do POST /invoice: nada foi criado
+        raise InvoiceNaoCriada(str(e)[:400]) from e
+    try:
+        inv = _req("/invoice", "POST", corpo, params={"requestid": requestid}).get("Invoice", {})
+    except ErroFerramenta as e:
+        if getattr(e, "antes_do_envio", False) or _recusada(e):
+            raise InvoiceNaoCriada(str(e)[:400]) from e
+        raise                            # tempo esgotado, conexão caída, 5xx, 408, 429: pode ter criado
+    return _resumo_seguro(inv)
+
+
 def item_loja_sistema(nome, preco, descricao=None):
     """#174: o item do produto da loja no catálogo, pelo nome. Se já existe (em qualquer categoria),
     usa esse; senão cria um (tipo Service, sem imposto, como manda a regra de item novo)."""

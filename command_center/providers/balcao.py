@@ -353,8 +353,9 @@ def cliente_qbo(con, client_id):
 # ------------------------------------------------------------------ lançar
 def _invoice_do_dia(con, client_id, data, por):
     # invoice já paga no cartão não recebe peça nova: a próxima peça do dia abre outra
+    # #341: a invoice que nasceu de um rascunho tem as linhas dele; a leitura do COBRAR nunca entra nela
     p = um(con, """SELECT * FROM parts_invoices WHERE client_id=? AND service_date=? AND status='aberta' AND paid_at IS NULL
-                   ORDER BY id DESC LIMIT 1""", (client_id, data))
+                   AND draft_id IS NULL ORDER BY id DESC LIMIT 1""", (client_id, data))
     if p:
         return p
     return um(con, "SELECT * FROM parts_invoices WHERE id=?",
@@ -439,6 +440,10 @@ def desfazer(con, scan_id, por=None):
 
 # ------------------------------------------------------------------ invoice de peças ↔ QuickBooks
 def linhas(con, pinv_id):
+    p = um(con, "SELECT draft_id FROM parts_invoices WHERE id=?", (pinv_id,))
+    if p and p["draft_id"]:                       # #341: as linhas são as do rascunho (estoque, QuickBooks e livre)
+        return todos(con, """SELECT id, qty, unit_price, name, NULL AS sku, qbo_item_id FROM counter_draft_lines
+                              WHERE draft_id=? ORDER BY id""", (p["draft_id"],))
     return todos(con, """SELECT ch.id, ch.qty, ch.unit_price, i.name, i.sku, i.qbo_item_id
                            FROM stock_charges ch JOIN stock_items i ON i.id=ch.item_id
                           WHERE ch.parts_invoice_id=? AND ch.status!='waived' ORDER BY ch.id""", (pinv_id,))
@@ -455,8 +460,8 @@ def sincronizar_qbo(con, pinv_id):
     invoice, para a tela mostrar e o botão tentar de novo — a leitura já está salva."""
     from command_center.providers import NaoConectado
     p = um(con, "SELECT * FROM parts_invoices WHERE id=?", (pinv_id,))
-    if not p or p["status"] != "aberta":
-        return p
+    if not p or p["status"] != "aberta" or p["draft_id"]:
+        return p                     # #341: a do rascunho já subiu inteira; reescrever com as cobranças apagaria linhas
     ls = linhas(con, p["id"])
     if not ls and not p["qbo_invoice_id"]:
         atualizar(con, "parts_invoices", p["id"], total=0, qbo_error=None)
