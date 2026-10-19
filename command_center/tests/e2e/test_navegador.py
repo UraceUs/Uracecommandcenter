@@ -1584,20 +1584,31 @@ def test_mecanico_cadastra_peca_nova_no_balcao_com_foto_e_ela_aparece_no_estoque
 
 
 def _video_do_qr(texto, caminho):
-    """Um .y4m de 2 s com o QR parado no meio: a "câmera" falsa do Chromium mostra isto."""
+    """Um .y4m com o QR no meio: a "câmera" falsa do Chromium mostra isto, em laço.
+
+    O teste falhava às vezes ("a câmera não leu o QR em 15 s", com a câmera aberta e o quadro perfeito). A causa: o
+    código do cliente é sorteado a cada execução, e o ZXing (o leitor do iPhone, o mesmo do Chromium sem
+    BarcodeDetector) não acha o QR em ~1–2% dos desenhos *exatos* de um símbolo — no quadro inteiro e no recorte do
+    centro. Uma câmera de verdade nunca repete o quadro; a falsa repetia o mesmo, então o sorteio ruim falhava a
+    execução inteira. Agora o vídeo passa pelas 8 máscaras do QR (o mesmo texto, desenhos diferentes), com tamanho e
+    posição que variam um pouco, como a mão que segura o celular: medido com o ZXing em 120 códigos sorteados, nenhum
+    ficou sem leitura (o pior leu em 7 das 8). E o quadro é 1280x720, o que a tela pede (`CAMERA`): nada é
+    reescalado, e o QR (módulos inteiros, bordas nítidas) cabe com a margem no recorte do centro."""
     import io
     import segno
     from PIL import Image
-    buf = io.BytesIO(); segno.make(texto, error="m").save(buf, kind="png", scale=8, border=4)
-    qr = Image.open(buf).convert("RGB")
-    quadro = Image.new("RGB", (640, 480), (255, 255, 255))
-    qr.thumbnail((440, 440)); quadro.paste(qr, ((640 - qr.width) // 2, (480 - qr.height) // 2))
-    y, u, v = quadro.convert("YCbCr").split()
-    u, v = u.resize((320, 240)), v.resize((320, 240))
     with open(caminho, "wb") as f:
-        f.write(b"YUV4MPEG2 W640 H480 F10:1 Ip A1:1 C420jpeg\n")
-        for _ in range(20):
-            f.write(b"FRAME\n" + y.tobytes() + u.tobytes() + v.tobytes())
+        f.write(b"YUV4MPEG2 W1280 H720 F10:1 Ip A1:1 C420jpeg\n")
+        for m in range(8):
+            buf = io.BytesIO()
+            segno.make(texto, error="m", mask=m, micro=False).save(buf, kind="png", scale=4 + m % 2, border=4)
+            qr = Image.open(buf).convert("RGB")
+            quadro = Image.new("RGB", (1280, 720), (255, 255, 255))
+            quadro.paste(qr, ((1280 - qr.width) // 2 + 8 * m - 28, (720 - qr.height) // 2 - 4 * m + 14))
+            y, u, v = quadro.convert("YCbCr").split()
+            u, v = u.resize((640, 360)), v.resize((640, 360))
+            for _ in range(2):                 # cada desenho fica 0,2 s na "câmera"
+                f.write(b"FRAME\n" + y.tobytes() + u.tobytes() + v.tobytes())
     return caminho
 
 
@@ -1645,12 +1656,20 @@ def test_mecanico_le_o_qr_do_cliente_pela_camera_e_abre_o_cliente(servidor, nave
         assert pg.evaluate("() => 'BarcodeDetector' in window") is False      # sem o leitor nativo, como no iPhone
         console = []
         pg.on("console", lambda m: console.append(f"{m.type}: {m.text}"[:300]))
+        # quantas vezes a tela abriu a câmera: a leitura tem de usar a mesma câmera do começo ao fim
+        pg.evaluate("""() => { window.__aberturas = 0; const md = navigator.mediaDevices, gum = md.getUserMedia.bind(md)
+          md.getUserMedia = (c) => { window.__aberturas++; return gum(c) } }""")
         pg.get_by_role("button", name="Ler com a câmera").click()
         pg.get_by_role("heading", name="Apontar para o código").wait_for()
+        # o relógio da leitura só começa com a câmera mandando quadros (no runner lento, abrir a câmera e baixar o
+        # leitor ZXing já come segundos); ou a tela já leu e saiu do balcão
+        pg.wait_for_function(f"""() => location.pathname.endsWith('/balcao/{david}') ||
+          [...document.querySelectorAll('video')].some(v => v.readyState >= 2 && v.videoWidth > 0)""", timeout=20000)
+        quadro = pg.evaluate("() => { const v = document.querySelector('video'); return v ? [v.videoWidth, v.videoHeight] : null }")
         try:
             pg.wait_for_url(f"**/ops/balcao/{david}", timeout=15000)
         except Exception:                      # diga o que a tela mostrava: o CI não guarda print
-            raise AssertionError(f"a câmera não leu o QR em 15 s. url={pg.url}\ntela={pg.inner_text('body')[:1500]}\n"
+            raise AssertionError(f"a câmera não leu o QR em 15 s. quadro={quadro} aberturas={pg.evaluate('() => window.__aberturas')} url={pg.url}\ntela={pg.inner_text('body')[:1500]}\n"
                                  f"console={console[-15:]}\njs={pg.erros_js}\napi={pg.erros_api}")
         pg.get_by_role("heading", name="David Pedalo", level=2).wait_for()
         assert pg.get_by_role("heading", name="Apontar para o código").count() == 0   # a câmera fechou sozinha
