@@ -202,7 +202,7 @@ def checkout(con, oid):
                      FROM plan_orders o JOIN portal_accounts a ON a.id=o.account_id LEFT JOIN portal_pilots p ON p.id=o.pilot_id
                     WHERE o.id=?""", (oid,))
     from command_center.providers import waiver_nativa
-    nativa = waiver_nativa.ligada(con)
+    nativa = waiver_nativa.nativa_do_piloto(con, o["pilot_id"]) if o["pilot_id"] else waiver_nativa.ligada(con)
     w_ok = waiver_ok(con, o)
     w = "ok" if w_ok else ("erro" if o["waiver_error"] else ("enviada" if o["waiver_ref"] else "pendente"))
     waiver = {"estado": "ok" if w == "ok" else ("assinar_aqui" if nativa else ("email" if w == "enviada" else

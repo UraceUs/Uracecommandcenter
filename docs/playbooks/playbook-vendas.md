@@ -655,7 +655,9 @@ gerente. Use Aceitar."
    invoice **já saiu na hora em que o cliente marcou** (#340): o Aceitar não cria outra. Veja "Aluno recorrente"
    logo abaixo.
 3. **Waiver:** se o piloto não tem waiver válida no dia da sessão, sai pelo DocuSign. Com a waiver
-   nativa ligada, o cliente assina na área do cliente.
+   nativa ligada, o cliente assina na área do cliente. O card pode escolher outro fluxo no switch **Waiver** (card ›
+   Waivers, gerente+): **DocuSign** sempre manda o DocuSign; **Nativa** assina na área do cliente mesmo com a chave
+   geral desligada (#348).
 4. **Confirma sozinha** quando a invoice aparece paga e a waiver está em dia.
 5. **Lembrete ao cliente** por e-mail 3 dias e 1 dia antes, dizendo o que falta.
 6. Falhou algo (sem card, sem cliente no QuickBooks, serviço sem item)? O motivo fica escrito no

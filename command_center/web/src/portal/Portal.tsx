@@ -332,7 +332,7 @@ function Dashboard({ conta }: { conta: Account }) {
   const nomeDo = (id: number) => conta.drivers.find(p => p.id === id)?.name
   const atencao = conta.drivers.filter(p => p.measures_status !== 'ok')
   const waivers = useWaivers()
-  const semWaiver = waivers?.enabled ? waivers.drivers.filter(w => w.status !== 'signed' && w.kind) : []
+  const semWaiver = waivers?.enabled ? waivers.drivers.filter(w => w.status !== 'signed' && w.kind && w.enabled !== false) : []
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Dashboard</h1><p className="muted" style={{ margin: '4px 0 0' }}>Hi, {conta.name.split(' ')[0]}. Here is everything about your account.</p></div>
     <Aviso erro={erro} />
@@ -342,7 +342,7 @@ function Dashboard({ conta }: { conta: Account }) {
       {p.measures_status === 'faltando' ? `${p.name}: please complete the profile (${p.missing.map(k => ROTULO[k] || k).join(', ')}).`
         : p.measures_status === 'vencida' ? `${p.name}: measurements are ${d?.measures_limit_days ?? 60}+ days old. Update them to book.`
         : `${p.name}: measurements are ${p.measures_days} days old. Please review them.`} <Link to="/portal/drivers">Update</Link></div></div>)}
-    {(waivers?.enabled ? waivers.drivers.filter(w => w.turns_18_on) : []).map(w => <div key={`d${w.driver_id}`} className="banner info"><span className="bi">●</span><div className="grow">
+    {(waivers?.enabled ? waivers.drivers.filter(w => w.turns_18_on && w.enabled !== false) : []).map(w => <div key={`d${w.driver_id}`} className="banner info"><span className="bi">●</span><div className="grow">
       {w.driver} turns 18 on {dataUS(w.turns_18_on)}. The parental waiver ends the day before; from then on {w.driver} signs the adult waiver.</div></div>)}
     {semWaiver.map(w => <div key={`w${w.driver_id}`} className="banner warn"><span className="bi">▲</span><div className="grow">
       {w.driver}: the waiver is not signed yet. {w.own_signature_required
@@ -477,7 +477,7 @@ export function FormPiloto({ piloto, onSalvo, onFechar, nascimentoTravado }: { p
 function Pilotos({ conta, onSalvo }: { conta: Account; onSalvo: (a: Account) => void }) {
   const [editando, setEditando] = useState<number | 'novo' | null>(conta.drivers.length ? null : 'novo')
   const waivers = useWaivers()
-  const waiverDe = (id: number) => waivers?.enabled ? waivers.drivers.find(w => w.driver_id === id) : undefined
+  const waiverDe = (id: number) => waivers?.enabled ? waivers.drivers.find(w => w.driver_id === id && w.enabled !== false) : undefined
   return <div className="stack" style={{ gap: 18 }}>
     <div className="portal-piloto-topo"><div className="grow"><h1 className="h1">Drivers</h1><p className="muted" style={{ margin: '4px 0 0' }}>The people who drive the kart: your child or children, or you. The account holder stays the responsible adult.</p></div>
       <div className="row wrap" style={{ gap: 8 }}>{waivers && (waivers.enabled || !!waivers.signed_total) && <Link className="btn sm ghost" to="/portal/waivers">Signed waivers</Link>}

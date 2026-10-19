@@ -763,7 +763,7 @@ def email_confirmar(dados: CodigoIn, request: Request, cid=Depends(cliente_atual
 def waiver_codigo(request: Request, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """#108: o código de uma vez, na hora de assinar a waiver."""
     from command_center.providers import waiver_nativa as wn
-    if not wn.ligada(con):
+    if not wn.nativa_na_conta(con, cid):
         raise HTTPException(404, "Waiver not available.")
     if not um(con, "SELECT email_verified_at FROM portal_accounts WHERE id=?", (cid,))["email_verified_at"]:
         raise HTTPException(400, "Confirm your email first.")
@@ -781,7 +781,7 @@ def waivers(cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db
 def waiver_modelo(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """O texto do documento para ler antes de assinar (o PDF original está em …/pdf)."""
     from command_center.providers import waiver_nativa as wn
-    m = wn.modelo(con, kind) if wn.ligada(con) else None
+    m = wn.modelo(con, kind) if wn.nativa_na_conta(con, cid) else None
     if not m:
         raise HTTPException(404, "Waiver not available.")
     return {"kind": kind, "name": m["name"], "pages": m["pages"], "text": m["text"] or "",
@@ -792,7 +792,7 @@ def waiver_modelo(kind: str, cid=Depends(cliente_atual), con: sqlite3.Connection
 def waiver_modelo_pdf(kind: str, request: Request, driver: int | None = Query(None, ge=1, le=2**63 - 1),
                       cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import waiver_nativa as wn
-    m = wn.modelo(con, kind) if wn.ligada(con) else None
+    m = wn.modelo(con, kind) if wn.nativa_na_conta(con, cid) else None
     if not m:
         raise HTTPException(404, "Waiver not available.")
     with open(m["pdf_path"], "rb") as f:
@@ -860,9 +860,9 @@ def waiver_evento(pid: int, dados: EventoTelaIn, request: Request, cid=Depends(c
                   con: sqlite3.Connection = Depends(get_db)):
     """#111: abriu a tela de assinar e leu todas as páginas, relatados pela tela, com hora do servidor, IP e aparelho."""
     from command_center.providers import trilha_waiver as tw, waiver_nativa as wn
-    if not wn.ligada(con):
-        raise HTTPException(404, "Waiver not available.")
     p = next((x for x in portal.pilotos(con, cid) if x["id"] == pid), None)
+    if p and not wn.nativa_do_piloto(con, pid):
+        raise HTTPException(404, "Waiver not available.")
     if not p:
         raise HTTPException(404, "Driver not found.")
     try:

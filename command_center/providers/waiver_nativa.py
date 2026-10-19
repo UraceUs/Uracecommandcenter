@@ -175,6 +175,78 @@ def ligar(con, ligado, por):
     return ligada(con)
 
 
+# ------------------------------------------------------------------ fluxo por card (#348)
+# Dono, 19/10: "Um switch para escolher dentro do card de cada cliente se vamos usar o fluxo pelo DocuSign ou pela
+# waiver nativa." `padrao` segue a chave geral (Site › Waiver); `docusign` e `nativa` valem só para aquele card.
+FLUXOS = ("padrao", "docusign", "nativa")
+
+
+def motivo_sem_nativa():
+    """Por que a nativa não pode valer num card agora (None = pode): sem os modelos ou sem o selo (#110)."""
+    from command_center.providers import selo_waiver
+    e = selo_waiver.estado()
+    if not e["configured"]:
+        return f"O selo da waiver não está configurado ({e['reason']}). Sem ele nenhuma assinatura nativa sai."
+    return None
+
+
+def _modelos_prontos(con):
+    return all(modelo(con, k) for k in MODELOS)
+
+
+def fluxo_escolhido(con, client_id):
+    c = um(con, "SELECT waiver_flow FROM clients WHERE id=?", (client_id,)) if client_id else None
+    f = c and c["waiver_flow"]
+    return f if f in FLUXOS else "padrao"
+
+
+def fluxo_da_waiver(con, client_id):
+    """'nativa' ou 'docusign': o que vale para a PRÓXIMA waiver deste card. Sem card, a chave geral.
+    `nativa` no card sem selo ou sem os modelos cai para o DocuSign (e o card aparece em "Precisa de atenção")."""
+    f = fluxo_escolhido(con, client_id)
+    if f == "docusign":
+        return "docusign"
+    if f == "nativa":
+        return "nativa" if _modelos_prontos(con) and motivo_sem_nativa() is None else "docusign"
+    return "nativa" if ligada(con) else "docusign"
+
+
+def card_do_piloto(con, pid):
+    p = um(con, "SELECT client_id FROM portal_pilots WHERE id=?", (pid,)) if pid else None
+    return p["client_id"] if p else None
+
+
+def nativa_do_piloto(con, pid):
+    return fluxo_da_waiver(con, card_do_piloto(con, pid)) == "nativa"
+
+
+def nativa_na_conta(con, conta_id):
+    """A conta tem algum piloto que assina aqui (o código e o texto do modelo servem a ele)."""
+    ps = portal.pilotos(con, conta_id)
+    return any(nativa_do_piloto(con, p["id"]) for p in ps) if ps else ligada(con)
+
+
+def escolher_fluxo(con, client_id, fluxo):
+    """Grava a escolha do card. `nativa` sem selo (ou sem os modelos) é recusada com o motivo (ValueError)."""
+    if fluxo not in FLUXOS:
+        raise ValueError("fluxo inválido")
+    if fluxo == "nativa":
+        if not _modelos_prontos(con):
+            raise ValueError("Importe os dois modelos do DocuSign em Site › Waiver antes de usar a waiver nativa no card.")
+        m = motivo_sem_nativa()
+        if m:
+            raise ValueError(m)
+    atualizar(con, "clients", client_id, waiver_flow=fluxo)
+
+
+def fluxo_do_card(con, client_id):
+    """O que o card 360 mostra: a escolha, o que vale agora, a chave geral e se a nativa pode ser escolhida."""
+    m = None if _modelos_prontos(con) else "Os dois modelos da waiver ainda não foram importados (Site › Waiver)."
+    m = m or motivo_sem_nativa()
+    return {"choice": fluxo_escolhido(con, client_id), "effective": fluxo_da_waiver(con, client_id),
+            "general": "nativa" if ligada(con) else "docusign", "native_available": m is None, "native_reason": m}
+
+
 # ------------------------------------------------------------------ modelos
 def modelo(con, tipo):
     m = um(con, "SELECT * FROM waiver_templates WHERE kind=?", (tipo,))
@@ -421,10 +493,12 @@ def faz_18_em(piloto):
 
 
 def situacao(con, conta_id):
-    """O que a área do cliente mostra: por piloto, qual waiver e se está assinada."""
-    ativa = ligada(con)
+    """O que a área do cliente mostra: por piloto, qual waiver e se está assinada.
+    #348: `enabled` é por piloto (o fluxo do card dele); o geral diz se algum piloto da conta assina aqui."""
     saida = []
-    for p in portal.pilotos(con, conta_id):
+    pilotos = portal.pilotos(con, conta_id)
+    ativa = nativa_na_conta(con, conta_id)
+    for p in pilotos:
         w = vigente(con, p["id"])
         try:
             tipo = tipo_para(p)
@@ -432,6 +506,7 @@ def situacao(con, conta_id):
             tipo = None
         saida.append({"driver_id": p["id"], "driver": p["name"], "kind": tipo,
                       "own_signature_required": precisa_assinar_sozinho(p, tipo), "turns_18_on": faz_18_em(p),
+                      "enabled": nativa_do_piloto(con, p["id"]),
                       "status": "signed" if w else "none", "waiver_id": w["id"] if w else None,
                       "signed_at": w["completed_at"] if w else None, "valid_until": w["expires_at"] if w else None})
     c = um(con, "SELECT email, email_verified_at FROM portal_accounts WHERE id=?", (conta_id,))
@@ -470,7 +545,7 @@ def _preparar(con, conta_id, pid, dados):
     """O que a revisão e o clique final conferem igual (#112: tudo, menos o código do e-mail)."""
     from command_center.providers import revisao_waiver as rv
     from command_center.providers import selo_waiver
-    if not ligada(con):
+    if not nativa_do_piloto(con, pid):                     # #348: o fluxo do card do piloto (ou a chave geral)
         raise ErroWaiver("Online waiver signing is not available yet. Our team will send you the waiver.")
     selo_waiver.exigir()                                   # #110: sem selo, 503 antes de qualquer passo (e do código)
     if not dados.get("read_and_agree") or not dados.get("consent_esign"):

@@ -165,7 +165,7 @@ def checkout(con, bid):
                     WHERE b.id=?""", (bid,))
     s = cob.situacao(con, b)
     from command_center.providers import waiver_nativa
-    nativa = waiver_nativa.ligada(con)
+    nativa = waiver_nativa.nativa_do_piloto(con, b["pilot_id"]) if b["pilot_id"] else waiver_nativa.ligada(con)
     w = s["waiver"]
     waiver = {"estado": "ok" if w == "ok" else ("assinar_aqui" if nativa else ("email" if w == "enviada" else
                                                                                  "equipe" if w == "erro" else "preparando")),

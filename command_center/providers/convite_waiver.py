@@ -147,9 +147,10 @@ def destino(con, client_id):
         raise LookupError("cliente")
     c = d.pop("card")
     motivo = None
-    if not wn.ligada(con):
-        motivo = ("A assinatura da waiver no próprio sistema está desligada (Site › Waiver). "
-                  "O convite abre essa assinatura: ligue-a antes.")
+    nativa = wn.fluxo_da_waiver(con, client_id) == "nativa"          # #348: o switch do card (ou a chave geral)
+    if not nativa:
+        motivo = ("Este card usa a waiver pelo DocuSign (o switch Waiver do card ou a chave geral em Site › Waiver). "
+                  "O convite abre a assinatura no próprio sistema: escolha Nativa no card antes.")
     elif not d["email"]:
         motivo = "O card não tem e-mail. Ponha no card o e-mail do piloto adulto ou do responsável para mandar o convite."
     elif not _EMAIL.match(d["email"]):
@@ -163,7 +164,7 @@ def destino(con, client_id):
         motivo = ("O piloto é menor e o card não tem o nome do responsável (pai ou mãe), que é quem assina. "
                   "Ponha o piloto no campo Piloto e o responsável no nome do card.")
     v = _vigente_do_card(con, client_id, d["kind"]) if d["kind"] else None
-    return {**d, "client_id": client_id, "enabled": wn.ligada(con), "can_send": motivo is None, "reason": motivo,
+    return {**d, "client_id": client_id, "enabled": nativa, "can_send": motivo is None, "reason": motivo,
             "valid_hours": VALIDADE_HORAS, "valid_waiver_until": v["expires_at"] if v else None}
 
 
@@ -314,7 +315,7 @@ def conferir(con, token):
             or d["kind"] != inv["kind"]):
         raise LinkInvalido("This link is no longer valid because the details on file changed. Ask URACE to send "
                            "you a new one.", "changed", inv)
-    if not wn.ligada(con):
+    if wn.fluxo_da_waiver(con, inv["client_id"]) != "nativa":
         raise LinkInvalido("Online waiver signing is not available right now. Please contact URACE.", "off", inv)
     return inv
 

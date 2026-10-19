@@ -221,6 +221,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
           {t.deleted_at && <div className="small muted">{tr("Excluído por {0} em {1}", t.deleted_by_name || '—', fmtDate(t.deleted_at))}{t.deleted_reason ? ` · ${t.deleted_reason}` : ''}</div>}</td><td>{t.section}</td><td>{t.deleted_at ? <Chip tone="crit">{tr("excluído")}</Chip> : <Status s={t.status} />}</td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title={tr("A waiver assinada foi anexada nesta tarefa")}>{tr("📎 waiver")}</a> : <span className="muted">—</span>}</td>
           <td className="nowrap"><SysLink links={t.links} />{t.deleted_at ? (can('MANAGER') && <button className="btn ghost sm" onClick={() => restaurar(t.id)}>{tr("Restaurar")}</button>) : <>{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title={tr("trocar o nome do serviço (no Asana também)")}>{tr("Renomear")}</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title={tr("este serviço é de outro cliente")}>{tr("Mover")}</button>}</>}</td></tr>)}
       </tbody></table></div>}
+      {tab === 'waivers' && <FluxoWaiver cid={c.id} pode={can('MANAGER')} />}
       {tab === 'waivers' && can('OPERATOR') && <ConviteWaiver cid={c.id} onMuda={reload} />}
       {tab === 'waivers' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Signatário")}</th><th>{tr("Modelo")}</th><th>{tr("Status")}</th><th>{tr("Enviada")}</th><th>{tr("Assinada")}</th><th>{tr("Expira")}</th><th></th></tr></thead><tbody>
         {data.waivers.length === 0 && <tr><td colSpan={7}><Empty>{tr("Nenhum envelope para este e-mail.")}</Empty></td></tr>}
@@ -739,5 +740,44 @@ function ConviteWaiver({ cid, onMuda }: { cid: number; onMuda?: () => void }) {
         {c.used_at && <> · {tr("assinado {0}", fmtDateTime(c.used_at))}</>}
         {!c.used_at && (c.status === 'sent' || c.status === 'opened') && <> · {tr("vence {0}", fmtDateTime(c.expires_at))}</>}</span>
     </li>)}</ul>}
+  </div>
+}
+
+/* #348 (dono, 19/10): "um switch para escolher dentro do card de cada cliente se vamos usar o fluxo pelo DocuSign
+ * ou pela waiver nativa". Padrão segue a chave geral (Site › Waiver). Só decide a PRÓXIMA waiver: a já assinada vale.
+ * Nativa só com o selo configurado; o gerente (ou acima) muda. */
+interface FluxoDoCard { choice: 'padrao' | 'docusign' | 'nativa'; effective: 'nativa' | 'docusign'; general: 'nativa' | 'docusign'
+  native_available: boolean; native_reason: string | null }
+
+function FluxoWaiver({ cid, pode }: { cid: number; pode: boolean }) {
+  const d = useGet<FluxoDoCard>(`/clients/${cid}/waiver-flow`)
+  const toast = useToast()
+  const [indo, setIndo] = useState(false)
+  if (d.error) return <ErrorState error={d.error} retry={d.reload} />
+  if (!d.data) return <Loading rows={1} />
+  const x = d.data
+  const nome = (f: 'nativa' | 'docusign') => f === 'nativa' ? tr("Nativa") : 'DocuSign'
+  async function escolher(flow: FluxoDoCard['choice']) {
+    if (flow === x.choice) return
+    setIndo(true)
+    try { await api.put(`/clients/${cid}/waiver-flow`, { flow }); toast(tr("Fluxo da waiver do card salvo."), 'ok'); d.reload() }
+    catch (e) { toast((e as ApiError).message, 'crit'); d.reload() } finally { setIndo(false) }
+  }
+  const opcoes: [FluxoDoCard['choice'], string, boolean][] = [
+    ['padrao', tr("Padrão (geral: {0})", nome(x.general)), true], ['docusign', 'DocuSign', true],
+    ['nativa', tr("Nativa"), x.native_available || x.choice === 'nativa']]
+  return <div className="card card-b stack fluxo-waiver" style={{ gap: 8, marginBottom: 12 }}>
+    <div className="row wrap" style={{ gap: 10 }}>
+      <h3 className="h3 grow" style={{ margin: 0 }}>{tr("Waiver: fluxo deste card")}</h3>
+      <div className="seg" role="group" aria-label={tr("Waiver: fluxo deste card")}>
+        {opcoes.map(([k, rot, ok]) => <button key={k} type="button" aria-pressed={x.choice === k}
+          className={`btn sm${x.choice === k ? '' : ' ghost'}`} disabled={!pode || indo || !ok} onClick={() => escolher(k)}
+          title={!ok && x.native_reason ? x.native_reason : undefined}>{rot}</button>)}
+      </div>
+    </div>
+    <p className="small muted" style={{ margin: 0 }}>{tr("A próxima waiver deste card sai por: {0}. A já assinada continua valendo.", nome(x.effective))}
+      {!pode && <> {tr("(só gerente muda)")}</>}</p>
+    {x.choice === 'nativa' && x.effective !== 'nativa' && <p className="small" role="alert" style={{ margin: 0, color: 'var(--warn)' }}>{tr("O card está em Nativa, mas ela não está pronta: sai pelo DocuSign.")} {x.native_reason}</p>}
+    {!x.native_available && x.choice !== 'nativa' && <p className="small muted" style={{ margin: 0 }}>{tr("Nativa desligada:")} {x.native_reason}</p>}
   </div>
 }

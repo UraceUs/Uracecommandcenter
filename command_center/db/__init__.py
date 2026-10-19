@@ -418,6 +418,9 @@ MIGRACOES = [
     # #341 (dono, 19/10): a invoice de peças que nasceu de um rascunho do balcão. As linhas dela são as do rascunho
     # (peça do estoque, item do QuickBooks e linha livre), não as cobranças do dia: a leitura do COBRAR não entra nela
     ("parts_invoices", "draft_id", "INTEGER REFERENCES counter_drafts(id)"),
+    # #348 (dono, 19/10): "um switch para escolher dentro do card de cada cliente se vamos usar o fluxo pelo DocuSign ou
+    # pela waiver nativa". padrao = segue a chave geral (Site › Waiver); docusign; nativa (só com o selo configurado)
+    ("clients", "waiver_flow", "TEXT NOT NULL DEFAULT 'padrao' CHECK (waiver_flow IN ('padrao','docusign','nativa'))"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
