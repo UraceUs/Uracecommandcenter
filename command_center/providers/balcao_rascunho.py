@@ -307,10 +307,9 @@ def descartar(con, client_id, por):
 def _devolver_ao_estoque(con, d, por):
     """A invoice com certeza não saiu: a peça que saiu para ela volta (como o desfazer do COBRAR)."""
     for li in _linhas(con, d["id"]):
-        if li["source"] == "estoque" and li["move_id"]:
-            estoque.entrada(con, li["item_id"], qty=li["qty"], para=d["location"], client_id=None,
-                            reason="estorno do balcão", by_user_id=por, source="balcao",
-                            notes=f"rascunho #{d['id']}: a invoice não saiu")
+        if li["source"] == "estoque" and li["charge_id"]:       # #350: o "sem saldo" se cancela, o resto volta
+            estoque.devolver_venda(con, li["item_id"], li["qty"], para=d["location"], ref=f"linha:{li['id']}",
+                                   by_user_id=por, notes=f"rascunho #{d['id']}: a invoice não saiu")
             if li["charge_id"]:
                 atualizar(con, "stock_charges", li["charge_id"], status="waived", resolved_by=por, resolved_at=agora(),
                           notes=f"rascunho #{d['id']}: a invoice não saiu")
@@ -429,9 +428,13 @@ def faturar(con, client_id, por, ip=None, gerente=True):
 
 def _sai_do_estoque(con, d, li, qty, por, pid=None):
     """A peça do estoque sai (venda, do local do rascunho) com a cobrança no preço da linha, como no COBRAR."""
-    estoque.saida(con, li["item_id"], qty=qty, de=d["location"], client_id=None, para_cliente_id=d["client_id"],
-                  reason="venda", by_user_id=por, source="balcao", notes=f"balcão: rascunho #{d['id']}")
-    move = b._ultimo_movimento(con, li["item_id"])
+    # #350: sem saldo não trava (o estoque pode estar desatualizado): o que falta vai para a lista de recontar
+    move, falta = estoque.vender_mesmo_sem_saldo(con, li["item_id"], qty, de=d["location"], para_cliente_id=d["client_id"],
+                                                 ref=f"linha:{li['id']}", by_user_id=por,
+                                                 notes=f"balcão: rascunho #{d['id']}")
+    if falta:
+        _aud(con, "estoque.vendida_sem_saldo", por, d["id"], {"linha": li["id"], "item": li["item_id"], "nome": li["name"],
+                                                               "falta": falta, "client_id": d["client_id"]})
     ch = estoque.registrar_cobranca(con, li["item_id"], d["client_id"], qty, move_id=move, by_user_id=por,
                                     notes=f"balcão: rascunho #{d['id']}")
     campos = {"unit_price": li["unit_price"]}                   # o preço da linha, não o da ficha
@@ -552,16 +555,18 @@ def revisar_editar(con, pid, lid, por, qty=None, preco=None, ip=None):
         campos = {}
         if qty is not None and _qty(qty) != float(li["qty"]):
             nova = _qty(qty)
-            if li["source"] == "estoque" and li["move_id"]:
+            if li["source"] == "estoque" and li["charge_id"]:
                 delta = round(nova - float(li["qty"]), 3)
-                if delta > 0:
-                    estoque.saida(con, li["item_id"], qty=delta, de=d["location"], client_id=None,
-                                  para_cliente_id=d["client_id"], reason="venda", by_user_id=por, source="balcao",
-                                  notes=f"revisão do gerente: rascunho #{d['id']}")
+                if delta > 0:                                   # #350: a mais, sai mesmo sem saldo
+                    _, falta = estoque.vender_mesmo_sem_saldo(con, li["item_id"], delta, de=d["location"],
+                                                              para_cliente_id=d["client_id"], ref=f"linha:{li['id']}",
+                                                              by_user_id=por, notes=f"revisão do gerente: rascunho #{d['id']}")
+                    if falta:
+                        _aud(con, "estoque.vendida_sem_saldo", por, d["id"], {"linha": li["id"], "item": li["item_id"],
+                                                                               "nome": li["name"], "falta": falta}, ip)
                 else:
-                    estoque.entrada(con, li["item_id"], qty=-delta, para=d["location"], client_id=None,
-                                    reason="estorno do balcão", by_user_id=por, source="balcao",
-                                    notes=f"revisão do gerente: rascunho #{d['id']}")
+                    estoque.devolver_venda(con, li["item_id"], -delta, para=d["location"], ref=f"linha:{li['id']}",
+                                           by_user_id=por, notes=f"revisão do gerente: rascunho #{d['id']}")
                 if li["charge_id"]:
                     atualizar(con, "stock_charges", li["charge_id"], qty=nova)
             campos["qty"] = nova
@@ -586,10 +591,9 @@ def revisar_remover(con, pid, lid, por, ip=None):
         li = um(con, "SELECT * FROM counter_draft_lines WHERE id=? AND draft_id=?", (lid, d["id"]))
         if not li:
             raise LookupError("linha não encontrada nesta invoice")
-        if li["source"] == "estoque" and li["move_id"]:
-            estoque.entrada(con, li["item_id"], qty=li["qty"], para=d["location"], client_id=None,
-                            reason="estorno do balcão", by_user_id=por, source="balcao",
-                            notes=f"revisão do gerente: rascunho #{d['id']}")
+        if li["source"] == "estoque" and li["charge_id"]:
+            estoque.devolver_venda(con, li["item_id"], li["qty"], para=d["location"], ref=f"linha:{li['id']}",
+                                   by_user_id=por, notes=f"revisão do gerente: rascunho #{d['id']}")
             if li["charge_id"]:
                 atualizar(con, "stock_charges", li["charge_id"], status="waived", resolved_by=por, resolved_at=agora(),
                           notes="removida na revisão do gerente")

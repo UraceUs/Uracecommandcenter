@@ -411,7 +411,7 @@ function ContarEstoque() {
     } catch (er) { toast((er as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   return <Section title={tr("Contar o estoque")} count={feitos.length || undefined}>
-    <p className="small muted" style={{ marginTop: 0 }}>{tr("Sem saldo contado, o balcão não cobra a peça. Leia a peça ou a etiqueta da prateleira, digite quanto tem e grave: o próximo item já aparece.")}</p>
+    <p className="small muted" style={{ marginTop: 0 }}>{tr("A peça vendida sem saldo aparece em Precisa de atenção para recontar. Leia a peça ou a etiqueta da prateleira, digite quanto tem e grave: o próximo item já aparece.")}</p>
     {!aberto ? <div className="row wrap" style={{ gap: 8 }}>
       <button className="btn primary" onClick={() => { setAberto(true); setTimeout(() => campo.current?.focus(), 30) }}>{tr("Começar a contar")}</button>
       <button className="btn" onClick={() => setSemCodigo(true)}>{tr("Peça sem código: etiqueta URACE")}</button>

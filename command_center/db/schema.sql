@@ -1323,6 +1323,25 @@ CREATE TABLE IF NOT EXISTS counter_draft_lines (
 );
 CREATE INDEX IF NOT EXISTS counter_draft_lines_draft ON counter_draft_lines(draft_id, id);
 
+-- #350 (dono, 19/10): "permita criar mesmo sem ter no estoque pois pode ser que o estoque esteja desatualizado". A venda
+-- do balcão não trava por falta de saldo: sai o que há e o que FALTA fica aqui ("vendida sem saldo"), sem mexer no
+-- saldo (nunca negativo: o razão, a conferência e os relatórios continuam batendo). É a lista de recontar: some
+-- quando alguém conta a peça (contagem depois da venda) ou quando a venda é desfeita/devolvida (`cancelled_at`).
+CREATE TABLE IF NOT EXISTS stock_oversold (
+  id            INTEGER PRIMARY KEY,
+  item_id       INTEGER NOT NULL REFERENCES stock_items(id),
+  location_id   INTEGER REFERENCES stock_locations(id),
+  qty           REAL NOT NULL,                       -- o que faltou (a peça saiu, o sistema não tinha)
+  client_id     INTEGER REFERENCES clients(id),      -- para quem foi vendida
+  ref           TEXT,                                -- de onde veio: 'linha:<id>' (rascunho) ou 'leitura:<id>' (COBRAR)
+  by_user_id    INTEGER REFERENCES users(id),
+  at            TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  cancelled_at  TEXT,
+  cancel_note   TEXT
+);
+CREATE INDEX IF NOT EXISTS stock_oversold_ref ON stock_oversold(ref, cancelled_at);
+CREATE INDEX IF NOT EXISTS stock_oversold_item ON stock_oversold(item_id, cancelled_at);
+
 -- #180 (dono, 09/10): o mecânico lê a PEÇA com a câmera do celular e toca no piloto do dia; nada
 -- é cobrado nem sai do estoque ali. A leitura espera aqui até o gerente confirmar (vira uma linha
 -- de counter_scans, com as regras do balcão) ou descartar. Código desconhecido também espera.

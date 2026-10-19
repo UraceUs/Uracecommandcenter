@@ -4681,5 +4681,6 @@
 "Revisão confirmada: a invoice pode ser enviada.": "Review confirmed: the invoice can be sent.",
 "aguardando revisão do gerente": "waiting for manager review",
 "É esta? Toque para pôr no rascunho.": "Is it this one? Tap to add it to the draft.",
-"É uma peça nova: cadastrar o código": "It's a new part: register the code"
+"É uma peça nova: cadastrar o código": "It's a new part: register the code",
+"A peça vendida sem saldo aparece em Precisa de atenção para recontar. Leia a peça ou a etiqueta da prateleira, digite quanto tem e grave: o próximo item já aparece.": "Parts sold without stock show up in Needs attention to be recounted. Scan the part or the shelf label, type how many there are and save: the next item comes up right away."
 }

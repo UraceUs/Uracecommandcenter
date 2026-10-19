@@ -118,9 +118,10 @@ def test_o_que_nao_pode_ir_direto_fica_pendente_com_o_motivo(cli):
     con = _con()
     con.execute("UPDATE stock_levels SET qty=0 WHERE item_id=?", (cli.para,))
     r = cli.post(f"{B}/rapido", json={"codigo": "7891234567895", "data": AMANHA, "client_id": cli.leo}, headers=h).json()
-    assert r["tipo"] == "pendente" and "tem 0" in r["motivo"], "sem saldo: vai para o gerente, nada se perde"
-    assert con.execute("SELECT COUNT(*) FROM counter_scans").fetchone()[0] == 0
-    assert con.execute("SELECT COUNT(*) FROM stock_charges").fetchone()[0] == 0, "o que falhou não deixou meia cobrança"
+    # #350 (dono, 19/10): sem saldo não trava mais; vai direto e a peça fica para recontar
+    assert r["direto"] is True, r
+    from command_center.providers import estoque as _e
+    assert [x["falta"] for x in _e.a_recontar(_con())] == [1]
 
 
 def test_desfazer_pelo_celular_a_peca_que_foi_para_a_os(cli):

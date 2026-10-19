@@ -189,12 +189,21 @@ def test_sem_preco_sem_item_ou_sem_cliente_no_quickbooks_nao_cobra(cli):
     assert estoque.saldo(conectar(), cli.para, client_id=None) == 5, "recusado não mexe no estoque"
 
 
-def test_peca_sem_saldo_da_urace_nao_cobra(cli):
+def test_peca_sem_saldo_da_urace_cobra_e_fica_para_recontar(cli):
+    """#350 (dono, 19/10): "permita criar mesmo sem ter no estoque pois pode ser que o estoque esteja desatualizado".
+    Antes (05/10) a peça sem saldo não cobrava. Agora sai o que há e a falta vai para a lista de recontar."""
     prepara_peca(cli, cli.para)
     h = entra(cli)
     r = lanca(cli, h, cli.para, qty=9)
-    assert r.status_code == 400 and "tem 5" in r.json()["detail"]
-    assert not um(conectar(), "SELECT 1 AS x FROM parts_invoices"), "nada pela metade"
+    assert r.status_code == 201, r.text
+    con = conectar()
+    assert estoque.vendavel(con, cli.para) == 0, "o saldo nunca fica negativo"
+    assert [x["falta"] for x in estoque.a_recontar(con)] == [4]
+    assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='estoque.vendida_sem_saldo'")
+    sid = r.json()["leitura"]["id"]
+    assert cli.post(f"{B}/leituras/{sid}/desfazer", headers=h).status_code == 200
+    con = conectar()
+    assert estoque.vendavel(con, cli.para) == 5 and not estoque.a_recontar(con), "desfazer volta ao saldo certo"
 
 
 # ------------------------------------------------------------------ guardar × cobrar

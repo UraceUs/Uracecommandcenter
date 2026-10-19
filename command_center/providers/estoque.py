@@ -353,6 +353,59 @@ def saida(con, item_id, qty=None, unit_id=None, de=SEDE, client_id=None, para_cl
     return {"qty": depois}
 
 
+def vender_mesmo_sem_saldo(con, item_id, qty, de=SEDE, para_cliente_id=None, ref=None, by_user_id=None,
+                           source="balcao", notes=None):
+    """#350 (dono, 19/10: "permita criar mesmo sem ter no estoque pois pode ser que o estoque esteja desatualizado").
+    Venda da URACE que NÃO trava por saldo: sai o que há (uma saída normal, no razão) e o que falta vira uma linha de
+    `stock_oversold` (a lista de recontar), sem deixar o saldo negativo. Devolve (move_id ou None, falta)."""
+    it, loc = item(con, item_id), local(con, de)
+    qty = _quantidade(qty, it)
+    if it["tracking"] == "serie":
+        raise ErroEstoque(f"{it['name']} tem número de série: lance pela tela de Estoque")
+    disp = max(saldo(con, it["id"], loc["id"], client_id=None), 0.0)
+    tira = round(min(qty, disp), 4)
+    falta = round(qty - tira, 4)
+    move = None
+    if tira > 0:
+        saida(con, it["id"], qty=tira, de=loc, client_id=None, para_cliente_id=para_cliente_id, reason="venda",
+              by_user_id=by_user_id, source=source, notes=notes)
+        move = um(con, "SELECT MAX(id) AS id FROM stock_moves WHERE item_id=?", (it["id"],))["id"]
+    if falta > 0:
+        inserir(con, "stock_oversold", item_id=it["id"], location_id=loc["id"], qty=falta, client_id=para_cliente_id,
+                ref=ref, by_user_id=by_user_id)
+    return move, falta
+
+
+def devolver_venda(con, item_id, qty, para=SEDE, ref=None, by_user_id=None, source="balcao", notes=None):
+    """O contrário de `vender_mesmo_sem_saldo`: o que volta primeiro cancela o que tinha saído SEM saldo (nunca
+    existiu na prateleira) e só o resto entra de volta no estoque. Devolve o que entrou no saldo."""
+    it, loc = item(con, item_id), local(con, para)
+    resta = round(float(qty), 4)
+    for o in todos(con, "SELECT * FROM stock_oversold WHERE ref=? AND cancelled_at IS NULL ORDER BY id DESC", (ref,)) if ref else []:
+        if resta <= 0:
+            break
+        c = min(resta, float(o["qty"]))
+        if c >= float(o["qty"]) - 1e-9:
+            con.execute("UPDATE stock_oversold SET cancelled_at=?, cancel_note=? WHERE id=?", (agora(), "devolvida", o["id"]))
+        else:
+            con.execute("UPDATE stock_oversold SET qty=? WHERE id=?", (round(float(o["qty"]) - c, 4), o["id"]))
+        resta = round(resta - c, 4)
+    if resta > 0:
+        entrada(con, it["id"], qty=resta, para=loc, client_id=None, reason="estorno do balcão", by_user_id=by_user_id,
+                source=source, notes=notes)
+    return resta
+
+
+def a_recontar(con):
+    """As peças vendidas sem saldo que ninguém contou depois (a lista de recontar, #350)."""
+    return todos(con, """SELECT o.item_id, i.name, l.code AS local, ROUND(SUM(o.qty), 3) AS falta, MIN(o.at) AS desde
+                           FROM stock_oversold o JOIN stock_items i ON i.id=o.item_id
+                           LEFT JOIN stock_locations l ON l.id=o.location_id
+                          WHERE o.cancelled_at IS NULL AND NOT EXISTS (
+                                SELECT 1 FROM stock_moves m WHERE m.item_id=o.item_id AND m.kind='contagem' AND m.at > o.at)
+                          GROUP BY o.item_id, o.location_id ORDER BY desde""")
+
+
 def _unidade(con, unit_id, it):
     if not unit_id:
         raise ErroEstoque(f"{it['name']} é controlado por número de série: diga qual unidade")

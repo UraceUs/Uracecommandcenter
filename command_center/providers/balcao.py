@@ -380,6 +380,7 @@ def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, c
     qty = float(qty or 1)
     loc = estoque.local(con, local)
     charge_id = pinv_id = None
+    falta = 0
     if modo == "cobrar":
         if not confirmado and estoque.saldo(con, it["id"], client_id=client_id) > 0:
             raise Confirmar("tem_do_cliente", f"{c['pilot_name'] or c['name']} tem {it['name']} guardado com a gente. "
@@ -391,9 +392,9 @@ def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, c
         if not cliente_qbo(con, client_id):
             raise ErroBalcao("este card não está ligado a um cliente do QuickBooks (sem invoice e sem e-mail que bata). "
                              "Ligue no card antes de cobrar")
-        estoque.saida(con, it["id"], qty=qty, de=loc, client_id=None, para_cliente_id=client_id, reason="venda",
-                      by_user_id=por, source="balcao", notes="balcão")
-        move = _ultimo_movimento(con, it["id"])
+        # #350: sem saldo não trava (o estoque pode estar desatualizado); o que falta vai para a lista de recontar
+        move, falta = estoque.vender_mesmo_sem_saldo(con, it["id"], qty, de=loc, para_cliente_id=client_id,
+                                                     by_user_id=por, notes="balcão")
         pinv_id = _invoice_do_dia(con, client_id, data or hoje(), por)["id"]   # #180: a da data da leitura
         charge_id = estoque.registrar_cobranca(con, it["id"], client_id, qty, move_id=move, by_user_id=por, notes="balcão")
         atualizar(con, "stock_charges", charge_id, parts_invoice_id=pinv_id)
@@ -407,6 +408,13 @@ def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, c
         move = _ultimo_movimento(con, it["id"])
     sid = inserir(con, "counter_scans", client_id=client_id, item_id=it["id"], code=codigo, mode=modo, qty=qty,
                   location_id=loc["id"], move_id=move, charge_id=charge_id, parts_invoice_id=pinv_id, by_user_id=por)
+    if modo == "cobrar":                          # a falta (se houve) fica ligada a esta leitura: o desfazer cancela
+        con.execute("UPDATE stock_oversold SET ref=? WHERE ref IS NULL AND item_id=? AND by_user_id IS ? AND cancelled_at IS NULL",
+                    (f"leitura:{sid}", it["id"], por))
+        if falta:
+            auditar(con, "estoque.vendida_sem_saldo", f"user:{por}" if por else "system", user_id=por,
+                    entity_type="counter_scan", entity_id=sid,
+                    detail={"item": it["id"], "nome": it["name"], "falta": falta, "client_id": client_id})
     return um(con, "SELECT * FROM counter_scans WHERE id=?", (sid,))
 
 
@@ -424,8 +432,8 @@ def desfazer(con, scan_id, por=None):
             raise ErroBalcao("a invoice desta peça já foi enviada: ajuste pelo QuickBooks")
         if p and p["paid_at"]:                    # #206: paga no cartão, o QuickBooks já tem o dinheiro dela
             raise ErroBalcao("a invoice desta peça já foi paga: ajuste (reembolso) pelo QuickBooks")
-        estoque.entrada(con, s["item_id"], qty=s["qty"], para=s["location_id"], client_id=None,
-                        reason="estorno do balcão", by_user_id=por, source="balcao")
+        estoque.devolver_venda(con, s["item_id"], s["qty"], para=s["location_id"], ref=f"leitura:{s['id']}",
+                               by_user_id=por)
         atualizar(con, "stock_charges", s["charge_id"], status="waived", notes="desfeito no balcão",
                   resolved_by=por, resolved_at=agora())
     elif s["mode"] == "guardar":
