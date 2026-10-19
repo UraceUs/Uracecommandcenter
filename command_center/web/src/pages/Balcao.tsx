@@ -693,7 +693,13 @@ export function Balcao() {
       const r = await api.get<Lido>(`/balcao/ler${qs({ codigo: t, client_id: cid })}`)
       if (r.tipo === 'cliente') { vibrar(40); nav(`/balcao/${r.cliente.id}`); return }
       // #346: não bateu com nada; no COBRAR com cliente aberto, o que mais se parece (tocar para pôr no rascunho)
-      if (r.tipo === 'desconhecido') { if (cid && modo === 'cobrar') setProximos({ texto: t, codigo: r.codigo }); else setNovo(r.codigo); return }
+      if (r.tipo === 'desconhecido') {
+        if (cid && modo === 'cobrar') {
+          const px = await api.get<{ itens: unknown[] }>(`/balcao/aproximado${qs({ q: t.slice(0, 120) })}`).catch(() => ({ itens: [] }))
+          if (px.itens.length) { setProximos({ texto: t, codigo: r.codigo }); return }   // nada parecido: direto ao código novo
+        }
+        setNovo(r.codigo); return
+      }
       if (!cid) { vibrar(40); setSemCliente({ item: r.item, codigo: r.codigo }); return }
       if (modo === 'cobrar' && rzAberto) {
         await adicionarLinha(cid, { origem: 'estoque', item_id: r.item.id, local })
