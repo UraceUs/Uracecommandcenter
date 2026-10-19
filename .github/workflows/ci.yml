@@ -13,8 +13,8 @@ concurrency:
 
 jobs:
   # #344 (dono, 19/10): a rodada levava ~20 min. O pytest do backend roda em 2 máquinas e o end-to-end em 3,
-  # ao mesmo tempo, sem tirar nenhum teste: o conftest.py da raiz ordena os testes coletados pelo nodeid e
-  # reparte em rodízio (`--parte K/N`), cada teste numa parte só. Cada parte imprime "parte K/N: X de T".
+  # ao mesmo tempo, sem tirar nenhum teste: o conftest.py da raiz (`--parte K/N`) reparte por arquivo (o
+  # arquivo inteiro numa parte, na ordem; o grande do e2e em blocos seguidos), cada teste numa parte só. Cada parte imprime "parte K/N: X de T".
   # N vem de strategy.job-total: aumentar a matriz já redivide, sem mexer no comando.
   python:
     name: Python — ruff + pytest (${{ matrix.parte }}/${{ strategy.job-total }})

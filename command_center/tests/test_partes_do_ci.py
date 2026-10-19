@@ -1,9 +1,9 @@
 """O CI em partes paralelas não tira nenhum teste (#344).
 
 Dono, 19/10: o CI levava ~20 min; aprovou dividir em máquinas paralelas *"sem tirar nenhum teste"*.
-O `conftest.py` da raiz (`--parte K/N`) ordena os testes coletados pelo nodeid e reparte em rodízio.
-Aqui a prova: as partes juntas são a suíte inteira, nenhum teste cai em duas, e o ci.yml usa as partes
-todas da matriz.
+O `conftest.py` da raiz (`--parte K/N`) reparte por arquivo (arquivo grande demais, em blocos seguidos).
+Aqui a prova: as partes juntas são a suíte inteira, nenhum teste cai em duas, um arquivo não se espalha
+(teste que depende do anterior no mesmo arquivo segue com ele), e o ci.yml usa as partes todas da matriz.
 """
 import random
 import subprocess
@@ -19,22 +19,41 @@ sys.path.insert(0, str(RAIZ))
 import conftest as partes  # noqa: E402  (o conftest da raiz, com a divisão)
 
 
+def _suite(sorteio, arquivos):
+    return [f"t/test_{a}.py::t{i}" for a in range(arquivos) for i in range(sorteio.randrange(1, 40))]
+
+
 def test_as_partes_juntas_sao_tudo_e_nenhum_teste_se_repete():
     sorteio = random.Random(344)
-    for total in (0, 1, 2, 5, 161, 2624):
-        ids = [f"t/test_{sorteio.randrange(10**6)}.py::t{i}" for i in range(total)]
+    for arquivos in (0, 1, 2, 7, 150):
+        ids = _suite(sorteio, arquivos)
         for n in (1, 2, 3, 4):
             cada = [partes.da_parte(ids, k, n) for k in range(1, n + 1)]
-            assert set().union(*cada) == set(ids), (total, n)
-            assert sum(len(c) for c in cada) == len(set(ids)), "nenhum teste em duas partes"
-            assert max(map(len, cada)) - min(map(len, cada)) <= 1, "partes do mesmo tamanho"
+            assert set().union(*cada) == set(ids), (arquivos, n)
+            assert sum(len(c) for c in cada) == len(ids), "nenhum teste em duas partes"
 
 
-def test_a_divisao_nao_depende_da_ordem_da_coleta():
-    ids = [f"a.py::t{i}" for i in range(50)]
-    embaralhado = ids[::-1]
+def test_arquivo_pequeno_fica_inteiro_numa_parte_e_o_grande_vai_em_blocos_seguidos():
+    sorteio = random.Random(19)
+    ids = _suite(sorteio, 60)
+    cada = [partes.da_parte(ids, k, 2) for k in (1, 2)]
+    for a in {i.split("::")[0] for i in ids}:
+        assert sum(any(i.startswith(a + "::") for i in c) for c in cada) == 1, a
+    assert abs(len(cada[0]) - len(cada[1])) <= 40, "equilibradas pelo número de testes"
+    # o e2e: um arquivo com 160 testes e outro com 1, em 3 partes
+    grande = [f"e2e/test_navegador.py::t{i:03d}" for i in range(160)] + ["e2e/test_pacote.py::t"]
+    cada = [partes.da_parte(grande, k, 3) for k in (1, 2, 3)]
+    assert sorted(map(len, cada)) == [53, 54, 54]
+    for c in cada:
+        nav = sorted(int(i[-3:]) for i in c if "navegador" in i)
+        assert nav == list(range(nav[0], nav[-1] + 1)), "bloco seguido, na ordem do arquivo"
+
+
+def test_a_divisao_nao_depende_da_ordem_dos_arquivos():
+    ids = [f"{a}.py::t{i}" for a in "abcdef" for i in range(7)]
+    outra = [f"{a}.py::t{i}" for a in "fedcba" for i in range(7)]
     for k in (1, 2, 3):
-        assert partes.da_parte(ids, k, 3) == partes.da_parte(embaralhado, k, 3)
+        assert partes.da_parte(ids, k, 3) == partes.da_parte(outra, k, 3)
 
 
 def _coletados(*args):

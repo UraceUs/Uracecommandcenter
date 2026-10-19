@@ -3,10 +3,12 @@
 Dono, 19/10: o CI levava ~20 min por rodada; aprovou dividir em máquinas paralelas *sem tirar nenhum
 teste*. `python -m pytest --parte 2/3` roda só a parte 2 de 3. Sem `--parte`, roda tudo (VPS, dev, local).
 
-A divisão é por TESTE, não por arquivo (o e2e tem um arquivo só com ~160 testes): ordena os testes
-coletados pelo nodeid — igual em toda máquina — e reparte em rodízio (1º na parte 1, 2º na parte 2, …).
-Assim cada teste cai em exatamente uma parte, a união das partes é a suíte inteira, e os arquivos lentos
-ficam espalhados pelas máquinas. A ordem de execução dentro da parte continua a do pytest.
+A divisão é por ARQUIVO: há testes que dependem do que um teste anterior do mesmo arquivo deixou no
+banco (19/10: repartir teste a teste quebrou 15 no backend), então um arquivo inteiro fica numa parte só,
+na ordem de sempre. Os arquivos são distribuídos pelo número de testes, do maior para o menor, sempre na
+parte mais leve (desempate pelo nome) — igual em toda máquina. Um arquivo maior que a cota de uma parte
+(o e2e tem um com ~160 testes) é cortado em blocos SEGUIDOS, que mantêm a ordem do arquivo.
+Cada teste cai em exatamente uma parte e a união das partes é a suíte inteira.
 
 Fica na raiz do repositório para valer tanto em `python -m pytest -q` (backend) quanto em
 `pytest command_center/tests/e2e`. Não importa nada da aplicação (o conftest dos testes isola o ambiente
@@ -26,9 +28,25 @@ def _ler_parte(texto):
     return k, n
 
 
+def dividir(nodeids, n):
+    """Lista de n conjuntos de nodeids. Determinístico, sem sobra nem repetição, arquivo inteiro junto."""
+    arquivos = {}
+    for nid in nodeids:                       # mantém a ordem da coleta dentro de cada arquivo
+        arquivos.setdefault(nid.split("::", 1)[0], []).append(nid)
+    cota = max(1, -(-len(nodeids) // n))      # teto de total/n
+    blocos = []
+    for nome in sorted(arquivos):
+        ids = arquivos[nome]
+        blocos += [ids[i:i + cota] for i in range(0, len(ids), cota)]
+    partes = [[] for _ in range(n)]
+    for bloco in sorted(blocos, key=lambda b: (-len(b), b[0])):
+        min(partes, key=len).extend(bloco)    # min() devolve a primeira mais leve: desempate estável
+    return [set(p) for p in partes]
+
+
 def da_parte(nodeids, k, n):
-    """Os nodeids da parte k de n: ordena e reparte em rodízio. Determinístico e sem sobra nem repetição."""
-    return set(sorted(nodeids)[k - 1::n])
+    """Os nodeids da parte k de n."""
+    return dividir(nodeids, n)[k - 1]
 
 
 def pytest_addoption(parser):
