@@ -2,7 +2,7 @@
 
 **Command Center da URACE — calendário e balcão de peças**
 
-Para quem trabalha no box, com o celular na mão. Atualizado em 19/10/2026 (#346: o mecânico cria a invoice do rascunho e o gerente revisa; a peça mais próxima).
+Para quem trabalha no box, com o celular na mão. Atualizado em 19/10/2026 (#350: o balcão cobra mesmo sem saldo e a peça vai para recontar).
 O guia do painel inteiro está no playbook geral (`docs/playbooks/playbook-geral.md`).
 
 ---
@@ -388,10 +388,14 @@ No balcão completo (painel), código novo abre a janela **"Código novo"**. Ali
 é: escolhe uma peça do estoque **ou** cria uma peça nova (nome, prateleira e foto). O preço e o
 item do QuickBooks o gerente completa antes de cobrar.
 
-### Contar o estoque (sem saldo, não cobra)
+### Contar o estoque (e a peça vendida sem saldo)
 
-O balcão **não cobra** uma peça que a URACE não tem contada no estoque. Por isso, a prateleira
-precisa estar contada.
+Dono, 19/10 (#350): *"permita criar mesmo sem ter no estoque pois pode ser que o estoque esteja desatualizado"*.
+O balcão **cobra mesmo sem saldo** (no COBRAR e no rascunho de invoice). Sai do estoque o que o sistema tem, e o
+que falta fica registrado como **"vendida sem saldo"**: a peça entra em **Precisa de atenção → "vendida(s) sem
+saldo: recontar"**. Contar a prateleira tira a peça dessa lista. Se a venda é desfeita (ou o gerente tira a peça
+na revisão), o "sem saldo" se cancela e só volta à prateleira o que tinha saído de verdade. A linha do rascunho
+continua com o aviso **"sem saldo no estoque"**.
 
 1. No painel, abra **Balcão** e desça até **"Contar o estoque"**.
 2. Toque em **Começar a contar** e escolha onde está contando: **Galpão**, **Trailer** ou

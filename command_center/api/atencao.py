@@ -361,6 +361,17 @@ def _coletar(con):
                                   f"US$ {x['total']:,.2f}" + (f" · invoice {x['doc_number']}" if x["doc_number"] else "")
                                   + (f" · {x['por']}" if x["por"] else "")) for x in rev[:6]]))
 
+    # ---- 4f2c. #350: peça vendida sem saldo no balcão (o estoque pode estar desatualizado): recontar
+    from command_center.providers import estoque as _est350
+    recontar = _est350.a_recontar(con)
+    if recontar:
+        itens.append(dict(key=_chave("estoque-recontar", "stock", "sem_saldo"), level="MEDIUM",
+                          title=f"{len(recontar)} peça(s) vendida(s) sem saldo: recontar",
+                          why="O balcão cobrou a peça mesmo sem saldo no sistema (o estoque pode estar desatualizado). "
+                              "Conte a prateleira (Balcão › Contar o estoque) para o número voltar a valer.",
+                          entity={"type": "stock", "id": None}, client_id=None, link="/balcao", action="Contar no balcão",
+                          facts=[(x["name"], f"faltou {x['falta']:g} · {x['local'] or ''}") for x in recontar[:6]]))
+
     # ---- 4f2b. balcão do celular (#206): leitura pendente esperando a revisão do gerente
     pend = todos(con, """SELECT cp.id, cp.service_date, cp.code, cp.pilot_name, i.name AS peca, u.name AS por
                            FROM counter_pending cp LEFT JOIN stock_items i ON i.id=cp.item_id

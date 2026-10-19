@@ -35,12 +35,14 @@ def test_revisao_confirma_tirando_do_local_escolhido(cli):  # noqa: F811
     assert estoque.saldo(con, cli.para, trailer, client_id=None) == 1 and estoque.saldo(con, cli.para, sede, client_id=None) == 3
 
 
-def test_revisao_sem_saldo_no_local_e_recusada_e_a_leitura_continua_pendente(cli):  # noqa: F811
+def test_revisao_sem_saldo_no_local_cobra_e_fica_para_recontar(cli):  # noqa: F811
+    """#350 (dono, 19/10): sem saldo no local não trava mais; a peça fica na lista de recontar."""
     pid = _pendente(cli)
     h = entra(cli, "ger@urace.us")
     r = cli.post(f"{B}/revisao/{pid}/confirmar", json={"modo": "cobrar", "local": "pista", "client_id": cli.leo}, headers=h)
-    assert r.status_code == 400
-    assert um(conectar(), "SELECT status FROM counter_pending WHERE id=?", (pid,))["status"] == "pendente"
+    assert r.status_code == 200, r.text
+    assert um(conectar(), "SELECT status FROM counter_pending WHERE id=?", (pid,))["status"] == "confirmada"
+    assert [x["local"] for x in estoque.a_recontar(conectar())] == ["pista"]
 
 
 # ------------------------------------------------------------------ invoice paga não se mexe

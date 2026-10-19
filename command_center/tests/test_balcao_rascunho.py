@@ -356,3 +356,32 @@ def test_a_linha_e_a_da_url_e_nao_o_numero_do_cliente(cli):
     assert lid != cli.outro
     r = cli.patch(f"{B}/cliente/{cli.outro}/rascunho/linhas/{lid}", json={"preco": 25}, headers=h)
     assert r.status_code == 200 and r.json()["rascunho"]["linhas"][0]["preco"] == 25
+
+
+def test_rascunho_com_peca_sem_saldo_cria_a_invoice_e_marca_para_recontar(cli):
+    """#350 (dono, 19/10: "permita criar mesmo sem ter no estoque pois pode ser que o estoque esteja desatualizado")."""
+    con = conectar()
+    estoque.contar(con, cli.para, 0)
+    h = entra(cli)
+    linha(cli, h, origem="estoque", item_id=cli.para, qty=2, preco=80)
+    assert cli.get(f"{B}/cliente/{cli.leo}/rascunho", headers=h).json()["rascunho"]["linhas"][0]["sem_saldo"]
+    r = cli.post(f"{B}/cliente/{cli.leo}/rascunho/faturar", headers=h)
+    assert r.status_code == 200, r.text
+    con = conectar()
+    assert estoque.vendavel(con, cli.para) == 0 and [x["falta"] for x in estoque.a_recontar(con)] == [2]
+    from command_center.api import atencao
+    assert any("vendida(s) sem saldo" in x["title"] for x in atencao.coletar(con))
+    # o gerente tira uma unidade na revisão e depois a linha: o "sem saldo" se cancela, nada entra na prateleira
+    p = um(con, "SELECT id FROM parts_invoices WHERE draft_id IS NOT NULL")["id"]
+    hg = entra(cli, "ger@urace.us")
+    lid = cli.get(f"{B}/invoices/{p}/revisao", headers=hg).json()["rascunho"]["linhas"][0]["id"]
+    assert cli.patch(f"{B}/invoices/{p}/revisao/linhas/{lid}", json={"qty": 1}, headers=hg).status_code == 200
+    assert [x["falta"] for x in estoque.a_recontar(conectar())] == [1] and saldo(cli.para) == 0
+    assert cli.delete(f"{B}/invoices/{p}/revisao/linhas/{lid}", headers=hg).status_code == 200
+    assert saldo(cli.para) == 0 and not estoque.a_recontar(conectar()), "devolver volta ao saldo certo"
+    # contar a prateleira tira da lista de recontar
+    h = entra(cli)
+    linha(cli, h, origem="estoque", item_id=cli.para)
+    assert faturar(cli).status_code == 200 and estoque.a_recontar(conectar())
+    estoque.contar(conectar(), cli.para, 3)
+    assert not estoque.a_recontar(conectar())
