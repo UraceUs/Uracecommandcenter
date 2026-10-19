@@ -648,10 +648,12 @@ gerente. Use Aceitar."
    (configurado em Serviços e preços). A linha do depósito diz que é devolvido em até 5 dias úteis
    se não houver incidente. **Não cobra duas vezes**: se o agendamento já tem invoice, não cria outra.
 2. **Aluno recorrente (Academy / Kart School, #314):** a sessão já nasce marcada como **do plano** ou
-   **extra** (chip na lista: "do plano" ou "extra $689.23 · invoice …", com o pacote do mês ao lado, que
-   só a equipe vê). A do plano não cobra nada. A **extra** (acima do pacote do mês) vai numa invoice do
-   QuickBooks com o **item da sessão extra** (no QuickBooks: "Academy | Extra session (beyond monthly 4)")
-   e o **valor da extra, sem depósito**. Veja "Aluno recorrente" logo abaixo.
+   **extra** (chip na lista: "do plano" ou "extra $689.23 · invoice …", com o pacote do mês ao lado e, desde
+   #340, a **mensalidade do mês** — paga, em aberto ou sem invoice — e o **add-on**). A do plano não cobra nada. A
+   **extra** (acima do pacote do mês) vai numa invoice do QuickBooks com o **item da sessão extra** (no
+   QuickBooks: "Academy | Extra session (beyond monthly 4)") e o **valor da extra, sem depósito** — e essa
+   invoice **já saiu na hora em que o cliente marcou** (#340): o Aceitar não cria outra. Veja "Aluno recorrente"
+   logo abaixo.
 3. **Waiver:** se o piloto não tem waiver válida no dia da sessão, sai pelo DocuSign. Com a waiver
    nativa ligada, o cliente assina na área do cliente.
 4. **Confirma sozinha** quando a invoice aparece paga e a waiver está em dia.
@@ -670,8 +672,8 @@ mesma coisa.
 
 - **Quem é recorrente:** o card do **piloto** tem contrato (plano mensal, valor mensal ou sessões por mês).
   Plano comprado no site só vale **depois da 1ª mensalidade paga**. Plano cuja recorrência acabou não vale
-  mais. Pro Racing Driver sem mensal no card **não** é recorrente. Piloto do site sem card ligado ainda não
-  é recorrente: ligue o card (Contas do site) antes de ele marcar.
+  mais. Pro Racing Driver sem mensal no card **não** é recorrente (veja "Piloto pro" abaixo). Piloto do site sem
+  card ligado ainda não é recorrente: ligue o card (Contas do site) antes de ele marcar.
 - **Pacote do mês:** as sessões por mês do card (sem número, 4). Zera no dia 1, também nos contratos de 6
   e 12 meses. A sessão extra e a paga no Stripe **não** ocupam vaga. Cancelar uma do pacote (pelas regras
   de cancelamento de sempre) devolve a vaga do mês.
@@ -679,14 +681,16 @@ mesma coisa.
   (Site › Serviços e preços) → o **mensal do card ÷ sessões do mês**, em centavos com arredondamento
   comercial (2.756,90 ÷ 4 = 689,23; 1.378,45 ÷ 2 = 689,23).
 - **Item da extra**, nesta ordem: o do card → o do plano → o item "Extra session" do QuickBooks.
-- **O cliente vê** só "Included in your plan" ou "Extra session · $689.23" em cada dia. O contador
-  ("2 de 4 no mês") fica com a equipe (dono, 01/10).
+- **O cliente vê** em cada dia "Included in your plan" ou "Extra session · $689.23" e, desde 19/10 (#340), **o
+  contador do mês** (veja "O contador" abaixo). A decisão de 01/10 ("o contador fica com a equipe") mudou.
 - **"Confirmar sozinho"** confirma a do plano, mas **não** confirma a extra: ela espera a invoice e a waiver.
 - **Extra cancelada** com a invoice aberta vira aviso em **Precisa de atenção**: anule a invoice (ou tire a
   linha dela) no QuickBooks.
 - **Vaga devolvida antes da cobrança:** se o cliente cancela uma do pacote e a extra do mesmo mês ainda não foi
   cobrada, na hora de cobrar a extra passa a ser do plano (sem invoice). Em pedido de vários dias, a invoice
-  leva só as que continuam extra.
+  leva só as que continuam extra. Desde #340 a invoice da extra sai **na marcação**, então isso só acontece
+  quando a invoice falhou e ainda não saiu; a extra **já faturada** continua extra (a equipe decide se ajusta no
+  QuickBooks).
 - **Extra sem valor** (card sem mensal e sem "Valor da sessão extra"): fica escrito no agendamento "sem valor da
   sessão extra". Ponha o valor na Mensalidade do card e clique **Aceitar** de novo: a invoice sai com o valor
   novo, que fica gravado na sessão.
@@ -695,13 +699,68 @@ mesma coisa.
 - **Onde se combina:** card do cliente › Mensalidade (gerente): "Valor da sessão extra" (vazio mostra a
   conta que vale) e "Item da sessão extra".
 
+### Piloto pro: o contador, só o serviço do plano e a extra cobrada na hora (#340)
+
+Dono, 19/10: *"verifica para mim como esta a marcação dos pilotos pro, ela deve ser diferente pois eles ja pagam
+mensal, entao precisa mostrar tanto para nos quanto para eles a quantidade de sessões que eles tem pagas ou em
+aberto, e nao cobrar na marcação e sim na invoice pelo QuickBooks"* — *"se ele selecionar mais do que ele tem paga
+ja gerar a invoice e enviar das sessões a mais"* — *"deixe os add ons disponiveis tb"*.
+
+- **Pro sem mensalidade no card** (★ Pro Racing Driver e a Mensalidade vazia): vira item em **Precisa de atenção**
+  ("Piloto pro sem mensalidade no card: preencha sessões por mês e valor mensal", com **Abrir cliente**), e o card
+  mostra o mesmo aviso no topo e na aba Mensalidade e contrato. Enquanto isso, na área do cliente ele vê *"Your
+  monthly plan is being set up by our team"*, **sem preço e sem carrinho**: o pedido vai para a equipe como
+  qualquer pedido, e o **Aceitar não cria invoice pelo preço da tabela** (fica escrito "piloto pro sem
+  mensalidade no card…"). Preencha na aba **Mensalidade e contrato**: **sessões por mês**, **valor mensal** e, em
+  Editar, o **Plano mensal** (o kart do plano, ex.: "Academy 4 stroke"). Na rodada seguinte (até 15 min) a sessão é
+  alocada no pacote (ou extra) e cobrada certo. Nenhum número é inventado pelo painel.
+- **O piloto pro nunca vai para o carrinho (Stripe)**: nem a sessão do plano, nem a avulsa. O carrinho do site
+  recusa a sessão dele ("is a URACE Pro driver: book this session in your account").
+- **Só o serviço do plano:** em **Book sessions** o aluno recorrente vê só o serviço do **kart do plano** (o Plano
+  mensal do card ou o plano comprado no site: "Academy 4 stroke" → Arrive and Drive 4-stroke). Os outros serviços
+  ficam atrás de **Book as a regular session**. Plano sem kart no nome ("Contrato 12 meses") mostra todos.
+- **Add-ons** (hoje o **Lead and Follow**, preço de Site › Serviços e preços): cada dia do pedido tem "Add Lead
+  and Follow · $769.00". O add-on **não vai para o Stripe**: entra na **mesma invoice do QuickBooks** das extras
+  do pedido; pedido só do pacote com add-on gera uma invoice **só com os add-ons**. A sessão do pacote continua do
+  pacote (confirma como antes); o add-on é cobrado à parte nessa invoice. O add-on precisa do **item do
+  QuickBooks** no serviço; sem ele, fica escrito no agendamento.
+- **A extra sai na hora:** no pedido (um dia ou vários), antes de confirmar o cliente vê "N included · M extra ·
+  $total" (e os add-ons). Ao marcar, a invoice das extras e add-ons é **criada e enviada na hora**, sem esperar o
+  Aceitar, **uma invoice por pedido**, sem depósito. Pedido só do pacote, sem add-on, **não** cria invoice.
+  QuickBooks fora do ar: o erro fica escrito no agendamento e o painel tenta de novo a cada rodada (até 3 vezes),
+  com a **mesma requestid** — o QuickBooks nunca cria a segunda. O Aceitar continua sendo da equipe (a vaga, a
+  waiver, a confirmação).
+- **Cancelar** a extra (ou a sessão com add-on) depois que a invoice saiu: vira aviso em **Precisa de atenção**
+  ("Sessão extra cancelada com a invoice … ainda aberta"); a equipe ajusta no QuickBooks. O painel não mexe
+  sozinho no QuickBooks.
+- **Mensalidade em aberto não trava** (dono, 19/10: *"pode"*): o pro marca normalmente; a tela só mostra a
+  situação.
+
+**O contador** (o cliente vê no **Dashboard**, seção "Monthly plan", e em **Book sessions**; a equipe vê o mesmo na
+aba **Mensalidade e contrato** do card, em "O que o cliente vê", e na lista de Agendamentos). Por mês e por
+piloto:
+- *"This month: X of Y sessions used · Z left · resets on the 1st"* — as do pacote (Asana + site, como o card já
+  contava) e as livres; zera no dia 1;
+- **Monthly invoice**: a mensalidade do mês pelo espelho do QuickBooks — **Paid**, **Open** (com "Pay now" quando
+  o painel tem o link de pagamento; senão "It is in your email from QuickBooks") ou **—** (sem invoice do mês);
+- **Extra sessions this month**: cada extra com a situação da invoice dela (Paid / Open / Invoice on its way);
+- **Open** (dono, 19/10: *"em aberto = sessões que possam ter sido feitas mas não foram pagas ainda, isso precisa
+  ser contabilizado pelas invoices do cliente e pelos serviços prestados"*): as sessões **já feitas** (agendamento
+  do site com data passada e não cancelado; tarefa do Asana do mês que conta no card, concluída ou com data
+  passada) que **não** estão cobertas por invoice paga, nos últimos 3 meses. A do pacote é coberta pela
+  mensalidade do mês dela; a extra e a avulsa pela invoice dela (a do Stripe já entra paga). O valor é o **saldo
+  das invoices abertas** ligadas a essas sessões (cada invoice uma vez). Sessão sem invoice nenhuma aparece como
+  "not invoiced yet", **sem valor**. A equipe vê **quais sessões e quais invoices** (tabela no card); o cliente vê
+  a quantidade e o valor.
+
 **Vários dias num pedido** (dono, 16/10: *"se ele quiser marcar para quartas, toda quarta. Ou quartas e sábado
 dessa semana, ou então sábado e domingo da outra, ele consegue marcar isso tudo em um book"*). Na área do
 cliente (**Book sessions**, `/portal/book`), o aluno recorrente:
 - toca nos dias do calendário (marca e desmarca) ou usa os atalhos **Every Wed** (e os outros dias que a agenda
   abre), com **Repeat until**: o fim deste mês, as próximas 4 semanas ou até uma data, sempre dentro do que a
   agenda mostra; **This weekend** e **Next weekend**. Atalho sem dia aberto avisa ("No open days that weekend.");
-- escolhe o **Session type** antes: sem ele, a tela diz "Pick the session type above to see what is included";
+- vê em cima o **contador do mês** (#340) e escolhe o **Session type** do plano (só o do kart do plano; os outros
+  pelo "Book as a regular session"); sem ele, a tela diz "Pick the session type above to see what is included";
 - vê em cada dia o turno (manhã, tarde, dia todo) e o rótulo do servidor: **Included in your plan** ou **Extra
   session · $689.23**; o resumo mostra "3 included · 2 extras" e, ao lado, "$1,378.46";
 - marca **no máximo 12 dias** por pedido; **ou entram todos, ou nenhum**: um dia que lotou no meio do caminho
@@ -713,9 +772,10 @@ cliente (**Book sessions**, `/portal/book`), o aluno recorrente:
   invoice). "Back to my plan days" volta para os vários dias.
 
 Na lista da equipe, cada sessão do pedido tem o chip **"pedido de vários dias #n"**. **Aceitar** uma delas
-aceita o **pedido inteiro**: as extras saem numa **invoice só** do QuickBooks (uma linha por sessão extra,
-item e valor da extra, sem depósito), a waiver sai uma vez, e o cliente recebe **um** e-mail com todos os dias,
-o que é do plano e o que é extra. Com a venda automática ligada, isso acontece sozinho na hora.
+aceita o **pedido inteiro**: a waiver sai uma vez, e o cliente recebe **um** e-mail com todos os dias, o que é do
+plano e o que é extra. A **invoice só** das extras e add-ons (uma linha por sessão extra e por add-on, sem depósito)
+**já saiu na marcação** (#340); se falhou, o Aceitar tenta de novo a mesma. Com a venda automática ligada, o Aceitar
+também acontece sozinho na hora.
 - O cliente acompanha em `/portal/sessions/group/<n>`: os dias, a invoice das extras, a waiver e a confirmação.
   Paga a invoice, todas as extras do pedido ficam pagas. No painel do Site, essa invoice entra **uma vez** na
   receita (não uma vez por dia).

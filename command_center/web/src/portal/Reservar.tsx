@@ -125,7 +125,9 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
   // cliente novo. Os outros dias do aluno recorrente vão pelo plano (incluída, ou extra por invoice, nunca Stripe).
   const foraDoPlano = cotDia?.reason === 'fora_do_plano'
   const viaPlano = recorrentePiloto && !foraDoPlano
-  const viaCarrinho = !plano && !viaPlano && comCarrinho                                         // cliente novo: Stripe
+  // #340: o piloto pro nunca vai para o carrinho: a sessão dele sai pela invoice do QuickBooks (dono, 19/10)
+  const proNaConta = !!planosConta?.some(x => x.pro)
+  const viaCarrinho = !plano && !viaPlano && comCarrinho && !proNaConta                          // cliente novo: Stripe
 
   async function reservar() {
     if (!passo3) return
@@ -224,7 +226,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
               {deposito > 0 && <div><span>Security deposit <span className="small muted">(refundable)</span></span><span>{usd(deposito)}</span></div>}
               <div className="soma"><span>Total</span><span>{usd(s.price + deposito)}</span></div></div>}
             <div className="row wrap" style={{ gap: 8 }}><button className="btn primary" disabled={!sessaoPronta} onClick={() => setSessaoOk(true)}>Continue</button>
-              {comCarrinho && (!recorrenteNaConta || foraDoPlano) && <button className="btn" disabled={!sessaoPronta} onClick={porNoCarrinho}>Add to cart</button>}</div>
+              {comCarrinho && !proNaConta && (!recorrenteNaConta || foraDoPlano) && <button className="btn" disabled={!sessaoPronta} onClick={porNoCarrinho}>Add to cart</button>}</div>
             {comCarrinho && !recorrenteNaConta && <p className="small muted" style={{ margin: 0 }}>Add to cart to pay online now with card, Apple Pay or Google Pay, together with anything from the store.
               Academy students: sign in and book in your account (sessions in your plan are included).</p>}
             {recorrenteNaConta && <p className="small muted" style={{ margin: 0 }}>Academy student: sessions in your monthly plan are included. An extra session is billed by invoice, with no deposit: you see which one it is before booking.</p>}

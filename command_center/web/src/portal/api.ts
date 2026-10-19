@@ -111,15 +111,26 @@ export interface RevisaoWaiver { review_id: number; review_expires_at: string; d
 export interface ConviteWaiver { kind: 'adult' | 'parental'; driver: string; signer_name: string; email: string; expires_at: string
   model: { name: string; pages: number; text: string; declaration: string | null } }
 
-/** #314: o piloto é aluno recorrente (plano mensal vigente)? Nunca o contador do pacote (dono, 01/10). */
+/** #340: a situação de uma invoice do QuickBooks, pelo espelho. */
+export type SituacaoInvoice = 'paid' | 'open' | 'not_invoiced'
+/** #340 (dono, 19/10): o contador do mês, por piloto — o cliente vê o mesmo que a equipe. */
+export interface Contador { month: string; sessions_per_month: number; used: number; left: number; over: number; resets_on: string
+  monthly_invoice: { status: 'paid' | 'open'; doc: string | null; amount?: number | null; balance?: number | null; link: string | null } | null
+  extras: { date: string; period: Turno; price?: number | null; invoice: string | null; status: SituacaoInvoice; link: string | null }[]
+  open: { count: number; amount: number | null; not_invoiced: number } }
+export interface AddOn { id: number; name: string; price: number; description?: string | null }
+/** #314: o piloto é aluno recorrente (plano mensal vigente)? #340: e o contador do mês, os serviços do plano e o add-on. */
 export interface PlanoPiloto { driver_id: number; recurring: boolean; plan: string | null; extra_price: number | null
-  /** #314, parte 3: como paga a sessão — do plano (QuickBooks), carrinho (Stripe) ou invoice */
-  payment?: 'plano' | 'stripe' | 'invoice' }
+  /** #314, parte 3: como paga a sessão — do plano (QuickBooks), carrinho (Stripe), invoice ou, #340, pela equipe
+   * (o piloto pro com a mensalidade ainda sendo configurada: nunca o carrinho) */
+  payment?: 'plano' | 'stripe' | 'invoice' | 'equipe'
+  pro?: boolean; setup?: boolean; counter?: Contador | null; services?: number[]; services_matched?: boolean; addon?: AddOn | null }
 export type Turno = 'manha' | 'tarde' | 'dia'
 /** #314: um dia do pedido, como o servidor vê: aberto ou não, e do plano ou extra. */
 export interface DiaCotado { date: string; period: Turno; ok: boolean; reason: string | null; message: string | null
-  coverage: Cobertura; price: number | null; label: string | null }
+  coverage: Cobertura; price: number | null; label: string | null; addon?: AddOn | null }
 export interface Cotacao { slots: DiaCotado[]; included: number; extras: number; extras_total: number; extra_price_missing: boolean
+  addons?: number; addons_total?: number; invoice_total?: number
   service: string; hash: string }
 /** #314: as etapas do pedido de vários dias. */
 export interface CheckoutGrupo { id: number; service: string | null; driver: string | null; status: 'pendente' | 'confirmada' | 'cancelada'

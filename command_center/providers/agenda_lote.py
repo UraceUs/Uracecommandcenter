@@ -10,7 +10,11 @@ semana, ou então sábado e domingo da outra, ele consegue marcar isso tudo em u
 - **Marcar** (`marcar`): o pedido inteiro numa transação — ou entram todos os dias, ou nenhum. Se a cotação
   mudou desde que o cliente viu (outra pessoa pegou a vaga, o preço mudou), o pedido volta para ele revisar.
 - No máximo 12 dias por pedido. Só para quem tem plano mensal vigente: o cliente avulso marca um dia por vez.
-- O contador do pacote (usadas/total) não sai daqui: o cliente vê só o rótulo de cada dia (dono, 01/10).
+- #340 (dono, 19/10): o contador do pacote vai para o cliente (`plano_do_piloto` → `counter`, o
+  `contrato.contador`); a tela de marcar mostra só o(s) serviço(s) do kart do plano (`services`; os outros ficam
+  atrás do "Book as a regular session"); e os add-ons continuam (dono: *"deixe os add ons disponiveis tb"*):
+  cada dia pode levar o add-on do site (Lead and Follow, preço do painel), que vai na invoice do QuickBooks do
+  pedido junto com as extras — criada e enviada na marcação (`cobranca_agenda.cobrar_pedido`), nunca no Stripe.
 
 Mensagens em inglês: é o que o cliente lê.
 """
@@ -27,7 +31,9 @@ PERIODOS = ("manha", "tarde", "dia")
 MOTIVOS = {"invalido": "Choose a valid date and time.",
            "fechado": "This time is not available. Pick another one.",
            "repetido": "This day and time is twice in your booking.",
-           "fora_do_plano": "Your monthly plan does not cover this date. Use \"Book as a regular session\" on this day."}
+           "fora_do_plano": "Your monthly plan does not cover this date. Use \"Book as a regular session\" on this day.",
+           "sem_addon": "This add-on is not open for online booking right now. Remove it to continue, or talk to us."}
+FORA_DO_PLANO = "This session type is not in your monthly plan. Use \"Book as a regular session\" for it."
 MUDOU = "Your booking changed since you reviewed it (a spot or a price). Please review it and book again."
 
 
@@ -40,7 +46,7 @@ class CotacaoMudou(ErroLote):
 
 
 def rotulo(cobertura, preco):
-    """O que o cliente lê em cada dia — e só isto (dono, 01/10: o contador fica com a equipe)."""
+    """O que o cliente lê em cada dia. O contador do mês vem à parte, no `plano_do_piloto` (#340)."""
     if cobertura == "plano":
         return "Included in your plan"
     return "Extra session" + (f" · ${preco:,.2f}" if preco is not None else "")
@@ -53,15 +59,37 @@ def _piloto(con, conta_id, piloto_id):
     return p
 
 
+def servicos_para_o_plano(con, card):
+    """Os serviços de sessão que o aluno recorrente marca pelo plano: os do kart do plano; sem kart no plano (ou sem
+    serviço daquele kart), todos — e `matched` diz qual foi."""
+    todos_ = servicos_site.para_cliente(con)
+    do_plano = contrato.servicos_do_plano(con, card, todos_)
+    return (do_plano or todos_), bool(do_plano)
+
+
+def addon_para_o_plano(con):
+    """O add-on do dia que o site vende (Lead and Follow), com o preço do painel, ou None."""
+    a = servicos_site.addon_do_site(con)
+    return {"id": a["id"], "name": a["name"], "price": float(a["price"]), "description": a["texto"]} if a else None
+
+
 def plano_do_piloto(con, conta_id, piloto_id):
-    """O piloto é aluno recorrente? E o nome do plano e o preço da extra — nunca o contador."""
+    """O piloto é aluno recorrente? O nome do plano, o preço da extra e, desde 19/10 (#340), o contador do mês
+    (`counter`), os serviços do plano e o add-on. `setup`: piloto pro com a mensalidade ainda não configurada no
+    card (a equipe está montando: nada de carrinho, o pedido vai para a equipe e sai por invoice)."""
     p = _piloto(con, conta_id, piloto_id)
     card = p["client_id"]
     rec = contrato.vigente(con, card)
+    pro = contrato.e_pro(con, card)
     c = um(con, "SELECT monthly_plan FROM clients WHERE id=?", (card,)) if rec else None
     e = contrato.preco_extra(con, card) if rec else None
-    return {"driver_id": p["id"], "recurring": rec, "plan": (c or {}).get("monthly_plan") or ("Monthly plan" if rec else None),
-            "extra_price": float(e) if e is not None else None}
+    saida = {"driver_id": p["id"], "recurring": rec, "plan": (c or {}).get("monthly_plan") or ("Monthly plan" if rec else None),
+             "extra_price": float(e) if e is not None else None, "pro": pro, "setup": pro and not rec and contrato.pro_sem_mensal(con, card)}
+    if rec:
+        k = contrato.contador(con, card)
+        servicos, achou = servicos_para_o_plano(con, card)
+        saida.update(counter=k, services=[x["id"] for x in servicos], services_matched=achou, addon=addon_para_o_plano(con))
+    return saida
 
 
 def _sobrepoe(a, b):
@@ -82,6 +110,9 @@ def cotar(con, conta_id, piloto_id, servico_id, slots):
     card = p["client_id"]
     if not contrato.vigente(con, card):
         raise ErroLote("Booking several days at once is for students with a monthly plan. Book one session at a time.")
+    # #340: pelo plano, só o serviço do plano; outro serviço é sessão avulsa ("Book as a regular session")
+    servico_fora = servico["id"] not in [x["id"] for x in servicos_para_o_plano(con, card)[0]]
+    addon = addon_para_o_plano(con)
     from command_center.providers import portal                      # import aqui: portal não depende da agenda
     falta = portal.pode_marcar(con, conta_id, piloto_id)
     if falta:
@@ -93,7 +124,7 @@ def cotar(con, conta_id, piloto_id, servico_id, slots):
             dia = date.fromisoformat(d)
         except ValueError:
             dia = None
-        linhas.append({"date": d, "period": per, "_dia": dia if per in PERIODOS else None})
+        linhas.append({"date": d, "period": per, "_dia": dia if per in PERIODOS else None, "addon": bool((s or {}).get("addon"))})
     validos = [x["_dia"] for x in linhas if x["_dia"]]
     disp = {x["date"]: x for x in ag.disponibilidade(con, min(validos), max(validos))["dias"]} if validos else {}
     ja = todos(con, """SELECT date, period FROM bookings WHERE account_id=? AND COALESCE(pilot_id,0)=? AND date BETWEEN ? AND ?
@@ -110,28 +141,39 @@ def cotar(con, conta_id, piloto_id, servico_id, slots):
             motivo = "fechado"
         elif any(d == x["date"] and _sobrepoe(per, x["period"]) for d, per in vistos):
             motivo = "repetido"
+        elif x["addon"] and not addon:
+            motivo = "sem_addon"
         if not motivo:
             vistos.append((x["date"], x["period"]))
         x["reason"] = motivo
     bons = [x for x in linhas if not x["reason"]]
     for x, a in zip(bons, contrato.alocar(con, card, [x["date"] for x in bons])):
-        if not a["coverage"]:
+        if servico_fora:
+            x["reason"], x["_msg"] = "fora_do_plano", FORA_DO_PLANO
+        elif not a["coverage"]:
             x["reason"] = "fora_do_plano"
         else:
             x["coverage"], x["price"] = a["coverage"], (float(a["price"]) if a["price"] is not None else None)
     saida = []
     for x in linhas:
         ok = not x["reason"]
-        msg = None if ok else (f"{p['name']} already has a session at this time." if x["reason"] == "ja_tem" else MOTIVOS[x["reason"]])
+        msg = None if ok else (f"{p['name']} already has a session at this time." if x["reason"] == "ja_tem"
+                               else x.get("_msg") or MOTIVOS[x["reason"]])
+        com_addon = ok and x["addon"] and addon
         saida.append({"date": x["date"], "period": x["period"], "ok": ok, "reason": x["reason"], "message": msg,
                       "coverage": x.get("coverage") if ok else None, "price": x.get("price") if ok else None,
-                      "label": rotulo(x.get("coverage"), x.get("price")) if ok else None})
+                      "label": rotulo(x.get("coverage"), x.get("price")) if ok else None,
+                      "addon": {"id": addon["id"], "name": addon["name"], "price": addon["price"]} if com_addon else None})
     extras = [x for x in saida if x["coverage"] == "extra"]
     total = sum((contrato.centavos(x["price"]) for x in extras if x["price"] is not None), contrato.ZERO)
-    resumo = [[x["date"], x["period"], x["ok"], x["coverage"], x["price"]] for x in saida]
+    addons = [x["addon"] for x in saida if x["addon"]]
+    total_addons = sum((contrato.centavos(a["price"]) for a in addons), contrato.ZERO)
+    resumo = [[x["date"], x["period"], x["ok"], x["coverage"], x["price"], x["addon"] and [x["addon"]["id"], x["addon"]["price"]]]
+              for x in saida]
     h = hashlib.sha256(json.dumps([servico["id"], piloto_id, resumo]).encode()).hexdigest()[:16]
     return {"slots": saida, "included": sum(1 for x in saida if x["coverage"] == "plano"), "extras": len(extras),
             "extras_total": float(total), "extra_price_missing": any(x["price"] is None for x in extras),
+            "addons": len(addons), "addons_total": float(total_addons), "invoice_total": float(total + total_addons),
             "service": servico["name"], "hash": h}
 
 
@@ -153,7 +195,9 @@ def marcar(con, conta_id, piloto_id, servico_id, slots, cotacao, notas=None, ori
             bid = ag.agendar(con, conta_id, x["date"], x["period"], piloto_id, notas, servico_id)
         except ag.ErroAgenda as e:
             raise ErroLote(f"{date.fromisoformat(x['date']).strftime('%a, %b %d').replace(' 0', ' ')}: {e}")
-        atualizar(con, "bookings", bid, group_id=gid, origin="site" if origem == "site" else "portal", utm=utm)
+        a = x["addon"] or {}
+        atualizar(con, "bookings", bid, group_id=gid, origin="site" if origem == "site" else "portal", utm=utm,
+                  **({"addon_service_id": a["id"], "addon_name": a["name"], "addon_price": a["price"]} if a else {}))
         ids.append(bid)
     cob.alocar_grupo(con, ids)
     for bid in ids:

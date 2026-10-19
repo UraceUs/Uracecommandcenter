@@ -42,7 +42,9 @@ interface NoSite { onde: 'kart' | 'addon' | 'plano' | 'area' | 'repetido' | 'nen
 interface PaginaSite { id: string; nome: string; caminho: string; cartoes: boolean }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
 interface Ag { id: number; date: string; period: string; status: string; notes: string | null; decision_note: string | null; created_at: string
-  service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean } | null
+  service_name: string | null; price: number | null; contrato: { usadas: number; sessoes_por_mes: number; acima: boolean; mensalidade?: 'paid' | 'open' | null; mensalidade_doc?: string | null } | null
+  /** #340: o add-on do dia (Lead and Follow) e o piloto pro sem mensalidade no card */
+  addon_name?: string | null; addon_price?: number | null; pro_sem_mensal?: boolean
   /** #314: do pacote do mês (sem custo) ou extra (cobrada pela invoice); null = avulsa */
   coverage?: 'plano' | 'extra' | null; list_price?: number | null; group_id?: number | null
   accepted_at?: string | null; charge_kind?: string | null; store_order_id?: number | null; invoice_doc?: string | null; invoice_link?: string | null; charge_error?: string | null; waiver_error?: string | null; reminder_error?: string | null
@@ -115,13 +117,20 @@ function Agendamentos() {
               {pg === 'contrato' ? tr("sessão do contrato") : a.charge_kind === 'stripe' ? tr("pago no site · pedido #{0}", a.store_order_id ?? '') : pg === 'pago' ? tr("pago {0}", a.invoice_doc || '') : pg === 'enviada' ? tr("invoice {0} enviada", a.invoice_doc || '') : pg === 'erro' ? tr("invoice não saiu") : tr("invoice: tentando")}</CdItem>}
             {a.cobranca && <CdItem tom={wv === 'ok' ? 'ok' : wv === 'erro' ? 'crit' : 'warn'}>
               {wv === 'ok' ? tr("waiver em dia") : wv === 'enviada' ? tr("waiver enviada") : wv === 'erro' ? tr("waiver não saiu") : tr("waiver: assina na área do cliente")}</CdItem>}
-            {/* #314: a sessão do aluno recorrente — do plano (sem custo) ou extra (invoice); o contador é só da equipe */}
+            {/* #314: a sessão do aluno recorrente — do plano (sem custo) ou extra (invoice). #340: o cliente também vê o
+                contador; aqui a equipe vê ainda a mensalidade do mês e o add-on */}
             {a.coverage ? <CdItem tom={a.coverage === 'extra' ? 'warn' : 'info'} valor={a.contrato ? tr("pacote: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes) : null}>
               {a.coverage === 'extra' ? tr("extra {0}", a.price != null ? usd(a.price) : tr("sem valor")) + (a.invoice_doc ? tr(" · invoice {0}", a.invoice_doc) : '') : tr("do plano")}
               {a.group_id ? <> · {tr("pedido de vários dias #{0}", a.group_id)}</> : null}</CdItem>
               : a.contrato && <CdItem tom={a.contrato.acima ? 'warn' : 'info'}>{a.contrato.acima
                 ? tr("acima do contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)
                 : tr("contrato: {0} de {1} no mês", a.contrato.usadas, a.contrato.sessoes_por_mes)}</CdItem>}
+            {a.contrato && <CdItem tom={a.contrato.mensalidade === 'paid' ? 'ok' : a.contrato.mensalidade === 'open' ? 'warn' : 'neutral'}
+              valor={a.contrato.mensalidade_doc}>{a.contrato.mensalidade === 'paid' ? tr("mensalidade do mês paga") : a.contrato.mensalidade === 'open'
+                ? tr("mensalidade do mês em aberto") : tr("mensalidade do mês: sem invoice")}</CdItem>}
+            {a.addon_name && <CdItem tom="info" valor={a.addon_price != null ? usd(a.addon_price) : null}>{tr("add-on: {0}", a.addon_name)}</CdItem>}
+            {a.pro_sem_mensal && <CdItem tom="warn" valor={a.client_id ? <Link to={`/clients/${a.client_id}`}>{tr("abrir o card")}</Link> : null}>
+              {tr("Piloto pro sem mensalidade no card: preencha sessões por mês e valor mensal")}</CdItem>}
             <CdItem tom={a.client_id ? 'ok' : 'warn'} valor={a.client_id ? <Link to={`/clients/${a.client_id}`}>{tr("Client ID")} {a.client_id}</Link> : null}>
               {a.client_id ? tr("Card do cliente") : tr("driver ainda sem card")}</CdItem>
             <CdItem tom={a.asana_gid ? 'ok' : a.asana_error ? 'warn' : 'neutral'}

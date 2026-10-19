@@ -126,6 +126,10 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
           {c.plan_type === 'monthly' && <Chip tone="accent">{tr("Academy Monthly")}</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">{tr("Academy Day")}</Chip>}
           {!!c.vip && <Chip tone="warn">{tr("VIP")}</Chip>}
         </div>
+        {/* #340: o pro sem a Mensalidade preenchida — o aviso perto da Mensalidade (abre a aba) */}
+        {!!c.pro_driver && c.plan_type !== 'monthly' && !c.monthly_sessions && !c.monthly_amount &&
+          <button type="button" className="btn ghost" style={{ minHeight: 40, whiteSpace: 'normal', textAlign: 'left' }} onClick={() => setTab('monthly')}>
+            <Chip tone="warn">{tr("Piloto pro sem mensalidade no card: preencha sessões por mês e valor mensal")}</Chip></button>}
         <div className="meta">
           <span><span className="k">{tr("Client ID")}</span> <b className="mono">{c.id}</b></span>
           {c.pilot_name && c.pilot_name !== c.name && <span><span className="k">{tr("responsável")}</span> <b>{c.name}</b></span>}
@@ -407,7 +411,7 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
       <div className="field"><label>{tr("&nbsp;")}</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>{tr("Salvar mensalidade")}</button></div>
     </div>
     <p className="small muted" style={{ marginTop: 6 }}>{tr("Ao escolher o item, o preço de tabela entra no valor; mude se o combinado com o cliente for outro. O que estiver salvo aqui é o valor da invoice de todo dia 1.")}</p>
-    <p className="small muted" style={{ marginTop: 4 }}>{tr("Sessão extra (aluno recorrente): acima das sessões do mês, a sessão marcada na área do cliente sai numa invoice do QuickBooks com este valor, sem depósito. Vazio, vale o valor do plano do site ou o mensal ÷ sessões do mês. O cliente vê só \"Included in your plan\" ou \"Extra session\": o contador fica para a equipe.")}</p>
+    <p className="small muted" style={{ marginTop: 4 }}>{tr("Sessão extra (aluno recorrente): acima das sessões do mês, a sessão marcada na área do cliente sai numa invoice do QuickBooks com este valor, sem depósito. Vazio, vale o valor do plano do site ou o mensal ÷ sessões do mês. Desde 19/10 (#340) o cliente também vê o contador do mês, e a invoice da extra sai na hora em que ele marca.")}</p>
     <div className="row wrap" style={{ gap: 12, marginTop: 14, alignItems: 'flex-end' }}>
       <div className="field"><label>{tr("Recorrência")}</label>
         <div className="row wrap" style={{ gap: 6 }}>
@@ -521,19 +525,46 @@ function SubirContrato({ id, reload }: { id: number; reload: () => void }) {
   return <div className="row wrap"><input ref={campo} className="input" type="file" accept=".pdf,image/*" style={{ maxWidth: 360 }} aria-label={tr("PDF do contrato")} onChange={e => setFile(e.target.files?.[0] || null)} /><button className="btn" disabled={!file || busy} onClick={upload}>{busy ? <span className="spin" /> : tr("Subir contrato")}</button></div>
 }
 
+const SIT_INV: Record<string, [string, 'ok' | 'warn' | 'neutral']> = { paid: ['paga', 'ok'], open: ['aberta', 'warn'], not_invoiced: ['sem invoice', 'neutral'] }
+
+/** #340 (dono, 19/10): o que o cliente vê na área dele — a mensalidade do mês, as extras e o em aberto — com, para a
+ * equipe, quais sessões e quais invoices estão em aberto. */
+function ContadorDoCard({ k, fin }: { k: NonNullable<Monthly['counter']>; fin: boolean }) {
+  const sit = (s: string) => { const [r, t] = SIT_INV[s] || [s, 'neutral']; return <Chip tone={t}>{tr(r)}</Chip> }
+  return <Section title={tr("O que o cliente vê (contador do mês)")} tight>
+    <CdLista>
+      <CdItem tom="info">{tr("Este mês: {0} de {1} sessões usadas · {2} livre(s) · zera no dia 1", k.used, k.sessions_per_month, k.left)}</CdItem>
+      <CdItem tom={!k.monthly_invoice ? 'neutral' : k.monthly_invoice.status === 'paid' ? 'ok' : 'warn'}
+        valor={k.monthly_invoice ? <>{sit(k.monthly_invoice.status)} {k.monthly_invoice.doc && <span className="mono">{k.monthly_invoice.doc}</span>}
+          {fin && k.monthly_invoice.balance ? <span className="mono"> {money(k.monthly_invoice.balance)}</span> : null}</> : '—'}>{tr("Mensalidade do mês")}</CdItem>
+      <CdItem tom={k.extras.some(e => e.status !== 'paid') ? 'warn' : 'ok'}
+        valor={k.extras.length ? k.extras.map(e => <div key={`${e.date}${e.period}`}>{fmtDate(e.date)} {sit(e.status)} {e.invoice && <span className="mono">{e.invoice}</span>}</div>) : '—'}>
+        {tr("Extras do mês ({0})", k.extras.length)}</CdItem>
+      <CdItem tom={k.open.count ? 'warn' : 'ok'} valor={k.open.count ? <>{k.open.count}{fin && k.open.amount != null ? ` · ${money(k.open.amount)}` : ''}{k.open.not_invoiced ? tr(" · {0} sem invoice", k.open.not_invoiced) : ''}</> : '0'}>
+        {tr("Em aberto (feitas e não pagas, últimos 3 meses)")}</CdItem>
+    </CdLista>
+    {k.open.count > 0 && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Sessão")}</th><th>{tr("Tipo")}</th><th>{tr("Invoice")}</th></tr></thead><tbody>
+      {k.open.sessions.map((s, i) => <tr key={i}><td>{fmtDate(s.date)} <span className="small muted">{s.title}</span></td><td>{s.kind}</td>
+        <td>{s.invoice ? <span className="mono">{s.invoice}</span> : null} {sit(s.status)}</td></tr>)}</tbody></table></div>}
+    {k.open.invoices.length > 0 && <div className="small muted">{tr("Invoices em aberto: {0}", k.open.invoices.map(i => `${i.doc || '—'}${fin && i.balance != null ? ` (${money(i.balance)})` : ''}`).join(' · '))}</div>}
+  </Section>
+}
+
 function Mensalidade({ id, m, loading, reload, plan, fin }: { id: number; m: Monthly | null; loading: boolean; reload: () => void; plan?: string | null; fin: boolean }) {
   const { can } = useAuth()
   if (loading && !m) return <Loading />
   if (!m) return null
   const mesNome = (k: string) => new Date(k + '-15T12:00:00Z').toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric', timeZone: 'UTC' })
   return <div className="stack">
+    {m.pro_sem_mensal && <Banner tone="warn">{tr("Piloto pro sem mensalidade no card: preencha sessões por mês e valor mensal (e o Plano mensal, o kart do plano). Até lá, na área do cliente ele vê \"Your monthly plan is being set up by our team\", não vai para o carrinho e nenhuma invoice sai pelo preço da tabela.")}</Banner>}
     {plan !== 'monthly' && <Banner tone="info">{tr("Este piloto não está marcado como Academy Monthly. Marque em Editar → Tipo de piloto para o dia 1 gerar a mensalidade.")}</Banner>}
     <div className="grid g3">
       <div className="card kpi"><div className="lbl">{tr("Última mensalidade")}</div><div className="val" style={{ fontSize: 24 }}>{fin ? (m.last_monthly_amount != null ? money(m.last_monthly_amount) : '—') : '🔒'}</div><div className="foot truncate" title={m.last_monthly_memo || ''}>{m.last_monthly_memo || tr("nenhuma invoice de Academy encontrada")}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Sessões este mês")}</div><div className="val">{m.months[0]?.sessions_used ?? 0}<span className="muted" style={{ fontSize: 18 }}> / {m.sessions_per_month}</span></div>
-        <div className="foot">{m.months[0]?.sessions_over ? tr("{0} acima do contrato", m.months[0].sessions_over) : tr("{0} restante(s)", m.months[0]?.sessions_left ?? 0)}{m.sessions_per_month_set ? '' : tr(" · padrão de 4 (defina o do contrato)")} {tr("· zera no dia 1 · só a equipe vê")}</div></div>
+        <div className="foot">{m.months[0]?.sessions_over ? tr("{0} acima do contrato", m.months[0].sessions_over) : tr("{0} restante(s)", m.months[0]?.sessions_left ?? 0)}{m.sessions_per_month_set ? '' : tr(" · padrão de 4 (defina o do contrato)")} {tr("· zera no dia 1 · o cliente também vê")}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Invoice do mês")}</div><div className={`val ${m.months[0]?.invoice ? 'ok' : 'warn'}`} style={{ fontSize: 22 }}>{m.months[0]?.invoice ? (m.months[0].invoice.status || tr("emitida")) : tr("falta")}</div><div className="foot">{m.months[0]?.invoice?.doc_number || (m.months[0]?.needs_invoice ? tr("a IA monta no dia 1, você aprova") : '')}</div></div>
     </div>
+    {m.counter && <ContadorDoCard k={m.counter} fin={fin} />}
     {fin && <ValorERecorrencia id={id} lastAmount={m.last_monthly_amount} />}
     <Section title={tr("Meses")} tight><div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Mês")}</th><th>{tr("Invoice")}</th><th>{tr("Sessões usadas")}</th><th>{tr("Restantes / não usadas")}</th><th>{tr("Situação")}</th></tr></thead><tbody>
       {m.months.map(x => <tr key={x.month}><td style={{ textTransform: 'capitalize' }}>{mesNome(x.month)}</td>

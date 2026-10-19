@@ -7,8 +7,8 @@ outra, ele consegue marcar isso tudo em um book."*
 O que estes testes trancam: a cotação traz de cada dia o rótulo e o preço do servidor ("Included in your plan" /
 "Extra session · $X") e não grava nada; o pedido é tudo ou nada; as extras do pedido saem numa invoice só (uma
 chamada com N linhas) e a waiver sai uma vez; o pedido recusa piloto de outra conta, conflito de horário, mais de
-12 dias, cliente sem plano e falta de CSRF; cotação vencida dá 409; nada do contador do pacote vai para o
-cliente; a lista de sessões do cliente é paginada. Dados fictícios."""
+12 dias, cliente sem plano e falta de CSRF; cotação vencida dá 409; o contador do mês vai
+para o cliente (#340); a lista de sessões do cliente é paginada. Dados fictícios."""
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -37,7 +37,7 @@ def amb(tmp_path, monkeypatch):
     c = conectar(); aplicar_schema(c)
     inserir(c, "qbo_items", id="11", name="Arrive and Drive 4T", price=719)
     inserir(c, "qbo_items", id="892", name="Academy | Extra session (beyond monthly 4)", price=689)
-    sid = servicos_site.criar(c, None, {"name": "Academy session", "price": 719, "qbo_item": "Arrive and Drive 4T", "deposit": 400})
+    sid = servicos_site.criar(c, None, {"name": "Academy 4-stroke session", "price": 719, "qbo_item": "Arrive and Drive 4T", "deposit": 400})
     abre(c, cap=1)
     c.commit(); c.close()
     with TestClient(app, base_url="https://cc.test") as t:
@@ -80,11 +80,12 @@ def test_cotacao_traz_rotulo_e_preco_do_servidor_e_nao_grava_nada(amb):
     assert [x["label"] for m in meses.values() for x in m] == esperado, "2 do pacote por mês; o resto é extra (1.378,45 ÷ 2)"
     assert q["included"] + q["extras"] == 4 and q["extras_total"] == round(689.23 * q["extras"], 2)
     assert all(x["ok"] for x in q["slots"]) and len(q["hash"]) == 16
-    texto = str(q)
-    assert "usadas" not in texto and "sessoes_por_mes" not in texto and "used" not in texto, "o contador não vai para o cliente"
     assert not um(amb["con"], "SELECT COUNT(*) AS n FROM bookings")["n"], "cotar não grava"
     r = amb["cli"].get(f"{P}/plan").json()["drivers"][0]
-    assert r == {"driver_id": amb["pid"], "recurring": True, "plan": "Academy 4 stroke", "extra_price": 689.23, "payment": "plano"}
+    assert {k: r[k] for k in ("driver_id", "recurring", "plan", "extra_price", "payment", "pro", "setup")} == \
+        {"driver_id": amb["pid"], "recurring": True, "plan": "Academy 4 stroke", "extra_price": 689.23, "payment": "plano",
+         "pro": False, "setup": False}
+    assert r["counter"]["used"] == 0 and r["counter"]["sessions_per_month"] == 2, "#340: o contador vai para o cliente"
 
 
 def test_pedido_de_varios_dias_entra_inteiro_com_uma_invoice_e_uma_waiver(amb, monkeypatch):
@@ -209,7 +210,8 @@ def test_lista_de_sessoes_do_cliente_e_paginada(amb):
 
 
 def test_invoice_das_extras_que_falhou_e_tentada_uma_vez_por_rodada(amb, monkeypatch):
-    """O laço tenta de novo a invoice do pedido (até 3 vezes), não uma vez por dia extra do pedido."""
+    """O laço tenta de novo a invoice do pedido (até 3 vezes), não uma vez por dia extra do pedido. #340: a primeira
+    tentativa é na marcação; o aceite e a rodada tentam de novo a mesma cobrança."""
     from command_center.providers import cobranca_agenda as cob
     con, cli = amb["con"], amb["cli"]
     con.execute("UPDATE clients SET monthly_sessions=1 WHERE id=?", (amb["card"],))    # 1 por mês: 5 quartas, 3+ extras
@@ -217,20 +219,24 @@ def test_invoice_das_extras_que_falhou_e_tentada_uma_vez_por_rodada(amb, monkeyp
     dias = quartas(5)
     q = cota(amb, dias)
     assert q["extras"] >= 3
-    gid = cli.post(f"{P}/bookings/batch", headers=amb["h"], json=corpo(amb, dias, quote=q["hash"])).json()["group_id"]
     monkeypatch.setattr(mensalidades, "_cliente_qbo", lambda con, cid: "42")
     tentativas = []
 
     def falha(**kw):
         tentativas.append(len(kw["linhas"]))
         raise RuntimeError("QuickBooks fora do ar")
+    monkeypatch.setattr(cob, "_enviar_padrao", falha)
+    gid = cli.post(f"{P}/bookings/batch", headers=amb["h"], json=corpo(amb, dias, quote=q["hash"])).json()["group_id"]
+    assert tentativas == [q["extras"]], "na marcação: uma invoice com todas as extras"
     primeiro = todos(con, "SELECT id FROM bookings WHERE group_id=? ORDER BY date", (gid,))[0]["id"]
     cob.aceitar(con, 1, primeiro, enviar_invoice=falha, enviar_waiver=lambda *a: {"envelopeId": "e"})
-    assert tentativas == [q["extras"]], "uma invoice com todas as extras"
+    assert len(tentativas) == 2, "o aceite tenta uma vez o pedido inteiro"
     cob.rodar(con, enviar_invoice=falha, enviar_waiver=lambda *a: {"envelopeId": "e"}, enviar_email=lambda *a: None)
-    assert len(tentativas) == 2, "uma tentativa por rodada para o pedido"
+    assert len(tentativas) == 3, "uma tentativa por rodada para o pedido"
+    cob.rodar(con, enviar_invoice=falha, enviar_waiver=lambda *a: {"envelopeId": "e"}, enviar_email=lambda *a: None)
+    assert len(tentativas) == 3, "3 tentativas e para: a equipe vê o erro"
     extras = todos(con, "SELECT charge_error, charge_attempts FROM bookings WHERE group_id=? AND coverage='extra'", (gid,))
-    assert {x["charge_attempts"] for x in extras} == {2} and all("fora do ar" in x["charge_error"] for x in extras)
+    assert {x["charge_attempts"] for x in extras} == {3} and all("fora do ar" in x["charge_error"] for x in extras)
 
 
 def test_reserva_de_um_dia_com_a_cotacao_vencida_da_409_e_nao_marca(amb):

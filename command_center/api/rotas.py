@@ -2094,34 +2094,20 @@ def context_download(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Conne
 
 
 # ============================================================ Pro Racing Drivers, mensalidade, contrato, equipamento, corridas (09/09)
-MESES_EN = {m: i for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"), 1)}
 SESSOES_MES = 4                       # padrão da Academy; o card pode ter outro número (#61)
 CONTRACT_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "contracts")
 IMAGE_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "images")
 
 
-def mes_da_invoice(inv):
-    """'Urace Academy Training Program + Tuner [August, 2026]' → '2026-08'; senão o mês de emissão."""
-    m = re.search(r"\[\s*([A-Za-z]+)[,\s]+(\d{4})\s*\]", inv.get("memo") or "")
-    if m and m.group(1).lower() in MESES_EN:
-        return f"{m.group(2)}-{MESES_EN[m.group(1).lower()]:02d}"
-    return (inv.get("issued_on") or "")[:7] or None
+mes_da_invoice = contrato.mes_da_invoice          # #340: mora no contrato (o contador do cliente usa a mesma regra)
 
 
 def resumo_mensalidade(con, cid, meses=4):
     """Por mês: invoice da mensalidade (memo Academy), sessões usadas (tarefas de treino), restantes, e se falta invoice."""
     from datetime import date as _d
     hoje = _d.today()
-    invs = todos(con, "SELECT * FROM invoices WHERE client_id=? ORDER BY issued_on DESC", (cid,))
-    por_mes = {}
-    for i in invs:
-        # 01/10 (#63): a invoice de mensalidade também é reconhecida pelo item da linha (a de 17/09 do
-        # Joseph Kartian não tem memo, só o item "Academy Monthly")
-        linhas = " ".join(f"{x['item_name'] or ''} {x['description'] or ''}" for x in
-                          todos(con, "SELECT item_name, description FROM invoice_lines WHERE invoice_id=?", (i["id"],)))
-        i["_linhas"] = linhas
-        if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + (i.get("doc_number") or "") + " " + linhas, re.I):
-            por_mes.setdefault(mes_da_invoice(i), i)
+    # #340: a mensalidade do mês pelo espelho mora no contrato (a invoice de uma sessão do site não é mensalidade)
+    por_mes, invs = contrato.mensalidades_por_mes(con, cid)
     saida = []
     por_mes_n = contrato.sessoes_por_mes(con, cid)      # o número do contrato do card (#61); sem número, 4
     for k in range(meses):
@@ -2141,7 +2127,7 @@ def resumo_mensalidade(con, cid, meses=4):
                       "sessions": usadas,
                       "sessions_over": acima, "closed": k > 0,
                       "needs_invoice": inv is None and (k == 0 or len(usadas) > 0)})
-    ultimo = next((i for i in invs if re.search(r"academy|monthly|training program|mensal", (i.get("memo") or "") + " " + i.get("_linhas", ""), re.I)), None)
+    ultimo = next((i for i in invs if not i.get("_sessao") and contrato.EH_MENSALIDADE.search((i.get("memo") or "") + " " + i.get("_linhas", ""))), None)
     return {"months": saida, "last_monthly_amount": ultimo["amount"] if ultimo else None, "last_monthly_memo": ultimo["memo"] if ultimo else None,
             "sessions_per_month": por_mes_n, "sessions_per_month_set": bool(um(con, "SELECT monthly_sessions FROM clients WHERE id=?", (cid,))["monthly_sessions"])}
 
@@ -2151,11 +2137,22 @@ def client_monthly(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connect
     if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
         raise HTTPException(404, "Client not found.")
     r_ = resumo_mensalidade(con, cid)
+    # #340 (dono, 19/10): o contador que o cliente vê (do pacote, mensalidade do mês, extras, em aberto) — aqui com
+    # quais sessões e quais invoices estão em aberto; e o aviso do piloto pro sem mensalidade no card
+    r_["counter"] = contrato.contador(con, cid, equipe=True)
+    r_["pro_sem_mensal"] = contrato.pro_sem_mensal(con, cid)
     if not auth.pode(u["role"], "MANAGER"):                          # financeiro só para gerente+
         for m in r_["months"]:
             if m["invoice"]:
                 m["invoice"] = {k: v for k, v in m["invoice"].items() if k not in ("amount", "balance")}
         r_["last_monthly_amount"] = None
+        k = r_["counter"]
+        if k:
+            if k["monthly_invoice"]:
+                k["monthly_invoice"] = {x: v for x, v in k["monthly_invoice"].items() if x not in ("amount", "balance")}
+            k["extras"] = [{x: v for x, v in e.items() if x != "price"} for e in k["extras"]]
+            k["open"]["amount"] = None
+            k["open"]["invoices"] = [{x: v for x, v in i.items() if x != "balance"} for i in k["open"]["invoices"]]
     r_["contracts"] = todos(con, "SELECT c.*, us.name AS added_by_name FROM contracts c LEFT JOIN users us ON us.id=c.added_by WHERE c.client_id=? ORDER BY c.id DESC", (cid,))
     return r_
 
