@@ -332,3 +332,23 @@ def test_extra_com_add_on_vai_numa_invoice_com_os_dois(amb):
     assert len(ch) == 1
     assert sorted((x["item_id"], x["unitario"]) for x in ch[0]["linhas"]) == [("77", 769.0), ("892", 1378.45)]
     assert ch[0]["memo"].startswith("URACE extra session and add-on")
+
+
+def test_contador_e_em_aberto_nao_misturam_o_card_do_irmao(amb):
+    """Cada piloto tem o seu card (#65): a sessão e a invoice do irmão, na mesma conta, nunca entram no contador."""
+    con = amb["con"]
+    mensal(amb)
+    conta = um(con, "SELECT account_id FROM portal_pilots WHERE id=?", (amb["pid"],))["account_id"]
+    irmao = inserir(con, "clients", name="Nina Pista", pilot_name="Lia Pista", email="lia.pista@example.com", status="ACTIVE",
+                    monthly_sessions=2, monthly_amount=1378.45)
+    pid2 = inserir(con, "portal_pilots", account_id=conta, name="Lia Pista", client_id=irmao)
+    m = _mes(-1)
+    inserir(con, "bookings", account_id=conta, pilot_id=pid2, date=f"{m}-04", period="manha", status="confirmada",
+            coverage="extra", charge_kind="invoice", price=689.23, qbo_invoice_id="901", invoice_doc="URACE-901", invoice_total=689.23)
+    inserir(con, "bookings", account_id=conta, pilot_id=pid2, date=f"{_mes()}-28", period="manha", status="pendente",
+            coverage="plano", price=0)
+    a = contrato.em_aberto(con, amb["card"])
+    assert a["count"] == 0 and not a["invoices"], "a extra do irmão não é do card do Theo"
+    k = contrato.contador(con, amb["card"])
+    assert (k["used"], k["extras"]) == (0, []), "a do pacote do irmão não ocupa a vaga do Theo"
+    assert contrato.em_aberto(con, irmao)["count"] == 1 and contrato.contador(con, irmao)["used"] == 1
