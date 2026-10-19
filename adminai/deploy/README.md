@@ -150,7 +150,8 @@ cada passo para poder te passar e testar todas as funcionalidades"*.
 > para baixar em *Actions › a execução › Artifacts › prova-com-fotos*. Na VPS ela é opcional. E o deploy
 > (`servir_command_center.sh`) não roda mais a bateria quando o CI verde do commit está confirmado: a
 > prova é a tag `ci-verde/<sha>`, que o CI grava no repositório e a VPS lê pelo git (#286 — o repositório é
-> privado, a API do GitHub responde 404 sem login).
+> privado, a API do GitHub responde 404 sem login). Desde #344 o pytest e o end-to-end rodam em partes
+> paralelas ("… (1/3)"); a tag só sai com todas as partes verdes, e o `ci_verde.py` só diz ok com todas.
 
 **Uma linha, no VPS:**
 

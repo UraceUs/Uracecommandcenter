@@ -130,3 +130,54 @@ def test_o_ci_grava_a_tag_so_com_os_tres_jobs_verdes_no_branch_da_vps():
     corpo = verde["steps"][0]["run"]
     assert "refs/tags/ci-verde/${{ github.sha }}" in corpo and 'sha="${{ github.sha }}"' in corpo
     assert all("permissions" not in j for k, j in jobs.items() if k != "verde"), "os outros jobs seguem só leitura"
+
+
+# ------------------------------------------------------------------ #344: o CI em partes paralelas
+# Dono, 19/10: pytest e end-to-end em partes (hoje 3 cada). Cada parte é um check "… (K/N)". O deploy só pula a
+# bateria com TODAS as partes verdes; antes, o "mais recente que começa com End-to-end" decidiria por uma só.
+def _em_partes(e2e=("success",) * 3, py=("success",) * 2):
+    runs = [_run("Frontend — tsc + oxlint + build")]
+    runs += [_run(f"Python — ruff + pytest ({k}/{len(py)})", conclusao=c, inicio=f"2026-10-19T16:0{k}:00Z")
+             for k, c in enumerate(py, 1)]
+    runs += [_run(f"End-to-end — Playwright no Chromium ({k}/{len(e2e)})", conclusao=c, inicio=f"2026-10-19T16:1{k}:00Z")
+             for k, c in enumerate(e2e, 1)]
+    return {"check_runs": runs}
+
+
+def test_em_partes_todas_verdes_pulam_a_bateria():
+    assert ci.veredito(_em_partes()) == ("ok", "")
+
+
+def test_em_partes_qualquer_uma_vermelha_ou_rodando_roda_a_bateria():
+    # a parte que falhou NÃO é a mais recente: a regra antiga ("vale o mais recente do prefixo") diria ok
+    ok, motivo = ci.veredito(_em_partes(e2e=("failure", "success", "success")))
+    assert ok == "" and "End-to-end (1/3)" in motivo and "failure" in motivo
+    ok, motivo = ci.veredito(_em_partes(py=("success", "cancelled")))
+    assert ok == "" and "Python (2/2)" in motivo
+    rodando = _em_partes()
+    rodando["check_runs"][1].update(status="in_progress", conclusion=None)
+    ok, motivo = ci.veredito(rodando)
+    assert ok == "" and "rodando" in motivo
+
+
+def test_em_partes_uma_que_falta_roda_a_bateria():
+    dados = _em_partes()
+    dados["check_runs"] = [r for r in dados["check_runs"] if not r["name"].endswith("(2/3)")]
+    ok, motivo = ci.veredito(dados)
+    assert ok == "" and "2/3" in motivo
+
+
+def test_em_partes_o_re_run_verde_de_uma_parte_vale():
+    dados = _em_partes(e2e=("success", "failure", "success"))
+    dados["check_runs"].append(_run("End-to-end — Playwright no Chromium (2/3)", inicio="2026-10-19T17:00:00Z"))
+    assert ci.veredito(dados) == ("ok", "")
+
+
+def test_os_nomes_das_partes_no_ci_batem_com_o_que_o_deploy_procura():
+    import yaml
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    for chave, prefixo in (("python", "Python"), ("e2e", "End-to-end")):
+        nome = jobs[chave]["name"]
+        assert nome.startswith(prefixo) and nome.endswith("(${{ matrix.parte }}/${{ strategy.job-total }})"), nome
+        assert ci.PARTE.search(nome.replace("${{ matrix.parte }}", "1").replace("${{ strategy.job-total }}", "3"))
+    assert jobs["web"]["name"].startswith("Frontend")

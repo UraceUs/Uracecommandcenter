@@ -12,9 +12,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # #344 (dono, 19/10): a rodada levava ~20 min. O pytest do backend e o end-to-end rodam em 3 máquinas cada,
+  # ao mesmo tempo, sem tirar nenhum teste: o conftest.py da raiz (`--parte K/N`) reparte por arquivo (o
+  # arquivo inteiro numa parte, na ordem; o grande do e2e em blocos seguidos), cada teste numa parte só. Cada parte imprime "parte K/N: X de T".
+  # N vem de strategy.job-total: aumentar a matriz já redivide, sem mexer no comando.
   python:
-    name: Python — ruff + pytest (unitários e integração)
+    name: Python — ruff + pytest (${{ matrix.parte }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false          # uma parte vermelha não cancela as outras: aparece tudo que quebrou
+      matrix:
+        parte: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,7 +32,7 @@ jobs:
           cache-dependency-path: command_center/requirements.txt
       - run: pip install -r command_center/requirements.txt pytest httpx ruff
       - run: ruff check .
-      - run: python -m pytest -q
+      - run: python -m pytest -q --parte ${{ matrix.parte }}/${{ strategy.job-total }}
 
   web:
     name: Frontend — tsc + oxlint + build
@@ -48,10 +56,15 @@ jobs:
           path: command_center/web/dist
           retention-days: 3
 
+  # o build do frontend sai uma vez no job web e cada parte do e2e baixa o mesmo `dist`
   e2e:
-    name: End-to-end — Playwright no Chromium
+    name: End-to-end — Playwright no Chromium (${{ matrix.parte }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
     needs: web
+    strategy:
+      fail-fast: false
+      matrix:
+        parte: [1, 2, 3]
     env:
       # o conftest troca o HOME por uma pasta vazia (isolamento): o Chromium fica num lugar fixo
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-browsers
@@ -68,16 +81,18 @@ jobs:
           path: command_center/web/dist
       - run: pip install -r command_center/requirements.txt pytest httpx playwright
       - run: python -m playwright install --with-deps chromium
-      - run: CC_E2E=1 python -m pytest -q command_center/tests/e2e
+      - run: CC_E2E=1 python -m pytest -q command_center/tests/e2e --parte ${{ matrix.parte }}/${{ strategy.job-total }}
       # #277 (dono, 15/10): a prova com fotos sai da VPS. Ela roda aqui, em todo PR e em todo push no branch
       # da VPS, e o pacote (RESUMO.md em português + fotos de cada passo em 390 e 1280 px) fica para baixar
       # em "Artifacts" da execução — mesmo quando falha, com a foto do estado do erro.
+      # #344: roda numa parte só (a última, que tem um teste a menos no rodízio), para não repetir.
       - name: Prova do site e da venda, com fotos (390 e 1280 px)
+        if: matrix.parte == strategy.job-total
         run: |
           mkdir -p provas/fotos
           CC_E2E=1 CC_FOTOS="$GITHUB_WORKSPACE/provas/fotos" python -m pytest -q command_center/tests/e2e/test_pacote_de_provas.py
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && matrix.parte == strategy.job-total
         with:
           name: prova-com-fotos
           path: provas/
@@ -85,6 +100,7 @@ jobs:
           if-no-files-found: ignore
 
   # #286: o repositório é privado e a VPS não lê a API do GitHub sem login (404). Com os três jobs verdes
+  # (#344: `needs` de um job em matriz espera TODAS as partes — uma vermelha e a tag não sai)
   # num push ao branch da VPS, fica no repositório a tag `ci-verde/<sha>`; o deploy a procura pelo git, com
   # a mesma chave SSH do `git pull` — nenhum token novo na VPS. Sem a tag, a bateria roda lá como antes.
   verde:
