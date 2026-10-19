@@ -418,6 +418,11 @@ MIGRACOES = [
     # #341 (dono, 19/10): a invoice de peças que nasceu de um rascunho do balcão. As linhas dela são as do rascunho
     # (peça do estoque, item do QuickBooks e linha livre), não as cobranças do dia: a leitura do COBRAR não entra nela
     ("parts_invoices", "draft_id", "INTEGER REFERENCES counter_drafts(id)"),
+    # #346 (dono, 19/10): "as peças que o mecânico lê os códigos geram a invoice e salve, fica pendente só a revisão para
+    # confirmar/alterar pelo gerente". 1 = criada por quem não é gerente: não envia nem cobra até o gerente confirmar
+    ("parts_invoices", "review_pending", "INTEGER NOT NULL DEFAULT 0"),
+    ("parts_invoices", "reviewed_by", "INTEGER REFERENCES users(id)"),
+    ("parts_invoices", "reviewed_at", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

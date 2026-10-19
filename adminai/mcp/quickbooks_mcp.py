@@ -635,6 +635,32 @@ def enviar_invoice_sistema(invoice_id):
             "email_status": r.get("EmailStatus")}
 
 
+_CATEGORIA_PARTS = {}
+
+
+def categoria_parts_sistema():
+    """#346 (dono, 19/10: "sim como parts"): o id da categoria "Parts" do catálogo, procurada pelo nome. Se não existe,
+    cria uma vez (a próxima chamada acha pelo nome)."""
+    if _CATEGORIA_PARTS.get("id"):
+        return _CATEGORIA_PARTS["id"]
+    achadas = _query("select * from Item where Type = 'Category' and Name = 'Parts' maxresults 5").get("Item", [])
+    ativas = [i for i in achadas if i.get("Active") is not False]
+    if ativas:
+        cid = ativas[0]["Id"]
+    else:
+        cid = _req("/item", "POST", {"Name": "Parts", "Type": "Category"}).get("Item", {}).get("Id")
+    if not cid:
+        raise ErroFerramenta("não deu para achar nem criar a categoria Parts no QuickBooks")
+    _CATEGORIA_PARTS["id"] = str(cid)
+    return _CATEGORIA_PARTS["id"]
+
+
+def proximo_numero_sistema():
+    """#346: o número da próxima invoice, reservado ANTES de criar: é por ele que o "Conferir no QuickBooks" procura
+    a invoice quando a resposta se perdeu."""
+    return _proximo_doc_number()
+
+
 def item_avulso_sistema(nome, preco, descricao=None, requestid=None):
     """#341: o item da linha que não existe no catálogo (a linha livre do rascunho do balcão, ou a peça do estoque
     ainda sem item). Pelo nome: se já existe um ativo, usa esse (não duplica); senão cria do jeito do item novo do
@@ -648,14 +674,15 @@ def item_avulso_sistema(nome, preco, descricao=None, requestid=None):
     if ativos:
         return {**_resumo_item(ativos[0]), "ja_existia": True}
     corpo = {"Name": nome, "Type": "Service", "Taxable": False, "UnitPrice": float(preco or 0),
-             "IncomeAccountRef": _conta_receita()}
+             "IncomeAccountRef": _conta_receita(),
+             "SubItem": True, "ParentRef": {"value": categoria_parts_sistema()}}     # #346: dentro de Parts
     if descricao:
         corpo["Description"] = descricao[:4000]
     item = _req("/item", "POST", corpo, params={"requestid": requestid} if requestid else None).get("Item", {})
     return {**_resumo_item(item), "ja_existia": False}
 
 
-def invoice_rascunho_sistema(cliente_id, linhas, memo, data, requestid):
+def invoice_rascunho_sistema(cliente_id, linhas, memo, data, requestid, numero=None):
     """#341: a invoice do rascunho do balcão, numa chamada só e SEM enviar (o envio é outro clique, como o da invoice
     de peças do dia). Idempotente como a do #310: a `requestid` vai no POST /invoice e o QuickBooks devolve a resposta
     original quando ela se repete. `InvoiceNaoCriada` só quando é certo que nada foi criado (erro antes do POST ou
@@ -664,7 +691,8 @@ def invoice_rascunho_sistema(cliente_id, linhas, memo, data, requestid):
         if not linhas:
             raise ErroFerramenta("invoice sem linha")
         corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas), "TxnDate": data, "DueDate": data,
-                 "DocNumber": _proximo_doc_number(), "CustomerMemo": {"value": memo[:1000]}, "PrivateNote": memo[:4000]}
+                 "DocNumber": str(numero).strip() if numero else _proximo_doc_number(),
+                 "CustomerMemo": {"value": memo[:1000]}, "PrivateNote": memo[:4000]}
     except Exception as e:                                       # antes do POST /invoice: nada foi criado
         raise InvoiceNaoCriada(str(e)[:400]) from e
     try:

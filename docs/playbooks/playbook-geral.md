@@ -174,7 +174,7 @@ pedem acesso de operador.
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
 | Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, o **selo digital e carimbo de tempo** (#110), modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111), o **Pacote de prova** (#115) e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
-| Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar; no cliente aberto, **Waiver · Conferir documento** (#117) e o **Rascunho de invoice** (#341: peças do estoque, do inventário do QuickBooks ou linha livre, com o preço da linha; montar é operador+, **Criar invoice** é gerente) | operador+ |
+| Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar; no cliente aberto, **Waiver · Conferir documento** (#117) e o **Rascunho de invoice** (#341/#346: peças do estoque, do inventário do QuickBooks ou linha livre, com o preço da linha; montar e **Criar invoice** é operador+; a do mecânico fica **aguardando revisão do gerente**, que confirma ou altera a mesma invoice no QuickBooks antes de enviar ou cobrar; item novo vai para a categoria Parts; código que não bate mostra o mais parecido) | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
 | Logística | **Checklists** | `/ops/checklists` | os checklists do dia, do kart e os trimestrais | operador+ |
 | Pedidos e compras | **Pedidos** | `/ops/pedidos` | a lista do que a equipe **precisa** que se compre | todos |
@@ -292,7 +292,8 @@ leituras do balcão, os pedidos esperando compra, a Biblioteca) ficam em linhas 
 | Card do cliente › Conta no site | — (a lista mostra as medidas) | **Client ID** do piloto que tem outro card |
 | Meu dia (serviço e corrida) | na corrida, quantos pilotos; no serviço, a barra **Checklists feitos** | **Card**, **Peças**, **Excluir** (gerente); os checklists, um por linha |
 | Balcão › invoice de peças | o total | **Tentar de novo**, **Enviar invoice por e-mail** (gerente), **Cobrar no cartão** |
-| Balcão › Rascunho de invoice (#341) | o total do rascunho; linha **preço digitado** e **sem preço** marcadas | **Adicionar linha** (Estoque, QuickBooks, Linha livre), **Criar invoice** (gerente; cria o item que falta no QuickBooks, não duplica), **Descartar rascunho** |
+| Balcão › Rascunho de invoice (#341/#346) | o total do rascunho; linha **preço digitado** e **sem preço** marcadas | **Adicionar linha** (Estoque, QuickBooks, Linha livre), **Criar invoice** (operador+; cria o item que falta no QuickBooks, em Parts, sem duplicar), **Conferir no QuickBooks** (gerente, quando o QuickBooks não respondeu), **Descartar rascunho** |
+| Balcão › invoice aguardando revisão (#346) | o total; "aguardando revisão do gerente" | **Revisar** (gerente): mudar preço/quantidade, remover/adicionar linha, **Confirmar a invoice**; só depois **Enviar** e **Cobrar no cartão**. Aparece também em Precisa de atenção |
 | Balcão › Revisão | o preço da peça; a barra **Pronta para cobrar** | **Cobrar**, **Guardar para o cliente**, **Usar a do cliente**, **Descartar** |
 | Estoque (a prateleira) | quanto tem, com a foto no lugar das iniciais | o cartão inteiro abre a peça; a lixeira fica no canto da foto |
 | Pedidos | para quando a peça é precisa | **Comprar** (marca para a compra, gerente), **cancelar**, **entreguei** |

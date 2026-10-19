@@ -494,13 +494,13 @@ def revisao_descartar(pid: int, dados: DescartarIn, request: Request, con: sqlit
 # ------------------------------------------------------------------ #341: rascunho de invoice em lote
 # Dono, 19/10: "colocar peças e valores em um rascunho de bulk para o cliente e dali o command center cria a invoice
 # com os itens que eu falar; se não tiver item ele cria". Montar o rascunho (linhas, quantidade, PREÇO da linha,
-# descrição) é OPERATOR: é quem está no galpão. O preço digitado diferente da tabela fica marcado na linha e na
-# auditoria. **Criar a invoice é MANAGER**, como o item do QuickBooks e o envio no balcão: cria item no catálogo da
-# contabilidade e uma invoice com os preços digitados (preço fora da tabela é do gerente, política de 17/09).
+# descrição) e criar a invoice é OPERATOR (#346, dono, 19/10: "as peças que o mecânico lê os códigos geram a invoice
+# e salve, fica pendente só a revisão para confirmar/alterar pelo gerente"). A invoice de quem não é gerente fica
+# aguardando a REVISÃO (MANAGER): confirmar, ou alterar as linhas, que atualiza a mesma invoice no QuickBooks. Enviar e
+# cobrar no cartão só depois da revisão. "Conferir no QuickBooks" (resposta perdida) é MANAGER.
 from command_center.db import transacao  # noqa: E402
 from command_center.providers import balcao_rascunho as rz  # noqa: E402
 
-_ID = Path(..., ge=1, le=2**63 - 1)
 
 
 @r.get("/quickbooks/itens")
@@ -534,7 +534,7 @@ def rascunhos(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0,
 
 
 @r.get("/cliente/{client_id}/rascunho")
-def rascunho(client_id: int = _ID, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+def rascunho(client_id: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     try:
         return {**rz.do_cliente(con, client_id), "gerente": _gerente(u)}
     except LookupError:
@@ -559,7 +559,7 @@ def _resposta(con, client_id, u):
 
 
 @r.post("/cliente/{client_id}/rascunho/linhas", status_code=201)
-def rascunho_linha(dados: LinhaIn, request: Request, client_id: int = _ID, con: sqlite3.Connection = Depends(get_db),
+def rascunho_linha(dados: LinhaIn, request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
                    u=Depends(auth.exige("OPERATOR"))):
     try:
         with transacao(con, imediata=True):
@@ -592,7 +592,7 @@ class EditarLinhaIn(BaseModel):
 
 
 @r.patch("/cliente/{client_id}/rascunho/linhas/{lid}")
-def rascunho_editar(dados: EditarLinhaIn, request: Request, client_id: int = _ID, lid: int = _ID,
+def rascunho_editar(dados: EditarLinhaIn, request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1), lid: int = Path(..., ge=1, le=2**63 - 1),
                     con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     mudou = dados.model_dump(exclude_unset=True)
     try:
@@ -615,7 +615,7 @@ def rascunho_editar(dados: EditarLinhaIn, request: Request, client_id: int = _ID
 
 
 @r.delete("/cliente/{client_id}/rascunho/linhas/{lid}")
-def rascunho_remover(request: Request, client_id: int = _ID, lid: int = _ID, con: sqlite3.Connection = Depends(get_db),
+def rascunho_remover(request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1), lid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
                      u=Depends(auth.exige("OPERATOR"))):
     try:
         with transacao(con, imediata=True):
@@ -630,7 +630,7 @@ def rascunho_remover(request: Request, client_id: int = _ID, lid: int = _ID, con
 
 
 @r.post("/cliente/{client_id}/rascunho/descartar")
-def rascunho_descartar(request: Request, client_id: int = _ID, con: sqlite3.Connection = Depends(get_db),
+def rascunho_descartar(request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
                        u=Depends(auth.exige("OPERATOR"))):
     try:
         with transacao(con, imediata=True):
@@ -644,14 +644,85 @@ def rascunho_descartar(request: Request, client_id: int = _ID, con: sqlite3.Conn
 
 
 @r.post("/cliente/{client_id}/rascunho/faturar")
-def rascunho_faturar(request: Request, client_id: int = _ID, con: sqlite3.Connection = Depends(get_db),
-                     u=Depends(auth.exige("MANAGER"))):
+def rascunho_faturar(request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("OPERATOR"))):
     """Cria UMA invoice no QuickBooks com as linhas do rascunho (cria o item da linha que não tem). Não envia: o
-    "Enviar invoice por e-mail" é o da invoice de peças, que aparece logo acima."""
+    "Enviar invoice por e-mail" é o da invoice de peças, que aparece logo acima. #346 (dono, 19/10): o mecânico cria
+    também; a dele fica aguardando a revisão do gerente (não envia nem cobra antes)."""
     try:
-        rz.faturar(con, client_id, u["id"], ip=auth._ip(request))
+        rz.faturar(con, client_id, u["id"], ip=auth._ip(request), gerente=_gerente(u))
     except LookupError:
         raise HTTPException(404, "Este card não tem rascunho aberto.")
     except (b.ErroBalcao, estoque.ErroEstoque) as e:
         raise _erro(e)
     return {**_resposta(con, client_id, u), **b.do_cliente(con, client_id)}
+
+
+@r.post("/cliente/{client_id}/rascunho/conferir")
+def rascunho_conferir(request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                      u=Depends(auth.exige("MANAGER"))):
+    """#346: o QuickBooks não respondeu. Procura a invoice pelo número reservado: existe, liga; não existe, libera."""
+    try:
+        rz.conferir(con, client_id, u["id"], ip=auth._ip(request))
+    except LookupError:
+        raise HTTPException(404, "Este card não tem rascunho aberto.")
+    except (b.ErroBalcao, estoque.ErroEstoque) as e:
+        raise _erro(e)
+    return {**_resposta(con, client_id, u), **b.do_cliente(con, client_id)}
+
+
+@r.get("/aproximado")
+def aproximado(q: str = Query(..., min_length=2, max_length=120), con: sqlite3.Connection = Depends(get_db),
+               u=Depends(auth.exige("OPERATOR"))):
+    """#346 (dono, 19/10: "se não ler, coloque o que tiver de mais aproximado"): as peças e os itens mais parecidos."""
+    return rz.aproximado(con, q)
+
+
+# ------------------------------------------------------------------ #346: a revisão do gerente
+def _revisao_erro(fn):
+    try:
+        return fn()
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except (b.ErroBalcao, estoque.ErroEstoque) as e:
+        raise _erro(e)
+
+
+@r.get("/invoices/{pid}/revisao")
+def inv_revisao_invoice(pid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    return _revisao_erro(lambda: rz.revisao(con, pid))
+
+
+@r.post("/invoices/{pid}/revisao/linhas", status_code=201)
+def inv_revisao_adicionar(dados: LinhaIn, request: Request, pid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                      u=Depends(auth.exige("MANAGER"))):
+    campos = dados.model_dump(exclude={"local"})
+    _revisao_erro(lambda: rz.revisar_adicionar(con, pid, u["id"], ip=auth._ip(request), **campos))
+    return _revisao_erro(lambda: rz.revisao(con, pid))
+
+
+class RevisaoLinhaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    qty: float | None = Field(None, gt=0, le=rz.MAX_QTY)
+    preco: float | None = Field(None, ge=0, le=rz.MAX_PRECO)
+
+
+@r.patch("/invoices/{pid}/revisao/linhas/{lid}")
+def inv_revisao_editar(dados: RevisaoLinhaIn, request: Request, pid: int = Path(..., ge=1, le=2**63 - 1), lid: int = Path(..., ge=1, le=2**63 - 1),
+                   con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    _revisao_erro(lambda: rz.revisar_editar(con, pid, lid, u["id"], qty=dados.qty, preco=dados.preco, ip=auth._ip(request)))
+    return _revisao_erro(lambda: rz.revisao(con, pid))
+
+
+@r.delete("/invoices/{pid}/revisao/linhas/{lid}")
+def inv_revisao_remover(request: Request, pid: int = Path(..., ge=1, le=2**63 - 1), lid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                    u=Depends(auth.exige("MANAGER"))):
+    _revisao_erro(lambda: rz.revisar_remover(con, pid, lid, u["id"], ip=auth._ip(request)))
+    return _revisao_erro(lambda: rz.revisao(con, pid))
+
+
+@r.post("/invoices/{pid}/revisao/confirmar")
+def inv_revisao_confirmar(request: Request, pid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                      u=Depends(auth.exige("MANAGER"))):
+    p = _revisao_erro(lambda: rz.revisar_confirmar(con, pid, u["id"], ip=auth._ip(request)))
+    return b.invoice_publica(con, p)

@@ -2,7 +2,7 @@
 
 **Command Center da URACE — calendário e balcão de peças**
 
-Para quem trabalha no box, com o celular na mão. Atualizado em 19/10/2026 (#341: rascunho de invoice com peças e valores no balcão).
+Para quem trabalha no box, com o celular na mão. Atualizado em 19/10/2026 (#346: o mecânico cria a invoice do rascunho e o gerente revisa; a peça mais próxima).
 O guia do painel inteiro está no playbook geral (`docs/playbooks/playbook-geral.md`).
 
 ---
@@ -303,12 +303,23 @@ no modo **COBRAR**, a seção **Rascunho de invoice** monta a invoice antes de e
 4. Mude quantidade e preço direto na linha; **Remover** tira a linha; **Descartar rascunho** joga tudo fora.
    O rascunho fica salvo: recarregar a tela ou abrir em outro aparelho mostra o mesmo, e ele é **só deste
    cliente**.
-5. O **gerente** toca em **Criar invoice**: uma invoice só no QuickBooks com as linhas e os preços do rascunho.
-   Linha sem item no QuickBooks ganha o item lá na hora. A peça do estoque sai do estoque nesse momento.
-   A invoice aparece em **Invoice de peças**, com **Enviar invoice por e-mail** e **Cobrar no cartão**.
+5. Toque em **Criar invoice** (você pode: dono, 19/10, #346): uma invoice só no QuickBooks com as linhas e os
+   preços do rascunho. Linha sem item no QuickBooks ganha o item lá na hora, na categoria **Parts**. A peça do
+   estoque sai do estoque nesse momento.
+6. A invoice aparece em **Invoice de peças** como **"aguardando revisão do gerente"**. Ela **não é enviada nem
+   cobrada no cartão** até o gerente tocar em **Revisar**: ele muda preço, quantidade, tira ou põe linha (a mesma
+   invoice muda no QuickBooks, nunca nasce outra) e toca em **Confirmar a invoice**. Aí aparecem **Enviar
+   invoice por e-mail** e **Cobrar no cartão**. Invoice criada pelo próprio gerente já nasce confirmada.
 
 **Linha sem preço não deixa criar a invoice.** Se a tela disser que o QuickBooks não respondeu, toque em
-**Criar invoice de novo**: é a mesma tentativa e **não cria outra invoice**.
+**Criar invoice de novo**: é a mesma tentativa e **não cria outra invoice**. O gerente tem também
+**Conferir no QuickBooks**: procura a invoice pelo número; se ela saiu, liga ao rascunho; se não saiu, o
+rascunho volta a ser editável e a peça volta ao estoque.
+
+**Não achou a peça?** Leu (ou digitou) e o código não bate com nada: abre **"Não achei exatamente…"** com as peças
+do estoque e os itens do QuickBooks **mais parecidos** (código com um número trocado, começo do código, palavras
+do nome). A muito parecida vem em destaque: **toque nela** para pôr no rascunho. Nada entra sem o seu toque. Não
+é nenhuma? **"É uma peça nova: cadastrar o código"**.
 
 **Peça sem preço final:** no COBRAR, em vez de travar com "chame o gerente", abre **Pôr no rascunho**: digite o
 preço desta venda e a peça entra no rascunho do cliente.

@@ -20,6 +20,8 @@ o inventário do QuickBooks como opção para selecionar lá a peça também."*
   Sem resposta: o rascunho fica 'criando' e o "Criar invoice" de novo manda a MESMA `requestid` (não duplica, #310).
 """
 import math
+import re
+import unicodedata
 import uuid
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, transacao, um
@@ -189,8 +191,9 @@ def _editavel(con, client_id, por, local=None):
 
 
 def adicionar(con, client_id, origem, por, item_id=None, qbo_item_id=None, nome=None, qty=1, preco=None,
-              descricao=None, local=None, confirmado=False):
-    """Uma linha no rascunho do card. Devolve (rascunho, linha, novo_rascunho, preco_digitado)."""
+              descricao=None, local=None, confirmado=False, rascunho=None):
+    """Uma linha no rascunho do card. Devolve (rascunho, linha, novo_rascunho, preco_digitado). `rascunho`: o já
+    faturado que o gerente está revisando (#346); a linha entra nele, sempre como linha nova."""
     if origem not in ORIGENS:
         raise b.ErroBalcao("origem inválida")
     c = um(con, "SELECT * FROM clients WHERE id=?", (client_id,))
@@ -218,13 +221,13 @@ def adicionar(con, client_id, origem, por, item_id=None, qbo_item_id=None, nome=
         ref, qid, item_id = None, None, None
     if preco is None:
         preco = None if ref is None else round(float(ref), 2)
-    d, novo = _editavel(con, client_id, por, local)
+    d, novo = (rascunho, False) if rascunho else _editavel(con, client_id, por, local)
     if um(con, "SELECT COUNT(*) AS n FROM counter_draft_lines WHERE draft_id=?", (d["id"],))["n"] >= MAX_LINHAS:
         raise b.ErroBalcao(f"o rascunho tem o máximo de {MAX_LINHAS} linhas: crie esta invoice e comece outro")
     digitado = _digitado(preco, ref)
     # a mesma peça (ou o mesmo item) com o mesmo preço soma na linha que já existe: ler 3 vezes é 3 unidades
     ja = None
-    if origem != "livre":
+    if origem != "livre" and not rascunho:
         ja = um(con, f"""SELECT * FROM counter_draft_lines WHERE draft_id=? AND source=? AND
                          {'item_id' if origem == 'estoque' else 'qbo_item_id'}=? AND
                          COALESCE(unit_price, -1)=COALESCE(?, -1) ORDER BY id LIMIT 1""",
@@ -320,7 +323,7 @@ def _falhou(con, did, por, msg, devolver):
         d = um(con, "SELECT * FROM counter_drafts WHERE id=?", (did,))
         if devolver and d["stock_out"]:
             _devolver_ao_estoque(con, d, por)
-        atualizar(con, "counter_drafts", did, status="rascunho", uncertain=0, requestid=None, error=msg[:400],
+        atualizar(con, "counter_drafts", did, status="rascunho", uncertain=0, requestid=None, doc_number=None, error=msg[:400],
                   updated_at=agora())
         _aud(con, "balcao.rascunho.invoice_recusada", por, did, {"erro": msg[:300]})
 
@@ -353,9 +356,10 @@ def _itens_no_qbo(con, d, por, ip):
                   "ja_existia": bool(r.get("ja_existia")), "origem": li["source"], "client_id": d["client_id"]}, ip)
 
 
-def faturar(con, client_id, por, ip=None):
+def faturar(con, client_id, por, ip=None, gerente=True):
     """'Criar invoice'. Devolve o rascunho faturado (público). Erro para a tela: ErroBalcao (a mensagem diz o que
-    fazer); LookupError sem rascunho. Ver o docstring do módulo para a ordem e a idempotência."""
+    fazer); LookupError sem rascunho. Ver o docstring do módulo para a ordem e a idempotência. #346: quem não é
+    gerente cria também, e a invoice fica aguardando a revisão do gerente (não envia nem cobra antes)."""
     from command_center.providers import NaoConectado
     d = aberto(con, client_id)
     if not d:
@@ -375,6 +379,7 @@ def faturar(con, client_id, por, ip=None):
     if d["status"] == "rascunho":
         try:
             _itens_no_qbo(con, d, por, ip)
+            numero = b._qbo().proximo_numero_sistema()    # #346: reservado antes, é por ele que se confere depois
         except NaoConectado:
             raise b.ErroBalcao("QuickBooks não está conectado: o rascunho fica salvo, crie a invoice depois")
         except b.ErroBalcao:
@@ -390,18 +395,11 @@ def faturar(con, client_id, por, ip=None):
             if not ls or any(li["unit_price"] is None or not li["qbo_item_id"] for li in ls):
                 raise b.ErroBalcao("o rascunho mudou enquanto os itens eram criados: toque em 'Criar invoice' de novo")
             for li in ls:
-                if li["source"] != "estoque":
-                    continue
-                estoque.saida(con, li["item_id"], qty=li["qty"], de=d["location"], client_id=None,
-                              para_cliente_id=client_id, reason="venda", by_user_id=por, source="balcao",
-                              notes=f"balcão: rascunho #{d['id']}")
-                move = b._ultimo_movimento(con, li["item_id"])
-                ch = estoque.registrar_cobranca(con, li["item_id"], client_id, li["qty"], move_id=move, by_user_id=por,
-                                                notes=f"balcão: rascunho #{d['id']}")
-                atualizar(con, "stock_charges", ch, unit_price=li["unit_price"])   # o preço da linha, não o da ficha
-                atualizar(con, "counter_draft_lines", li["id"], move_id=move, charge_id=ch)
+                if li["source"] == "estoque":
+                    _sai_do_estoque(con, d, li, li["qty"], por)
             atualizar(con, "counter_drafts", d["id"], status="criando", uncertain=0, stock_out=1, error=None,
-                      requestid=d["requestid"] or uuid.uuid4().hex, updated_at=agora())
+                      requestid=d["requestid"] or uuid.uuid4().hex, doc_number=str(numero), created_by=d["created_by"] or por,
+                      closed_by=por, updated_at=agora())
             d = um(con, "SELECT * FROM counter_drafts WHERE id=?", (d["id"],))
     ls = _linhas(con, d["id"])
     corpo = [{"item_id": li["qbo_item_id"], "quantidade": li["qty"], "unitario": li["unit_price"],
@@ -409,7 +407,8 @@ def faturar(con, client_id, por, ip=None):
     data = b.hoje()
     try:
         r = b._qbo().invoice_rascunho_sistema(cliente_id=cliente, linhas=corpo, memo=b.memo(con, {"client_id": client_id,
-                                              "service_date": data}), data=data, requestid=d["requestid"])
+                                              "service_date": data}), data=data, requestid=d["requestid"],
+                                              numero=d["doc_number"])
     except NaoConectado:
         _falhou(con, d["id"], por, "QuickBooks não está conectado", devolver=True)
         raise b.ErroBalcao("QuickBooks não está conectado: o rascunho fica salvo, crie a invoice depois")
@@ -420,18 +419,41 @@ def faturar(con, client_id, por, ip=None):
         with transacao(con, imediata=True):
             atualizar(con, "counter_drafts", d["id"], uncertain=1, updated_at=agora(),
                       error=f"O QuickBooks não respondeu ({str(e)[:200]}). Toque em 'Criar invoice' de novo: "
-                            "é a mesma tentativa e não cria outra invoice.")
-            _aud(con, "balcao.rascunho.invoice_incerta", por, d["id"], {"erro": str(e)[:300], "requestid": d["requestid"]}, ip)
+                            "é a mesma tentativa e não cria outra invoice. O gerente pode também 'Conferir no QuickBooks'.")
+            _aud(con, "balcao.rascunho.invoice_incerta", por, d["id"], {"erro": str(e)[:300], "requestid": d["requestid"],
+                                                                         "numero": d["doc_number"]}, ip)
         raise b.ErroBalcao("O QuickBooks não respondeu. Toque em 'Criar invoice' de novo: é a mesma tentativa e não "
                            "cria outra invoice.")
+    return _registrar(con, d, r, por, gerente, ip)
+
+
+def _sai_do_estoque(con, d, li, qty, por, pid=None):
+    """A peça do estoque sai (venda, do local do rascunho) com a cobrança no preço da linha, como no COBRAR."""
+    estoque.saida(con, li["item_id"], qty=qty, de=d["location"], client_id=None, para_cliente_id=d["client_id"],
+                  reason="venda", by_user_id=por, source="balcao", notes=f"balcão: rascunho #{d['id']}")
+    move = b._ultimo_movimento(con, li["item_id"])
+    ch = estoque.registrar_cobranca(con, li["item_id"], d["client_id"], qty, move_id=move, by_user_id=por,
+                                    notes=f"balcão: rascunho #{d['id']}")
+    campos = {"unit_price": li["unit_price"]}                   # o preço da linha, não o da ficha
+    if pid:
+        campos.update(status="invoiced", parts_invoice_id=pid)
+    atualizar(con, "stock_charges", ch, **campos)
+    atualizar(con, "counter_draft_lines", li["id"], move_id=move, charge_id=ch)
+
+
+def _registrar(con, d, r, por, gerente, ip):
+    """A invoice saiu: entra nas invoices de peças. Criada por quem não é gerente, fica aguardando a revisão (#346)."""
+    ls = _linhas(con, d["id"])
     total = round(sum(float(li["qty"]) * float(li["unit_price"]) for li in ls), 2)
+    data = b.hoje()
     with transacao(con, imediata=True):
         atual = um(con, "SELECT * FROM counter_drafts WHERE id=?", (d["id"],))
         if atual["status"] == "faturado":            # duas telas ao mesmo tempo: o QuickBooks devolveu a mesma
             return publico(con, atual)
-        pid = inserir(con, "parts_invoices", client_id=client_id, service_date=data, status="aberta",
+        pid = inserir(con, "parts_invoices", client_id=d["client_id"], service_date=data, status="aberta",
                       qbo_invoice_id=str(r.get("id") or ""), doc_number=r.get("numero"), total=total,
-                      qbo_synced_at=agora(), created_by=por, draft_id=d["id"])
+                      qbo_synced_at=agora(), created_by=por, draft_id=d["id"], review_pending=0 if gerente else 1,
+                      reviewed_by=por if gerente else None, reviewed_at=agora() if gerente else None)
         ids = [li["charge_id"] for li in ls if li["charge_id"]]
         if ids:
             con.execute(f"UPDATE stock_charges SET status='invoiced', parts_invoice_id=? WHERE id IN ({','.join('?' * len(ids))})",
@@ -440,6 +462,236 @@ def faturar(con, client_id, por, ip=None):
                   qbo_invoice_id=str(r.get("id") or ""), doc_number=r.get("numero"), total=total, closed_by=por,
                   closed_at=agora(), updated_at=agora())
         _aud(con, "balcao.rascunho.invoice", por, d["id"],
-             {"client_id": client_id, "invoice_pecas": pid, "qbo": r.get("id"), "numero": r.get("numero"), "total": total,
-              "linhas": len(ls), "precos_digitados": sum(1 for li in ls if li["price_by"]), "requestid": d["requestid"]}, ip)
+             {"client_id": d["client_id"], "invoice_pecas": pid, "qbo": r.get("id"), "numero": r.get("numero"),
+              "total": total, "linhas": len(ls), "precos_digitados": sum(1 for li in ls if li["price_by"]),
+              "requestid": d["requestid"], "aguardando_revisao": not gerente}, ip)
     return publico(con, um(con, "SELECT * FROM counter_drafts WHERE id=?", (d["id"],)))
+
+
+def conferir(con, client_id, por, ip=None):
+    """#346: o QuickBooks não respondeu e o rascunho ficou 'criando'. O gerente confere lá pelo número reservado:
+    a invoice existe (do mesmo cliente) → liga ao rascunho; não existe → a peça volta ao estoque e o rascunho volta
+    a ser editável. Nada é liberado sem conferir."""
+    from command_center.providers import NaoConectado
+    d = aberto(con, client_id)
+    if not d:
+        raise LookupError("este card não tem rascunho aberto")
+    if d["status"] != "criando":
+        raise b.ErroBalcao("não há invoice esperando resposta do QuickBooks neste rascunho")
+    if not d["doc_number"]:
+        raise b.ErroBalcao("este rascunho não guardou o número da invoice: confira direto no QuickBooks")
+    cliente = b.cliente_qbo(con, client_id)
+    try:
+        inv = b._qbo().invoice_por_numero(d["doc_number"])
+    except NaoConectado:
+        raise b.ErroBalcao("QuickBooks não está conectado: não dá para conferir agora")
+    if inv and cliente and str(inv.get("cliente_id")) != str(cliente):
+        raise b.ErroBalcao(f"a invoice {d['doc_number']} existe no QuickBooks, mas é de outro cliente: confira lá")
+    with transacao(con):
+        _aud(con, "balcao.rascunho.conferido", por, d["id"],
+             {"client_id": client_id, "numero": d["doc_number"], "achou": bool(inv), "qbo": inv.get("id") if inv else None}, ip)
+    if inv:
+        p = um(con, "SELECT 1 AS x FROM parts_invoices WHERE draft_id=?", (d["id"],))
+        criador = um(con, "SELECT role FROM users WHERE id=?", (d["closed_by"],)) if d["closed_by"] else None
+        from command_center.api import auth
+        g = bool(criador) and auth.pode(criador["role"], "MANAGER")
+        return publico(con, d) if p else _registrar(con, d, {"id": inv.get("id"), "numero": inv.get("numero")}, d["closed_by"] or por, g, ip)
+    _falhou(con, d["id"], por, f"Conferido no QuickBooks: a invoice {d['doc_number']} não saiu. O rascunho voltou a ser "
+                               "editável e a peça voltou ao estoque.", devolver=True)
+    return publico(con, um(con, "SELECT * FROM counter_drafts WHERE id=?", (d["id"],)))
+
+
+# ------------------------------------------------------------------ #346: a revisão do gerente
+def _revisavel(con, pid):
+    p = um(con, "SELECT * FROM parts_invoices WHERE id=?", (pid,))
+    if not p or not p["draft_id"]:
+        raise LookupError("invoice de peças não encontrada")
+    if not p["review_pending"]:
+        raise b.ErroBalcao("esta invoice já foi revisada")
+    if p["status"] != "aberta" or p["paid_at"]:
+        raise b.ErroBalcao(f"esta invoice já está {'paga' if p['paid_at'] else p['status']}")
+    return p, um(con, "SELECT * FROM counter_drafts WHERE id=?", (p["draft_id"],))
+
+
+def revisao(con, pid):
+    p, d = _revisavel(con, pid)
+    return {"invoice": b.invoice_publica(con, p), "rascunho": publico(con, d)}
+
+
+def _sync(con, pid):
+    return b.sincronizar_qbo(con, pid)
+
+
+def revisar_adicionar(con, pid, por, ip=None, **linha):
+    p, d = _revisavel(con, pid)
+    with transacao(con, imediata=True):
+        _, li, _, digitado = adicionar(con, d["client_id"], linha.pop("origem"), por, rascunho=d, **linha)
+    if not li["qbo_item_id"]:
+        try:
+            _itens_no_qbo(con, d, por, ip)
+        except Exception as e:                       # noqa: BLE001 — sem item, a linha não fica
+            with transacao(con):
+                con.execute("DELETE FROM counter_draft_lines WHERE id=?", (li["id"],))
+            raise b.ErroBalcao(f"QuickBooks (item): {str(e)[:300]}")
+    with transacao(con, imediata=True):
+        li = um(con, "SELECT * FROM counter_draft_lines WHERE id=?", (li["id"],))
+        if li["source"] == "estoque":
+            _sai_do_estoque(con, d, li, li["qty"], por, pid)
+        _aud(con, "balcao.revisao.adicionar", por, d["id"],
+             {"invoice_pecas": pid, "linha": li["id"], "nome": li["name"], "qty": li["qty"], "preco": li["unit_price"],
+              "preco_tabela": li["ref_price"]}, ip)
+    return _sync(con, pid)
+
+
+def revisar_editar(con, pid, lid, por, qty=None, preco=None, ip=None):
+    p, d = _revisavel(con, pid)
+    with transacao(con, imediata=True):
+        li = um(con, "SELECT * FROM counter_draft_lines WHERE id=? AND draft_id=?", (lid, d["id"]))
+        if not li:
+            raise LookupError("linha não encontrada nesta invoice")
+        campos = {}
+        if qty is not None and _qty(qty) != float(li["qty"]):
+            nova = _qty(qty)
+            if li["source"] == "estoque" and li["move_id"]:
+                delta = round(nova - float(li["qty"]), 3)
+                if delta > 0:
+                    estoque.saida(con, li["item_id"], qty=delta, de=d["location"], client_id=None,
+                                  para_cliente_id=d["client_id"], reason="venda", by_user_id=por, source="balcao",
+                                  notes=f"revisão do gerente: rascunho #{d['id']}")
+                else:
+                    estoque.entrada(con, li["item_id"], qty=-delta, para=d["location"], client_id=None,
+                                    reason="estorno do balcão", by_user_id=por, source="balcao",
+                                    notes=f"revisão do gerente: rascunho #{d['id']}")
+                if li["charge_id"]:
+                    atualizar(con, "stock_charges", li["charge_id"], qty=nova)
+            campos["qty"] = nova
+        if preco is not None and _preco(preco) != li["unit_price"]:
+            campos["unit_price"] = _preco(preco)
+            campos["price_by"] = por if _digitado(campos["unit_price"], li["ref_price"]) else None
+            if li["charge_id"]:
+                atualizar(con, "stock_charges", li["charge_id"], unit_price=campos["unit_price"])
+        if not campos:
+            return p
+        atualizar(con, "counter_draft_lines", li["id"], updated_at=agora(), **campos)
+        _aud(con, "balcao.revisao.editar", por, d["id"],
+             {"invoice_pecas": pid, "linha": li["id"], "nome": li["name"],
+              "antes": {"qty": li["qty"], "preco": li["unit_price"]},
+              "depois": {"qty": campos.get("qty", li["qty"]), "preco": campos.get("unit_price", li["unit_price"])}}, ip)
+    return _sync(con, pid)
+
+
+def revisar_remover(con, pid, lid, por, ip=None):
+    p, d = _revisavel(con, pid)
+    with transacao(con, imediata=True):
+        li = um(con, "SELECT * FROM counter_draft_lines WHERE id=? AND draft_id=?", (lid, d["id"]))
+        if not li:
+            raise LookupError("linha não encontrada nesta invoice")
+        if li["source"] == "estoque" and li["move_id"]:
+            estoque.entrada(con, li["item_id"], qty=li["qty"], para=d["location"], client_id=None,
+                            reason="estorno do balcão", by_user_id=por, source="balcao",
+                            notes=f"revisão do gerente: rascunho #{d['id']}")
+            if li["charge_id"]:
+                atualizar(con, "stock_charges", li["charge_id"], status="waived", resolved_by=por, resolved_at=agora(),
+                          notes="removida na revisão do gerente")
+        con.execute("DELETE FROM counter_draft_lines WHERE id=?", (li["id"],))
+        _aud(con, "balcao.revisao.remover", por, d["id"],
+             {"invoice_pecas": pid, "linha": li["id"], "nome": li["name"], "qty": li["qty"], "preco": li["unit_price"]}, ip)
+    return _sync(con, pid)
+
+
+def revisar_confirmar(con, pid, por, ip=None):
+    p, d = _revisavel(con, pid)
+    if p["qbo_error"]:
+        raise b.ErroBalcao("a invoice no QuickBooks não está igual a esta: toque em 'Tentar de novo' antes de confirmar")
+    with transacao(con, imediata=True):
+        atualizar(con, "parts_invoices", pid, review_pending=0, reviewed_by=por, reviewed_at=agora())
+        _aud(con, "balcao.revisao.confirmar", por, d["id"],
+             {"invoice_pecas": pid, "numero": p["doc_number"], "total": p["total"], "criada_por": p["created_by"],
+              "linhas": len(_linhas(con, d["id"]))}, ip)
+    return um(con, "SELECT * FROM parts_invoices WHERE id=?", (pid,))
+
+
+# ------------------------------------------------------------------ #346: o mais próximo do que foi lido
+def _norm(s):
+    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().upper()
+    return re.sub(r"[^A-Z0-9]", "", s)
+
+
+def _palavras(s):
+    s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()
+    return [w for w in re.split(r"[^a-z0-9]+", s) if len(w) >= 2]
+
+
+def _lev(a, b_, teto=3):
+    """Distância de edição, parando cedo: acima de `teto` devolve teto+1."""
+    if abs(len(a) - len(b_)) > teto:
+        return teto + 1
+    ant = list(range(len(b_) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b_, 1):
+            cur.append(min(ant[j] + 1, cur[j - 1] + 1, ant[j - 1] + (ca != cb)))
+        if min(cur) > teto:
+            return teto + 1
+        ant = cur
+    return ant[-1]
+
+
+def _nota_codigo(n, c):
+    if not n or not c or len(n) < 3 or len(c) < 3:
+        return 0
+    if n == c:
+        return 100
+    curto = min(len(n), len(c))
+    d = _lev(n, c, 2) if curto >= 5 else 9
+    if d == 1:
+        return 90
+    if d == 2 and curto >= 8:
+        return 78
+    if curto >= 4 and (c.startswith(n) or n.startswith(c)):
+        return max(60, 85 - 3 * abs(len(n) - len(c)))
+    if len(n) >= 4 and n in c:
+        return 60
+    return 0
+
+
+def _nota_nome(ws, n, nome):
+    if not ws:
+        return 0
+    nw = _palavras(nome)
+    if not nw:
+        return 0
+    bate = sum(1 for w in ws if any(x.startswith(w) or (len(w) >= 4 and _lev(w, x, 1) <= 1) for x in nw))
+    if not bate:
+        return 0
+    nota = 45 + 40 * bate / len(ws)
+    if _norm(nome).startswith(n):
+        nota += 5
+    return round(nota)
+
+
+def aproximado(con, texto, limit=8):
+    """O que mais se parece com o que o leitor (ou a pessoa) mandou: peça do estoque (código da embalagem, etiqueta,
+    SKU, número da peça ou nome) e item do QuickBooks (nome). Em ordem de proximidade; `destaque` quando só um é
+    muito próximo. Nada entra no rascunho sem um toque."""
+    t = (texto or "").strip()[:120]
+    n, ws = _norm(t), _palavras(t)
+    if len(n) < 2:
+        return {"texto": t, "itens": [], "destaque": None}
+    melhor = {}
+    for r in todos(con, """SELECT i.id, i.name, i.price, i.sku, i.part_number, b.code FROM stock_items i
+                           LEFT JOIN stock_barcodes b ON b.item_id=i.id WHERE i.active=1"""):
+        nota = max([_nota_codigo(n, _norm(c)) for c in (r["code"], r["sku"], r["part_number"]) if c] + [0])
+        nota = max(nota, _nota_nome(ws, n, r["name"]))
+        k = ("estoque", r["id"])
+        if nota and nota > melhor.get(k, {}).get("nota", 0):
+            melhor[k] = {"origem": "estoque", "item_id": r["id"], "nome": r["name"], "preco": r["price"],
+                         "codigo": r["code"], "nota": nota}
+    for q in todos(con, "SELECT id, name, full_name, price FROM qbo_items WHERE active=1 AND COALESCE(type,'')!='Category'"):
+        nota = max(_nota_nome(ws, n, q["full_name"] or q["name"]), _nota_codigo(n, _norm(q["name"])))
+        if nota:
+            melhor[("quickbooks", q["id"])] = {"origem": "quickbooks", "qbo_item_id": q["id"],
+                                               "nome": q["full_name"] or q["name"], "preco": q["price"], "nota": nota}
+    itens = sorted((x for x in melhor.values() if x["nota"] >= 55), key=lambda x: (-x["nota"], len(x["nome"]), x["nome"]))[:limit]
+    destaque = itens[0] if itens and itens[0]["nota"] >= 75 and (len(itens) == 1 or itens[0]["nota"] - itens[1]["nota"] >= 10) else None
+    return {"texto": t, "itens": itens, "destaque": destaque}
