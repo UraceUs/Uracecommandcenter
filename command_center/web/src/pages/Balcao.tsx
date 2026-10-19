@@ -21,6 +21,7 @@ import { Picker } from '../components/Unir'
 import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { fmtDate, fmtDateTime } from '../components/fmt'
 import type { Client } from '../api/types'
+import { adicionarLinha, BuscaQbo, PorNoRascunho, RascunhoInvoice } from './BalcaoRascunho'
 
 type Modo = 'cobrar' | 'guardar'
 interface Cliente { id: number; nome: string; responsavel: string; vip?: boolean }
@@ -111,7 +112,7 @@ function CodigoNovo({ codigo, gerente, onFeito, onFechar }: { codigo: string; ge
     try {
       const r = await api.post<{ item: Item; aviso: string | null }>('/balcao/codigos', {
         codigo, item_id: f.item_id ? Number(f.item_id) : null, nome: f.nome || null, category: f.category || null,
-        price: gerente && f.price ? Number(f.price) : null, qbo_categoria_id: gerente && f.qbo_categoria_id ? f.qbo_categoria_id : null })
+        price: gerente && f.price ? Number(f.price) : null, qbo_categoria_id: gerente && f.qbo_categoria_id && f.price ? f.qbo_categoria_id : null })
       // a foto vai depois do código: se ela falhar, o código continua cadastrado
       let semFoto = false
       if (foto) {
@@ -139,6 +140,7 @@ function CodigoNovo({ codigo, gerente, onFeito, onFechar }: { codigo: string; ge
       <label className="fld"><span>{tr("Categoria no QuickBooks")} <i>{tr("cria o item lá agora")}</i></span><select value={f.qbo_categoria_id} onChange={e => setF({ ...f, qbo_categoria_id: e.target.value })}>
         <option value="">{tr("— depois —")}</option>{cats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>
       {qboFora && <p className="small muted" style={{ margin: 0 }}>{tr("QuickBooks não conectado: salve o código agora e crie o item lá depois.")}</p>}
+      {!!f.qbo_categoria_id && !f.price && <p className="small muted" style={{ margin: 0 }}>{tr("Sem preço final o item não é criado agora: a peça pode ir para o rascunho de invoice com o preço da venda.")}</p>}
     </> : <p className="small muted" style={{ margin: 0 }}>{tr("Preço e item do QuickBooks: o gerente completa antes de cobrar.")}</p>}
     <div className="row" style={{ justifyContent: 'flex-end' }}>
       <button type="button" className="btn" onClick={onFechar}>{tr("Cancelar")}</button>
@@ -152,20 +154,17 @@ type ItemMin = Pick<Item, 'id' | 'name' | 'price'> & { qbo_item_id?: string | nu
 function ItemQbo({ item, onFeito, onFechar }: { item: ItemMin; onFeito: () => void; onFechar: () => void }) {
   const toast = useToast()
   const [cats, setCats] = useState<{ id: string; nome: string }[]>([])
-  const [existentes, setExistentes] = useState<{ id: string; name: string; full_name: string | null; price: number | null }[]>([])
+  const [escolhido, setEscolhido] = useState<string | null>(null)
   const [como, setComo] = useState<'ligar' | 'criar'>('ligar')
   const [cat, setCat] = useState('')
   const [qid, setQid] = useState(item.qbo_item_id || '')
-  const [busca, setBusca] = useState('')
   const [preco, setPreco] = useState(item.price != null ? String(item.price) : '')
   const [indo, setIndo] = useState(false)
   useEffect(() => {
     api.get<{ categorias: { id: string; nome: string }[]; itens: { id: string; name: string; full_name: string | null; price: number | null }[]; conectado: boolean }>('/balcao/categorias')
-      .then(r => { setCats(r.categorias); setExistentes(r.itens); if (!r.conectado) toast(tr("QuickBooks não está conectado: não dá para criar o item agora."), 'crit') })
+      .then(r => { setCats(r.categorias); if (!r.conectado) toast(tr("QuickBooks não está conectado: não dá para criar o item agora."), 'crit') })
       .catch(e => toast((e as ApiError).message, 'crit'))
   }, [toast])
-  const termo = busca.trim().toLowerCase()
-  const lista = (termo ? existentes.filter(x => (x.full_name || x.name).toLowerCase().includes(termo)) : existentes).slice(0, 80)
   async function salvar() {
     setIndo(true)
     try {
@@ -183,9 +182,8 @@ function ItemQbo({ item, onFeito, onFechar }: { item: ItemMin; onFeito: () => vo
       <button type="button" role="radio" aria-checked={como === 'criar'} className={`btn sm${como === 'criar' ? ' primary' : ''}`} onClick={() => setComo('criar')}>{tr("Criar item novo")}</button>
     </div>
     {como === 'ligar' ? <>
-      <label className="fld"><span>{tr("Buscar no catálogo")}</span><input value={busca} onChange={e => setBusca(e.target.value)} placeholder={tr("bumper, chain, MG…")} /></label>
-      <label className="fld"><span>{tr("Item do QuickBooks")}</span><select value={qid} onChange={e => { setQid(e.target.value); const x = existentes.find(i => i.id === e.target.value); if (x?.price != null && !preco) setPreco(String(x.price)) }}>
-        <option value="">—</option>{lista.map(x => <option key={x.id} value={x.id}>{x.full_name || x.name}{x.price != null ? ` · US$ ${x.price.toFixed(2)}` : ''}</option>)}</select></label>
+      {qid && <Banner tone="ok">{tr("Item do QuickBooks:")} {escolhido || qid}</Banner>}
+      <BuscaQbo rotulo={tr("Buscar no catálogo")} onEscolher={x => { setQid(x.id); setEscolhido(x.full_name || x.name); if (x.price != null && !preco) setPreco(String(x.price)) }} />
     </> : <label className="fld"><span>{tr("Categoria")}</span><select value={cat} onChange={e => setCat(e.target.value)}><option value="">—</option>{cats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}</select></label>}
     <label className="fld"><span>{tr("Preço final (US$)")}</span><input inputMode="decimal" value={preco} onChange={e => setPreco(e.target.value)} /></label>
     <div className="row" style={{ justifyContent: 'flex-end' }}><button className="btn" onClick={onFechar}>{tr("Cancelar")}</button>
@@ -629,6 +627,11 @@ export function Balcao() {
   const [novo, setNovo] = useState<string | null>(null)
   const [semQbo, setSemQbo] = useState<Item | null>(null)
   const [abrindo, setAbrindo] = useState(false)
+  // #341: o rascunho de invoice do card. Aberto, a peça lida no COBRAR entra nele; a peça sem preço final vai para ele
+  const [rzAberto, setRzAberto] = useState(false)
+  const [rzVersao, setRzVersao] = useState(0)
+  const [porRz, setPorRz] = useState<{ item: Item; motivo: string } | null>(null)
+  useEffect(() => { setRzAberto(false) }, [clientId])
   // voltou do parts pelo "voltar" (página guardada pelo navegador): o botão volta a funcionar
   useEffect(() => {
     const f = (e: PageTransitionEvent) => { if (e.persisted) { setAbrindo(false); restaurarReferrer() } }
@@ -670,6 +673,7 @@ export function Balcao() {
       vibrar(250)
       if (er.motivo === 'tem_do_cliente') setDoCliente({ item, codigo, msg: er.message })
       else if (er.motivo === 'precisa_item_qbo' && est?.gerente) setSemQbo(item)
+      else if (m === 'cobrar' && (er.motivo === 'precisa_item_qbo' || /preço final/.test(er.message))) setPorRz({ item, motivo: er.message })
       else toast(er.message, 'crit')
     } finally { setIndo(false); focar() }
   }
@@ -683,10 +687,14 @@ export function Balcao() {
       if (r.tipo === 'cliente') { vibrar(40); nav(`/balcao/${r.cliente.id}`); return }
       if (r.tipo === 'desconhecido') { setNovo(r.codigo); return }
       if (!cid) { vibrar(40); setSemCliente({ item: r.item, codigo: r.codigo }); return }
+      if (modo === 'cobrar' && rzAberto) {
+        await adicionarLinha(cid, { origem: 'estoque', item_id: r.item.id, local })
+        vibrar(40); setRzVersao(v => v + 1); toast(tr("{0}: no rascunho.", r.item.name), 'ok'); return
+      }
       await lancar(r.item, r.codigo, modo === 'cobrar' ? 'cobrar' : 'guardar')
     } catch (e) { toast((e as ApiError).message, 'crit'); vibrar(250) } finally { focar() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cid, modo, local, est?.gerente])
+  }, [cid, modo, local, est?.gerente, rzAberto])
 
   async function paraOCliente(id: number, nome: string) {
     const lido = semCliente
@@ -714,7 +722,7 @@ export function Balcao() {
       <button role="radio" aria-checked={guardar} className="balcao-modo guardar" onClick={() => setModo('guardar')}>{tr("GUARDAR")}<small>{tr("estoque do cliente")}</small></button>
     </div>
     <div className={`balcao-aviso ${guardar ? 'guardar' : 'cobrar'}`} role="status">
-      {guardar ? tr("Modo GUARDAR: a peça vai para o estoque do cliente e NÃO é cobrada.") : tr("Modo COBRAR: cada peça lida entra na invoice de peças de hoje.")}
+      {guardar ? tr("Modo GUARDAR: a peça vai para o estoque do cliente e NÃO é cobrada.") : rzAberto && cid ? tr("Modo COBRAR com rascunho aberto: cada peça lida entra no rascunho de invoice.") : tr("Modo COBRAR: cada peça lida entra na invoice de peças de hoje.")}
     </div>
     <form className="balcao-leitor" onSubmit={e => { e.preventDefault(); ler(texto) }}>
       <label className="fld grow"><span>{cid ? tr("Leia a peça (ou outro cliente)") : tr("Leia o QR do cliente")}</span>
@@ -743,6 +751,7 @@ export function Balcao() {
         {!est.invoices.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nenhuma peça cobrada hoje.")}</p>
           : <div className="cd-grade">{est.invoices.map(p => <CartaoInvoice key={p.id} p={p} gerente={est.gerente} onMudou={carregar} />)}</div>}
       </Section>
+      {!guardar && <RascunhoInvoice clientId={est.cliente.id} versao={rzVersao} onEstado={setRzAberto} onFaturou={carregar} />}
       <Section title={tr("Leituras")} count={est.leituras.length}>
         {!est.leituras.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nada lido ainda.")}</p>
           : <div className="tbl">{est.leituras.map(l => <div className="tr" key={l.id}>
@@ -766,6 +775,8 @@ export function Balcao() {
     {camera && <Camera onLer={ler} onFechar={() => { setCamera(false); focar() }} />}
     {novo && <CodigoNovo codigo={novo} gerente={!!est?.gerente} onFechar={() => { setNovo(null); focar() }}
       onFeito={i => { const c = novo; setNovo(null); if (cid && c) lancar(i, c, guardar ? 'guardar' : 'cobrar') }} />}
+    {porRz && cid && <PorNoRascunho clientId={cid} item={porRz.item} motivo={porRz.motivo} onFeito={() => setRzVersao(v => v + 1)}
+      onFechar={() => { setPorRz(null); focar() }} />}
     {semQbo && <ItemQbo item={semQbo} onFechar={() => setSemQbo(null)} onFeito={() => setSemQbo(null)} />}
     {doCliente && <Scrim onMouseDown={() => setDoCliente(null)}><div className="modal stack" style={{ maxWidth: 480, gap: 12 }} onMouseDown={e => e.stopPropagation()}>
       <h2 className="h3">{tr("Esta peça é do cliente?")}</h2>
