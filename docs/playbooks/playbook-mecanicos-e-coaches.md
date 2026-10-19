@@ -2,7 +2,7 @@
 
 **Command Center da URACE — calendário e balcão de peças**
 
-Para quem trabalha no box, com o celular na mão. Atualizado em 18/10/2026 (#117: conferir o documento da waiver no balcão).
+Para quem trabalha no box, com o celular na mão. Atualizado em 19/10/2026 (#341: rascunho de invoice com peças e valores no balcão).
 O guia do painel inteiro está no playbook geral (`docs/playbooks/playbook-geral.md`).
 
 ---
@@ -284,6 +284,34 @@ Se a peça já é do cliente (guardada com a gente), o sistema pergunta antes:
 **"Usar a dele (sem cobrar)"** ou **"Cobrar uma nova"**.
 
 O QR do cliente fica no card dele, no botão **"▣ QR do balcão"**.
+
+### Rascunho de invoice (várias peças e valores de uma vez)
+
+Dono, 19/10 (#341): *"colocar peças e valores em um rascunho de bulk para o cliente e dali o command center
+cria a invoice com os itens que eu falar; se não tiver item ele cria"*. Com o cliente aberto no balcão completo,
+no modo **COBRAR**, a seção **Rascunho de invoice** monta a invoice antes de ela ir para o QuickBooks:
+
+1. Toque em **Adicionar linha** e escolha de onde vem:
+   - **Estoque**: a peça do estoque do Command Center (busque pelo nome);
+   - **QuickBooks**: qualquer item do **inventário inteiro do QuickBooks** (busque pelo nome; **Atualizar do
+     QuickBooks** traz o catálogo de agora);
+   - **Linha livre**: um nome e um preço que não existem em lugar nenhum (ex.: "Solda no chassi").
+2. Diga a **quantidade** e o **preço unitário**. A linha vem com o preço da tabela, quando existe; mudar o preço
+   marca a linha como **"preço digitado"** e fica registrado quem digitou.
+3. Com o rascunho aberto, **cada peça lida no leitor entra no rascunho** (não na invoice de hoje). O aviso verde
+   do topo diz isso.
+4. Mude quantidade e preço direto na linha; **Remover** tira a linha; **Descartar rascunho** joga tudo fora.
+   O rascunho fica salvo: recarregar a tela ou abrir em outro aparelho mostra o mesmo, e ele é **só deste
+   cliente**.
+5. O **gerente** toca em **Criar invoice**: uma invoice só no QuickBooks com as linhas e os preços do rascunho.
+   Linha sem item no QuickBooks ganha o item lá na hora. A peça do estoque sai do estoque nesse momento.
+   A invoice aparece em **Invoice de peças**, com **Enviar invoice por e-mail** e **Cobrar no cartão**.
+
+**Linha sem preço não deixa criar a invoice.** Se a tela disser que o QuickBooks não respondeu, toque em
+**Criar invoice de novo**: é a mesma tentativa e **não cria outra invoice**.
+
+**Peça sem preço final:** no COBRAR, em vez de travar com "chame o gerente", abre **Pôr no rascunho**: digite o
+preço desta venda e a peça entra no rascunho do cliente.
 
 ### Waiver · Conferir documento (check-in)
 

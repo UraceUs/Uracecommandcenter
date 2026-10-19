@@ -1276,6 +1276,53 @@ CREATE TABLE IF NOT EXISTS counter_scans (
 );
 CREATE INDEX IF NOT EXISTS counter_scans_cliente ON counter_scans(client_id, at);
 
+-- #341 (dono, 19/10): "colocar peças e valores em um rascunho de bulk para o cliente e dali o command center cria a
+-- invoice com os itens que eu falar; se não tiver item ele cria". Um rascunho aberto por card (o índice abaixo); as
+-- linhas são peça do estoque, item do catálogo do QuickBooks ou linha livre, com o preço da linha. "Criar invoice" leva
+-- tudo ao QuickBooks numa invoice só (com `requestid`: resposta perdida não cria outra) e o rascunho vira 'faturado'.
+CREATE TABLE IF NOT EXISTS counter_drafts (
+  id               INTEGER PRIMARY KEY,
+  client_id        INTEGER NOT NULL REFERENCES clients(id),
+  status           TEXT NOT NULL DEFAULT 'rascunho' CHECK (status IN ('rascunho','criando','faturado','descartado')),
+  location         TEXT NOT NULL DEFAULT 'sede',          -- de onde sai a peça do estoque (galpão, trailer, pista)
+  requestid        TEXT,                                  -- a do POST /invoice; a mesma em toda nova tentativa
+  stock_out        INTEGER NOT NULL DEFAULT 0,            -- 1: a peça do estoque já saiu (baixa antes do QuickBooks)
+  error            TEXT,                                  -- a última recusa (some quando a invoice sai)
+  uncertain        INTEGER NOT NULL DEFAULT 0,            -- 1: o QuickBooks não respondeu; tentar de novo não duplica
+  parts_invoice_id INTEGER REFERENCES parts_invoices(id),
+  qbo_invoice_id   TEXT,
+  doc_number       TEXT,
+  total            REAL,
+  created_by       INTEGER REFERENCES users(id),
+  created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  closed_by        INTEGER REFERENCES users(id),
+  closed_at        TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS counter_drafts_aberto ON counter_drafts(client_id) WHERE status IN ('rascunho','criando');
+CREATE INDEX IF NOT EXISTS counter_drafts_status ON counter_drafts(status, updated_at);
+
+CREATE TABLE IF NOT EXISTS counter_draft_lines (
+  id             INTEGER PRIMARY KEY,
+  draft_id       INTEGER NOT NULL REFERENCES counter_drafts(id),
+  source         TEXT NOT NULL CHECK (source IN ('estoque','quickbooks','livre')),
+  item_id        INTEGER REFERENCES stock_items(id),      -- peça do estoque do Command Center
+  qbo_item_id    TEXT,                                    -- o item no QuickBooks (o escolhido, o da peça ou o criado)
+  name           TEXT NOT NULL,
+  description    TEXT,
+  qty            REAL NOT NULL DEFAULT 1,
+  unit_price     REAL,                                    -- NULL: sem preço, não deixa criar a invoice
+  ref_price      REAL,                                    -- o preço da tabela quando a linha entrou (estoque ou QuickBooks)
+  price_by       INTEGER REFERENCES users(id),            -- quem digitou o preço (NULL: veio da tabela)
+  qbo_requestid  TEXT,                                    -- a do POST /item da linha livre: criar de novo não duplica
+  move_id        INTEGER REFERENCES stock_moves(id),
+  charge_id      INTEGER REFERENCES stock_charges(id),
+  created_by     INTEGER REFERENCES users(id),
+  created_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS counter_draft_lines_draft ON counter_draft_lines(draft_id, id);
+
 -- #180 (dono, 09/10): o mecânico lê a PEÇA com a câmera do celular e toca no piloto do dia; nada
 -- é cobrado nem sai do estoque ali. A leitura espera aqui até o gerente confirmar (vira uma linha
 -- de counter_scans, com as regras do balcão) ou descartar. Código desconhecido também espera.

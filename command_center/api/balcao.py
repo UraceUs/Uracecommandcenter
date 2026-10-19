@@ -489,3 +489,169 @@ def revisao_descartar(pid: int, dados: DescartarIn, request: Request, con: sqlit
         raise HTTPException(400, str(e))
     _aud(con, request, u, "balcao.revisao.descartar", "counter_pending", pid, {"nota": dados.nota})
     return br.revisao(con)
+
+
+# ------------------------------------------------------------------ #341: rascunho de invoice em lote
+# Dono, 19/10: "colocar peças e valores em um rascunho de bulk para o cliente e dali o command center cria a invoice
+# com os itens que eu falar; se não tiver item ele cria". Montar o rascunho (linhas, quantidade, PREÇO da linha,
+# descrição) é OPERATOR: é quem está no galpão. O preço digitado diferente da tabela fica marcado na linha e na
+# auditoria. **Criar a invoice é MANAGER**, como o item do QuickBooks e o envio no balcão: cria item no catálogo da
+# contabilidade e uma invoice com os preços digitados (preço fora da tabela é do gerente, política de 17/09).
+from command_center.db import transacao  # noqa: E402
+from command_center.providers import balcao_rascunho as rz  # noqa: E402
+
+_ID = Path(..., ge=1, le=2**63 - 1)
+
+
+@r.get("/quickbooks/itens")
+def qbo_itens(q: str | None = Query(None, max_length=80), limit: int = Query(30, ge=1, le=100),
+              offset: int = Query(0, ge=0, le=100000), con: sqlite3.Connection = Depends(get_db),
+              u=Depends(auth.exige("OPERATOR"))):
+    """O inventário inteiro do QuickBooks (produtos e serviços), do espelho, com busca e paginação."""
+    return rz.catalogo_qbo(con, q, limit, offset)
+
+
+@r.post("/quickbooks/itens/atualizar")
+def qbo_itens_atualizar(request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Traz o catálogo do QuickBooks agora (no máximo a cada 5 minutos; a busca não espera por isto)."""
+    from command_center.providers import NaoConectado
+    try:
+        res = rz.atualizar_catalogo(con)
+    except NaoConectado:
+        raise HTTPException(503, "QuickBooks não está conectado: a busca mostra o catálogo da última sincronia.")
+    except Exception as e:                           # noqa: BLE001 — recusa do QuickBooks
+        raise HTTPException(502, f"QuickBooks: {str(e)[:300]}")
+    if not res["recente"]:
+        _aud(con, request, u, "balcao.catalogo_qbo", "qbo_items", None, {"itens": res["atualizados"]})
+    return res
+
+
+@r.get("/rascunhos")
+def rascunhos(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0, le=100000),
+              con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Os rascunhos abertos de todos os cards (para nenhum ficar esquecido)."""
+    return rz.abertos(con, limit, offset)
+
+
+@r.get("/cliente/{client_id}/rascunho")
+def rascunho(client_id: int = _ID, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    try:
+        return {**rz.do_cliente(con, client_id), "gerente": _gerente(u)}
+    except LookupError:
+        raise HTTPException(404, "Cliente não encontrado.")
+
+
+class LinhaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    origem: Literal["estoque", "quickbooks", "livre"]
+    item_id: int | None = Field(None, ge=1, le=2**63 - 1)          # peça do estoque
+    qbo_item_id: str | None = Field(None, min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")
+    nome: str | None = Field(None, max_length=100)                  # linha livre
+    descricao: str | None = Field(None, max_length=300)
+    qty: float = Field(1, gt=0, le=rz.MAX_QTY)
+    preco: float | None = Field(None, ge=0, le=rz.MAX_PRECO)
+    local: Literal["sede", "trailer", "pista"] | None = None
+    confirmado: StrictBool = False
+
+
+def _resposta(con, client_id, u):
+    return {**rz.do_cliente(con, client_id), "gerente": _gerente(u)}
+
+
+@r.post("/cliente/{client_id}/rascunho/linhas", status_code=201)
+def rascunho_linha(dados: LinhaIn, request: Request, client_id: int = _ID, con: sqlite3.Connection = Depends(get_db),
+                   u=Depends(auth.exige("OPERATOR"))):
+    try:
+        with transacao(con, imediata=True):
+            d, li, novo, digitado = rz.adicionar(con, client_id, dados.origem, u["id"], item_id=dados.item_id,
+                                                 qbo_item_id=dados.qbo_item_id, nome=dados.nome, qty=dados.qty,
+                                                 preco=dados.preco, descricao=dados.descricao, local=dados.local,
+                                                 confirmado=dados.confirmado)
+            if novo:
+                _aud(con, request, u, "balcao.rascunho.criar", "counter_draft", d["id"], {"client_id": client_id})
+            _aud(con, request, u, "balcao.rascunho.linha", "counter_draft", d["id"],
+                 {"client_id": client_id, "linha": li["id"], "origem": li["source"], "item": li["item_id"],
+                  "qbo_item": li["qbo_item_id"], "nome": li["name"], "qty": dados.qty, "preco": li["unit_price"]})
+            if digitado:
+                _aud(con, request, u, "balcao.rascunho.preco", "counter_draft", d["id"],
+                     {"client_id": client_id, "linha": li["id"], "nome": li["name"], "preco_tabela": li["ref_price"],
+                      "preco": li["unit_price"]})
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except (b.ErroBalcao, estoque.ErroEstoque) as e:
+        raise _erro(e)
+    return {"linha": li["id"], **_resposta(con, client_id, u)}
+
+
+class EditarLinhaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    qty: float | None = Field(None, gt=0, le=rz.MAX_QTY)
+    preco: float | None = Field(None, ge=0, le=rz.MAX_PRECO)
+    descricao: str | None = Field(None, max_length=300)
+    nome: str | None = Field(None, max_length=100)
+
+
+@r.patch("/cliente/{client_id}/rascunho/linhas/{lid}")
+def rascunho_editar(dados: EditarLinhaIn, request: Request, client_id: int = _ID, lid: int = _ID,
+                    con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    mudou = dados.model_dump(exclude_unset=True)
+    try:
+        with transacao(con, imediata=True):
+            antes, depois = rz.editar(con, client_id, lid, u["id"], qty=mudou.get("qty"),
+                                      preco=mudou["preco"] if "preco" in mudou else rz._NADA,
+                                      descricao=mudou["descricao"] if "descricao" in mudou else rz._NADA,
+                                      nome=mudou.get("nome"))
+            _aud(con, request, u, "balcao.rascunho.editar", "counter_draft", antes["draft_id"],
+                 {"client_id": client_id, "linha": lid, "campos": sorted(mudou)})
+            if "preco" in mudou and depois["price_by"] and antes["unit_price"] != depois["unit_price"]:
+                _aud(con, request, u, "balcao.rascunho.preco", "counter_draft", antes["draft_id"],
+                     {"client_id": client_id, "linha": lid, "nome": depois["name"], "preco_tabela": depois["ref_price"],
+                      "antes": antes["unit_price"], "preco": depois["unit_price"]})
+    except LookupError:
+        raise HTTPException(404, "Linha não encontrada neste rascunho.")
+    except b.ErroBalcao as e:
+        raise _erro(e)
+    return _resposta(con, client_id, u)
+
+
+@r.delete("/cliente/{client_id}/rascunho/linhas/{lid}")
+def rascunho_remover(request: Request, client_id: int = _ID, lid: int = _ID, con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("OPERATOR"))):
+    try:
+        with transacao(con, imediata=True):
+            li = rz.remover(con, client_id, lid)
+            _aud(con, request, u, "balcao.rascunho.remover", "counter_draft", li["draft_id"],
+                 {"client_id": client_id, "linha": lid, "nome": li["name"], "qty": li["qty"], "preco": li["unit_price"]})
+    except LookupError:
+        raise HTTPException(404, "Linha não encontrada neste rascunho.")
+    except b.ErroBalcao as e:
+        raise _erro(e)
+    return _resposta(con, client_id, u)
+
+
+@r.post("/cliente/{client_id}/rascunho/descartar")
+def rascunho_descartar(request: Request, client_id: int = _ID, con: sqlite3.Connection = Depends(get_db),
+                       u=Depends(auth.exige("OPERATOR"))):
+    try:
+        with transacao(con, imediata=True):
+            d, n = rz.descartar(con, client_id, u["id"])
+            _aud(con, request, u, "balcao.rascunho.descartar", "counter_draft", d["id"], {"client_id": client_id, "linhas": n})
+    except LookupError:
+        raise HTTPException(404, "Este card não tem rascunho aberto.")
+    except b.ErroBalcao as e:
+        raise _erro(e)
+    return _resposta(con, client_id, u)
+
+
+@r.post("/cliente/{client_id}/rascunho/faturar")
+def rascunho_faturar(request: Request, client_id: int = _ID, con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("MANAGER"))):
+    """Cria UMA invoice no QuickBooks com as linhas do rascunho (cria o item da linha que não tem). Não envia: o
+    "Enviar invoice por e-mail" é o da invoice de peças, que aparece logo acima."""
+    try:
+        rz.faturar(con, client_id, u["id"], ip=auth._ip(request))
+    except LookupError:
+        raise HTTPException(404, "Este card não tem rascunho aberto.")
+    except (b.ErroBalcao, estoque.ErroEstoque) as e:
+        raise _erro(e)
+    return {**_resposta(con, client_id, u), **b.do_cliente(con, client_id)}
