@@ -133,7 +133,7 @@ def test_o_ci_grava_a_tag_so_com_os_tres_jobs_verdes_no_branch_da_vps():
 
 
 # ------------------------------------------------------------------ #344: o CI em partes paralelas
-# Dono, 19/10: pytest em 2 máquinas e end-to-end em 3. Cada parte é um check "… (K/N)". O deploy só pula a
+# Dono, 19/10: pytest e end-to-end em partes (hoje 3 cada). Cada parte é um check "… (K/N)". O deploy só pula a
 # bateria com TODAS as partes verdes; antes, o "mais recente que começa com End-to-end" decidiria por uma só.
 def _em_partes(e2e=("success",) * 3, py=("success",) * 2):
     runs = [_run("Frontend — tsc + oxlint + build")]
