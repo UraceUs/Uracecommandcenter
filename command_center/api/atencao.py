@@ -345,6 +345,22 @@ def _coletar(con):
                           facts=[(f"{_dbr(x['service_date'])} · {x['cliente']}", f"US$ {x['total']:,.2f}" + (" · erro" if x["qbo_error"] else ""))
                                  for x in pecas[:6]]))
 
+    # ---- 4f2a. balcão (#346): invoice de peças criada pelo mecânico, aguardando a revisão do gerente
+    rev = todos(con, """SELECT p.id, p.client_id, p.service_date, p.total, p.doc_number, COALESCE(c.pilot_name, c.name) AS cliente,
+                               u.name AS por
+                          FROM parts_invoices p JOIN clients c ON c.id=p.client_id LEFT JOIN users u ON u.id=p.created_by
+                         WHERE p.review_pending=1 AND p.status='aberta' AND p.paid_at IS NULL ORDER BY p.service_date, p.id""")
+    if rev:
+        itens.append(dict(key=_chave("balcao", "parts_invoice", "revisao"), level="HIGH",
+                          title=f"{len(rev)} invoice(s) de peças aguardando a sua revisão",
+                          why="O mecânico criou a invoice no QuickBooks a partir do rascunho do balcão. Ela só é enviada "
+                              "(ou cobrada no cartão) depois que o gerente confirma ou altera as linhas.",
+                          entity={"type": "parts_invoice", "id": None}, client_id=None,
+                          link=f"/balcao/{rev[0]['client_id']}" if len(rev) == 1 else "/balcao", action="Revisar no balcão",
+                          facts=[(f"{_dbr(x['service_date'])} · {x['cliente']}",
+                                  f"US$ {x['total']:,.2f}" + (f" · invoice {x['doc_number']}" if x["doc_number"] else "")
+                                  + (f" · {x['por']}" if x["por"] else "")) for x in rev[:6]]))
+
     # ---- 4f2b. balcão do celular (#206): leitura pendente esperando a revisão do gerente
     pend = todos(con, """SELECT cp.id, cp.service_date, cp.code, cp.pilot_name, i.name AS peca, u.name AS por
                            FROM counter_pending cp LEFT JOIN stock_items i ON i.id=cp.item_id

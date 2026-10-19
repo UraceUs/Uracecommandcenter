@@ -460,8 +460,9 @@ def sincronizar_qbo(con, pinv_id):
     invoice, para a tela mostrar e o botão tentar de novo — a leitura já está salva."""
     from command_center.providers import NaoConectado
     p = um(con, "SELECT * FROM parts_invoices WHERE id=?", (pinv_id,))
-    if not p or p["status"] != "aberta" or p["draft_id"]:
-        return p                     # #341: a do rascunho já subiu inteira; reescrever com as cobranças apagaria linhas
+    if not p or p["status"] != "aberta":
+        return p
+    # #341/#346: a do rascunho leva as linhas do rascunho (a revisão do gerente muda a mesma invoice lá)
     ls = linhas(con, p["id"])
     if not ls and not p["qbo_invoice_id"]:
         atualizar(con, "parts_invoices", p["id"], total=0, qbo_error=None)
@@ -484,7 +485,7 @@ def sincronizar_qbo(con, pinv_id):
     atualizar(con, "parts_invoices", p["id"], qbo_invoice_id=str(r.get("id") or p["qbo_invoice_id"]),
               doc_number=r.get("numero") or p["doc_number"], total=total, qbo_error=None, qbo_synced_at=agora(),
               status="anulada" if r.get("anulada") else "aberta")
-    if ls:
+    if ls and not p["draft_id"]:
         con.execute(f"UPDATE stock_charges SET status='invoiced' WHERE id IN ({','.join('?' * len(ls))})",
                     tuple(l["id"] for l in ls))
     return um(con, "SELECT * FROM parts_invoices WHERE id=?", (p["id"],))
@@ -498,6 +499,8 @@ def enviar(con, pinv_id, por=None):
         raise ErroBalcao(f"esta invoice já está {p['status']}")
     if p["paid_at"]:
         raise ErroBalcao("esta invoice já foi paga no cartão: não há o que enviar")
+    if p.get("review_pending"):
+        raise ErroBalcao("esta invoice está aguardando a revisão do gerente: revise e confirme antes de enviar")
     if not p["qbo_invoice_id"] or p["qbo_error"]:
         raise ErroBalcao("a invoice ainda não está no QuickBooks: toque em 'Tentar de novo' antes de enviar")
     # #206: antes de mandar cobrança por e-mail, confere se o cartão já pagou (sem "Já passei o cartão")
@@ -531,6 +534,8 @@ def conferir_pagamento(con, pinv_id, por=None):
         raise LookupError("invoice de peças não existe")
     if not p["qbo_invoice_id"]:
         raise ErroBalcao("a invoice ainda não está no QuickBooks")
+    if p.get("review_pending"):
+        raise ErroBalcao("esta invoice está aguardando a revisão do gerente: o cartão só depois de confirmada")
     from command_center.providers import modulo
     inv = modulo("quickbooks").qbo_invoice(p["qbo_invoice_id"])
     saldo = float(inv.get("saldo") or 0)
@@ -547,6 +552,7 @@ def conferir_pagamento(con, pinv_id, por=None):
 def invoice_publica(con, p):
     c = um(con, "SELECT id, name, pilot_name FROM clients WHERE id=?", (p["client_id"],))
     return {**dict(p), "cliente": (c["pilot_name"] or c["name"]) if c else None, "paga": bool(p["paid_at"]),
+            "revisao_pendente": bool(p.get("review_pending")),
             "cartao": cartao_ligado(),
             "linhas": [dict(l, total=round(float(l["qty"]) * float(l["unit_price"]), 2)) for l in linhas(con, p["id"])]}
 

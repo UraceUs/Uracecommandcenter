@@ -421,6 +421,11 @@ MIGRACOES = [
     # #348 (dono, 19/10): "um switch para escolher dentro do card de cada cliente se vamos usar o fluxo pelo DocuSign ou
     # pela waiver nativa". padrao = segue a chave geral (Site › Waiver); docusign; nativa (só com o selo configurado)
     ("clients", "waiver_flow", "TEXT NOT NULL DEFAULT 'padrao' CHECK (waiver_flow IN ('padrao','docusign','nativa'))"),
+    # #346 (dono, 19/10): "as peças que o mecânico lê os códigos geram a invoice e salve, fica pendente só a revisão para
+    # confirmar/alterar pelo gerente". 1 = criada por quem não é gerente: não envia nem cobra até o gerente confirmar
+    ("parts_invoices", "review_pending", "INTEGER NOT NULL DEFAULT 0"),
+    ("parts_invoices", "reviewed_by", "INTEGER REFERENCES users(id)"),
+    ("parts_invoices", "reviewed_at", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
