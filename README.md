@@ -65,6 +65,11 @@ CC_E2E=1 python -m pytest -q command_center/tests/e2e
 ```
 
 O CI (`.github/workflows/ci.yml`) roda tudo isso em cada PR: ruff, pytest, tsc, oxlint, build e end-to-end.
+Desde #344 o pytest do backend roda em 2 máquinas e o end-to-end em 3, ao mesmo tempo, sem tirar nenhum
+teste: `--parte K/N` (o `conftest.py` da raiz) reparte os testes coletados em rodízio pelo nodeid, e cada
+parte imprime `parte K/N: X de T testes coletados`. Para repetir uma parte aqui:
+`python -m pytest -q --parte 2/2` ou `CC_E2E=1 python -m pytest -q command_center/tests/e2e --parte 1/3`.
+Sem `--parte`, roda tudo.
 
 ## Como uma mudança chega à VPS
 

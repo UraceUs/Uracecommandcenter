@@ -80,7 +80,8 @@ if [ -z "${URACE_DEPLOY_TESTES:-}" ]; then
     if timeout 30 git -C "$REPO" ls-remote --exit-code origin "refs/tags/ci-verde/$SHA" >/dev/null 2>&1; then
         CI="ok"
     else
-        # 2) a API pública do GitHub — só responde se o repositório for público (privado: 404)
+        # 2) a API pública do GitHub — só responde se o repositório for público (privado: 404).
+        #    #344: o Python e o end-to-end rodam em partes ("(1/3)"…); o ci_verde.py só diz ok com TODAS verdes
         API="$(curl -fsSL --max-time 15 -H 'Accept: application/vnd.github+json' \
                 "https://api.github.com/repos/$REPO_GH/commits/$SHA/check-runs?per_page=100" 2>/dev/null \
               | "$VENV/bin/python" "$REPO/adminai/deploy/command_center/ci_verde.py" 2>/dev/null || true)"
