@@ -4640,5 +4640,21 @@
 "preço digitado": "typed price",
 "se não existir no QuickBooks, o item é criado lá": "if it doesn't exist in QuickBooks, the item is created there",
 "sem saldo no estoque": "out of stock",
-"{0}: no rascunho.": "{0}: added to the draft."
+"{0}: no rascunho.": "{0}: added to the draft.",
+"A invoice que você criar fica aguardando a revisão do gerente: ele confirma ou altera antes de enviar.": "The invoice you create waits for the manager review: they confirm or change it before sending.",
+"As mais parecidas, da mais próxima para a menos:": "The closest matches, from closest to farthest:",
+"Conferido no QuickBooks.": "Checked in QuickBooks.",
+"Conferir no QuickBooks": "Check in QuickBooks",
+"Confirmar a invoice": "Confirm the invoice",
+"Criada no balcão: o gerente confirma ou altera as linhas antes de enviar ou cobrar.": "Created at the counter: the manager confirms or changes the lines before sending or charging.",
+"Mudar preço, quantidade ou linha atualiza a mesma invoice no QuickBooks.": "Changing price, quantity or a line updates the same invoice in QuickBooks.",
+"Nada parecido no estoque nem no QuickBooks.": "Nothing similar in stock or in QuickBooks.",
+"Não achei exatamente {0}": "Couldn't find exactly {0}",
+"Outras parecidas:": "Other similar ones:",
+"Revisar": "Review",
+"Revisar a invoice {0}": "Review invoice {0}",
+"Revisão confirmada: a invoice pode ser enviada.": "Review confirmed: the invoice can be sent.",
+"aguardando revisão do gerente": "waiting for manager review",
+"É esta? Toque para pôr no rascunho.": "Is it this one? Tap to add it to the draft.",
+"É uma peça nova: cadastrar o código": "It's a new part: register the code"
 }

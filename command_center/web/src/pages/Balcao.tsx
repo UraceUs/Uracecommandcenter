@@ -21,7 +21,7 @@ import { Picker } from '../components/Unir'
 import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { fmtDate, fmtDateTime } from '../components/fmt'
 import type { Client } from '../api/types'
-import { adicionarLinha, BuscaQbo, PorNoRascunho, RascunhoInvoice } from './BalcaoRascunho'
+import { adicionarLinha, BuscaQbo, MaisProximos, PorNoRascunho, RascunhoInvoice, RevisaoInvoice } from './BalcaoRascunho'
 
 type Modo = 'cobrar' | 'guardar'
 interface Cliente { id: number; nome: string; responsavel: string; vip?: boolean }
@@ -30,7 +30,7 @@ interface Item { id: number; name: string; price: number | null; unit: string; q
 interface Linha { id: number; qty: number; unit_price: number; name: string; total: number }
 interface InvPecas { id: number; client_id: number; cliente: string | null; service_date: string; status: string; qbo_invoice_id: string | null
   doc_number: string | null; total: number; qbo_error: string | null; sent_to: string | null; linhas: Linha[]
-  paga?: boolean; cartao?: boolean; paid_at?: string | null }
+  paga?: boolean; cartao?: boolean; paid_at?: string | null; revisao_pendente?: boolean }
 interface Leitura { id: number; name: string; mode: string; qty: number; at: string; undone_at: string | null; por: string | null; travada?: number }
 /* #117: as waivers que valem para o card aberto (a nativa e a do DocuSign; nunca a de outro card) e a última
  * conferência do documento com foto de quem assinou. */
@@ -238,19 +238,23 @@ function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean;
   const toast = useToast()
   const [indo, setIndo] = useState(false)
   const [cartao, setCartao] = useState(false)
+  const [revisar, setRevisar] = useState(false)
   async function acao(qual: 'sincronizar' | 'enviar') {
     setIndo(true)
     try { await api.post(`/balcao/invoices/${p.id}/${qual}`); toast(qual === 'enviar' ? tr("Invoice enviada pelo QuickBooks.") : tr("Atualizada no QuickBooks."), 'ok'); onMudou() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   // #313: o cartão D — a situação, o cliente, o total no bloco grande, as linhas na lista e, embaixo, como o cliente paga
-  const [rot, tom]: [string, TomD] = p.status === 'enviada' ? [tr("enviada"), 'ok'] : p.status === 'anulada' ? [tr("anulada"), 'neutral'] : [tr("aberta · não enviada"), 'warn']
-  const cobrar = !p.paga && p.status !== 'anulada' && p.total > 0 && p.qbo_invoice_id && !p.qbo_error
+  // #346: a criada pelo mecânico espera a revisão do gerente; antes dela, nem envio nem cartão
+  const rev = !!p.revisao_pendente && p.status === 'aberta'
+  const [rot, tom]: [string, TomD] = rev ? [tr("aguardando revisão do gerente"), 'warn'] : p.status === 'enviada' ? [tr("enviada"), 'ok'] : p.status === 'anulada' ? [tr("anulada"), 'neutral'] : [tr("aberta · não enviada"), 'warn']
+  const cobrar = !rev && !p.paga && p.status !== 'anulada' && p.total > 0 && p.qbo_invoice_id && !p.qbo_error
   return <Cartao id={`inv-pecas-${p.id}`} estado={rot} tom={tom} avatar={p.cliente || '#'}
     nome={`${tr("Peças de")} ${p.service_date.slice(5, 7)}/${p.service_date.slice(8, 10)}${p.cliente ? ` · ${p.cliente}` : ''}`}
     sub={[p.status === 'enviada' && p.sent_to ? tr("enviada para {0}", p.sent_to) : null]}
     grande={usd(p.total)} detalhe={p.doc_number ? tr("invoice {0}", p.doc_number) : tr("Total")}
-    acoes={(p.status === 'aberta' && p.qbo_error) || (cobrar && ((p.status === 'aberta' && gerente) || p.cartao)) ? <>
+    acoes={(p.status === 'aberta' && p.qbo_error) || (rev && gerente) || (cobrar && ((p.status === 'aberta' && gerente) || p.cartao)) ? <>
+      {rev && gerente && <button className="btn primary" onClick={() => setRevisar(true)}>{tr("Revisar")}</button>}
       {p.status === 'aberta' && p.qbo_error && <button className="btn" disabled={indo} onClick={() => acao('sincronizar')}>{tr("Tentar de novo")}</button>}
       {cobrar && p.status === 'aberta' && gerente && <button className="btn" disabled={indo} onClick={() => acao('enviar')}>{tr("Enviar invoice por e-mail")}</button>}
       {cobrar && p.cartao && <button className="btn primary" onClick={() => setCartao(true)}>{tr("Cobrar no cartão")}</button>}</> : null}>
@@ -263,7 +267,9 @@ function CartaoInvoice({ p, gerente, onMudou }: { p: InvPecas; gerente: boolean;
     {cobrar && <p className="cd-aviso">{tr("Como o cliente paga?")}{' '}
       {p.status === 'aberta' && !gerente && tr("Enviar invoice: o gerente envia no fim do dia.")}
       {p.status === 'enviada' && tr("Invoice enviada: o cliente paga pelo link do e-mail.")}</p>}
+    {rev && <p className="cd-aviso">{tr("Criada no balcão: o gerente confirma ou altera as linhas antes de enviar ou cobrar.")}</p>}
     {cartao && <CobrarNoCartao p={p} onFechar={() => setCartao(false)} onPago={onMudou} />}
+    {revisar && <RevisaoInvoice pid={p.id} onFeito={onMudou} onFechar={() => { setRevisar(false); onMudou() }} />}
   </Cartao>
 }
 
@@ -631,6 +637,7 @@ export function Balcao() {
   const [rzAberto, setRzAberto] = useState(false)
   const [rzVersao, setRzVersao] = useState(0)
   const [porRz, setPorRz] = useState<{ item: Item; motivo: string } | null>(null)
+  const [proximos, setProximos] = useState<{ texto: string; codigo: string } | null>(null)
   useEffect(() => { setRzAberto(false) }, [clientId])
   // voltou do parts pelo "voltar" (página guardada pelo navegador): o botão volta a funcionar
   useEffect(() => {
@@ -685,7 +692,8 @@ export function Balcao() {
     try {
       const r = await api.get<Lido>(`/balcao/ler${qs({ codigo: t, client_id: cid })}`)
       if (r.tipo === 'cliente') { vibrar(40); nav(`/balcao/${r.cliente.id}`); return }
-      if (r.tipo === 'desconhecido') { setNovo(r.codigo); return }
+      // #346: não bateu com nada; no COBRAR com cliente aberto, o que mais se parece (tocar para pôr no rascunho)
+      if (r.tipo === 'desconhecido') { if (cid && modo === 'cobrar') setProximos({ texto: t, codigo: r.codigo }); else setNovo(r.codigo); return }
       if (!cid) { vibrar(40); setSemCliente({ item: r.item, codigo: r.codigo }); return }
       if (modo === 'cobrar' && rzAberto) {
         await adicionarLinha(cid, { origem: 'estoque', item_id: r.item.id, local })
@@ -775,6 +783,8 @@ export function Balcao() {
     {camera && <Camera onLer={ler} onFechar={() => { setCamera(false); focar() }} />}
     {novo && <CodigoNovo codigo={novo} gerente={!!est?.gerente} onFechar={() => { setNovo(null); focar() }}
       onFeito={i => { const c = novo; setNovo(null); if (cid && c) lancar(i, c, guardar ? 'guardar' : 'cobrar') }} />}
+    {proximos && cid && <MaisProximos clientId={cid} texto={proximos.texto} onFeito={() => setRzVersao(v => v + 1)}
+      onCodigoNovo={() => { const c = proximos.codigo; setProximos(null); setNovo(c) }} onFechar={() => { setProximos(null); focar() }} />}
     {porRz && cid && <PorNoRascunho clientId={cid} item={porRz.item} motivo={porRz.motivo} onFeito={() => setRzVersao(v => v + 1)}
       onFechar={() => { setPorRz(null); focar() }} />}
     {semQbo && <ItemQbo item={semQbo} onFechar={() => setSemQbo(null)} onFeito={() => setSemQbo(null)} />}
