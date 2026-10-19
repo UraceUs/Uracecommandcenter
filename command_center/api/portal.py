@@ -472,6 +472,8 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
     except ag.ErroAgenda as e:
         raise HTTPException(400, str(e))
     tarefas.add_task(agenda_asana.levar, bid)      # #67: todo agendamento vira tarefa no Asana
+    if (um(con, "SELECT coverage FROM bookings WHERE id=?", (bid,)) or {}).get("coverage") == "extra":
+        tarefas.add_task(_cobrar_pedido, [bid])    # #340: a extra do aluno recorrente sai na invoice na hora
     from command_center.providers import venda_site
     if venda_site.ligada(con):
         tarefas.add_task(_vender, bid)
@@ -491,7 +493,10 @@ def meu_plano(request: Request, response: Response, driver_id: int | None = None
               con: sqlite3.Connection = Depends(get_db)):
     """Por piloto: é aluno recorrente (plano mensal vigente)? O nome do plano, o preço da extra e como paga: o
     recorrente pelo plano (QuickBooks); o cliente novo no carrinho do site (Stripe) quando ele está ligado, senão
-    pela invoice (dono, 16/10). O contador do pacote não sai daqui (dono, 01/10: o cliente não vê)."""
+    pela invoice (dono, 16/10). #340 (dono, 19/10, mudando a de 01/10): o contador do mês vai junto (`counter`:
+    usadas, livres, mensalidade do mês, extras, em aberto), com os serviços do plano e o add-on. O piloto pro nunca
+    vai para o carrinho: com a mensalidade ainda não configurada no card, `payment='equipe'` (o pedido vai para a
+    equipe e sai por invoice do QuickBooks)."""
     from command_center.providers import agenda_lote
     ids = [p["id"] for p in portal.pilotos(con, cid) if driver_id is None or p["id"] == driver_id]
     if driver_id is not None and not ids:
@@ -499,7 +504,8 @@ def meu_plano(request: Request, response: Response, driver_id: int | None = None
     carrinho = carrinho_ligado(request)
     pilotos = [agenda_lote.plano_do_piloto(con, cid, i) for i in ids]
     for p in pilotos:
-        p["payment"] = "plano" if p["recurring"] else ("stripe" if carrinho else "invoice")
+        p["payment"] = "plano" if p["recurring"] else "equipe" if p["setup"] else \
+            ("stripe" if carrinho and not p["pro"] else "invoice")
     response.headers["Cache-Control"] = "private, no-store"
     return {"drivers": pilotos, "cart": carrinho}
 
@@ -508,6 +514,7 @@ class DiaIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     date: str
     period: str
+    addon: bool = False                      # #340: o add-on do dia (Lead and Follow), na invoice do pedido
 
 
 class LoteIn(BaseModel):
@@ -531,6 +538,19 @@ def cotar_lote(dados: LoteIn, response: Response, cid=Depends(cliente_atual), co
         raise HTTPException(400, str(e))
     response.headers["Cache-Control"] = "private, no-store"
     return q
+
+
+def _cobrar_pedido(ids):
+    """#340: a invoice do QuickBooks das extras e dos add-ons do pedido, na hora da marcação (fora da resposta: o
+    QuickBooks leva alguns segundos). Falhou: fica escrito no agendamento e a rodada seguinte tenta de novo."""
+    from command_center.db import conectar
+    from command_center.providers import cobranca_agenda
+    con = conectar()
+    try:
+        cobranca_agenda.cobrar_pedido(con, ids)
+        con.commit()
+    finally:
+        con.close()
 
 
 def _vender_grupo(gid):
@@ -561,6 +581,7 @@ def marcar_lote(dados: LoteIn, request: Request, tarefas: BackgroundTasks, cid=D
         raise HTTPException(400, str(e))
     for bid in ids:
         tarefas.add_task(agenda_asana.levar, bid)            # #67: cada sessão vira tarefa no Asana
+    tarefas.add_task(_cobrar_pedido, ids)                   # #340: a invoice das extras e add-ons sai na marcação
     if venda_site.ligada(con):
         tarefas.add_task(_vender_grupo, gid)
     return {"group_id": gid, "ids": ids, "auto_sell": venda_site.ligada(con)}

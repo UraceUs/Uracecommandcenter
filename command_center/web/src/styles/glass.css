@@ -606,6 +606,19 @@ kbd.k{border-radius:6px;border-color:var(--glass-line-2)}
 .portal-varios-tirar{min-width:40px}
 .portal-varios-motivo{grid-column:1/-1;margin:0;color:var(--crit)}
 .portal-varios-avulso{grid-column:1/-1}
+/* #340: o contador do plano mensal na área do cliente — usadas e livres, a mensalidade, as extras e o em aberto */
+.portal-contador{min-width:0}
+.portal-contador-barra{height:8px;border-radius:999px;background:var(--glass-line-2);overflow:hidden}
+.portal-contador-barra span{display:block;height:100%;background:var(--accent);transform-origin:left center;
+  transition:transform var(--dur-media) var(--ease-saida)}
+.portal-contador-dl{display:grid;grid-template-columns:minmax(0,1fr);gap:4px;margin:0}
+.portal-contador-dl dt{color:var(--muted);font-size:.85em;margin-top:6px}
+.portal-contador-dl dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.portal-contador-dl .btn.sm{min-height:40px}
+.portal-contador-extras{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.portal-addon{display:flex;align-items:center;gap:8px;min-height:40px;grid-column:1/-1;cursor:pointer}
+.portal-addon input{width:20px;height:20px;flex:0 0 auto}
+@media(prefers-reduced-motion:reduce){.portal-contador-barra span{transition:none}}
 /* #300: o editor visual do site (a lista das páginas) */
 .ed-lista-paginas{list-style:none;margin:0;padding:0;display:grid;gap:8px}
 .ed-lista-paginas>li{display:flex;gap:10px;align-items:center;flex-wrap:wrap}

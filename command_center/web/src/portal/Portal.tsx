@@ -9,7 +9,8 @@ import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from
 import { Icon } from '../components/Icon'
 import { Pista } from '../components/Pista'
 import { Agendar, CartaoSessao, Sessoes } from './Agendar'
-import { haDias, papi, PortalError, type Account, type AgendaCfg, type Driver, type Painel, type WaiverPiloto, type Waivers } from './api'
+import { haDias, papi, PortalError, type Account, type AgendaCfg, type Driver, type Painel, type PlanoPiloto, type WaiverPiloto, type Waivers } from './api'
+import { ContadorDoPlano, PlanoEmMontagem } from './Contador'
 import { dataUS } from './datas'
 import { ddiDe, PAISES } from './paises'
 import { guardarVisual, visual3d, visualSite } from './visual'
@@ -324,6 +325,11 @@ function Dashboard({ conta }: { conta: Account }) {
   const [erro, setErro] = useState<string | null>(null)
   useEffect(() => { papi<Painel>('GET', '/dashboard').then(setD).catch(e => setErro((e as PortalError).message)) }, [])
   useEffect(() => { papi<{ config: AgendaCfg }>('GET', '/availability').then(r => setCfg(r.config)).catch(() => setCfg(null)) }, [])
+  // #340 (dono, 19/10): o aluno recorrente vê o contador do mês de cada piloto — usadas, livres, a mensalidade e o em aberto
+  const [planos, setPlanos] = useState<PlanoPiloto[]>([])
+  useEffect(() => { papi<{ drivers: PlanoPiloto[] }>('GET', '/plan').then(r => setPlanos(r.drivers)).catch(() => setPlanos([])) }, [conta])
+  const comPlano = planos.filter(x => x.recurring && x.counter)
+  const nomeDo = (id: number) => conta.drivers.find(p => p.id === id)?.name
   const atencao = conta.drivers.filter(p => p.measures_status !== 'ok')
   const waivers = useWaivers()
   const semWaiver = waivers?.enabled ? waivers.drivers.filter(w => w.status !== 'signed' && w.kind) : []
@@ -351,6 +357,11 @@ function Dashboard({ conta }: { conta: Account }) {
       <div className="card card-b portal-kpi"><span className="small muted">Upcoming</span>
         <b className="portal-num">{d ? d.upcoming : '…'}</b><Link className="small" to="/portal/sessions">My sessions</Link></div>
     </div>
+    {planos.some(x => x.setup) && <PlanoEmMontagem />}
+    {comPlano.length > 0 && <section className="stack" aria-labelledby="dash-plano"><div className="row"><h2 className="h2 grow" id="dash-plano">Monthly plan</h2>
+      <Link className="btn sm" to="/portal/book">Book sessions</Link></div>
+      <div className="portal-grade">{comPlano.map(x => <ContadorDoPlano key={x.driver_id} plano={x} nome={conta.drivers.length > 1 ? nomeDo(x.driver_id) : undefined} />)}</div>
+    </section>}
     <section className="stack" aria-labelledby="dash-pil"><div className="row"><h2 className="h2 grow" id="dash-pil">Drivers</h2><Link className="btn sm" to="/portal/drivers">Manage</Link></div>
       {!conta.drivers.length ? <p className="muted small" style={{ margin: 0 }}>No drivers yet. <Link to="/portal/drivers">Add a driver</Link></p>
         : <div className="portal-grade">{conta.drivers.map(p => <article key={p.id} className="card card-b portal-piloto">

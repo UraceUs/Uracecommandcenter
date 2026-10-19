@@ -47,7 +47,8 @@ Liga com: [[D-2026-08-31 - Sessao extra e mensal do Academy]] · [[Urace Academy
 ## As regras que o Claude escolheu (o dono não respondeu ainda)
 
 1. O cliente vê só **"Included in your plan"** ou **"Extra session · $X"** em cada dia; o contador
-   (usadas/total) **não** vai para o cliente (como o dono pediu em 01/10).
+   (usadas/total) **não** vai para o cliente (como o dono pediu em 01/10). **Mudou em 19/10:** o cliente vê o
+   contador — [[D-2026-10-19 - Pro ve o contador e a extra sai na hora]].
 2. A sessão extra **não leva depósito**: é só o valor da extra.
 3. Plano comprado no site só libera as sessões sem custo **depois que a 1ª mensalidade é paga**.
 4. Cliente não recorrente na área do cliente paga no Stripe (carrinho) quando o Stripe está ligado; com o
@@ -56,7 +57,8 @@ Liga com: [[D-2026-08-31 - Sessao extra e mensal do Academy]] · [[Urace Academy
 6. "Toda quarta" oferece o resto deste mês, as próximas 4 semanas ou até uma data, dentro do horizonte da
    agenda; no máximo 12 dias por pedido.
 7. O pacote é **por mês** (zera no dia 1), também nos contratos de 6 e 12 meses, como já era.
-8. **Pro Racing Driver sem mensal no card não conta como recorrente.**
+8. **Pro Racing Driver sem mensal no card não conta como recorrente.** Desde 19/10 ele vai para Precisa de atenção
+   e nunca para o carrinho — [[D-2026-10-19 - Pro ve o contador e a extra sai na hora]].
 9. A sessão do pacote cancelada **devolve a vaga do mês** (segue as regras de cancelamento que já existem); a
    invoice de uma extra cancelada vira aviso em **Precisa de atenção** para a equipe anular no QuickBooks. A
    extra do mesmo mês **ainda não cobrada** ocupa a vaga devolvida: na hora de cobrar, vira do plano e não sai

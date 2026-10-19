@@ -23,7 +23,23 @@ O agendamento aceito continua `pendente` (segura a vaga) com `accepted_at` preen
 `confirmada` sozinho quando a invoice está paga (o espelho do QuickBooks sincroniza a cada 15 min)
 e a waiver está assinada. Toda falha (sem card, sem cliente no QuickBooks, serviço sem item) fica
 escrita no agendamento para a equipe ver e resolver — a rodada seguinte tenta de novo.
+
+**Extra e add-on cobrados na marcação** (#340, dono, 19/10): *"se ele selecionar mais do que ele tem paga ja gerar
+a invoice e enviar das sessões a mais"* e *"deixe os add ons disponiveis tb"*. Para o aluno recorrente, a invoice
+do QuickBooks das extras do pedido **e** dos add-ons (Lead and Follow, o preço do painel gravado na sessão) é criada
+e enviada **na hora em que ele marca** (`cobrar_pedido`), sem esperar a equipe aceitar a vaga: uma invoice só por
+pedido, sem depósito. Pedido só do pacote, sem add-on, não cria invoice. Nada vai para o Stripe. Falha do
+QuickBooks fica escrita no agendamento e a rodada seguinte tenta de novo; o `requestid` do QuickBooks é o mesmo
+para a mesma cobrança (mesmas sessões, mesmas linhas), então repetir nunca cria a segunda invoice. A sessão do
+pacote com add-on continua do pacote (`charge_kind='contrato'`): só o add-on é cobrado, e ela confirma como antes.
+A extra cancelada com a invoice já enviada vai para "Precisa de atenção" (a equipe ajusta o QuickBooks; o painel
+não mexe sozinho).
+
+**Piloto pro sem mensalidade no card** (#340): a equipe aceita, mas a invoice não sai pelo preço da tabela — fica
+escrito "preencha a Mensalidade do card"; preenchida, a rodada seguinte aloca no pacote (ou extra) e cobra certo.
 """
+import hashlib
+import json
 from datetime import date, timedelta
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, um
@@ -142,6 +158,23 @@ def linha_da_extra(con, b, card):
                          f"{date.fromisoformat(b['date']).strftime('%m/%d/%Y')} ({_per(b)})"}
 
 
+def linha_do_addon(con, b):
+    """#340: o add-on do dia (Lead and Follow) com o preço do painel gravado na sessão e o item do serviço."""
+    s = um(con, "SELECT name, qbo_item_id FROM booking_services WHERE id=?", (b["addon_service_id"],)) if b.get("addon_service_id") else None
+    if not s or not s["qbo_item_id"]:
+        raise ErroCobranca(f"o add-on {b.get('addon_name') or ''} não tem item do QuickBooks: escolha o item em Site › "
+                           "Serviços e preços".replace("  ", " "))
+    return {"item_id": s["qbo_item_id"], "quantidade": 1, "unitario": float(b["addon_price"]),
+            "descricao": f"{b.get('addon_name') or s['name']} · {date.fromisoformat(b['date']).strftime('%m/%d/%Y')} ({_per(b)})"}
+
+
+def _requestid(juntos, linhas):
+    """#340: a mesma cobrança (mesmas sessões, mesmas linhas) tem sempre a mesma `requestid`: o QuickBooks devolve
+    a invoice que já criou em vez de criar outra (#310). Mudou a cobrança, muda a requestid."""
+    chave = json.dumps([sorted(x["id"] for x in juntos), linhas], sort_keys=True, default=str)
+    return "urace-sessoes-" + hashlib.sha256(chave.encode()).hexdigest()[:32]
+
+
 DESCRICAO_DEPOSITO = "Refundable security deposit: returned within 5 business days after the session if there is no incident."
 
 
@@ -181,31 +214,74 @@ def alocar_agendamento(con, bid):
     return a["coverage"]
 
 
-def cobrar(con, b, enviar=None, criar_cliente=None):
+def _addon_pendente(b):
+    return bool(b.get("addon_price")) and not b.get("qbo_invoice_id")
+
+
+def cobrar(con, b, enviar=None, criar_cliente=None, grupo=True):
     """Cria e envia a invoice da sessão. Não cobra duas vezes; contrato não cobra. `criar_cliente`
     (venda automática, #164) cria o cliente no QuickBooks quando o card ainda não tem. #314: a sessão do
     pacote não cobra; a extra vai com o item e o preço da extra, sem depósito, e as extras do mesmo pedido saem
-    numa invoice só."""
+    numa invoice só. #340: a extra e o add-on do pedido vão pela `cobrar_pedido` (a mesma da marcação); `grupo=False`
+    só marca a sessão do pacote, sem tentar de novo a invoice do pedido (o `aceitar` tenta uma vez)."""
     b = dict(um(con, "SELECT * FROM bookings WHERE id=?", (b["id"],)) or b)    # o laço passa a linha de antes
-    if b["charge_kind"] or b["qbo_invoice_id"]:
+    if b["charge_kind"] in ("invoice", "stripe") or (b["qbo_invoice_id"] and b["charge_kind"]):
+        return b["charge_kind"]
+    if b["charge_kind"] and not _addon_pendente(b):
         return b["charge_kind"]
     if not b.get("coverage"):
         alocar_agendamento(con, b["id"])
         b = dict(um(con, "SELECT * FROM bookings WHERE id=?", (b["id"],)))
+    if not b.get("coverage"):
+        card = card_do_agendamento(con, b)
+        if card and contrato.pro_sem_mensal(con, card):
+            # #340: o pro já paga mensal — nunca a invoice pelo preço da tabela; a equipe preenche a Mensalidade
+            erro = ("piloto pro sem mensalidade no card: preencha sessões por mês e valor mensal na Mensalidade do card "
+                    f"(Client ID {card}); a sessão é alocada no pacote e cobrada na rodada seguinte")
+            if b["charge_error"] != erro:
+                atualizar(con, "bookings", b["id"], charge_error=erro, updated_at=agora())
+            return None
     if b.get("coverage") == "plano":
-        atualizar(con, "bookings", b["id"], charge_kind="contrato", charge_error=None, updated_at=agora())
+        if not b["charge_kind"]:
+            atualizar(con, "bookings", b["id"], charge_kind="contrato", charge_error=None, updated_at=agora())
+        if _addon_pendente(b) and grupo:
+            cobrar_pedido(con, [b["id"]], enviar, criar_cliente)
         return "contrato"
-    juntos = [b]
-    if b.get("coverage") == "extra" and b.get("group_id"):
-        # #314: as extras do mesmo pedido de vários dias (já aceitas, sem invoice) vão numa invoice só
-        juntos = [dict(x) for x in todos(con, """SELECT * FROM bookings WHERE group_id=? AND coverage='extra'
-                                                  AND status IN ('pendente','confirmada') AND charge_kind IS NULL
-                                                  AND qbo_invoice_id IS NULL AND (accepted_at IS NOT NULL OR id=?)
-                                                ORDER BY date, id""", (b["group_id"], b["id"]))] or [b]
     if b.get("coverage") == "extra":
-        juntos = _realocar_extras(con, juntos)
+        if not grupo:
+            return None
+        r = cobrar_pedido(con, [b["id"]], enviar, criar_cliente)
+        x = um(con, "SELECT charge_kind FROM bookings WHERE id=?", (b["id"],))
+        return (x and x["charge_kind"]) or r
+    return _invoice(con, [b], enviar, criar_cliente)
+
+
+def _do_pedido(con, ids):
+    """As sessões a cobrar do pedido das sessões `ids` (o pedido de vários dias inteiro, ou a sessão sozinha):
+    ativas, ainda sem invoice, extra ou com add-on."""
+    ids = list(ids)
+    grupos = {r["group_id"] for r in todos(con, f"SELECT group_id FROM bookings WHERE id IN ({','.join('?' * len(ids))})", ids)
+              if r["group_id"]}
+    filtro = f"(id IN ({','.join('?' * len(ids))})" + (f" OR group_id IN ({','.join('?' * len(grupos))}))" if grupos else ")")
+    return [dict(x) for x in todos(con, f"""SELECT * FROM bookings WHERE {filtro} AND status IN ('pendente','confirmada')
+                                            AND qbo_invoice_id IS NULL AND COALESCE(charge_kind,'') NOT IN ('invoice','stripe')
+                                            AND (coverage='extra' OR COALESCE(addon_price,0)>0) ORDER BY date, id""",
+                                   (*ids, *grupos))]
+
+
+def cobrar_pedido(con, ids, enviar=None, criar_cliente=None):
+    """#340: a invoice do pedido do aluno recorrente na hora da marcação — as extras e os add-ons numa invoice só.
+    Devolve 'invoice', None (falhou: fica escrito, a rodada tenta de novo) ou False (nada a cobrar)."""
+    juntos = _do_pedido(con, ids)
+    if not juntos:
+        return False
+    extras = [x for x in juntos if x["coverage"] == "extra"]
+    if extras:
+        _realocar_extras(con, extras)            # a vaga do pacote devolvida antes da invoice: a extra vira do plano
+        juntos = [x for x in (dict(um(con, "SELECT * FROM bookings WHERE id=?", (y["id"],))) for y in juntos)
+                  if x["coverage"] == "extra" or x["addon_price"]]
         if not juntos:
-            return "contrato"
+            return False
     return _invoice(con, juntos, enviar, criar_cliente)
 
 
@@ -245,20 +321,35 @@ def _invoice(con, juntos, enviar, criar_cliente):
             qbo = criar_cliente(card)
         if not qbo:
             raise ErroCobranca("o cliente não está no QuickBooks (crie o cliente lá ou ligue o card)")
-        if b.get("coverage") == "extra":
-            linhas = [linha_da_extra(con, x, card) for x in juntos]
-            memo = "URACE extra session" + ("s" if len(juntos) > 1 else "") + ": " + \
+        pedido = any(x.get("coverage") == "extra" or x.get("addon_price") for x in juntos) and \
+            all(x.get("coverage") in ("extra", "plano") for x in juntos)
+        if pedido:
+            # #314/#340: as extras (item e valor da extra) e os add-ons (item e preço do painel) do pedido
+            linhas = []
+            for x in juntos:
+                if x.get("coverage") == "extra":
+                    linhas.append(linha_da_extra(con, x, card))
+                if x.get("addon_price"):
+                    linhas.append(linha_do_addon(con, x))
+            n_extra = sum(1 for x in juntos if x.get("coverage") == "extra")
+            partes = ([f"extra session{'s' if n_extra > 1 else ''}"] if n_extra else []) + \
+                (["add-on" + ("s" if sum(1 for x in juntos if x.get("addon_price")) > 1 else "")]
+                 if any(x.get("addon_price") for x in juntos) else [])
+            memo = "URACE " + " and ".join(partes) + ": " + \
                 "; ".join(f"{date.fromisoformat(x['date']).strftime('%m/%d/%Y')} ({_per(x)})" for x in juntos) + "."
         else:
             linhas = linhas_da_invoice(con, b)
             memo = f"URACE session: {_sessao(b)}."
         conta = um(con, "SELECT email FROM portal_accounts WHERE id=?", (b["account_id"],))
         res = (enviar or _enviar_padrao)(cliente_id=qbo, linhas=linhas, vence_em=min(x["date"] for x in juntos),
-                                         memo=memo, email=conta["email"] if conta else None)
+                                         memo=memo, email=conta["email"] if conta else None,
+                                         requestid=_requestid(juntos, linhas))
         if not res or res.get("aplicado") is False:
             raise ErroCobranca("o QuickBooks não criou a invoice (simulação)")
         for x in juntos:
-            atualizar(con, "bookings", x["id"], charge_kind="invoice", qbo_invoice_id=str(res.get("id") or ""),
+            # #340: a sessão do pacote com add-on continua do pacote (`contrato`); só o add-on está nesta invoice
+            atualizar(con, "bookings", x["id"], charge_kind="contrato" if x.get("coverage") == "plano" else "invoice",
+                      qbo_invoice_id=str(res.get("id") or ""),
                       invoice_doc=res.get("numero"), invoice_total=res.get("total"), invoice_link=res.get("link"),
                       pay_link=res.get("link_pagamento"),
                       invoice_sent_to=res.get("enviado_para"), charge_error=None if res.get("enviado", True) else
@@ -266,7 +357,9 @@ def _invoice(con, juntos, enviar, criar_cliente):
                       updated_at=agora())
             auditar(con, "booking.invoice", "system", entity_type="booking", entity_id=x["id"],
                     detail={"invoice": res.get("numero"), "total": res.get("total"), "client_id": card,
-                            **({"extra": True, "sessoes": [y["id"] for y in juntos]} if b.get("coverage") == "extra" else {})})
+                            **({"extra": any(y.get("coverage") == "extra" for y in juntos),
+                                "addon": any(y.get("addon_price") for y in juntos),
+                                "sessoes": [y["id"] for y in juntos]} if pedido else {})})
         return "invoice"
     except Exception as e:                                         # noqa: BLE001 — fica escrito, tenta de novo
         for x in juntos:
@@ -362,14 +455,12 @@ def aceitar(con, por, bid, enviar_invoice=None, enviar_waiver=None, criar_client
     for i in ids:
         if not um(con, "SELECT accepted_at FROM bookings WHERE id=?", (i,))["accepted_at"]:
             atualizar(con, "bookings", i, accepted_at=agora(), accepted_by=por, updated_at=agora())
-    extras_tentadas = False                  # a invoice das extras do pedido sai (ou falha) uma vez só
+    tentada = False                          # a invoice do pedido (extras e add-ons) sai (ou falha) uma vez só
     for i in ids:
         x = um(con, "SELECT * FROM bookings WHERE id=?", (i,))
-        if x["group_id"] and x["coverage"] == "extra":
-            if extras_tentadas:
-                continue
-            extras_tentadas = True
-        cobrar(con, x, enviar_invoice, criar_cliente)
+        do_pedido = bool(x["group_id"]) and (x["coverage"] == "extra" or bool(x["addon_price"]))
+        cobrar(con, x, enviar_invoice, criar_cliente, grupo=not (do_pedido and tentada))
+        tentada = tentada or do_pedido
     for i in ids:
         pedir_waiver(con, um(con, "SELECT * FROM bookings WHERE id=?", (i,)), enviar_waiver)
         verificar(con, i)
@@ -444,10 +535,23 @@ def rodar(con, hoje=None, enviar_invoice=None, enviar_waiver=None, enviar_email=
     hoje = hoje or ag._agora_fl().date()
     feito = {"confirmadas": 0, "cobradas": 0, "waivers": 0, "lembretes": 0}
     grupos = set()                    # #314: a invoice das extras de um pedido é tentada uma vez por rodada, não uma por dia
+    # #340: a invoice das extras e dos add-ons do aluno recorrente sai na marcação; a que falhou (ou ainda não saiu)
+    # é tentada de novo aqui, aceita ou não, uma vez por pedido. Nunca duas invoices: a requestid é a mesma.
+    for b in con.execute("""SELECT * FROM bookings WHERE status IN ('pendente','confirmada') AND date >= ?
+                              AND qbo_invoice_id IS NULL AND COALESCE(charge_kind,'') NOT IN ('invoice','stripe')
+                              AND (coverage='extra' OR COALESCE(addon_price,0)>0) AND COALESCE(charge_attempts,0) < ?
+                            ORDER BY date, id""", (hoje.isoformat(), TENTATIVAS)).fetchall():
+        chave = b["group_id"] or f"b{b['id']}"
+        if chave in grupos:
+            continue
+        grupos.add(chave)
+        criar = venda_site.criador_de_cliente_qbo(con, b, criar_qbo) if auto else None
+        if cobrar_pedido(con, [b["id"]], enviar_invoice, criar):
+            feito["cobradas"] += 1
     for b in con.execute("""SELECT * FROM bookings WHERE status='pendente' AND accepted_at IS NOT NULL
                               AND date >= ? ORDER BY date, id""", (hoje.isoformat(),)).fetchall():
         criar = venda_site.criador_de_cliente_qbo(con, b, criar_qbo) if auto else None
-        grupo = b["group_id"] if b["coverage"] == "extra" else None
+        grupo = (b["group_id"] or f"b{b['id']}") if (b["coverage"] == "extra" or b["addon_price"]) else None
         if not b["charge_kind"] and (b["charge_attempts"] or 0) < TENTATIVAS and grupo not in grupos:
             if grupo:
                 grupos.add(grupo)

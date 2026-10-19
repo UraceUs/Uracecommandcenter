@@ -308,7 +308,7 @@ def conferir_pagamento_grupo(con, gid, ler=None, enviar_email=None, agora_dt=Non
 
 def checkout_grupo(con, gid):
     """As etapas do pedido de vários dias, na linguagem do cliente: cada dia com "Included in your plan" ou
-    "Extra session · $X", a invoice das extras (uma só) e a waiver. Nada do contador do pacote."""
+    "Extra session · $X", a invoice das extras (uma só) e a waiver. O contador do mês vem no `GET /plan` (#340)."""
     from command_center.providers.agenda_lote import rotulo
     bs = _do_grupo(con, gid)
     ativas = [b for b in bs if b["status"] in ag.ATIVAS]

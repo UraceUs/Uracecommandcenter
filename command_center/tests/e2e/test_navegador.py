@@ -689,7 +689,9 @@ def test_aluno_recorrente_marca_toda_quarta_num_pedido_so_no_celular(servidor, n
         c = _aluno_recorrente(navegador, servidor, g, csrf, largura)
         c.goto(servidor + "/portal/book")
         c.get_by_role("heading", name="Book sessions", level=1).wait_for()
-        assert c.get_by_text("2756").count() == 0, "o cliente não vê conta nem contador do pacote"
+        assert c.get_by_text("2756").count() == 0, "o cliente não vê a conta do mensal"
+        # #340 (dono, 19/10): o cliente agora vê o contador do mês
+        c.get_by_text("This month: 0 of 1 session used · 1 left · resets on the 1st").wait_for()
         c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
         c.get_by_role("button", name="Every Wed").click()
         dias = c.locator(".portal-varios-dia")
@@ -701,8 +703,6 @@ def test_aluno_recorrente_marca_toda_quarta_num_pedido_so_no_celular(servidor, n
         soma = c.locator(".reserva-total .soma")
         soma.wait_for()
         assert re.search(r"\d+ included · \d+ extras? ", soma.inner_text().replace("\n", " ")), soma.inner_text()
-        texto = c.locator("main").inner_text() if c.locator("main").count() else c.inner_text("body")
-        assert " of 1" not in texto and "used" not in texto.lower(), "o contador (usadas/total) não vai para o cliente"
         assert len([t for nv, t in _cabecalhos(c) if nv == 1]) == 1
         r = c.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
@@ -738,6 +738,75 @@ def test_aluno_recorrente_marca_toda_quarta_num_pedido_so_no_celular(servidor, n
     finally:
         g.request.put(servidor + "/api/site/agenda/semana", headers=csrf,
                       data=[{**x, "open": False} for x in abrir_quarta])
+        g.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_piloto_pro_ve_o_contador_so_o_servico_do_plano_e_o_add_on(servidor, navegador, largura):
+    """#340, dono 19/10: "precisaria aparecer a quantidade de sessões que ele tem paga p pode marcar, permitir ele
+    marcar mais de uma sessão de uma vez" e "no print mostra todos os serviços disponiveis". O pro com a Mensalidade
+    vazia vê "Your monthly plan is being set up by our team" e nunca o carrinho; com a Mensalidade preenchida, o
+    Dashboard e Book a session mostram "This month: X of Y sessions used · Z left", a mensalidade do mês ("—" sem
+    invoice), só o serviço do kart do plano e o add-on. Um h1, nada rola para o lado, toque de 40 px."""
+    g = entrar(navegador, servidor)
+    csrf = {"X-CSRF": next(x["value"] for x in g.context.cookies() if x["name"] == "cc_csrf")}
+    abrir_quarta = [{"weekday": 2, "period": p, "open": True, "capacity": 3} for p in ("manha", "tarde")]
+    assert g.request.put(servidor + "/api/site/agenda/semana", headers=csrf, data=abrir_quarta).ok
+    try:
+        c = navegador.new_page(viewport={"width": largura, "height": 844})
+        c.erros_js = []
+        c.on("pageerror", lambda e: c.erros_js.append(str(e)))
+        cliente_pela_api(c, servidor, "Pia Pro", f"pia.pro{largura}.e2e@example.com", piloto=f"Pedro Pro {largura}",
+                         ip=f"10.1.34.{largura % 250}", telefone=f"(407) 555-01{(largura + 7) % 100:02d}")
+        pid = c.request.get(servidor + "/api/portal/me").json()["drivers"][0]["id"]
+        r = g.request.post(servidor + f"/api/site/drivers/{pid}/criar-cliente", headers=csrf)
+        assert r.ok, r.text()
+        card = r.json()["client_id"]
+        assert g.request.patch(servidor + f"/api/clients/{card}/profile", headers=csrf, data={"pro_driver": True}).ok
+        # a Mensalidade ainda vazia: o plano está sendo montado, sem preço e sem carrinho
+        c.goto(servidor + "/portal/book")
+        c.get_by_role("heading", name="Book a session", level=1).wait_for()
+        c.get_by_text("Your monthly plan is being set up by our team").wait_for()
+        assert c.get_by_role("button", name="Add to cart").count() == 0 and c.get_by_text("$719").count() == 0
+        abrir(g, servidor, f"/clients/{card}")
+        g.get_by_text("Piloto pro sem mensalidade no card").first.wait_for()
+        # a equipe preenche a Mensalidade (números fictícios do teste) e o Plano mensal
+        assert g.request.patch(servidor + f"/api/clients/{card}/mensal", headers=csrf,
+                               data={"monthly_amount": 1378.45, "monthly_sessions": 2}).ok
+        assert g.request.patch(servidor + f"/api/clients/{card}", headers=csrf, data={"monthly_plan": "Academy 4 stroke"}).ok
+        c.goto(servidor + "/portal/dashboard")
+        c.get_by_role("heading", name="Monthly plan", level=2).wait_for()
+        c.get_by_text("This month: 0 of 2 sessions used · 2 left · resets on the 1st").wait_for()
+        cont = c.locator(".portal-contador").first
+        assert "Monthly invoice" in cont.inner_text() and "Nothing open" in cont.inner_text(), cont.inner_text()
+        assert len([t for nv, t in _cabecalhos(c) if nv == 1]) == 1
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        c.goto(servidor + "/portal/book")
+        c.get_by_role("heading", name="Book sessions", level=1).wait_for()
+        c.get_by_text("This month: 0 of 2 sessions used · 2 left · resets on the 1st").wait_for()
+        servicos = c.locator(".portal-servicos .portal-servico")
+        assert servicos.count() == 1 and "4-stroke" in servicos.first.inner_text(), "só o serviço do plano"
+        c.get_by_role("button", name="Book as a regular session").first.wait_for()
+        c.get_by_role("button", name="Every Wed").click()
+        c.locator(".portal-varios-dia").first.wait_for()
+        c.get_by_text("Included in your plan").first.wait_for()
+        c.locator(".portal-addon input").first.check()
+        soma = c.locator(".reserva-total .soma")
+        c.wait_for_function("() => /add-on/.test(document.querySelector('.reserva-total .soma')?.textContent || '')")
+        assert "$769.00" in soma.inner_text() or "extra" in soma.inner_text(), soma.inner_text()
+        c.get_by_text("Nothing is charged online").wait_for()
+        assert len([t for nv, t in _cabecalhos(c) if nv == 1]) == 1
+        r = c.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not c.evaluate(_TOQUE_VARIOS), c.evaluate(_TOQUE_VARIOS)
+        pequenos = c.evaluate("""() => [...document.querySelectorAll('.portal-addon, .portal-contador .btn')]
+          .filter(el => el.offsetHeight < 40).map(el => el.className + '=' + el.offsetHeight)""")
+        assert not pequenos, pequenos
+        assert not c.erros_js, c.erros_js
+        c.close()
+    finally:
+        g.request.put(servidor + "/api/site/agenda/semana", headers=csrf, data=[{**x, "open": False} for x in abrir_quarta])
         g.close()
 
 

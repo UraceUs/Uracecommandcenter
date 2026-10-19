@@ -293,19 +293,36 @@ def _coletar(con):
                           facts=[(f"{_dbr(b['date'])} · {per.get(b['period'], b['period'])}", (b["piloto"] or b["conta"]))
                                  for b in pedidos_site[:6]]))
 
+    # ---- 4e9. piloto pro sem mensalidade no card (#340, dono, 19/10: "ela deve ser diferente pois eles ja pagam
+    # mensal"): sem sessões por mês nem valor, a área do cliente não sabe o pacote. Nada é inventado: a equipe preenche.
+    for c in todos(con, """SELECT id, COALESCE(pilot_name, name) AS quem FROM clients
+                            WHERE COALESCE(pro_driver,0)=1 AND COALESCE(plan_type,'')<>'monthly'
+                              AND COALESCE(monthly_sessions,0)=0 AND COALESCE(monthly_amount,0)=0
+                              AND COALESCE(kind,'cliente')='cliente' ORDER BY id"""):
+        itens.append(dict(key=_chave("pro-sem-mensal", "client", c["id"]), level="MEDIUM",
+                          title=f"Piloto pro sem mensalidade no card: preencha sessões por mês e valor mensal (Client ID {c['id']})",
+                          why="O card é Pro Racing Driver, mas a Mensalidade está vazia. Enquanto isso, na área do cliente ele vê "
+                              "\"Your monthly plan is being set up by our team\", não vai para o carrinho e o pedido fica para a "
+                              "equipe (nenhuma invoice sai pelo preço da tabela). Preencha em Mensalidade e contrato: sessões "
+                              "por mês, valor mensal e o Plano mensal (o kart do plano).",
+                          entity={"type": "client", "id": c["id"]}, client_id=c["id"], link=None, action="Abrir o card",
+                          facts=[("Client ID", str(c["id"])), ("Piloto", c["quem"] or "—")]))
+
     # ---- 4f1. sessão extra (#314) cancelada ou recusada com a invoice ainda aberta: anular no QuickBooks
     from command_center.providers.cobranca_agenda import invoice_paga
     from command_center.providers.contrato import CARD_DO_AGENDAMENTO
     for b in todos(con, f"""SELECT b.*, {CARD_DO_AGENDAMENTO} AS card, COALESCE(p.name, a.name) AS quem
                               FROM bookings b JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id
-                             WHERE b.coverage='extra' AND b.status IN ('cancelada','recusada') AND b.qbo_invoice_id IS NOT NULL
+                             WHERE (b.coverage='extra' OR COALESCE(b.addon_price,0)>0)
+                               AND b.status IN ('cancelada','recusada') AND b.qbo_invoice_id IS NOT NULL
                              ORDER BY b.date DESC, b.id DESC LIMIT 50"""):
         if invoice_paga(con, b):
             continue                             # paga: a devolução é conversa da equipe, fora deste aviso
         outras = um(con, """SELECT COUNT(*) AS n FROM bookings WHERE qbo_invoice_id=? AND id<>?
                              AND status IN ('pendente','confirmada')""", (b["qbo_invoice_id"], b["id"]))["n"]
         itens.append(dict(key=_chave("extra-cancelada", "booking", b["id"]), level="MEDIUM",
-                          title=f"Sessão extra cancelada com a invoice {b['invoice_doc'] or ''} ainda aberta".replace("  ", " "),
+                          title=(f"Sessão {'extra' if b['coverage'] == 'extra' else 'com add-on'} cancelada com a invoice "
+                                 f"{b['invoice_doc'] or ''} ainda aberta").replace("  ", " "),
                           why="A sessão extra do aluno recorrente foi cancelada, mas a invoice do QuickBooks continua aberta. "
                               + ("Ela também cobra outras sessões do mesmo pedido: tire só a linha desta sessão no QuickBooks."
                                  if outras else "Anule a invoice no QuickBooks (ou ajuste, se o cliente vai remarcar)."),
