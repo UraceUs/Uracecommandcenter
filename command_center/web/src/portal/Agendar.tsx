@@ -134,7 +134,8 @@ export function Agendar({ conta }: { conta: Account }) {
   const [planos, setPlanos] = useState<PlanoPiloto[] | null>(null)
   const [carrinho, setCarrinho] = useState(false)
   // #314: o dia que o plano não cobre (o plano acaba antes daquele mês) o aluno marca como sessão avulsa, um dia por vez
-  const [avulsa, setAvulsa] = useState(false)
+  // #340: 'servico' = outro serviço que não o do plano; 'data' = o dia que o plano não cobre
+  const [avulsa, setAvulsa] = useState<'' | 'data' | 'servico'>('')
   const nav = useNavigate()
   // #314: quem tem plano mensal marca vários dias; a sessão do plano é incluída e a extra vai por invoice
   useEffect(() => {
@@ -202,7 +203,7 @@ export function Agendar({ conta }: { conta: Account }) {
     return <Suspense fallback={<div className="state"><span className="spin" /></div>}>
       <AgendarVarios piloto={piloto} plano={plano} dias={dias} cfg={cfg} servicos={servicos} servico={servico}
         setServico={setServico} seletorPiloto={seletorPiloto} onMarcou={carregar}
-        onAvulso={(d, p) => { setAvulsa(true); setDia(d ?? null); setPeriodo(p ?? null); if (d) setMes(mesDe(d)); setOk(null); setErro(null) }} /></Suspense>
+        onAvulso={(d, p) => { setAvulsa(d ? 'data' : 'servico'); setDia(d ?? null); setPeriodo(p ?? null); if (d) setMes(mesDe(d)); setOk(null); setErro(null) }} /></Suspense>
 
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Book a session</h1><p className="muted" style={{ margin: '4px 0 0' }}>Pick the session type, the day and the driver.</p></div>
@@ -211,8 +212,8 @@ export function Agendar({ conta }: { conta: Account }) {
     {conta.missing.length > 0 && <div className="banner warn"><span className="bi">▲</span><div className="grow">Please complete the account holder details before booking. <Link to="/portal/account">Go to Account</Link></div></div>}
     {plano?.setup && <PlanoEmMontagem />}
     {avulsa && plano?.recurring && <div className="banner info" role="status"><span className="bi" aria-hidden="true">●</span><div className="grow">
-      Regular session: it is not part of your monthly plan, so it is {plano.pro ? 'billed by QuickBooks invoice' : 'paid like any session'}.{' '}
-      <button type="button" className="btn ghost" onClick={() => setAvulsa(false)}>Back to my plan days</button></div></div>}
+      Regular session: {avulsa === 'data' ? 'your monthly plan does not cover this date' : 'this session type is not in your monthly plan'}, so it is {plano.pro ? 'billed by QuickBooks invoice' : 'paid like any session'}.{' '}
+      <button type="button" className="btn ghost" onClick={() => setAvulsa('')}>Back to my plan days</button></div></div>}
     {!conta.drivers.length ? <div className="card card-b stack"><p className="muted" style={{ margin: 0 }}>Add a driver first, then pick a date.</p><div><Link className="btn primary" to="/portal/drivers">Add a driver</Link></div></div>
       : !livres.length ? <div className="banner warn"><span className="bi">▲</span><div className="grow">Your drivers need up-to-date measurements before booking. <Link to="/portal/drivers">Update drivers</Link></div></div>
       : dias === null || planos === null ? <div className="state"><span className="spin" /></div>

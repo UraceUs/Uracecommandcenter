@@ -79,8 +79,10 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
     }, 300)
     return () => { vale = false; window.clearTimeout(t) }
   }, [chave, pedido, servico, piloto])
-  // o serviço escolhido fora do plano (veio de outra tela) volta para o do plano
-  useEffect(() => { if (doPlano.length && !doPlano.some(x => x.id === servico)) setServico(doPlano[0].id) }, [doPlano, servico, setServico])
+  // o plano diz o kart: o serviço escolhido fora dele (ou nenhum) vira o do plano. Sem kart no plano, o cliente escolhe
+  const achou = !!plano.services_matched
+  useEffect(() => { if (achou && doPlano.length && !doPlano.some(x => x.id === servico)) setServico(doPlano[0].id) },
+    [achou, doPlano, servico, setServico])
   const atual = cot && cot.chave === chave ? cot : null
   const q = atual?.r || null
   const cotando = !!pedido.length && !!servico && !atual
