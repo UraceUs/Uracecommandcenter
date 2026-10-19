@@ -417,6 +417,21 @@ def _coletar(con):
                                  ("Quando", _dbr(_dia_fl(e["at"])))],
                           auto_oculto=oculto))
 
+    # ---- 4f2d. waiver por card (#348): o card escolheu a nativa, mas o selo (ou os modelos) não está pronto. A próxima
+    # waiver desse card sai pelo DocuSign até alguém resolver (configurar o selo ou mudar o switch do card)
+    from command_center.providers import waiver_nativa as _wn
+    nativos = todos(con, "SELECT id, name, pilot_name FROM clients WHERE waiver_flow='nativa'")
+    if nativos and _wn.fluxo_da_waiver(con, nativos[0]["id"]) != "nativa":      # o selo e os modelos são de todos
+        motivo = _wn.fluxo_do_card(con, nativos[0]["id"])["native_reason"] or "a waiver nativa não está pronta"
+        for x in nativos:
+            itens.append(dict(key=_chave("waiver-fluxo", "client", x["id"]), level="MEDIUM",
+                              title=f"{x['pilot_name'] or x['name']}: o card usa a waiver nativa, mas ela não está pronta",
+                              why=f"{motivo} A próxima waiver deste card sai pelo DocuSign até configurar o selo "
+                                  "ou mudar o switch Waiver do card.",
+                              entity={"type": "client", "id": x["id"]}, client_id=x["id"], link=None,
+                              action="Configurar o selo ou mudar o switch", facts=[("Switch do card", "Nativa"),
+                                                                                    ("Vale agora", "DocuSign")]))
+
     # ---- 4f3. checklists (#92): começado e não concluído num dia que já passou
     from command_center.providers import checklists as _ck
     soltos = _ck.incompletos(con)

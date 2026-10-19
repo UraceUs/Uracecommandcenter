@@ -172,7 +172,7 @@ pedem acesso de operador.
 | Site | **Editor do site** | `/ops/site/editor` (uma página: `/ops/site/editor/<n>`) | muda as páginas do site **como no Canva**: a prévia da página é a área de trabalho; clica, escreve no lugar, arrasta e solta, no computador (Celular 390 px ou Computador 1280 px reduzido para caber) e no celular; **?** mostra os atalhos (#300, #315; seção 6, "Editor do site") | operador+ (mudar e publicar: gerente+) |
 | Site | **Blog** | `/ops/site/blog` | os artigos do blog do site (`/blog/`): **Novo artigo** em cima, rascunho, capa, texto com links e fotos, prévia, publicar e as versões; o artigo abre em `/ops/site/blog/<n>` (#172; seção 6, "Blog do site") | operador+ (publicar e tirar do ar: **só o ADMIN** ou o acesso livre) |
 | Site | **Contas de clientes** | `/ops/site/contas` | as contas da área do cliente e o card de cada uma: ligar, criar o card, desligar | operador+ |
-| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar, o **selo digital e carimbo de tempo** (#110), modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111), o **Pacote de prova** (#115) e **Anular** (#109) | gerente+ |
+| Site | **Waiver** | `/ops/site/waiver` | a waiver assinada no próprio site: ligar (a chave geral; cada card pode escolher outro fluxo no switch Waiver do card, #348), o **selo digital e carimbo de tempo** (#110), modelos, o **aviso do §744.301(3)** e as **versões dos modelos** (#116), assinadas com a **Trilha** de eventos (#111), o **Pacote de prova** (#115) e **Anular** (#109) | gerente+ |
 | Logística | **Corridas** | `/ops/races` | as corridas (coluna RACES do Asana) e o convite aos ★ Pro | todos (criar: operador+) |
 | Logística | **Balcão** | `/ops/balcao` | ler a peça e o piloto do dia: cobrar ou guardar; no cliente aberto, **Waiver · Conferir documento** (#117) e o **Rascunho de invoice** (#341/#346: peças do estoque, do inventário do QuickBooks ou linha livre, com o preço da linha; montar e **Criar invoice** é operador+; a do mecânico fica **aguardando revisão do gerente**, que confirma ou altera a mesma invoice no QuickBooks antes de enviar ou cobrar; item novo vai para a categoria Parts; código que não bate mostra o mais parecido) | operador+ |
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
@@ -401,13 +401,31 @@ Dentro do card (`/ops/clients/<n>`), as abas:
 | Peças | o QR que o mecânico lê no balcão e as peças do cliente |
 | Conta no site | a conta da área do cliente ligada ao card |
 | Serviços | as tarefas do Asana do cliente: **Renomear** (operador+), **Mover** (gerente+) |
-| Waivers | os envelopes do DocuSign e as assinadas no sistema, com o PDF assinado; no topo, o **Convite da waiver por e-mail** (abaixo). A assinada no sistema tem **Anular** (gerente+, abaixo) |
+| Waivers | os envelopes do DocuSign e as assinadas no sistema, com o PDF assinado; no topo, o switch **Waiver: fluxo deste card** (DocuSign ou nativa, abaixo) e o **Convite da waiver por e-mail** (abaixo). A assinada no sistema tem **Anular** (gerente+, abaixo) |
 | E-mails | os e-mails ligados ao card |
 | Invoices | só gerente e administrador (para os outros, aparece 🔒) |
 | IA | o que a IA propôs para este cliente |
 
 O box vê o card **sem valores**: não aparecem mensalidade, corridas, conta no site, e-mails,
 invoices nem IA.
+
+#### Waiver por card: DocuSign ou nativa (#348)
+
+Dono, 19/10: *"Um switch para escolher dentro do card de cada cliente se vamos usar o fluxo pelo DocuSign ou pela
+waiver nativa."*
+
+- **Onde:** card › aba **Waivers** › **Waiver: fluxo deste card**. Todos veem; só **gerente ou acima** muda.
+- **Padrão (geral: …)**: segue a chave geral de **Site › Waiver** (o nome entre parênteses diz qual vale hoje).
+  É como todo card nasce.
+- **DocuSign**: a próxima waiver deste card sai sempre pelo DocuSign, mesmo com a chave geral ligada. A área do
+  cliente não oferece **Sign now** para o piloto deste card.
+- **Nativa**: o piloto deste card assina na área do cliente (ou pelo convite por e-mail), mesmo com a chave geral
+  desligada; a cobrança da sessão não manda o DocuSign. Só dá para escolher com o **selo digital configurado** e os
+  dois modelos importados (Site › Waiver): sem isso o botão fica desligado e diz por quê. Se o selo deixar de estar
+  configurado depois, o card **cai para o DocuSign** na hora de enviar e aparece em **Precisa de atenção**.
+- O switch só decide a **próxima** waiver: a já assinada (de qualquer fluxo) continua valendo. Vale por card: o irmão
+  ou outro piloto da mesma conta segue o switch do card dele. Piloto sem card segue a chave geral.
+- Cada mudança fica na Auditoria (`client.waiver_flow`, com antes, depois e quem).
 
 #### Convite da waiver por e-mail (#135)
 
@@ -432,7 +450,7 @@ Auditoria (`waiver.invite.*`).
 
 O botão fica **desligado, com o motivo escrito**, quando: o card não tem e-mail; o card não tem a
 data de nascimento do piloto; o piloto é menor e o card não tem o responsável; o e-mail é da URACE;
-ou a assinatura no próprio sistema está desligada (Site › Waiver). Se o card mudar
+ou o card está no DocuSign (o switch **Waiver** do card, ou a chave geral de Site › Waiver no Padrão). Se o card mudar
 de e-mail ou de data de nascimento depois do envio, o link para de valer: reenvie.
 
 #### Como o cliente assina: revisar antes do clique final (#112)

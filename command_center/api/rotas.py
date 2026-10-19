@@ -9,7 +9,7 @@ import threading
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from command_center.api import atencao, auth, equipe, vendas
 from command_center.api.cache_api import paginar
@@ -1096,6 +1096,38 @@ def waiver_link(wid: int, dados: VinculoIn, request: Request, u=Depends(auth.exi
     auditar(con, "waiver.link", f"user:{u['id']}", user_id=u["id"], entity_type="waiver", entity_id=wid,
             detail={"client_id": dados.client_id}, ip=auth._ip(request))
     return {"ok": True}
+
+
+# ------------------------------------------------------- waiver por card: DocuSign ou nativa (#348)
+class FluxoWaiverIn(BaseModel):
+    flow: str = Field(..., pattern="^(padrao|docusign|nativa)$")
+
+
+@r.get("/clients/{cid}/waiver-flow")
+def fluxo_waiver_do_card(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    from command_center.providers import waiver_nativa as wn
+    if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
+        raise HTTPException(404, "Client not found.")
+    return wn.fluxo_do_card(con, cid)
+
+
+@r.put("/clients/{cid}/waiver-flow")
+def fluxo_waiver_mudar(cid: int, dados: FluxoWaiverIn, request: Request, u=Depends(auth.exige("MANAGER")),
+                       con: sqlite3.Connection = Depends(get_db)):
+    """Dono, 19/10: o switch do card. Só decide a PRÓXIMA waiver: a já assinada (de qualquer fluxo) continua valendo."""
+    from command_center.providers import waiver_nativa as wn
+    if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
+        raise HTTPException(404, "Client not found.")
+    antes = wn.fluxo_escolhido(con, cid)
+    try:
+        wn.escolher_fluxo(con, cid, dados.flow)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    if antes != dados.flow:
+        auditar(con, "client.waiver_flow", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid,
+                detail={"antes": antes, "depois": dados.flow, "por": u["name"]}, ip=auth._ip(request))
+    con.commit()
+    return wn.fluxo_do_card(con, cid)
 
 
 # ------------------------------------------------------- convite da waiver por e-mail (#135)

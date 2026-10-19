@@ -86,10 +86,10 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
 
   useEffect(() => { papi<Waivers>('GET', '/waivers').then(setSit).catch(e => setErro((e as PortalError).message)) }, [])
   useEffect(() => {
-    if (sit?.enabled && meu?.kind) papi<WaiverModelo>('GET', `/waivers/model/${meu.kind}`).then(setModelo).catch(e => setErro((e as PortalError).message))
+    if (sit?.enabled && meu?.enabled !== false && meu?.kind) papi<WaiverModelo>('GET', `/waivers/model/${meu.kind}`).then(setModelo).catch(e => setErro((e as PortalError).message))
   }, [sit, meu?.kind])
   // #111: o que só a tela sabe vai para a trilha (abriu a tela, leu todas as páginas); falhar aqui não trava a assinatura
-  const podeAssinar = !!(sit?.enabled && meu?.kind && meu.status !== 'signed' && !meu.own_signature_required)
+  const podeAssinar = !!(sit?.enabled && meu?.enabled !== false && meu?.kind && meu.status !== 'signed' && !meu.own_signature_required)
   const abriu = useRef(false)
   useEffect(() => {
     if (!podeAssinar || abriu.current) return
@@ -142,7 +142,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
       <button className="btn" onClick={() => nav('/portal/drivers')}>Back to Drivers</button></div>
   </div>
   if (!sit) return <div className="stack">{topo}{erro ? <div className="banner crit" role="alert">{erro}</div> : <div className="state"><span className="spin" /></div>}</div>
-  if (!sit.enabled) return <div className="stack">{topo}<p className="muted">Online signing is not available yet. Our team will email you the waiver.</p>
+  if (!sit.enabled || (meu?.enabled === false && meu.status !== 'signed')) return <div className="stack">{topo}<p className="muted">Online signing is not available yet. Our team will email you the waiver.</p>
     <Link to="/portal/drivers">Back to Drivers</Link></div>
   if (meu?.status === 'signed') return <div className="stack">{topo}<p>This driver already has a valid waiver.</p>
     <div className="row wrap" style={{ gap: 8 }}><a className="btn" href={`${BASE}/waivers/${meu.waiver_id}/pdf`}>Download the signed PDF</a><Link className="btn ghost" to="/portal/drivers">Back to Drivers</Link></div></div>

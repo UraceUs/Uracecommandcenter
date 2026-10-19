@@ -391,7 +391,8 @@ def pedir_waiver(con, b, enviar=None, tabela="bookings", card=None, motivo=None)
             atualizar(con, "bookings", b["id"], waiver_ref=w["waiver_ref"], waiver_error=None, updated_at=agora())
             return "ok"
     from command_center.providers import waiver_nativa
-    if waiver_nativa.ligada(con):
+    card = card if card is not None else card_do_agendamento(con, b)
+    if waiver_nativa.fluxo_da_waiver(con, card) == "nativa":     # #348: o switch do card (ou a chave geral)
         return "nativa"
     p = um(con, "SELECT * FROM portal_pilots WHERE id=?", (b["pilot_id"],)) if b["pilot_id"] else None
     a = um(con, "SELECT * FROM portal_accounts WHERE id=?", (b["account_id"],))
@@ -408,7 +409,6 @@ def pedir_waiver(con, b, enviar=None, tabela="bookings", card=None, motivo=None)
         template = "parental" if menor else "adult"
         res = (enviar or _enviar_waiver_padrao)(template, nome, email.lower(), b["service_name"] or "")
         env = res.get("envelopeId") if isinstance(res, dict) else None
-        card = card if card is not None else card_do_agendamento(con, b)
         wid = inserir(con, "waivers", client_id=card, signer_name=nome, signer_email=email.lower(), template=template,
                       status="sent", sent_at=agora(), link_reason=motivo or f"agenda: sessão #{b['id']} aceita",
                       link_by="system" if card else None, minor_name=p["name"] if menor else None, synced_at=agora())
