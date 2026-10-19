@@ -1266,3 +1266,17 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .ins-painel .sdr-form{border-top:0;padding-top:0}
 /* dentro de uma seção "tight" (sem margem interna), o inserir no topo ganha a margem dele */
 .ins-tight{padding:12px 16px 4px}
+/* #341: rascunho de invoice do balcão. No celular (360 px) cada linha empilha: nome em cima, quantidade, preço e
+   remover embaixo; nada rola para o lado e todo alvo de toque tem 40 px. */
+.rz-linhas{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.rz-linha{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:10px;border:1px solid var(--line,#444);border-radius:12px}
+.rz-linha .rz-nome{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0;overflow-wrap:anywhere}
+.rz-campos{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.rz-campos .fld{margin:0}
+.rz-campos input{min-height:40px;width:96px;max-width:100%}
+.rz-campos .rz-total{margin-left:auto;font-weight:700;align-self:center}
+.rz-acoes{display:flex;flex-wrap:wrap;gap:8px}
+.rz-acoes .btn,.rz-linha .btn,.rz-busca .btn{min-height:40px}
+.rz-total-geral{display:flex;justify-content:space-between;align-items:center;font-size:20px;font-weight:800}
+.rz-busca{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow:auto;margin:0;padding:0;list-style:none}
+.rz-busca li button{width:100%;min-height:44px;text-align:left;display:flex;justify-content:space-between;gap:8px;overflow-wrap:anywhere}

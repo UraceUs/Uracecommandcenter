@@ -415,6 +415,9 @@ MIGRACOES = [
     ("site_pages", "rev", "INTEGER NOT NULL DEFAULT 0"),
     # #116: o ponteiro da versão atual de cada modelo da waiver nativa (as versões ficam em waiver_template_versions)
     ("waiver_templates", "version_id", "INTEGER REFERENCES waiver_template_versions(id)"),
+    # #341 (dono, 19/10): a invoice de peças que nasceu de um rascunho do balcão. As linhas dela são as do rascunho
+    # (peça do estoque, item do QuickBooks e linha livre), não as cobranças do dia: a leitura do COBRAR não entra nela
+    ("parts_invoices", "draft_id", "INTEGER REFERENCES counter_drafts(id)"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",
