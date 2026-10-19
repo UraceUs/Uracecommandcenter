@@ -121,8 +121,10 @@ def agendamentos(status: str | None = None, de: str | None = None, ate: str | No
                  con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     lista = ag.lista(con, status or None, de, ate)
     from command_center.providers import cobranca_agenda
-    for a in lista:                          # contrato mensal: só a equipe vê (#61)
-        a["contrato"] = contrato.situacao_do_agendamento(con, a["client_id"], a["date"], a)
+    cache = {}
+    for a in lista:                          # contrato mensal (#61); #340: o cliente também vê o contador dele
+        a["contrato"] = contrato.situacao_do_agendamento(con, a["client_id"], a["date"], a, cache)
+        a["pro_sem_mensal"] = contrato.pro_sem_mensal(con, a["client_id"])
         a["cobranca"] = cobranca_agenda.situacao(con, a) if a.get("accepted_at") else None
     return {"agendamentos": lista}
 

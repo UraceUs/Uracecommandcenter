@@ -61,7 +61,8 @@ def test_acima_do_contrato(con):
     cid, conta, pil = cenario(con, sessoes=1)
     m = _mes()
     sessao(con, conta, pil, f"{m}-03")
-    assert contrato.situacao_do_agendamento(con, cid, f"{m}-03") == {"usadas": 1, "sessoes_por_mes": 1, "acima": False}
+    assert contrato.situacao_do_agendamento(con, cid, f"{m}-03") == {"usadas": 1, "sessoes_por_mes": 1, "acima": False,
+                                                                           "mensalidade": None, "mensalidade_doc": None}
     sessao(con, conta, pil, f"{m}-04")
     assert contrato.situacao_do_agendamento(con, cid, f"{m}-04")["acima"] is True
 
@@ -110,7 +111,8 @@ def test_card_mostra_o_contrato_do_cliente_e_a_lista_da_equipe_tambem(cli, con):
     assert atual["sessions"][0]["site"] is True, "o agendamento do site entra no contador"
     assert (passado["sessions_used"], passado["sessions_left"], passado["closed"]) == (1, 1, True), "deixou de usar 1 no mês passado"
     ag = cli.get("/ops/api/site/agendamentos").json()["agendamentos"]
-    assert next(x for x in ag if x["date"].startswith(m))["contrato"] == {"usadas": 1, "sessoes_por_mes": 2, "acima": False}
+    assert next(x for x in ag if x["date"].startswith(m))["contrato"] == {"usadas": 1, "sessoes_por_mes": 2, "acima": False,
+                                                                              "mensalidade": None, "mensalidade_doc": None}
     cli.cookies.clear()
     assert cli.get("/ops/api/portal/bookings").status_code == 401, "o cliente não vê nada disto"
 

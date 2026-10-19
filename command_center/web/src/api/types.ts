@@ -47,6 +47,8 @@ export interface Client {
   status_locked?: number; last_service_at?: string | null; scanned_at?: string | null; monthly_plan?: string | null; monthly_note?: string | null
   plan_type?: 'monthly' | 'daily' | null; pro_driver?: number; chassis_id?: number | null; engine_id?: number | null; equipment_notes?: string | null; email_alt?: string | null
   sibling_of?: number | null
+  /** #340: a Mensalidade do card (sessões por mês e valor) — o pro sem ela vai para Precisa de atenção */
+  monthly_amount?: number | null; monthly_sessions?: number | null
   created_at: string; updated_at: string
   open_tasks?: number; done_tasks?: number; last_service?: string | null
   next_service?: string | null; waiver_status?: string | null
@@ -175,7 +177,15 @@ export interface Catalog { chassis: Chassis[]; engines: Engine[]; parts: Part[] 
 export interface Contract { id: number; client_id: number; kind: string; source: 'docusign' | 'upload'; envelope_id: string | null; status: string | null; signed_at: string | null; file_path: string | null; title: string | null; added_by_name?: string | null; added_at: string }
 export interface MonthlyMonth { month: string; invoice: { id: number; doc_number: string | null; amount?: number | null; balance?: number | null; status: string | null; memo: string | null } | null; sessions_used: number; sessions_left: number; sessions: { title: string; due_on: string; status: string; site?: boolean }[]; needs_invoice: boolean
   sessions_over?: number; closed?: boolean }
-export interface Monthly { months: MonthlyMonth[]; last_monthly_amount: number | null; last_monthly_memo: string | null; sessions_per_month: number; sessions_per_month_set?: boolean; contracts: Contract[] }
+/** #340: o contador do mês, o mesmo que o cliente vê na área dele — aqui com quais sessões e quais invoices estão em aberto. */
+export interface ContadorEquipe { month: string; sessions_per_month: number; used: number; left: number; over: number; resets_on: string
+  monthly_invoice: { status: 'paid' | 'open'; doc: string | null; amount?: number | null; balance?: number | null; link: string | null } | null
+  extras: { date: string; period: string; price?: number | null; invoice: string | null; status: 'paid' | 'open' | 'not_invoiced'; link: string | null }[]
+  open: { count: number; amount: number | null; not_invoiced: number
+    sessions: { date: string; title: string; kind: string; invoice: string | null; status: 'open' | 'not_invoiced' }[]
+    invoices: { doc: string | null; balance?: number | null; link: string | null; kind: string }[] } }
+export interface Monthly { months: MonthlyMonth[]; last_monthly_amount: number | null; last_monthly_memo: string | null; sessions_per_month: number; sessions_per_month_set?: boolean; contracts: Contract[]
+  counter?: ContadorEquipe | null; pro_sem_mensal?: boolean }
 export interface Race { id: number; name: string; series: string | null; track: string | null; city: string | null; date_start: string | null; date_end: string | null; notes: string | null; source: string | null; active: number; invites: number
   task_id?: number | null; task?: { id: number; title: string; status: string; due_on: string | null; section: string | null; subtasks_total: number | null; subtasks_done: number | null; assignee: string | null; links?: Link[] } | null
   invited: { id: number; client_id: number; name: string; pilot_name: string | null; status: string; estimate_text: string | null; estimate_cmd: number | null; estimate_status: string | null }[] }

@@ -166,6 +166,11 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
         return {**linha, "recorrente": True,
                 "erro": f"{p['name']} has a monthly plan: book this session in your account (sessions in your plan are "
                         "included; extra sessions are billed by invoice). Remove it from the cart."}
+    if card and card["client_id"] and contrato.e_pro(con, card["client_id"]):
+        # #340 (dono, 19/10): o piloto pro já paga mensal — "nao cobrar na marcação e sim na invoice pelo QuickBooks"
+        return {**linha, "recorrente": True,
+                "erro": f"{p['name']} is a URACE Pro driver: book this session in your account (it is billed by "
+                        "QuickBooks invoice, with your monthly plan). Remove it from the cart."}
     from command_center.providers import portal
     # #305 (dono, 16/10): paga antes e completa o piloto depois, "com lembretes pelo email ate completar as
     # informações". O responsável completo continua exigido (o carrinho pede os dados dele); o piloto sem medidas

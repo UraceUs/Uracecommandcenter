@@ -6,6 +6,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { papi, PortalError, rotuloCobertura, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type PlanoPiloto, type Servico } from './api'
 import { porNoCarrinhoDoSite } from './carrinhoSite'
+import { PlanoEmMontagem } from './Contador'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
 
 const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
@@ -133,7 +134,8 @@ export function Agendar({ conta }: { conta: Account }) {
   const [planos, setPlanos] = useState<PlanoPiloto[] | null>(null)
   const [carrinho, setCarrinho] = useState(false)
   // #314: o dia que o plano não cobre (o plano acaba antes daquele mês) o aluno marca como sessão avulsa, um dia por vez
-  const [avulsa, setAvulsa] = useState(false)
+  // #340: 'servico' = outro serviço que não o do plano; 'data' = o dia que o plano não cobre
+  const [avulsa, setAvulsa] = useState<'' | 'data' | 'servico'>('')
   const nav = useNavigate()
   // #314: quem tem plano mensal marca vários dias; a sessão do plano é incluída e a extra vai por invoice
   useEffect(() => {
@@ -171,7 +173,9 @@ export function Agendar({ conta }: { conta: Account }) {
 
   const plano = planos?.find(x => x.driver_id === piloto) || null
   // a sessão avulsa do aluno recorrente paga como a de qualquer cliente: no carrinho (Stripe) se ligado, senão invoice
-  const noCarrinho = plano?.payment === 'stripe' || (avulsa && !!plano?.recurring && carrinho)
+  // #340: o piloto pro nunca vai para o carrinho (dono, 19/10: "nao cobrar na marcação e sim na invoice pelo QuickBooks")
+  const noCarrinho = plano?.payment === 'stripe' || (avulsa && !!plano?.recurring && carrinho && !plano?.pro)
+  const semPreco = !!plano?.setup                    // #340: o pro com o plano em montagem não vê o preço da tabela
   const seletorPiloto = conta.drivers.length > 1 ? <label className="fld"><span>Driver</span>
     <select value={piloto} onChange={e => setPiloto(e.target.value ? Number(e.target.value) : '')}>
       {conta.drivers.map(p => { const b = bloqueioDoPiloto(p)
@@ -199,16 +203,17 @@ export function Agendar({ conta }: { conta: Account }) {
     return <Suspense fallback={<div className="state"><span className="spin" /></div>}>
       <AgendarVarios piloto={piloto} plano={plano} dias={dias} cfg={cfg} servicos={servicos} servico={servico}
         setServico={setServico} seletorPiloto={seletorPiloto} onMarcou={carregar}
-        onAvulso={(d, p) => { setAvulsa(true); setDia(d); setPeriodo(p); setMes(mesDe(d)); setOk(null); setErro(null) }} /></Suspense>
+        onAvulso={(d, p) => { setAvulsa(d ? 'data' : 'servico'); setDia(d ?? null); setPeriodo(p ?? null); if (d) setMes(mesDe(d)); setOk(null); setErro(null) }} /></Suspense>
 
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Book a session</h1><p className="muted" style={{ margin: '4px 0 0' }}>Pick the session type, the day and the driver.</p></div>
     {erro && <div className="banner crit" role="alert"><span className="bi">✕</span><div className="grow">{erro}</div></div>}
     {ok && <div className="banner ok" role="status"><span className="bi">✓</span><div className="grow">{ok} <Link to="/portal/sessions">See my sessions</Link></div></div>}
     {conta.missing.length > 0 && <div className="banner warn"><span className="bi">▲</span><div className="grow">Please complete the account holder details before booking. <Link to="/portal/account">Go to Account</Link></div></div>}
+    {plano?.setup && <PlanoEmMontagem />}
     {avulsa && plano?.recurring && <div className="banner info" role="status"><span className="bi" aria-hidden="true">●</span><div className="grow">
-      Regular session: your monthly plan does not cover this date, so it is paid like any session.{' '}
-      <button type="button" className="btn ghost" onClick={() => setAvulsa(false)}>Back to my plan days</button></div></div>}
+      Regular session: {avulsa === 'data' ? 'your monthly plan does not cover this date' : 'this session type is not in your monthly plan'}, so it is {plano.pro ? 'billed by QuickBooks invoice' : 'paid like any session'}.{' '}
+      <button type="button" className="btn ghost" onClick={() => setAvulsa('')}>Back to my plan days</button></div></div>}
     {!conta.drivers.length ? <div className="card card-b stack"><p className="muted" style={{ margin: 0 }}>Add a driver first, then pick a date.</p><div><Link className="btn primary" to="/portal/drivers">Add a driver</Link></div></div>
       : !livres.length ? <div className="banner warn"><span className="bi">▲</span><div className="grow">Your drivers need up-to-date measurements before booking. <Link to="/portal/drivers">Update drivers</Link></div></div>
       : dias === null || planos === null ? <div className="state"><span className="spin" /></div>
@@ -225,7 +230,7 @@ export function Agendar({ conta }: { conta: Account }) {
           {servicos.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
             <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />
             <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span>
-            <b>{usd(x.price)}</b></label>)}</fieldset>
+            {!semPreco && <b>{usd(x.price)}</b>}</label>)}</fieldset>
         <div className="row"><button className="btn ghost sm" aria-label="Previous month" disabled={meses.indexOf(mes) <= 0} onClick={() => setMes(meses[meses.indexOf(mes) - 1])}>‹</button>
           <b className="grow" style={{ textAlign: 'center' }}>{new Date(mes + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</b>
           <button className="btn ghost sm" aria-label="Next month" disabled={meses.indexOf(mes) >= meses.length - 1} onClick={() => setMes(meses[meses.indexOf(mes) + 1])}>›</button></div>
@@ -247,7 +252,7 @@ export function Agendar({ conta }: { conta: Account }) {
           {pilotoEscolhido?.measures_status === 'aviso' && <div className="banner warn"><span className="bi">▲</span><div className="grow">
             {pilotoEscolhido.name}'s measurements are {pilotoEscolhido.measures_days} days old. Please <Link to="/portal/drivers">review them</Link> soon.</div></div>}
           <label className="fld"><span>Anything we should know? <i>optional</i></span><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></label>
-          {escolhidoServico && <p className="small" style={{ margin: 0 }}>{escolhidoServico.name} · <b>{usd(escolhidoServico.price)}</b> per driver
+          {escolhidoServico && !semPreco && <p className="small" style={{ margin: 0 }}>{escolhidoServico.name} · <b>{usd(escolhidoServico.price)}</b> per driver
             {noCarrinho && (escolhidoServico.deposit || 0) > 0 ? ` + ${usd(escolhidoServico.deposit || 0)} refundable security deposit` : ''}</p>}
           {/* #314 (dono, 16/10): o cliente novo paga no Stripe (carrinho do site) quando ele está ligado; sem Stripe, a invoice */}
           {noCarrinho

@@ -4,14 +4,20 @@
  * marcar isso tudo em um book."
  *
  * Tocar no dia marca ou desmarca. Atalhos: "Every Wed" (o resto do mês, as próximas 4 semanas ou até uma
- * data, dentro do que a agenda mostra), "This weekend", "Next weekend". Cada dia mostra só "Included in your
- * plan" ou "Extra session · $X", vindo do servidor (a cotação); o contador do pacote não aparece (dono,
- * 01/10). No máximo 12 dias por pedido; ou entra tudo, ou nada. Carregado só para quem tem plano. O dia que o plano
- * não cobre (o plano acaba antes daquele mês) tem "Book as a regular session": abre a marcação de um dia, avulsa. */
+ * data, dentro do que a agenda mostra), "This weekend", "Next weekend". Cada dia mostra "Included in your
+ * plan" ou "Extra session · $X", vindo do servidor (a cotação). No máximo 12 dias por pedido; ou entra tudo, ou
+ * nada. Carregado só para quem tem plano. O dia que o plano não cobre (o plano acaba antes daquele mês) tem "Book
+ * as a regular session": abre a marcação de um dia, avulsa.
+ *
+ * #340 (dono, 19/10): o contador do mês aparece em cima ("This month: X of Y sessions used · Z left"), a mensalidade
+ * e o em aberto; só o(s) serviço(s) do plano (os outros pelo "Book as a regular session"); cada dia pode levar o
+ * add-on (dono: "deixe os add ons disponiveis tb"); e antes de confirmar, "N included · M extra · $total". As extras
+ * e os add-ons saem numa invoice do QuickBooks na hora da marcação, nunca no Stripe. */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { dataLonga, faixa, PERIODOS } from './Agendar'
 import { papi, PortalError, usd, type AgendaCfg, type CheckoutGrupo, type Cotacao, type Dia, type PlanoPiloto, type Servico, type Turno } from './api'
+import { ContadorDoPlano } from './Contador'
 
 const MAX_DIAS = 12
 const SEMANA = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -34,14 +40,19 @@ function turnoPara(d: Dia, costume: Turno): Turno | null {
 export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, setServico, seletorPiloto, onMarcou, onAvulso }: {
   piloto: number; plano: PlanoPiloto; dias: Dia[]; cfg: AgendaCfg; servicos: Servico[]; servico: number | null
   setServico: (id: number) => void; seletorPiloto: ReactNode; onMarcou: () => void
-  onAvulso: (date: string, period: Turno) => void
+  onAvulso: (date?: string, period?: Turno) => void
 }) {
+  // #340: pelo plano, só o(s) serviço(s) do plano; os outros são sessão avulsa
+  const doPlano = useMemo(() => plano.services?.length ? servicos.filter(x => plano.services?.includes(x.id)) : servicos,
+    [plano.services, servicos])
+  const outros = servicos.length > doPlano.length
   const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const porData = useMemo(() => Object.fromEntries(dias.map(d => [d.date, d])), [dias])
   const meses = useMemo(() => [...new Set(dias.map(d => mesDe(d.date)))], [dias])
   const ultimo = dias.length ? dias[dias.length - 1].date : hoje
   const [mes, setMes] = useState(() => mesDe(dias.find(d => d.any_open)?.date || hoje))
   const [escolhidos, setEscolhidos] = useState<Record<string, Turno>>({})
+  const [comAddon, setComAddon] = useState<Record<string, boolean>>({})       // #340: o add-on de cada dia
   const [costume, setCostume] = useState<Turno>('manha')
   const [ate, setAte] = useState<'mes' | '4sem' | 'data'>('4sem')
   const [ateData, setAteData] = useState('')
@@ -52,7 +63,8 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
   const [nota, setNota] = useState('')
   const [indo, setIndo] = useState(false)
   const nav = useNavigate()
-  const pedido = useMemo(() => Object.entries(escolhidos).sort(([a], [b]) => a.localeCompare(b)).map(([date, period]) => ({ date, period })), [escolhidos])
+  const pedido = useMemo(() => Object.entries(escolhidos).sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, period]) => ({ date, period, ...(comAddon[date] ? { addon: true } : {}) })), [escolhidos, comAddon])
   const chave = JSON.stringify([servico, piloto, pedido, refaz])
 
   // a cotação acompanha a escolha (o preço e o rótulo são do servidor); a resposta vale só para a escolha dela
@@ -67,6 +79,10 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
     }, 300)
     return () => { vale = false; window.clearTimeout(t) }
   }, [chave, pedido, servico, piloto])
+  // o plano diz o kart: o serviço escolhido fora dele (ou nenhum) vira o do plano. Sem kart no plano, o cliente escolhe
+  const achou = !!plano.services_matched
+  useEffect(() => { if (achou && doPlano.length && !doPlano.some(x => x.id === servico)) setServico(doPlano[0].id) },
+    [achou, doPlano, servico, setServico])
   const atual = cot && cot.chave === chave ? cot : null
   const q = atual?.r || null
   const cotando = !!pedido.length && !!servico && !atual
@@ -130,13 +146,16 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
     <div><h1 className="h1">Book sessions</h1>
       <p className="muted" style={{ margin: '4px 0 0' }}>Pick one day or many. Sessions in your plan are included; an extra session is billed by invoice.</p>
       <p style={{ margin: '8px 0 0' }}><span className="chip info">{plano.plan || 'Monthly plan'}</span></p></div>
+    {plano.counter && <ContadorDoPlano plano={plano} nivel={2} />}
     {(erro || atual?.erro) && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro || atual?.erro}</div></div>}
     <div className="card card-b stack">
       {seletorPiloto}
-      <fieldset className="portal-servicos"><legend className="small">Session type</legend>
-        {servicos.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
+      <fieldset className="portal-servicos"><legend className="small">Session type in your plan</legend>
+        {doPlano.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
           <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />
           <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span></label>)}</fieldset>
+      {outros && <p className="small muted" style={{ margin: 0 }}>Another session type?{' '}
+        <button type="button" className="btn ghost" onClick={() => onAvulso()}>Book as a regular session</button></p>}
 
       <section className="stack" style={{ gap: 10 }} aria-labelledby="v-rapido">
         <h2 className="h2" id="v-rapido">Quick picks</h2>
@@ -189,6 +208,9 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
                 {TURNOS.filter(t => d?.periods[t].open || t === period).map(t =>
                   <button key={t} type="button" className={`btn${period === t ? ' primary' : ''}`} aria-pressed={period === t}
                     onClick={() => setEscolhidos(x => ({ ...x, [date]: t }))}>{PERIODOS[t]}<span className="small"> {faixa(cfg, t)}</span></button>)}</div>
+              {plano.addon && <label className="portal-addon small">
+                <input type="checkbox" checked={!!comAddon[date]} onChange={e => setComAddon(x => ({ ...x, [date]: e.target.checked }))} />
+                <span>Add {plano.addon.name} · {usd(plano.addon.price)}</span></label>}
               {c && !c.ok && <p className="small portal-varios-motivo">{c.message}</p>}
               {c?.reason === 'fora_do_plano' && <div className="portal-varios-avulso">
                 <button type="button" className="btn" onClick={() => onAvulso(date, period)}>Book as a regular session</button></div>}
@@ -197,10 +219,13 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
         {n > 0 && <div className="reserva-total" aria-live="polite">
           {q && !cotando ? <div className="soma"><span>{q.extras
             ? `${q.included} included · ${q.extras} extra${q.extras > 1 ? 's' : ''}`
-            : `${q.included} included in your plan`}</span><span>{q.extras ? (q.extra_price_missing ? 'by invoice' : usd(q.extras_total)) : usd(0)}</span></div>
+            : `${q.included} included in your plan`}{q.addons ? ` · ${q.addons} add-on${q.addons > 1 ? 's' : ''}` : ''}</span>
+            <span>{q.extras && q.extra_price_missing ? 'by invoice' : usd(q.invoice_total ?? q.extras_total)}</span></div>
             : !servico ? <div className="small muted"><span>Pick the session type above to see what is included.</span></div>
             : <div className="small muted"><span>Checking your days…</span></div>}
-          {q && q.extras > 0 && <div className="small muted"><span>The extra sessions come in one invoice by email.</span></div>}</div>}
+          {q && (q.extras > 0 || !!q.addons) && <div className="small muted"><span>
+            {q.extras > 0 && q.addons ? 'The extra sessions and add-ons' : q.extras > 0 ? 'The extra sessions' : 'The add-ons'} come in one
+            QuickBooks invoice, sent to your email as soon as you book. Nothing is charged online.</span></div>}</div>}
         {n > 0 && <label className="fld"><span>Anything we should know? <i>optional</i></span><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></label>}
         <div><button className="btn primary" disabled={!prontos || indo} onClick={marcar}>{indo ? 'Booking…' : n ? `Book ${n} session${n > 1 ? 's' : ''}` : 'Book sessions'}</button></div>
       </section>
