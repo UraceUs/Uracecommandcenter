@@ -149,8 +149,9 @@ def destino(con, client_id):
     motivo = None
     nativa = wn.fluxo_da_waiver(con, client_id) == "nativa"          # #348: o switch do card (ou a chave geral)
     if not nativa:
-        motivo = ("Este card usa a waiver pelo DocuSign (o switch Waiver do card ou a chave geral em Site › Waiver). "
-                  "O convite abre a assinatura no próprio sistema: escolha Nativa no card antes.")
+        motivo = ("A assinatura da waiver no próprio sistema está desligada para este card: ele usa o DocuSign "
+                  "(o switch Waiver do card, ou a chave geral em Site › Waiver no Padrão). "
+                  "O convite abre essa assinatura: ligue a chave geral ou escolha Nativa no card antes.")
     elif not d["email"]:
         motivo = "O card não tem e-mail. Ponha no card o e-mail do piloto adulto ou do responsável para mandar o convite."
     elif not _EMAIL.match(d["email"]):
