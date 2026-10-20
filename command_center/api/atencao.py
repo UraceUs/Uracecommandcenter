@@ -590,6 +590,21 @@ def _coletar(con):
                                  ("Recado", "sim" if c.get("voicemail") else "não"),
                                  ("Oportunidade", c.get("oportunidade") or "—")]))
 
+    # ---- 8a. robô SDR no SMS / e-mail (20/10): o que ele passou para a equipe
+    corte_canal = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
+    for c in todos(con, """SELECT * FROM sdr_canal_contatos WHERE precisa_gente=1 AND opt_out=0
+                           AND COALESCE(ultima_resposta_em, ultima_entrada_em, '') >= ?
+                           ORDER BY ultima_resposta_em DESC LIMIT 20""", (corte_canal,)):
+        meio = "SMS" if c["canal"] == "sms" else "e-mail"
+        quem = c.get("nome") or (("+" + c["contato"]) if c["canal"] == "sms" else c["contato"])
+        itens.append(dict(key=_chave("sdr-canal", "sdr_canal", f"{c['id']}-{c.get('ultima_resposta_em') or ''}"),
+                          level="HIGH", title=f"{quem}: o robô passou a conversa de {meio} para a equipe",
+                          why=(c.get("precisa_motivo") or "O robô passou para a equipe.")
+                              + " Responda pelo Dialpad ou pela support@ (o robô pausa sozinho ao ver a sua resposta).",
+                          entity={"type": "sdr_canal", "id": c["id"]}, client_id=None, link="/sdr", action="Responder",
+                          facts=[("Canal", meio), ("Contato", ("+" + c["contato"]) if c["canal"] == "sms" else c["contato"]),
+                                 ("Última mensagem", (c.get("ultima_entrada_em") or "—")[:16].replace("T", " "))]))
+
     # ---- 8b. vendas (#204): retorno vencido — a tela de vendas promete que ele aparece aqui
     from command_center.api import vendas as _vendas
     agora_utc = agora()                     # o mesmo relógio do quadro de vendas (`board`)

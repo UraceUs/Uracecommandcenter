@@ -272,6 +272,32 @@ def rodar() -> list[str]:
     check("sem motivo de call, a espera de sempre", "calendar.app.google" not in app._resposta_de_espera(
         101, "Quero falar com uma pessoa", "PEDIDO_HUMANO"))
 
+    print("\n2g. SMS e e-mail: o mesmo robô, sem Kommo, sessão por contato (20/10)")
+    vistos = []
+    resp_canal = "Oi! Aqui é o Chase, da URACE.\nÉ pra você ou pra outra pessoa?"
+    app._call_agent = lambda lead_id, msg, session_key=None: (
+        vistos.append((session_key, msg)) or resp_canal, textproc.extract_directives(resp_canal))
+    escritas_antes, bots_antes = (len(k.notas), len(k.bots))
+    c1 = app.turno_de_canal("sms", "14075550199", "Oi, quanto custa?", "Ana", True)
+    chave, msg_canal = vistos[-1]
+    check("sessão própria do canal, sem o número no nome", chave.startswith("canal-sms-") and "4075550199" not in chave, chave)
+    check("o modelo sabe que é SMS e que não há card no Kommo", "SMS" in msg_canal and "[[crm]]" in msg_canal, msg_canal[:300])
+    check("mesma guarda e balões", c1["mensagens"] == ["Oi! Aqui é o Chase, da URACE.", "É pra você ou pra outra pessoa?"], c1)
+    app.turno_de_canal("sms", "14075550199", "8 anos", "Ana", False)
+    check("o mesmo contato fica na mesma sessão", vistos[-1][0] == chave)
+    app.turno_de_canal("email", "ana@example.com", "How much is it?", "Ana", True)
+    check("e-mail tem outra sessão e o contexto de e-mail", vistos[-1][0].startswith("canal-email-") and "e-mail" in vistos[-1][1])
+    c2 = app.turno_de_canal("sms", "14075550199", "Faria se fosse mais barato", "Ana", False)
+    check("objeção no SMS: oferta de call e a equipe é avisada (precisa_gente)",
+          c2["precisa_gente"] and any("calendar.app.google" in m for m in c2["mensagens"]), c2)
+    check("nada escrito no Kommo nem disparado", (len(k.notas), len(k.bots)) == (escritas_antes, bots_antes))
+    try:
+        app.turno_de_canal("whatsapp", "x", "oi")
+        check("canal desconhecido é recusado", False)
+    except Exception as exc:
+        check("canal desconhecido é recusado", getattr(exc, "status_code", 0) == 400, exc)
+    app._call_agent = lambda lead_id, msg, session_key=None: (resposta, textproc.extract_directives(resposta))
+
     print("\n3. Fora do escopo: só organiza")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
     antes = len(k.bots)
