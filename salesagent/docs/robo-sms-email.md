@@ -39,8 +39,8 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
    confirma o nome dos campos do SMS (o painel aceita as variações conhecidas).
 4. **Ligar só para o seu celular e um e-mail de teste** (o papel da tag `teste-sdr`):
    `printf 'SDR_CANAL_SMS=1\nSDR_CANAL_EMAIL=1\nSDR_CANAL_SO_PARA=+1SEUNUMERO,seu.email@exemplo.com\n' > ~/.urace/sdr-canais.env && chmod 600 ~/.urace/sdr-canais.env`
-   O painel lê o arquivo na hora (sem reiniciar). Se o SMS não sair pelo número da empresa, acrescente
-   `DIALPAD_SMS_FROM=+1NUMERODAEMPRESA` em `~/.urace/dialpad.env` e reinicie o painel.
+   O painel lê o arquivo na hora (sem reiniciar). Para o SMS sair pelo número da empresa (e não pela linha pessoal do usuário), acrescente
+   `DIALPAD_SMS_GRUPO=office:6037417788784640` (o escritório Urace.us) em `~/.urace/dialpad.env` e reinicie o painel.
 5. **Teste**: SMS "Oi, quanto custa?" do seu celular; e-mail para support@ do seu e-mail. Confira a conversa:
    `GET /ops/api/sdr/canais` (ou peça a mim).
 6. **Liberar para todos os leads**: apague a linha `SDR_CANAL_SO_PARA` de `~/.urace/sdr-canais.env`.
