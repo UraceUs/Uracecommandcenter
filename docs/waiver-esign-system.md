@@ -148,12 +148,33 @@ address in `X-Forwarded-For`, and the system reads that header **from right to l
 that is not a trusted proxy: the address the proxy itself saw. A value invented by the browser at the left of the
 header is ignored. The same address is recorded in the trail, the audit log and the certificate.
 
+**URACE staff actions** (owner's decision, October 20, 2026: "show the IP of the server the system runs from"): for
+the events a URACE team member causes — invitation emailed, signed PDF downloaded, voided, photo ID checked, signed
+copy re-sent, evidence package exported — the event trail records, from October 20, 2026, the public IP address of
+URACE's server (the VPS the system runs on; setting `CC_SERVER_IP`) and the device "URACE Command Center (staff)"; the
+name and id of the team member stay in the event's details. Events recorded before that date are not changed (the hash
+chain must stay intact): in the evidence package, `events.json` keeps them exactly as stored, and the certificate of
+completion and `audit_logs.json` show the server's address on the staff rows (the audit log has no per-row hash; its
+protection is the append-only trigger). The IP address and device of the **person who signs** are always the ones the
+server saw, unchanged: they are the evidence of the signature.
+
 ## 9. After signing
 
 Events after the signature (copy emailed, with the email provider's message-id, or the failure; photo ID checked at
 the front desk; PDF downloaded; voided; evidence package exported) cannot be added to the sealed PDF. They are
 recorded in the event trail with the waiver's id and appear in the certificate of completion of the evidence package
 (`certificate-of-completion.pdf`).
+
+## 9a. Renewal and who sees a waiver
+
+- **Renewal** (owner's decision, October 20, 2026: "new waivers come in as the current ones expire"): while a client
+  card or driver has a waiver in force (signed here or through DocuSign; a DocuSign waiver counts for one year from
+  signing), the email invitation is not sent. It opens in the last 30 days of that waiver, as a renewal. The control
+  panel lists those waivers under "Needs attention" with a button to send the renewal invitation; nothing is emailed to
+  a client without a team member's click. The automatic request when a session is booked is sent only if no waiver is
+  valid on the day of the session.
+- **Who sees it**: the client portal shows the waivers of the drivers linked to that account, so an account that has
+  the driver linked also sees a waiver another person (the email on the client card) signed through the invitation.
 
 ## 10. Backups
 

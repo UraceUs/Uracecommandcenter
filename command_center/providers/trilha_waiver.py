@@ -18,10 +18,18 @@ primeira linha mexida.
   conferência do documento com foto no balcão — #117, `id_checked` ou `id_check_failed`, com o tipo de documento e o
   que conferiu, nunca a imagem nem o número —; o pacote de prova exportado — #115, com o hash do ZIP) não entram no
   PDF selado, que não muda: ficam aqui, com o `waiver_id`, no painel e no certificado avulso do pacote de prova.
+- **Evento da equipe** (#354, dono, 20/10: *"mostrar o IP do servidor de onde o sistema opera"*): baixou, anulou,
+  conferiu o documento, reenviou a cópia, exportou o pacote, mandou o convite. Desde 20/10 o `ip` gravado é o IP público
+  do servidor (`ip_do_servidor`) e o `user_agent` é `UA_EQUIPE`; quem fez continua no `detail` (nome e id). O IP e o
+  aparelho de quem ASSINA não mudam: são a prova da assinatura. Os eventos de equipe já gravados ficam como estão (a
+  cadeia não quebra); o pacote de prova mostra o IP do servidor nas linhas de equipe só na hora de imprimir.
 """
 import hashlib
+import ipaddress
 import json
+import os
 import re
+import socket
 from datetime import datetime, timedelta, timezone
 
 from command_center.db import agora, todos, transacao, um
@@ -52,6 +60,37 @@ JANELA_HORAS = 24                                        # a mesma da leitura (#
 TELA_POR_HORA = 30                                       # eventos da tela por conta (ou convite) por hora
 _CAMPOS = ("at", "flow", "account_id", "invite_id", "pilot_id", "client_id", "kind", "template_version_id", "waiver_id",
            "signature_id", "event", "source", "ip", "user_agent", "detail")
+
+
+UA_EQUIPE = "URACE Command Center (staff)"
+SEM_IP_SERVIDOR = "server"
+_ip_descoberto = None
+
+
+def ip_do_servidor():
+    """O IP público do servidor (VPS) de onde o sistema opera. `CC_SERVER_IP` (no adminai.env) manda; sem ela, o
+    endereço da interface por onde o servidor sai para a internet, descoberto uma vez por processo (um socket UDP
+    "conectado" não manda pacote nenhum) e só se for IP público; sem nenhum, "server"."""
+    global _ip_descoberto
+    env = (os.environ.get("CC_SERVER_IP") or "").strip()
+    if env:
+        return env[:64]
+    if _ip_descoberto is None:
+        _ip_descoberto = SEM_IP_SERVIDOR
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("192.0.2.1", 9))                  # TEST-NET: nada sai, só escolhe a rota
+                ip = s.getsockname()[0]
+            if ipaddress.ip_address(ip).is_global:
+                _ip_descoberto = ip
+        except (OSError, ValueError):
+            pass
+    return _ip_descoberto
+
+
+def da_equipe(fluxo, evento):
+    """O evento é de alguém da equipe (não de quem assina)? O convite enviado é o clique da equipe no painel."""
+    return fluxo == "staff" or evento == "invite_sent"
 
 
 class Demais(Exception):
@@ -85,6 +124,8 @@ def registrar(con, evento, fluxo, source="server", ip=None, user_agent=None, det
     desconhecidos = set(ids) - set(_CAMPOS)
     if desconhecidos:
         raise ValueError(f"campos desconhecidos: {sorted(desconhecidos)}")
+    if da_equipe(fluxo, evento):                       # #354: o IP do servidor, nunca o da pessoa da equipe
+        ip, user_agent = ip_do_servidor(), UA_EQUIPE
     linha = {k: None for k in _CAMPOS}
     linha.update(ids)
     linha.update(at=agora(), flow=fluxo, event=evento, source=source, ip=ip, user_agent=(user_agent or "")[:300] or None,

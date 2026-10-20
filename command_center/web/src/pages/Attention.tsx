@@ -15,6 +15,27 @@ import { tr } from '../i18n'
 const LEVELS: Level[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 const LABEL: Record<Level, string> = { CRITICAL: tr("Crítico"), HIGH: tr("Alto"), MEDIUM: tr("Médio"), LOW: tr("Baixo") }
 
+/* #354 (dono, 20/10: "as novas waivers entram quando as atuais forem vencendo"): o convite de renovação sai só
+ * com o clique da equipe, depois de ver para quem vai */
+function RenovarWaiver({ a, onChange }: { a: A; onChange?: () => void }) {
+  const toast = useToast()
+  const perguntar = usePerguntar()
+  const [indo, setIndo] = useState(false)
+  async function enviar() {
+    setIndo(true)
+    try {
+      const { destino: x } = await api.get<{ destino: { can_send: boolean; reason: string | null; email: string | null; signer_name: string | null } }>(`/clients/${a.client_id}/waiver-invite`)
+      if (!x.can_send || !x.email) { toast(x.reason || tr("O convite não pode sair deste card agora."), 'warn'); return }
+      const ok = await perguntar({ titulo: tr("Mandar o convite de renovação da waiver?"), ok: tr("Enviar"),
+        texto: tr("Para: {0} · {1}\n\nO link é pessoal, vale uma vez e vence em 72 h.", x.signer_name || '', x.email) })
+      if (!ok) return
+      await api.post(`/clients/${a.client_id}/waiver-invite`, { email: x.email })
+      toast(tr("Convite enviado para {0}.", x.email), 'ok'); onChange?.()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <button className="btn primary" disabled={indo} onClick={enviar}>{indo ? <span className="spin" /> : '✉'} {tr("Mandar convite de renovação")}</button>
+}
+
 function Balao({ a, onDone }: { a: A; onDone: () => void }) {
   const toast = useToast()
   const nav = useNavigate()
@@ -62,6 +83,7 @@ export function AttentionList({ items, onChange, mini }: { items: A[]; onChange?
     sub={[a.why, mini ? (a.facts || []).filter(([, v]) => v && v !== '—').map(([k, v]) => `${k}: ${v}`).join(' · ') : null]}
     acoes={<>
       {a.client_id && <Link className="btn" to={`/clients/${a.client_id}`}>{a.action && /respond|responder/i.test(a.action) ? tr("Abrir cliente e responder") : tr("Abrir cliente")}</Link>}
+      {a.entity.type === 'waiver_renewal' && a.client_id && can('OPERATOR') && !a.dismissed && <RenovarWaiver a={a} onChange={onChange} />}
       {a.entity.type === 'approvals' && <Link className="btn" to="/approvals">{tr("Ver aprovações")}</Link>}
       {a.entity.type === 'ai' && <Link className="btn" to="/ai">{tr("Ver conversa da IA")}</Link>}
       {a.entity.type === 'integration' && <Link className="btn" to="/integrations">{tr("Ver integrações")}</Link>}

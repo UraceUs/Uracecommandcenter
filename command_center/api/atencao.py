@@ -443,6 +443,36 @@ def _coletar(con):
                               action="Configurar o selo ou mudar o switch", facts=[("Switch do card", "Nativa"),
                                                                                     ("Vale agora", "DocuSign")]))
 
+    # ---- 4f2e. waiver vencendo (#354, dono, 20/10: "as novas waivers entram quando as atuais forem vencendo"): o card
+    # cuja waiver que vale (nativa ou DocuSign) vence em até 30 dias. O botão manda o convite de renovação, com o clique
+    # da equipe: nada sai sozinho para o cliente
+    from command_center.providers import convite_waiver as _cw
+    hj = _cw.portal.hoje()
+    limite = (hj + timedelta(days=_cw.RENOVACAO_DIAS)).isoformat()
+    candidatos = todos(con, f"""SELECT DISTINCT client_id FROM waivers WHERE client_id IS NOT NULL AND status='completed'
+                                  AND COALESCE(hidden,0)=0 AND COALESCE(internal,0)=0 AND NOT {waiver_anulada()} AND (
+                                    (source='urace' AND substr(expires_at,1,10) BETWEEN ? AND ?)
+                                    OR (COALESCE(source,'')<>'urace' AND date(substr(completed_at,1,10), '+{_wn.VALIDADE_DIAS} days')
+                                        BETWEEN ? AND ?))""", (hj.isoformat(), limite, hj.isoformat(), limite))
+    for x in candidatos:
+        d = _cw._do_card(con, x["client_id"])
+        r = _cw.renovacao(con, x["client_id"], d) if d else None
+        if not r or r["expires_at"] > limite or not r["renewal"]:
+            continue                                  # já renovou (outra vale mais), ou a renovação não cabe (18 anos)
+        c = d["card"]
+        dias = (date.fromisoformat(r["expires_at"]) - hj).days
+        quem = c.get("pilot_name") or c["name"]
+        itens.append(dict(key=_chave("waiver-renovar", "client", f"{c['id']}:{r['expires_at']}"),
+                          level="MEDIUM" if dias <= 7 else "LOW",
+                          title=f"{quem}: a waiver vence em {dias} dia(s)" if dias else f"{quem}: a waiver vence HOJE",
+                          why=f"A waiver {'do DocuSign' if r['source'] == 'docusign' else 'assinada no sistema'} vale até "
+                              f"{_dbr(r['expires_at'])}. A nova entra quando esta for vencendo: mande o convite de "
+                              "renovação (nada sai sem o clique da equipe).",
+                          entity={"type": "waiver_renewal", "id": r["id"]}, client_id=c["id"], link=None,
+                          action="Mandar convite de renovação",
+                          facts=[("Vence", _dbr(r["expires_at"])), ("Origem", "DocuSign" if r["source"] == "docusign" else "Nativa"),
+                                 ("E-mail", d["email"] or "—")]))
+
     # ---- 4f3. checklists (#92): começado e não concluído num dia que já passou
     from command_center.providers import checklists as _ck
     soltos = _ck.incompletos(con)

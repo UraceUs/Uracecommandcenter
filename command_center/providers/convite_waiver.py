@@ -16,6 +16,11 @@ para adulto quanto para responsável, o e-mail que tiver no card vai receber iss
   hora de assinar; os dois vão para a trilha e para o certificado.
 - **Reenviar** manda um link novo e aposenta os anteriores ainda em aberto. Cada passo (enviado,
   aberto, documento entregue, código, assinado, recusado) fica na auditoria do card.
+- **Renovação** (#354, dono, 20/10: *"as novas waivers entram quando as atuais forem vencendo"*): com uma waiver valendo
+  no card ou no piloto (a nativa ou a do DocuSign), o convite não sai; libera nos últimos `RENOVACAO_DIAS` dias dela, e
+  aí é a renovação. "Precisa de atenção" lista essas waivers com o botão do convite; nada sai sem o clique da equipe.
+- **Quem vê**: a área do cliente mostra as waivers dos pilotos da conta. Quem tem o piloto ligado à conta vê também a
+  waiver que outra pessoa (o e-mail do card) assinou pelo convite: é o piloto dele (decisão do dono, 20/10: fica assim).
 - **Política**: pela pessoa no painel, o clique dela (com a confirmação). Pela IA,
   `painel_waiver_convite` é REQUIRES_APPROVAL: sai para o cliente, espera o aprovar.
 
@@ -34,6 +39,7 @@ from command_center.db import agora, atualizar, auditar, inserir, todos, um, wai
 from command_center.providers import codigos, portal, trilha_waiver as tw, waiver_nativa as wn
 
 VALIDADE_HORAS = 72          # a issue (#135, dono 06/10): "um link de uso único, que vale 72 h"
+RENOVACAO_DIAS = 30          # #354: o convite de renovação libera nos últimos 30 dias da waiver que vale
 INTERVALO_ENVIO_S = 60       # dois cliques seguidos não mandam dois e-mails
 CODIGO_MIN = codigos.VALIDADE_MIN
 CODIGO_TENTATIVAS = codigos.TENTATIVAS
@@ -140,6 +146,51 @@ def _vigente_do_card(con, client_id, tipo):
     return None if wn.parental_de_maior(con, w) else w
 
 
+def waiver_valendo(con, client_id, tipo=None, pilot_id=None):
+    """A waiver que vale hoje para este card (ou piloto) e vence por último: a nativa (do modelo `tipo`, do card ou do
+    piloto) ou a do DocuSign no card (1 ano da assinatura, a mesma conta da cobrança da sessão). {source, id, expires_at}
+    ou None."""
+    hoje = portal.hoje()
+    achadas = []
+    if tipo:
+        w = _vigente_do_card(con, client_id, tipo)
+        if w:
+            achadas.append({"source": "nativa", "id": w["id"], "expires_at": (w["expires_at"] or "")[:10]})
+    if pilot_id:
+        w = wn.vigente(con, pilot_id)
+        if w:
+            achadas.append({"source": "nativa", "id": w["id"], "expires_at": (w["expires_at"] or "")[:10]})
+    d = um(con, f"""SELECT id, completed_at FROM waivers WHERE client_id=? AND status='completed'
+                     AND COALESCE(source,'')<>'urace' AND COALESCE(hidden,0)=0 AND COALESCE(internal,0)=0
+                     AND NOT {waiver_anulada()} AND substr(completed_at,1,10) >= ? ORDER BY completed_at DESC LIMIT 1""",
+           (client_id, (hoje - timedelta(days=wn.VALIDADE_DIAS)).isoformat()))
+    if d:
+        ate = date.fromisoformat(d["completed_at"][:10]) + timedelta(days=wn.VALIDADE_DIAS)
+        achadas.append({"source": "docusign", "id": d["id"], "expires_at": ate.isoformat()})
+    return max(achadas, key=lambda x: x["expires_at"]) if achadas else None
+
+
+def renovacao(con, client_id, d=None):
+    """Para a renovação (#354): a waiver que vale, se o convite pode sair (`renewal`) e, se não, por quê (`blocked`)."""
+    d = d or _do_card(con, client_id)
+    v = waiver_valendo(con, client_id, d["kind"], d["pilot_id"]) if d else None
+    if not v:
+        return None
+    ate = date.fromisoformat(v["expires_at"])
+    libera = ate - timedelta(days=RENOVACAO_DIAS)
+    fonte = "do DocuSign" if v["source"] == "docusign" else "assinada no sistema"
+    bloqueio = None
+    if portal.hoje() < libera:
+        bloqueio = (f"O card já tem uma waiver valendo até {ate.strftime('%m/%d/%Y')} ({fonte}). A nova entra quando "
+                    f"esta for vencendo: o convite de renovação libera em {libera.strftime('%m/%d/%Y')} "
+                    f"({RENOVACAO_DIAS} dias antes).")
+    elif d["kind"] == "parental" and d["driver_birth_date"] and \
+            wn.validade("parental", date.fromisoformat(d["driver_birth_date"]), portal.hoje()) <= ate:
+        bloqueio = (f"A waiver vale até a véspera dos 18 do piloto ({ate.strftime('%m/%d/%Y')}). Uma parental nova não "
+                    "valeria mais tempo: no aniversário de 18 o próprio piloto assina a dele (adulto).")
+    return {**v, "renews_from": libera.isoformat(), "renewal": bloqueio is None, "blocked": bloqueio}
+
+
 def destino(con, client_id):
     """O que o painel mostra antes do clique: para quem vai, qual waiver e, se não pode, por quê."""
     d = _do_card(con, client_id)
@@ -164,9 +215,13 @@ def destino(con, client_id):
     elif d["kind"] == "parental" and (not (c.get("pilot_name") or "").strip() or _mesma_pessoa(c["pilot_name"], c["name"])):
         motivo = ("O piloto é menor e o card não tem o nome do responsável (pai ou mãe), que é quem assina. "
                   "Ponha o piloto no campo Piloto e o responsável no nome do card.")
-    v = _vigente_do_card(con, client_id, d["kind"]) if d["kind"] else None
+    r = renovacao(con, client_id, d)
+    if motivo is None and r and r["blocked"]:
+        motivo = r["blocked"]                                      # #354: a nova entra quando a atual for vencendo
     return {**d, "client_id": client_id, "enabled": nativa, "can_send": motivo is None, "reason": motivo,
-            "valid_hours": VALIDADE_HORAS, "valid_waiver_until": v["expires_at"] if v else None}
+            "valid_hours": VALIDADE_HORAS, "valid_waiver_until": r["expires_at"] if r else None,
+            "valid_waiver_source": r["source"] if r else None, "renewal": bool(r and r["renewal"]),
+            "renewal_days": RENOVACAO_DIAS}
 
 
 # ------------------------------------------------------------------ o e-mail
@@ -237,7 +292,7 @@ def enviar(con, client_id, por, user_id=None, email_confirmado=None, enviar_emai
     auditar(con, "waiver.invite.sent", por, user_id=user_id, entity_type="client", entity_id=client_id,
             detail={"invite": iid, "kind": inv["kind"], "to": inv["email"], "signer": inv["signer_name"],
                     "driver": inv["driver_name"], "expires_at": inv["expires_at"], "resend": bool(anteriores),
-                    "replaced": anteriores}, ip=ip)
+                    "replaced": anteriores, "renewal": d["renewal"]}, ip=ip)
     m = wn.modelo(con, inv["kind"])
     tw.registrar(con, "invite_sent", "invite", ip=ip, detail={"to": codigos.mascarar(inv["email"]), "by": por,
                                                               "expires_at": inv["expires_at"], "resend": bool(anteriores)},
@@ -426,8 +481,9 @@ def _preparar(con, token, dados):
     m = wn.modelo(con, tipo)
     if not m:
         raise wn.ErroWaiver("Online waiver signing is not available right now. Please contact URACE.")
-    if _vigente_do_card(con, inv["client_id"], tipo):
-        raise wn.ErroWaiver("This driver already has a signed waiver that is still valid.")
+    v = _vigente_do_card(con, inv["client_id"], tipo)
+    if v and (v["expires_at"] or "")[:10] > (portal.hoje() + timedelta(days=RENOVACAO_DIAS)).isoformat():
+        raise wn.ErroWaiver("This driver already has a signed waiver that is still valid.")   # #354: só na renovação
     nome = wn._nome(dados.get("typed_name"))
     png = wn._png(dados.get("signature"))
     with open(m["pdf_path"], "rb") as f:
