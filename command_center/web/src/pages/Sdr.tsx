@@ -83,6 +83,79 @@ function LigarDesligar({ p, onMudou }: { p: Painel; onMudou: () => void }) {
   </Section>
 }
 
+// ------------------------------------------------------------------ SMS (Dialpad) e e-mail (support@) — 20/10
+interface CanalContato {
+  id: number; canal: 'sms' | 'email'; contato: string; nome: string | null; respostas: number; opt_out: number
+  pausado_ate: string | null; pausa_motivo: string | null; precisa_gente: number; precisa_motivo: string | null
+  ultima_entrada_em: string | null; ultima_resposta_em: string | null
+}
+interface Canais {
+  configuracao: { arquivo: string; existe: boolean }; sms: { ligado: boolean }; email: { ligado: boolean; caixa: string }
+  nivel: string; lista_de_teste: boolean; pausa_horas: number; contatos: CanalContato[]
+}
+interface CanalMsg { direcao: 'entrada' | 'saida'; por: 'lead' | 'robo' | 'equipe'; texto: string; at: string }
+const quemCanal = (c: CanalContato) => c.nome || (c.canal === 'sms' ? `+${c.contato}` : c.contato)
+const QUEM_MSG: Record<string, string> = { lead: tr("lead"), robo: tr("robô"), equipe: tr("equipe") }
+function CanaisCard({ pode }: { pode: boolean }) {
+  const d = useGet<Canais>('/sdr/canais', 30000)
+  const toast = useToast()
+  const [aberto, setAberto] = useState<number | null>(null)
+  const conversa = useGet<{ mensagens: CanalMsg[] }>(aberto ? `/sdr/canais/${aberto}` : null)
+  const [busy, setBusy] = useState<number | null>(null)
+  async function acao(id: number, a: 'reativar' | 'pausar' | 'resolvido') {
+    setBusy(id)
+    try {
+      await api.post(`/sdr/canais/${id}`, { acao: a })
+      toast(a === 'reativar' ? tr("Robô reativado neste contato.") : a === 'pausar' ? tr("Robô pausado neste contato. A pessoa responde.") : tr("Marcado como resolvido: o robô volta a responder."), 'ok')
+      d.reload(); conversa.reload()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(null) }
+  }
+  const agoraIso = new Date().toISOString()
+  return <Section title={tr("Robô no SMS e no e-mail")} count={d.data?.contatos.length}>
+    {d.error ? <ErrorState error={d.error} retry={d.reload} /> : !d.data ? <Loading rows={2} /> : <div className="stack" style={{ gap: 12 }}>
+      <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+        <Chip tone={d.data.sms.ligado ? 'ok' : 'neutral'} dot>{d.data.sms.ligado ? tr("SMS ligado") : tr("SMS desligado")}</Chip>
+        <Chip tone={d.data.email.ligado ? 'ok' : 'neutral'} dot>{d.data.email.ligado ? tr("e-mail ligado ({0})", d.data.email.caixa) : tr("e-mail desligado")}</Chip>
+        {d.data.lista_de_teste && <Chip tone="warn">{tr("só a lista de teste")}</Chip>}
+        {!d.data.configuracao.existe && <Chip tone="neutral" title={d.data.configuracao.arquivo}>{tr("sem arquivo de configuração")}</Chip>}
+      </div>
+      <p className="small muted" style={{ margin: 0 }}>{tr("O mesmo robô do Instagram, só para lead. Quando alguém da equipe responde pelo Dialpad ou pela support@, ele sai da conversa por {0} h. O que ele passa para a equipe aparece em Precisa de atenção.", d.data.pausa_horas)}</p>
+      {!d.data.contatos.length ? <Empty title={tr("Nenhuma conversa ainda")}>{tr("As conversas de SMS e e-mail aparecem aqui assim que chegarem.")}</Empty>
+        : <ul className="sdr-lista">{d.data.contatos.map(c => {
+          const pausado = !!c.pausado_ate && c.pausado_ate > agoraIso
+          return <li key={c.id} style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+            <div className="row" style={{ gap: 8, alignItems: 'start' }}>
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  <Chip tone="neutral">{c.canal === 'sms' ? tr("SMS") : tr("e-mail")}</Chip>
+                  <strong>{quemCanal(c)}</strong>
+                  {!!c.opt_out && <Chip tone="crit">{tr("pediu para parar")}</Chip>}
+                  {pausado && <Chip tone="warn" title={c.pausa_motivo || ''}>{tr("robô pausado")}</Chip>}
+                  {!!c.precisa_gente && <Chip tone="crit" title={c.precisa_motivo || ''}>{tr("com a equipe")}</Chip>}
+                </div>
+                {c.precisa_gente ? <div className="small" style={{ marginTop: 4 }}>{c.precisa_motivo}</div> : null}
+                <div className="small muted">{tr("{0} resposta(s) do robô", c.respostas)}{c.ultima_entrada_em ? ` · ${tr("última mensagem")} ${ago(c.ultima_entrada_em)}` : ''}</div>
+              </div>
+              <div className="row" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button className="btn sm" onClick={() => setAberto(aberto === c.id ? null : c.id)}>{aberto === c.id ? tr("Fechar") : tr("Ver conversa")}</button>
+                {pode && pausado && <button className="btn sm" disabled={busy === c.id} onClick={() => acao(c.id, 'reativar')}>{tr("Reativar")}</button>}
+                {pode && !pausado && !c.opt_out && <button className="btn sm" disabled={busy === c.id} onClick={() => acao(c.id, 'pausar')}>{tr("Pausar")}</button>}
+                {pode && !!c.precisa_gente && <button className="btn sm primary" disabled={busy === c.id} onClick={() => acao(c.id, 'resolvido')}>{tr("Resolvido")}</button>}
+              </div>
+            </div>
+            {aberto === c.id && <div className="sdr-teste" style={{ marginTop: 8, maxHeight: 320 }}>
+              {conversa.error ? <ErrorState error={conversa.error} retry={conversa.reload} /> : !conversa.data ? <Loading rows={2} />
+                : conversa.data.mensagens.map((m, i) => <div key={i} className={`sdr-teste-turno ${m.direcao === 'entrada' ? 'voce' : 'robo'}`}>
+                  <div className="sdr-balao" style={{ whiteSpace: 'pre-wrap' }}>{m.texto}</div>
+                  <div className="sdr-hora">{QUEM_MSG[m.por] || m.por} · {horaOrlando(m.at)}</div>
+                </div>)}
+            </div>}
+          </li>
+        })}</ul>}
+    </div>}
+  </Section>
+}
+
 // ------------------------------------------------------------------ IA pausada por conversa
 export interface Pausa { lead_id: number; por?: string | null; em?: string | null; motivo?: string | null }
 function PausasCard({ pode, onMudou }: { pode: boolean; onMudou: () => void }) {
@@ -390,6 +463,7 @@ export function Sdr() {
       <LigarDesligar p={d} onMudou={() => setTick(x => x + 1)} />
       {can('OPERATOR') && <TesteCard />}
       <PausasCard pode={can('OPERATOR')} onMudou={() => setTick(x => x + 1)} />
+      {can('OPERATOR') && <CanaisCard pode={can('OPERATOR')} />}
       <Instrucoes pode={d.pode_instruir || can('MANAGER')} onMudou={() => setTick(x => x + 1)} />
       <RelatosCard podeResolver={can('MANAGER')} onMudou={() => setTick(x => x + 1)} />
       <Decisoes />

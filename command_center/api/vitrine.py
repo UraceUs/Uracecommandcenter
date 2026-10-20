@@ -469,11 +469,38 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
     _avisar_equipe(f"Site · contato: {assunto} — {c['nome']}",
                    f"{c['nome']} <{c['email']}> {c.get('telefone') or ''}\nAssunto: {assunto}\n\n{c['mensagem']}\n\n"
                    f"Vendas: https://ops.urace.us/ops/sales/{oid}")
-    _confirmar_pessoa(c["email"], "We got your message — URACE",
-                      f"Hi {c['nome'].split()[0]},\n\nThanks for reaching out to URACE. We received your message about "
-                      f"{assunto} and will reply shortly, usually within one business day.\n\nIn a hurry? Call or WhatsApp "
-                      f"+1 (407) 250 2291.\n\nURACE — the Champion's Factory\nOrlando Kart Center, 10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824")
+    confirmacao = ("We got your message — URACE",
+                   f"Hi {c['nome'].split()[0]},\n\nThanks for reaching out to URACE. We received your message about "
+                   f"{assunto} and will reply shortly, usually within one business day.\n\nIn a hurry? Call or WhatsApp "
+                   f"+1 (407) 250 2291.\n\nURACE — the Champion's Factory\nOrlando Kart Center, 10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824")
+    # dono, 20/10: com o robô ligado no e-mail, é ele quem escreve o follow-up (no lugar da confirmação genérica)
+    from command_center.providers import sdr_canais
+    if sdr_canais.vai_responder_formulario(con, c["email"]):
+        _robo_no_formulario(oid, c["nome"], c["email"].lower(), assunto, c["mensagem"], confirmacao)
+    else:
+        _confirmar_pessoa(c["email"], *confirmacao)
     return _responde(request, True, "/contact/?sent=1")
+
+
+def _robo_no_formulario(oid, nome, email, assunto, mensagem, confirmacao):
+    """Em segundo plano (o robô leva alguns segundos): se ele não conseguir, sai a confirmação de sempre."""
+
+    def corpo():
+        from command_center.db import conectar
+        from command_center.providers import sdr_canais
+        con = conectar()
+        try:
+            ok = sdr_canais.responder_formulario(con, oid, nome, email, assunto, mensagem)
+        except Exception:                                    # noqa: BLE001
+            ok = False
+        finally:
+            con.close()
+        if not ok:
+            _confirmar_pessoa(email, *confirmacao)
+    if os.environ.get("CC_SDR_FORMULARIO_SINCRONO") == "1":   # teste: sem thread
+        corpo()
+    else:
+        threading.Thread(target=corpo, daemon=True, name="sdr-formulario").start()
 
 
 @r.post("/ops/api/vitrine/pedido", include_in_schema=False)

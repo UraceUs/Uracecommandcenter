@@ -256,3 +256,6 @@ canal (`command_center/providers/sdr_canais.py`): SMS pelo webhook do Dialpad, e
 3 min, só lead (cliente e oportunidade com o closer ficam com a equipe), robô nunca responde a robô, a pessoa
 que responde à mão pausa o robô 72 h no contato, "pare" encerra. Começa desligado (`sdr-canais.env`) e com lista
 de teste. Sem follow-up por SMS/e-mail nesta fase (FTSA da Flórida). Roteiro: `salesagent/docs/robo-sms-email.md`.
+- 20/10, respostas do dono: o formulário do site recebe o follow-up escrito pelo robô (da support@, no lugar da
+  confirmação genérica; oportunidade NOVO sem closer é lead); card "Robô no SMS e no e-mail" no painel; taxa de
+  pista do site passa a ser a do robô ($90 seg–sex, $65 sáb–dom, espectador $5).

@@ -15,7 +15,8 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | Lead escreve para support@ | responde na mesma conversa, num e-mail curto, assinado "Chase, URACE" |
 | "Oi" e "quanto custa" logo em seguida | espera 8 s e responde uma vez só |
 | Objeção, pronto para fechar, já compete, pede pessoa | oferece a call (ou a frase de espera) e a conversa entra em **Precisa de atenção** |
-| SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (a operadora confirma) e nunca mais escreve; START devolve |
+| SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (o Dialpad confirma e bloqueia o contato) e nunca mais escreve; UNSTOP devolve |
+| SMS só com HELP / INFO | **não responde**: o Dialpad manda a mensagem de ajuda do escritório |
 | "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
 | Cliente do painel, oportunidade com o closer, card do Kommo fora das etapas do robô ou com tag de passagem | **não responde**: é da equipe |
 | Conversa que o robô já passou para a equipe | **fica quieto** até alguém marcar resolvido |
@@ -63,10 +64,23 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 na mesma pasta do `bridge.env` (a `URACE_DIR` do serviço). Se aparecer `existe: false`, o arquivo foi criado em outra
 pasta.
 
-## Em aberto (decisão do dono)
+## Formulário do site (dono, 20/10: "ele monta o e-mail para follow up")
 
-- **Formulário do site**: se ele chega na support@ vindo de noreply@ com Reply-To, o robô hoje o ignora como
-  automático. Responder pelo Reply-To?
-- **10DLC**: confirmar que o registro do número da empresa cobre resposta automática (senão a operadora pode
-  filtrar) e se o Dialpad já responde o STOP sozinho.
-- **Tela**: as conversas e o "Reativar" existem só na API. Um card no painel do robô antes de liberar a todos.
+Com o e-mail ligado, quem preenche o formulário de contato recebe o follow-up **escrito pelo robô**, saindo da
+support@, no lugar da confirmação genérica. A oportunidade nova em Vendas (NOVO, sem closer) é lead para o robô; a
+resposta da pessoa cai na support@ e segue com ele. Quando um closer pega a oportunidade (ou ela passa de NOVO), o
+robô sai. Se o robô não conseguir responder, sai a confirmação de sempre. A equipe continua avisada como antes.
+
+## Tela
+
+Painel → Robô SDR → **Robô no SMS e no e-mail**: as conversas, o que está ligado, e os botões Ver conversa,
+Pausar, Reativar e Resolvido.
+
+## Em aberto
+
+- **10DLC (trava do SMS)**: sem campanha A2P **Registered**, as operadoras bloqueiam SMS do número da empresa
+  para celulares dos EUA. Conferir em Admin Portal → Company Settings → SMS Management → SMS Registration
+  (`dialpad.com/campaignregistration`, só Company Admin). A campanha precisa marcar mensagem **automatizada e
+  conversacional**, ter 2+ exemplos com "URACE", objetivo e "Reply STOP to opt out", e o site precisa da política
+  de SMS (dado de celular não é compartilhado para marketing). Aprovação leva ~3 semanas. O Dialpad já trata
+  STOP, UNSTOP e HELP sozinho. **Só ligar `SDR_CANAL_SMS` com a campanha Registered**; o e-mail não depende disso.
