@@ -110,3 +110,55 @@ def test_cobranca_segue_o_card(con, cenario, monkeypatch):  # noqa: F811
     assert wn.fluxo_da_waiver(con, outro) == "nativa" and wn.fluxo_da_waiver(con, None) == "nativa"
     con.execute("UPDATE booking_config SET waiver_native=0 WHERE id=1")
     assert wn.fluxo_da_waiver(con, outro) == "docusign"
+
+
+# ------------------------------------------------------------------ pré-requisitos por provedor (#364)
+# Dono, 20/10: "Waiver pronta para uso: mostrar os pré-requisitos por provedor. No teste, DocuSign está selecionado; a
+# opção nativa está desabilitada por falta dos dois templates. Isso não indica falha no DocuSign."
+def _itens(bloco):
+    return {i["chave"]: i for i in bloco["itens"]}
+
+
+def test_prerequisitos_por_provedor_nativa_sem_modelos_nao_e_falha_do_docusign(cli):
+    equipe(cli)
+    c1 = _card("Leo Exemplo", "leo@example.com")
+    _db("UPDATE integrations SET status='CONNECTED' WHERE system='docusign'")
+    assert _muda(cli, c1, "docusign").status_code == 200
+    f = cli.get(f"/ops/api/clients/{c1}/waiver-flow", headers=equipe(cli)).json()
+    ds, na = f["prerequisites"]["docusign"], f["prerequisites"]["nativa"]
+    assert ds["pronto"] is True and all(i["ok"] and i["como_resolver"] is None for i in ds["itens"])
+    assert set(_itens(ds)) == {"conectado", "modelo"}
+    assert na["pronto"] is False and set(_itens(na)) == {"modelos", "selo", "chave_geral"}
+    m = _itens(na)["modelos"]
+    assert m["ok"] is False and m["detalhe"] == "0 de 2 importados" and "Importar do DocuSign" in m["como_resolver"]
+    assert _itens(na)["selo"]["ok"] is True and _itens(na)["chave_geral"]["obrigatorio"] is False
+    assert f["native_available"] is False
+    assert f["native_reason"] == "Nativa indisponível: faltam os 2 modelos importados. Isso não é falha do DocuSign."
+    # importados os dois, a nativa fica pronta (a chave geral desligada não a impede no card)
+    assert cli.post(f"{S}/waiver-nativa/importar", headers=equipe(cli)).status_code == 200
+    f = cli.get(f"/ops/api/clients/{c1}/waiver-flow", headers=equipe(cli)).json()
+    assert f["prerequisites"]["nativa"]["pronto"] is True and f["native_available"] is True and f["native_reason"] is None
+    assert _itens(f["prerequisites"]["nativa"])["chave_geral"]["ok"] is False
+
+
+def test_prerequisitos_docusign_desconectado_e_selo_ausente(cli, tmp_path, monkeypatch):
+    equipe(cli)
+    c1 = _card("Ana Exemplo", "ana@example.com")
+    _db("UPDATE integrations SET status='DISCONNECTED', last_error='faltam credenciais' WHERE system='docusign'")
+    monkeypatch.setenv("CC_WAIVER_SEAL_DIR", str(tmp_path / "sem-selo"))
+    f = cli.get(f"/ops/api/clients/{c1}/waiver-flow", headers=equipe(cli)).json()
+    ds, na = f["prerequisites"]["docusign"], f["prerequisites"]["nativa"]
+    assert ds["pronto"] is False and _itens(ds)["conectado"]["ok"] is False
+    assert _itens(ds)["conectado"]["detalhe"] == "faltam credenciais" and _itens(ds)["conectado"]["como_resolver"]
+    assert _itens(na)["selo"]["ok"] is False and _itens(na)["selo"]["como_resolver"]
+    assert "faltam os 2 modelos importados e o selo não está configurado" in f["native_reason"]
+
+
+def test_mcp_do_cliente_le_os_prerequisitos(cli):
+    from command_center.api import mcp_http
+    equipe(cli)
+    c1 = _card("Rui Exemplo", "rui@example.com")
+    d = mcp_http._f_cliente(conectar(), id=c1)
+    w = d["waiver_fluxo"]
+    assert w["choice"] == "padrao" and set(w["prerequisites"]) == {"docusign", "nativa"}
+    assert "Isso não é falha do DocuSign" in w["native_reason"]

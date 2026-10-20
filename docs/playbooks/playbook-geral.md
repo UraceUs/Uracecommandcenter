@@ -427,6 +427,28 @@ waiver nativa."*
   ou outro piloto da mesma conta segue o switch do card dele. Piloto sem card segue a chave geral.
 - Cada mudança fica na Auditoria (`client.waiver_flow`, com antes, depois e quem).
 
+**Pré-requisitos por provedor (#364).** Dono, 20/10: *"Waiver pronta para uso: mostrar os pré-requisitos por
+provedor. No teste, DocuSign está selecionado; a opção nativa está desabilitada por falta dos dois templates. Isso
+não indica falha no DocuSign."* Debaixo do switch, cada provedor tem a sua lista, com ✓ (ok) ou ✗ (falta) e, no que
+falta, como resolver:
+
+| Provedor | Pré-requisito | Como resolver quando falta |
+|---|---|---|
+| DocuSign | **DocuSign conectado** (a última sondagem de Integrações) | Integrações › **Verificar agora**; se continuar, conferir a credencial do DocuSign no servidor |
+| DocuSign | **Modelos de waiver definidos** (adult e parental) | os dois modelos têm de estar definidos no sistema |
+| Nativa | **Os 2 modelos importados** do DocuSign (mostra "N de 2 importados") | Site › Waiver › **Importar do DocuSign** (ADMIN; só lê os modelos, nada muda no DocuSign) |
+| Nativa | **Selo digital (PAdES) configurado** | configurar o selo no servidor (`selo-waiver`; veja Site › Waiver) |
+| Nativa | **Chave geral ligada** (opcional no card) | só conta para os cards em **Padrão**; escolher **Nativa** no card não depende dela |
+
+- Ao lado do nome do provedor aparece **pronto** ou **não pronto** (pronto = todos os obrigatórios com ✓).
+- A nativa indisponível diz o porquê numa frase só, por exemplo: *"Nativa indisponível: faltam os 2 modelos
+  importados. Isso não é falha do DocuSign."* A lista do DocuSign continua com ✓: a falta é da nativa.
+- O "conectado" do DocuSign não chama o DocuSign ao abrir o card: lê o estado de **Integrações** (sondagem de manhã
+  e à noite, ou **Verificar agora**).
+- O conector (MCP) lê o mesmo: `urace_cliente` traz `waiver_fluxo` com a escolha, o fluxo que vale e
+  `prerequisites` (`docusign` e `nativa`, cada um com `pronto` e os itens `{chave, rotulo, ok, como_resolver}`).
+- Rota: `GET /clients/{id}/waiver-flow` (a mesma do switch) devolve `prerequisites` junto.
+
 #### Convite da waiver por e-mail (#135)
 
 Dono, 14/10: *"vai ser por e-mail para o adulto ou para o responsável assinar aquela waiver. Tanto

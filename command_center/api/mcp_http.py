@@ -33,7 +33,7 @@ from starlette.concurrency import run_in_threadpool
 from command_center import providers
 from command_center.api import atencao, auth, mcp_operar
 from command_center.db import conectar_somente_leitura, status_da_waiver, todos, um
-from command_center.providers import estoque
+from command_center.providers import estoque, waiver_nativa
 
 r = APIRouter(prefix="/ops/mcp", tags=["mcp"])
 
@@ -103,6 +103,8 @@ def _f_cliente(con, id=None, **_):
             "waivers": [dict(w) for w in todos(
                 con, f"SELECT signer_name, {status_da_waiver()} AS status, completed_at, expires_at FROM waivers "
                      "WHERE client_id=? ORDER BY id DESC LIMIT 20", (id,))],
+            # #364: o fluxo da próxima waiver e os pré-requisitos de cada provedor (DocuSign × nativa), como o card mostra
+            "waiver_fluxo": waiver_nativa.fluxo_do_card(con, id),
             "estoque_dele": estoque.do_cliente(con, id)}
 
 
@@ -235,8 +237,8 @@ FERRAMENTAS = {
          "limite": {"type": "integer", "description": "quantos (padrão 50, teto 200)"}},
         [], _f_clientes),
     "urace_cliente": (
-        "Ficha completa de um cliente: serviços, invoices, waivers e as peças dele que "
-        "estão com a gente.",
+        "Ficha completa de um cliente: serviços, invoices, waivers, o fluxo da próxima waiver com os "
+        "pré-requisitos de cada provedor (DocuSign × nativa) e as peças dele que estão com a gente.",
         {"id": {"type": "integer", "description": "id do cliente"}}, ["id"], _f_cliente),
     "urace_invoices": (
         "Invoices espelhadas do QuickBooks: quem deve, quanto e desde quando.",
