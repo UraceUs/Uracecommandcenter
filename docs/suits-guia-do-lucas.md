@@ -62,7 +62,10 @@ claude mcp add --transport http urace https://ops.urace.us/ops/mcp
 Depois, dentro do Claude Code, digite `/mcp`, escolha **urace** e **Authenticate**. Entre com o
 seu usuário e marque **"Também operar o painel como você"**.
 
-Sem a caixa marcada, o Claude só lê. Tudo o que ele faz fica na auditoria do painel com o **seu**
+Sem a caixa marcada, o Claude só lê, mesmo com papel ADMIN: o papel e o conector são travas
+separadas. Em **Equipe › Conectar o Claude**, a lista **Seus conectores** mostra cada um como
+**Leitura** ou **Operar** e o motivo; se estiver **Leitura**, desconecte e conecte de novo marcando
+a caixa. Tudo o que ele faz fica na auditoria do painel com o **seu**
 nome.
 
 **Ferramentas que aparecem para o Claude:**
@@ -70,6 +73,8 @@ nome.
 - `urace_api`: executa uma operação (método, caminho, corpo). É exatamente o mesmo que clicar no
   botão do painel.
 - `urace_resumo` e `urace_atencao`: o panorama e o que precisa de gente hoje.
+- `urace_cliente_pedidos` e `urace_cliente_pagamentos` com o `client_id` (número do card): os pedidos
+  (Suits incluídos) e os pagamentos só daquele cliente, sem trazer dado de outro.
 
 **Confirmação:** o que manda algo para fora (e-mail, rascunho no Gmail, QuickBooks, Asana) não
 acontece na primeira chamada. O painel devolve o que vai fazer. O Claude mostra para você e só

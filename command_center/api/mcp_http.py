@@ -108,12 +108,17 @@ def _f_cliente(con, id=None, **_):
             "estoque_dele": estoque.do_cliente(con, id)}
 
 
-def _f_invoices(con, status=None, limite=80, **_):
+def _f_invoices(con, status=None, limite=80, client_id=None, **_):
     sql = "SELECT id, client_id, doc_number, amount, balance, status, issued_on, due_on FROM invoices"
-    p = []
+    onde, p = [], []
     if status:
-        sql += " WHERE UPPER(status)=UPPER(?)"
+        onde.append("UPPER(status)=UPPER(?)")
         p.append(status)
+    if client_id is not None:                    # #363: só as daquele card
+        onde.append("client_id=?")
+        p.append(int(client_id))
+    if onde:
+        sql += " WHERE " + " AND ".join(onde)
     sql += " ORDER BY COALESCE(issued_on,'') DESC LIMIT ?"
     p.append(min(int(limite or 80), 300))
     linhas = [dict(i) for i in todos(con, sql, tuple(p))]
@@ -121,11 +126,121 @@ def _f_invoices(con, status=None, limite=80, **_):
     return {"invoices": linhas, "total_em_aberto": round(aberto, 2)}
 
 
-def _f_corridas(con, limite=40, **_):
+def _f_corridas(con, limite=40, client_id=None, **_):
+    if client_id is not None:                    # #363: as corridas para que aquele card foi convidado
+        return {"corridas": [dict(x) for x in todos(
+            con, "SELECT r.id, r.name, r.series, r.track, r.date_start, r.date_end, ri.status AS convite "
+                 "FROM race_invites ri JOIN races r ON r.id=ri.race_id WHERE ri.client_id=? "
+                 "ORDER BY COALESCE(r.date_start,'') DESC LIMIT ?",
+            (int(client_id), min(int(limite or 40), 200)))]}
     return {"corridas": [dict(x) for x in todos(
         con, "SELECT id, name, series, track, date_start, date_end FROM races "
              "WHERE COALESCE(active,1)=1 ORDER BY COALESCE(date_start,'') DESC LIMIT ?",
         (min(int(limite or 40), 200),))]}
+
+
+# ------------------------------------------------------- consultas por card (#363)
+# Dono, 20/10: "permitir filtrar reservas, pedidos e pagamentos pelo mesmo card, evitando buscar
+# dados de outros clientes durante um diagnóstico". Cada fonte junta pelo `client_id` gravado na
+# linha (ou pela conta/piloto do portal ligados ao card, a mesma regra do painel). NUNCA por nome ou
+# e-mail: o e-mail de um pedido pode ser de outra pessoa, e "parecido" traz outro cliente.
+# Colunas comuns, na ordem: fonte, id, data, descricao, status, valor, saldo, documento, pago_em.
+def _reservas():
+    from command_center.providers.contrato import CARD_DO_AGENDAMENTO
+    return [
+        ("agendamento_site",
+         "SELECT 'agendamento_site', b.id, b.date, COALESCE(b.service_name, 'Site booking') || ' (' || b.period || ')', "
+         "b.status, b.price, NULL, b.invoice_doc, b.paid_at FROM bookings b "
+         "JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id "
+         f"WHERE {CARD_DO_AGENDAMENTO}=?"),
+        ("corrida",
+         "SELECT 'corrida', ri.id, r.date_start, r.name || COALESCE(' - ' || r.track, ''), ri.status, "
+         "NULL, NULL, NULL, NULL FROM race_invites ri JOIN races r ON r.id=ri.race_id WHERE ri.client_id=?"),
+        ("sessao_do_carrinho",       # sessão paga no carrinho que ainda não virou agendamento (ex.: sem vaga)
+         "SELECT 'sessao_do_carrinho', i.id, i.date, COALESCE(i.service_name, i.name), i.status, i.amount, "
+         "NULL, NULL, NULL FROM store_order_items i WHERE i.kind='sessao' AND i.booking_id IS NULL AND i.client_id=?"),
+    ]
+
+
+_PEDIDOS = [
+    ("loja",
+     "SELECT 'loja', id, created_at, product_name, status, amount, NULL, qbo_receipt_doc, paid_at "
+     "FROM store_orders WHERE client_id=?"),
+    ("plano",
+     "SELECT 'plano', id, created_at, service_name || ' x ' || months || ' meses', status, "
+     "COALESCE(invoice_total, price * months), NULL, invoice_doc, paid_at FROM plan_orders WHERE client_id=?"),
+    ("suit",
+     "SELECT 'suit', id, COALESCE(order_date, created_at), title, "
+     "CASE WHEN discarded_at IS NOT NULL THEN 'descartado' ELSE status END, NULL, NULL, site_order, paid_at "
+     "FROM suit_orders WHERE client_id=?"),
+]
+
+_PAGAMENTOS = [
+    ("invoice_qbo",
+     "SELECT 'invoice_qbo', id, issued_on, 'Invoice QuickBooks', status, amount, balance, doc_number, NULL "
+     "FROM invoices WHERE client_id=?"),
+    ("mensalidade",
+     "SELECT 'mensalidade', id, send_at, COALESCE(description, 'Mensalidade ' || month), status, amount, NULL, "
+     "doc_number, sent_at FROM monthly_invoices WHERE client_id=?"),
+    ("invoice_pecas",
+     "SELECT 'invoice_pecas', id, service_date, 'Peças do dia', status, total, "
+     "CASE WHEN paid_at IS NULL THEN total END, doc_number, paid_at FROM parts_invoices WHERE client_id=?"),
+    ("stripe",
+     "SELECT 'stripe', id, COALESCE(paid_at, created_at), product_name, status, COALESCE(amount_paid, amount), "
+     "NULL, qbo_receipt_doc, paid_at FROM store_orders WHERE stripe_session_id IS NOT NULL AND client_id=?"),
+    ("deposito_reembolso",
+     "SELECT 'deposito_reembolso', d.id, d.created_at, 'Reembolso do security deposit', d.status, d.amount, "
+     "NULL, d.stripe_refund_id, d.done_at FROM store_deposit_refunds d JOIN store_orders o ON o.id=d.order_id "
+     "WHERE o.client_id=?"),
+]
+
+# O que ficou de fora, e por quê: a pessoa precisa saber que não é "não tem", é "não junta".
+_FORA = {
+    "reservas": {"booking_groups": "sem client_id; o card vem de cada agendamento (bookings)",
+                 "tasks (Asana)": "estão nos serviços de urace_cliente"},
+    "pedidos": {"suit_leads": "é interesse, não pedido: o lead que fecha vira suit_orders (fonte suit)"},
+    "pagamentos": {"stripe_events": "sem client_id; o pagamento aparece pelo pedido (fonte stripe)",
+                   "client_events": "sem dado novo: repete o pagamento do pedido (fonte stripe)"},
+}
+
+_COLUNAS = ("fonte", "id", "data", "descricao", "status", "valor", "saldo", "documento", "pago_em")
+
+
+def _por_card(con, tipo, partes, client_id=None, limit=20, offset=0):
+    if client_id is None:
+        raise ValueError("client_id (o número do card) é obrigatório")
+    cid = int(client_id)
+    if not um(con, "SELECT 1 FROM clients WHERE id=?", (cid,)):
+        raise ValueError(f"cliente {cid} não existe")
+    lim = max(1, min(int(limit or 20), 100))
+    desl = max(0, int(offset or 0))
+    uniao = " UNION ALL ".join(sql for _, sql in partes)
+    p = (cid,) * len(partes)
+    por_fonte = {f: 0 for f, _ in partes}
+    # A primeira parte (vazia) só dá nome às colunas: no UNION ALL, quem nomeia é o primeiro SELECT.
+    nomes = ", ".join(f"NULL AS {c}" for c in _COLUNAS)
+    base = f"SELECT * FROM (SELECT {nomes} WHERE 0 UNION ALL {uniao})"
+    for x in todos(con, f"SELECT fonte, COUNT(*) n FROM ({base}) GROUP BY fonte", p):
+        por_fonte[x["fonte"]] = x["n"]
+    linhas = [dict(x) for x in todos(
+        con, f"{base} ORDER BY COALESCE(data, '') DESC, fonte, id DESC LIMIT ? OFFSET ?", (*p, lim, desl))]
+    return {"client_id": cid, "tipo": tipo, "total": sum(por_fonte.values()), "limit": lim, "offset": desl,
+            "por_fonte": por_fonte, tipo: linhas,
+            "como_junta": "só pelo client_id do card (agendamento do site: pela conta ou pelo piloto do portal "
+                          "ligados ao card). Nunca por nome ou e-mail.",
+            "fora": _FORA[tipo]}
+
+
+def _f_cliente_reservas(con, client_id=None, limit=20, offset=0, **_):
+    return _por_card(con, "reservas", _reservas(), client_id, limit, offset)
+
+
+def _f_cliente_pedidos(con, client_id=None, limit=20, offset=0, **_):
+    return _por_card(con, "pedidos", _PEDIDOS, client_id, limit, offset)
+
+
+def _f_cliente_pagamentos(con, client_id=None, limit=20, offset=0, **_):
+    return _por_card(con, "pagamentos", _PAGAMENTOS, client_id, limit, offset)
 
 
 def _f_auditoria(con, limite=100, **_):
@@ -216,6 +331,12 @@ def _f_api(con, metodo=None, caminho=None, corpo=None, consulta=None, confirmar=
     return mcp_operar.chamar(_quem or {}, _ctx or {}, metodo, caminho, corpo, consulta, bool(confirmar))
 
 
+_POR_CARD = {
+    "client_id": {"type": "integer", "description": "número do card (id do cliente), obrigatório"},
+    "limit": {"type": "integer", "description": "quantas linhas (padrão 20, teto 100)"},
+    "offset": {"type": "integer", "description": "quantas pular, para a próxima página (padrão 0)"},
+}
+
 FERRAMENTAS = {
     "urace_resumo": (
         "Panorama do negócio em números: clientes, serviços, invoices em aberto, waivers, "
@@ -243,9 +364,28 @@ FERRAMENTAS = {
     "urace_invoices": (
         "Invoices espelhadas do QuickBooks: quem deve, quanto e desde quando.",
         {"status": {"type": "string", "description": "opcional: paid, sent, overdue"},
+         "client_id": {"type": "integer", "description": "opcional: só as do card (número do cliente)"},
          "limite": {"type": "integer"}}, [], _f_invoices),
     "urace_corridas": (
-        "Calendário de corridas da equipe.", {"limite": {"type": "integer"}}, [], _f_corridas),
+        "Calendário de corridas da equipe. Com client_id, só as corridas para que aquele card foi "
+        "convidado, com a situação do convite.",
+        {"limite": {"type": "integer"},
+         "client_id": {"type": "integer", "description": "opcional: número do card"}}, [], _f_corridas),
+    # -------------------------------------------------- consultas por card (#363)
+    "urace_cliente_reservas": (
+        "Reservas de UM card: agendamentos do site e do portal (com a cobrança do agendamento), "
+        "convites de corrida e sessões do carrinho que ainda não viraram agendamento. Só linhas daquele "
+        "card, juntadas pelo client_id (nunca por nome ou e-mail), da mais recente para a mais antiga.",
+        _POR_CARD, ["client_id"], _f_cliente_reservas),
+    "urace_cliente_pedidos": (
+        "Pedidos de UM card: loja/carrinho do site, planos mensais comprados no site e pedidos de "
+        "macacão (Suits). Só linhas daquele card, juntadas pelo client_id.",
+        _POR_CARD, ["client_id"], _f_cliente_pedidos),
+    "urace_cliente_pagamentos": (
+        "Pagamentos de UM card: invoices do QuickBooks espelhadas, mensalidades, invoices de peças, "
+        "pagamentos pelo Stripe e reembolsos do security deposit. Só linhas daquele card, juntadas pelo "
+        "client_id.",
+        _POR_CARD, ["client_id"], _f_cliente_pagamentos),
     "urace_auditoria": (
         "Rastro de auditoria do painel: quem fez o quê e quando. Append-only por gatilho "
         "no banco — nem um bug apaga.",
@@ -308,10 +448,12 @@ FERRAMENTAS = {
 def _instrucoes(quem):
     base = ("Painel de operações da URACE.US (kart racing, Orlando). Comece por urace_resumo para o "
             "panorama, ou urace_atencao para o que precisa de gente hoje. As urace_kommo_* leem o CRM "
-            "comercial (Kommo). ")
+            "comercial (Kommo). Num diagnóstico de um cliente, consulte pelo card: urace_cliente_reservas, "
+            "urace_cliente_pedidos e urace_cliente_pagamentos pedem o client_id e só trazem as linhas daquele "
+            "card (paginadas com limit/offset e total); urace_invoices e urace_corridas também aceitam client_id. ")
     if (quem or {}).get("somente_leitura"):
-        return base + ("Este acesso é SÓ DE LEITURA: nada aqui escreve. Para operar, a pessoa conecta de "
-                       "novo e marca 'Também operar o painel como você'.")
+        from command_center.api.mcp_operar import permissao
+        return base + f"Este acesso é SÓ DE LEITURA: nada aqui escreve. {permissao(quem)['por_que']}"
     return base + (f"Este acesso OPERA o painel como {(quem or {}).get('name')} ({(quem or {}).get('role')}): "
                    "use urace_operacoes para ver o que dá para fazer e urace_api para fazer. Valem as regras "
                    "do painel e o papel da pessoa. Antes de enviar algo ao cliente ou cobrar, mostre o que vai "

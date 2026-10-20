@@ -124,16 +124,31 @@ def pode(quem, papel):
     return quem.get("free") or auth.pode(quem.get("role"), papel)
 
 
+def permissao(quem):
+    """#362: papel da pessoa e permissão do conector, separados, e o porquê em português.
+    O conector OAuth vale pelo escopo `mcp:write` do token; a chave de API, por não ser só de
+    leitura; a sessão do navegador não tem trava de conector."""
+    from command_center.api import oauth
+    quem = quem or {}
+    if quem.get("via") == "oauth":
+        conector = oauth.ESCOPO_OPERAR in (quem.get("escopo") or "").split()
+    else:
+        conector = not quem.get("somente_leitura")
+    return oauth.permissao(quem.get("role"), conector, livre=quem.get("free"),
+                           chave=str(quem.get("via") or "").startswith("key:"))
+
+
 def operacoes(quem, busca=None, limite=60):
     """O que ESTA pessoa pode fazer pelo MCP: só as rotas que o papel dela alcança, e só
     leitura se o acesso dela é de leitura."""
-    so_ler = bool(quem.get("somente_leitura"))
+    p = permissao(quem)
+    so_ler = bool(quem.get("somente_leitura")) or not p["opera"]
     itens = [o for o in catalogo() if pode(quem, o["papel"]) and (not so_ler or o["metodo"] == "GET")]
     if busca:
         termos = [t for t in re.split(r"\s+", busca.lower()) if t]
         itens = [o for o in itens if all(t in f"{o['caminho']} {o['descricao']}".lower() for t in termos)]
     limite = max(1, min(int(limite or 60), 300))
-    return {"papel": quem.get("role"), "opera": not so_ler, "total": len(itens), "operacoes": itens[:limite],
+    return {**p, "opera": not so_ler, "total": len(itens), "operacoes": itens[:limite],
             "como_usar": "chame urace_api com metodo e caminho (troque {id} pelo número); corpo é JSON. "
                          "O que tem confirma=true precisa de confirmar=true — antes disso só mostra o que vai fazer."}
 
@@ -153,9 +168,10 @@ def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=Fals
     op = _operacao(metodo, caminho)
     if not op:
         raise ValueError(f"{metodo} {caminho} não existe no painel (veja urace_operacoes)")
-    if metodo != "GET" and quem.get("somente_leitura"):
-        raise ValueError("este acesso é só de leitura. Para operar, conecte de novo e marque "
-                         "'Também operar o painel como você' na tela de autorização.")
+    if metodo != "GET":
+        p = permissao(quem)
+        if quem.get("somente_leitura") or not p["opera"]:
+            raise ValueError(f"este acesso é só de leitura. {p['por_que']}")
     if not pode(quem, op["papel"]):
         raise ValueError(f"isto é do papel {op['papel']} ou acima; você é {quem.get('role')}")
     if op["confirma"] and not confirmar:

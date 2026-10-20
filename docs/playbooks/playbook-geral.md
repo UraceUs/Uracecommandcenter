@@ -1238,6 +1238,25 @@ Depois, no Claude Code, digite `/mcp`, escolha **urace** e **Authenticate**. Ent
 Sem a caixa marcada, o Claude **só lê**. Ninguém copia senha, token ou chave para o chat: o login
 é pelo navegador.
 
+### Leitura ou Operar: por quê (#362)
+
+São **duas travas separadas**, e o conector só opera com as duas abertas:
+
+1. **O seu papel** no painel: OPERATOR, MANAGER e ADMIN podem operar; VIEWER só lê.
+2. **O que o conector recebeu** quando você clicou em **Autorizar**: com a caixa
+   **"Também operar o painel como você"** marcada, operar; sem ela, só leitura.
+
+Em **Equipe › Conectar o Claude** aparece **"Seu papel: X"** e a lista **Seus conectores**: cada
+conector que você autorizou (Claude, ChatGPT…), com **Leitura** ou **Operar**, a data e o motivo.
+Só os seus; token e segredo nunca aparecem. O `urace_operacoes` devolve o mesmo, separado em
+`papel_permite_operar`, `conector_permite_operar`, `opera` e `por_que`.
+
+| Situação | O que fazer |
+|---|---|
+| Papel ADMIN (ou OPERATOR/MANAGER), conector **Leitura** | No app do Claude ou ChatGPT, desconecte o conector e conecte de novo marcando **"Também operar o painel como você"** |
+| Papel VIEWER | Peça a um ADMIN que mude o seu papel para OPERATOR ou acima (tela **Usuários**); depois conecte de novo marcando a caixa |
+| Papel que opera e conector **Operar** | Já opera: o que vai para o cliente ou cobra pede confirmação antes |
+
 ### As ferramentas
 
 | Ferramenta | Para quê |
@@ -1245,6 +1264,7 @@ Sem a caixa marcada, o Claude **só lê**. Ninguém copia senha, token ou chave 
 | `urace_resumo` | o panorama |
 | `urace_atencao` | o que precisa de gente hoje |
 | `urace_clientes`, `urace_cliente`, `urace_corridas`, `urace_estoque`, `urace_invoices`, `urace_precos_cobrados`, `urace_auditoria`, `urace_kommo_*` | leituras prontas |
+| `urace_cliente_reservas`, `urace_cliente_pedidos`, `urace_cliente_pagamentos` | **diagnóstico de um cliente pelo card**: pedem o `client_id` (número do card) e só trazem as linhas dele (agendamentos e corridas; loja, planos e Suits; invoices, mensalidades, peças, Stripe e reembolso do depósito), paginadas com `limit` (padrão 20, teto 100), `offset` e `total`. `urace_invoices` e `urace_corridas` também aceitam `client_id` |
 | `urace_operacoes` | lista **as operações que o seu papel alcança**. Filtre com uma palavra: `venda`, `waiver`, `invoice`, `suits`... |
 | `urace_api` | executa uma operação (método, caminho, corpo). É a **mesma rota** do botão do painel |
 
@@ -1446,6 +1466,8 @@ auditoria com o nome dela.
 ### Como trabalhar
 
 1. **Comece pelo panorama:** `urace_resumo` e `urace_atencao`.
+   Para diagnosticar **um** cliente, consulte pelo card: `urace_cliente_reservas`,
+   `urace_cliente_pedidos` e `urace_cliente_pagamentos` com o `client_id` (não traz dado de outro cliente).
 2. **Descubra antes de agir:** `urace_operacoes` com uma palavra (`clients`, `sales`, `suits`,
    `waiver`, `invoice`...). Ela só lista o que o papel da pessoa alcança. Não chute rota.
 3. **Leia antes de perguntar:** procure o cliente (`GET /ops/api/clients?q=…`), o pedido, a

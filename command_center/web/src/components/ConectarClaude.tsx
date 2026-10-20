@@ -4,11 +4,40 @@
  * com o papel dela, e a auditoria fica com o nome dela. */
 import { useState } from 'react'
 import { useGet } from '../api/hooks'
-import { Section } from './ui'
+import { Section, Status } from './ui'
 import { useToast } from './Toast'
+import { fmtDate } from './fmt'
 import { tr } from '../i18n'
 
-interface Conector { url: string; papel: string; pode_operar: boolean; terminal: string }
+/** #362: cada conector que a pessoa autorizou. O papel e o escopo do conector são duas travas
+ * separadas: só opera com as duas abertas. */
+interface Autorizado { nome: string; escopo: 'leitura' | 'operar'; autorizado_em: string; usado_em: string | null
+  papel_permite_operar: boolean; opera: boolean; por_que: string }
+interface Conector { url: string; papel: string; pode_operar: boolean; terminal: string; conectores?: Autorizado[] }
+
+function motivo(c: Autorizado, papel: string) {
+  if (c.opera) return tr("Seu papel ({0}) permite operar e este conector foi autorizado para operar.", papel)
+  if (c.papel_permite_operar) return tr("Seu papel ({0}) permite operar, mas este conector foi autorizado só para leitura: desconecte e conecte de novo marcando \"Também operar o painel como você\".", papel)
+  if (c.escopo === 'operar') return tr("Este conector foi autorizado para operar, mas seu papel ({0}) só permite ler o painel: para operar, peça a um ADMIN que mude o seu papel para OPERATOR ou acima.", papel)
+  return tr("Seu papel ({0}) só permite ler o painel, e este conector também foi autorizado só para leitura.", papel)
+}
+
+function Autorizados({ lista, papel }: { lista: Autorizado[]; papel: string }) {
+  return <div className="stack" style={{ gap: 8, marginTop: 12 }}>
+    <h3 className="h3">{tr("Seus conectores")}</h3>
+    {lista.length === 0 ? <p className="small muted" style={{ margin: 0 }}>{tr("Nenhum conector autorizado ainda.")}</p>
+      : <ul className="stack" style={{ gap: 8, margin: 0, padding: 0, listStyle: 'none' }}>
+        {lista.map(c => <li key={`${c.nome}-${c.autorizado_em}`} className="stack" style={{ gap: 4, minWidth: 0 }}>
+          <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <b style={{ overflowWrap: 'anywhere' }}>{c.nome}</b>
+            <Status kind={c.opera ? 'ok' : 'off'} label={c.opera ? tr("Operar") : tr("Leitura")} />
+            <span className="small muted">{tr("desde {0}", fmtDate(c.autorizado_em))}</span>
+          </div>
+          <span className="small">{motivo(c, papel)}</span>
+        </li>)}
+      </ul>}
+  </div>
+}
 
 function Copiar({ texto, rotulo }: { texto: string; rotulo: string }) {
   const toast = useToast()
@@ -30,6 +59,8 @@ export function ConectarClaude() {
     onClick={() => setAberto(a => !a)}>{aberto ? tr("Fechar") : tr("Como conectar")}</button>}>
     <p className="small" style={{ margin: 0 }}>
       {tr("O seu Claude pode")} {c.pode_operar ? <b>{tr("consultar e operar")}</b> : <b>{tr("consultar")}</b>} {tr("o Command Center como")} <b>{tr("você")}</b> ({c.papel}{tr("): agendar, criar cliente, fechar venda, mandar invoice e waiver — só o que o seu papel já faz aqui. O que vai para o cliente ou cobra pede a sua confirmação antes, e tudo fica na auditoria com o seu nome.")}</p>
+    <p className="small" style={{ margin: '8px 0 0' }}>{tr("Seu papel:")} <b>{c.papel}</b>{' · '}{c.pode_operar ? tr("permite operar") : tr("só permite ler")}</p>
+    {c.conectores && <Autorizados lista={c.conectores} papel={c.papel} />}
     {aberto && <div className="stack" style={{ gap: 14, marginTop: 12 }}>
       <div className="stack" style={{ gap: 6 }}>
         <h3 className="h3">{tr("No app do Claude (celular, computador ou claude.ai)")}</h3>
