@@ -1404,32 +1404,91 @@ def test_balcao_le_o_cliente_cobra_guarda_e_pergunta_antes_de_cobrar_peca_dele(s
     pg.wait_for_url(f"**/ops/balcao/{david}")
     pg.get_by_role("heading", name="David Pedalo", level=2).wait_for()
     # COBRAR: a peça entra na invoice de peças de hoje. Sem QuickBooks no e2e, a tela diz isso.
-    campo = pg.get_by_label("Leia a peça (ou outro cliente)")
+    campo = pg.get_by_label("Peça: digite o nome ou o código")
     campo.fill("7890000000017"); campo.press("Enter")
     pg.get_by_text("Front bumper (e2e): cobrada.").wait_for()
     pg.get_by_text("QuickBooks: QuickBooks não está conectado").wait_for()
     assert pg.get_by_role("button", name="Tentar de novo").count() == 1
-    # GUARDAR: outra cor, outro aviso, vai para o estoque dele
+    # GUARDAR: outra cor, outro aviso; a peça entra na lista e vai para o estoque dele no Confirmar
     pg.get_by_role("radio", name="GUARDAR").click()
     pg.get_by_text("Modo GUARDAR: a peça vai para o estoque do cliente e NÃO é cobrada.").wait_for()
     campo.fill("7890000000017"); campo.press("Enter")
-    pg.get_by_text("Front bumper (e2e): guardada para o cliente.").wait_for()
-    pg.get_by_text("Guardado deste cliente com a gente").wait_for()
+    pg.get_by_text("Front bumper (e2e): na lista para guardar.").wait_for()
+    pg.get_by_role("button", name="Confirmar 1 peça(s)").click()
+    pg.get_by_text("1 peça(s) guardada(s) para David Pedalo.").wait_for()
     # COBRAR uma peça que ele tem guardada pergunta antes
     pg.get_by_role("radio", name="COBRAR").click()
+    pg.get_by_text("Guardado deste cliente com a gente").wait_for()
     campo.fill("7890000000017"); campo.press("Enter")
     pg.get_by_role("heading", name="Esta peça é do cliente?").wait_for()
     pg.get_by_role("button", name="Usar a dele (sem cobrar)").click()
     pg.get_by_text("Front bumper (e2e): usada do estoque do cliente.").wait_for()
-    # código que ninguém conhece abre o cadastro
+    # código que ninguém conhece abre o registro da peça nova, com o código já preenchido
     campo.fill("1234509876"); campo.press("Enter")
-    pg.get_by_role("heading", name="Código novo").wait_for()
-    pg.get_by_role("button", name="Cancelar").click()
+    pg.get_by_role("heading", name="Registrar peça nova", level=3).wait_for()
+    assert pg.get_by_label("Código da etiqueta").input_value() == "1234509876"
+    pg.get_by_role("dialog").get_by_role("button", name="Cancelar").click()
     # desfazer a primeira leitura (a cobrada)
     pg.get_by_role("button", name="Desfazer").last.click()
     pg.get_by_text("Desfeito.").wait_for()
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_balcao_no_celular_cliente_guardar_digitar_peca_nova_e_confirmar(servidor, navegador):
+    """Dono, 20/10: "quando eu vou digitar a peça pelo celular, não aparece o teclado" — o campo tinha inputmode="none".
+    E a ordem: o cliente primeiro, COBRAR/GUARDAR, o campo da peça; a peça que não existe abre o pop-up, que já põe no
+    cliente; no GUARDAR, a lista do que está guardando e o Confirmar lá embaixo."""
+    pg = entrar(navegador, servidor, largura=390, altura=844)
+    abrir(pg, servidor, "/balcao")
+    pg.get_by_role("heading", name="Quem é o cliente?", level=2).wait_for()
+    assert pg.get_by_role("radio", name="GUARDAR").count() == 0, "sem cliente, nada mais aparece"
+    busca = pg.get_by_label("Buscar o cliente pelo nome")
+    busca.fill("Pedalo")
+    pg.locator(".lpick-menu .opt", has_text="David Pedalo").first.click()
+    pg.get_by_role("heading", name="David Pedalo", level=2).wait_for()
+    pg.get_by_role("radio", name="GUARDAR").click()
+    campo = pg.get_by_label("Peça: digite o nome ou o código")
+    assert campo.get_attribute("inputmode") != "none" and campo.get_attribute("readonly") is None
+    campo.click(); pg.keyboard.type("Seat strut e2e novo")
+    assert campo.input_value() == "Seat strut e2e novo", "o campo aceita texto digitado"
+    pg.get_by_role("button", name=re.compile("registrar peça nova “Seat strut e2e novo”", re.I)).wait_for()
+    campo.press("Enter")                            # não existe: o pop-up, com o nome já preenchido
+    dlg = pg.get_by_role("dialog")
+    dlg.get_by_role("heading", name="Registrar peça nova", level=3).wait_for()
+    assert dlg.get_by_label("Nome da peça").input_value() == "Seat strut e2e novo"
+    salvar = dlg.get_by_role("button", name="Salvar e guardar")
+    assert salvar.bounding_box()["height"] >= 40
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    salvar.click()
+    pg.get_by_text("Seat strut e2e novo registrada e na lista para guardar de David Pedalo.").wait_for()
+    lista = pg.locator(".balcao-guard")
+    lista.get_by_text("Seat strut e2e novo").wait_for()
+    # a segunda peça, já conhecida, pelo código
+    campo.fill("7890000000017"); campo.press("Enter")
+    lista.get_by_text("Front bumper (e2e)").wait_for()
+    # Esc fecha o pop-up
+    pg.get_by_role("button", name="+ Registrar peça nova").click()
+    pg.get_by_role("heading", name="Registrar peça nova", level=3).wait_for()
+    pg.keyboard.press("Escape")
+    pg.get_by_role("dialog").wait_for(state="detached")
+    # a lista fica no servidor: recarregar mostra a mesma
+    pg.reload()
+    pg.get_by_role("radio", name="GUARDAR").click()
+    confirmar = pg.get_by_role("button", name="Confirmar 2 peça(s)")
+    assert confirmar.bounding_box()["height"] >= 44
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    confirmar.click()
+    pg.get_by_text("2 peça(s) guardada(s) para David Pedalo.").wait_for()
+    pg.locator(".tbl .tr", has_text="Seat strut e2e novo").first.wait_for()
+    assert pg.locator(".tbl .tr", has_text="guardada para o cliente").count() >= 2
+    pg.locator(".tbl .tr", has_text="Front bumper (e2e)").first.wait_for()
+    assert pg.locator(".balcao-guard").count() == 0
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
@@ -2209,7 +2268,7 @@ def test_balcao_finalizado_desfazer_no_celular_contar_o_estoque_e_abrir_cliente(
     r = g.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     g.get_by_role("button", name="Terminar").click()
-    g.get_by_role("heading", name="Abrir um cliente").wait_for()
+    g.get_by_role("heading", name="Quem é o cliente?").wait_for()
     assert len([t for n, t in _cabecalhos(g) if n == 1]) == 1
     assert not g.erros_js and not g.erros_api, (g.erros_js, g.erros_api)
     g.close()

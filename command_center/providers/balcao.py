@@ -585,7 +585,14 @@ def do_cliente(con, client_id, data=None):
     return {"cliente": resumo_cliente(c), "data": data, "qr": url_do_cliente(codigo_do_cliente(con, client_id)),
             "waivers": waivers_do_card(con, client_id),                 # #117: conferir o documento
             "invoices": [invoice_publica(con, p) for p in invs],
-            "leituras": [dict(x) for x in leituras], "guardado": estoque.do_cliente(con, client_id)["pecas"]}
+            "leituras": [dict(x) for x in leituras], "guardado": estoque.do_cliente(con, client_id)["pecas"],
+            "guardando": _guardando(con, client_id)}
+
+
+def _guardando(con, client_id):
+    """A lista do GUARDAR ainda não confirmada (dono, 20/10), só deste card."""
+    from command_center.providers import balcao_guardar
+    return balcao_guardar.lista(con, client_id)
 
 
 def a_enviar(con, limit=50, offset=0):

@@ -7,7 +7,7 @@
  *
  * O leitor (coletor Android) digita o código no campo e aperta Enter, como um teclado. A
  * câmera é a alternativa, em qualquer celular: o leitor nativo do Chrome ou, no iPhone, o ZXing. */
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
@@ -41,7 +41,7 @@ interface WaiverCard { id: number; source: 'urace' | 'docusign'; kind: string | 
   signed_at: string | null
   valid_until: string | null; id_check: IdCheck | null }
 interface Estado { cliente: Cliente; data: string; invoices: InvPecas[]; leituras: Leitura[]; gerente: boolean
-  guardado: { item_id: number; name: string; qty: number; local: string }[]; waivers?: WaiverCard[] }
+  guardado: { item_id: number; name: string; qty: number; local: string }[]; waivers?: WaiverCard[]; guardando?: Guardando[] }
 type Lido = { tipo: 'cliente'; cliente: Cliente; waivers?: WaiverCard[] } | { tipo: 'peca'; codigo: string; item: Item } | { tipo: 'desconhecido'; codigo: string }
 
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
@@ -619,6 +619,180 @@ function WaiverDoCard({ waivers, clientId, vip, onMudou }: { waivers: WaiverCard
   </Section>
 }
 
+/* Balcão no celular (dono, 20/10): "quando eu vou digitar a peça pelo celular, não aparece o teclado". O campo da
+ * peça tinha inputMode="none" por padrão (para o coletor não abrir o teclado em cima da tela) e só o botãozinho
+ * "Digitar" ligava o teclado. Agora o campo é um texto comum: tocar abre o teclado. Quem usa o coletor liga
+ * "Só o leitor" (fica lembrado no aparelho). */
+const lerSoLeitor = () => { try { return localStorage.getItem('balcao.soLeitor') === '1' } catch { return false } }
+interface Sugestao { origem: 'estoque' | 'quickbooks'; item_id?: number; qbo_item_id?: string; nome: string; preco: number | null; codigo?: string | null }
+interface Guardando { id: number; item_id: number; nome: string; qty: number; local: string; codigo: string | null }
+
+/** O campo da peça: digitar (com as sugestões do estoque e do QuickBooks enquanto digita) ou ler o código. */
+function CampoPeca({ campo, texto, setTexto, indo, guardar, onLer, onSugestao, onNova, onCamera, local, setLocal }: {
+  campo: RefObject<HTMLInputElement | null>; texto: string; setTexto: (t: string) => void; indo: boolean; guardar: boolean
+  onLer: (t: string) => void; onSugestao: (s: Sugestao) => void; onNova: (nome: string) => void; onCamera: () => void
+  local: string; setLocal: (l: string) => void }) {
+  const [sug, setSug] = useState<Sugestao[] | null>(null)
+  const [soLeitor, setSoLeitor] = useState(lerSoLeitor)
+  useEffect(() => {
+    const t = texto.trim()
+    if (t.length < 2 || soLeitor) { setSug(null); return }
+    let vale = true
+    const h = setTimeout(() => {
+      api.get<{ itens: Sugestao[] }>(`/balcao/aproximado${qs({ q: t.slice(0, 120) })}`)
+        .then(r => { if (vale) setSug(r.itens) }).catch(() => { if (vale) setSug([]) })
+    }, 250)
+    return () => { vale = false; clearTimeout(h) }
+  }, [texto, soLeitor])
+  const t = texto.trim()
+  function alternar() {
+    const v = !soLeitor; setSoLeitor(v)
+    try { localStorage.setItem('balcao.soLeitor', v ? '1' : '0') } catch { /* sem armazenamento */ }
+    setTimeout(() => campo.current?.focus(), 30)
+  }
+  return <form className="balcao-leitor" onSubmit={e => { e.preventDefault(); onLer(texto) }}>
+    <label className="fld grow"><span>{tr("Peça: digite o nome ou o código")}</span>
+      <input ref={campo} type="text" value={texto} onChange={e => setTexto(e.target.value)} autoComplete="off" autoCapitalize="off"
+        spellCheck={false} inputMode={soLeitor ? 'none' : 'text'} enterKeyHint="go" disabled={indo}
+        placeholder={tr("ex.: front bumper")} aria-describedby="balcao-dica" /></label>
+    {t.length >= 2 && !soLeitor && <ul className="balcao-sug" aria-label={tr("Sugestões")}>
+      {(sug || []).map(s => <li key={s.origem + (s.item_id ?? s.qbo_item_id)}>
+        <button type="button" className="btn" disabled={indo} onClick={() => { onSugestao(s); setSug(null) }}>
+          <span className="grow">{s.nome}<small className="muted"> · {s.origem === 'estoque' ? tr("estoque") : tr("QuickBooks")}</small></span>
+          {s.preco != null && <span className="mono">{usd(s.preco)}</span>}</button></li>)}
+      {sug && <li><button type="button" className="btn balcao-sug-nova" disabled={indo} onClick={() => onNova(t)}>
+        {sug.length ? tr("Não é nenhuma: registrar peça nova “{0}”", t) : tr("Não achei. Registrar peça nova “{0}”", t)}</button></li>}
+      {!sug && <li className="small muted">{tr("buscando…")}</li>}
+    </ul>}
+    <div className="balcao-leitor-acoes">
+      <button type="button" className="btn primary" onClick={onCamera}>{tr("📷 Ler com a câmera")}</button>
+      <button type="button" className="btn" onClick={() => onNova(t)}>{tr("+ Registrar peça nova")}</button>
+      <select aria-label={tr("Onde a peça está")} value={local} onChange={e => setLocal(e.target.value)}>
+        {LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select>
+      <button type="button" className="btn ghost" aria-pressed={soLeitor} onClick={alternar}>{soLeitor ? tr("⌨ Digitar") : tr("Só o leitor (sem teclado)")}</button>
+    </div>
+    <p id="balcao-dica" className="small muted" style={{ margin: 0 }}>{guardar
+      ? tr("Toque no campo para digitar, ou leia o código. A peça entra na lista abaixo e só vai para o estoque do cliente no Confirmar.")
+      : tr("Toque no campo para digitar, ou leia o código. O leitor também digita aqui.")}</p>
+  </form>
+}
+
+/** Peça que o sistema não tem: registra e já adiciona ao cliente (GUARDAR: na lista; COBRAR: no rascunho). */
+function PecaNova({ clientId, cliente, modo, nome: nome0, codigo: codigo0, local, gerente, onFeito, onLigarCodigo, onFechar }: {
+  clientId: number; cliente: string; modo: Modo; nome: string; codigo: string; local: string; gerente: boolean
+  onFeito: (r: { item: Item; guardando?: Guardando[] }) => void; onLigarCodigo?: () => void; onFechar: () => void }) {
+  const toast = useToast()
+  const caixa = useRef<HTMLFormElement>(null)
+  const [f, setF] = useState({ nome: nome0, category: '', codigo: codigo0, price: '' })
+  const [prat, setPrat] = useState<{ code: string; nome: string }[]>([])
+  const [foto, setFoto] = useState<File | null>(null)
+  const [previa, setPrevia] = useState<string | null>(null)
+  const [indo, setIndo] = useState(false)
+  const cobrar = modo === 'cobrar'
+  useEffect(() => {
+    api.get<{ prateleiras: { code: string; nome: string }[] }>('/estoque').then(r => setPrat(r.prateleiras)).catch(() => undefined)
+    const el = caixa.current?.querySelector<HTMLInputElement>('input')
+    setTimeout(() => el?.focus(), 30)
+  }, [])
+  useEffect(() => () => { if (previa) URL.revokeObjectURL(previa) }, [previa])
+  const fechar = useRef(onFechar)
+  useEffect(() => { fechar.current = onFechar })
+  useEffect(() => {        // Esc fecha, esteja o foco onde estiver
+    const f = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); fechar.current() } }
+    document.addEventListener('keydown', f)
+    return () => document.removeEventListener('keydown', f)
+  }, [])
+  function escolher(arq: File | null) { setFoto(arq); setPrevia(arq ? URL.createObjectURL(arq) : null) }
+  // o foco fica dentro do pop-up
+  function teclas(e: KeyboardEvent) {
+    if (e.key !== 'Tab' || !caixa.current) return
+    const els = [...caixa.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]):not([type=file]), select, [href]')]
+      .filter(x => x.offsetParent !== null)
+    if (!els.length) return
+    const [a, z] = [els[0], els[els.length - 1]]
+    if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus() }
+    else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus() }
+  }
+  const preco = f.price.trim() === '' ? null : Number(f.price.replace(',', '.'))
+  const precoRuim = preco !== null && !(Number.isFinite(preco) && preco >= 0)
+  async function salvar(e: FormEvent) {
+    e.preventDefault()
+    if (!f.nome.trim() || precoRuim) return
+    setIndo(true)
+    try {
+      const r = await api.post<{ item: Item; guardando?: Guardando[] }>('/balcao/peca-nova', {
+        client_id: clientId, modo, nome: f.nome.trim(), category: f.category || null, codigo: f.codigo.trim() || null,
+        price: cobrar ? preco : null, local })
+      if (foto) {
+        const fd = new FormData(); fd.append('foto', foto)
+        try { await api.postForm(`/estoque/item/${r.item.id}/foto`, fd) } catch (er) { toast(tr("Peça registrada, mas a foto não: {0}", (er as ApiError).message), 'warn') }
+      }
+      vibrar(40)
+      toast(cobrar ? tr("{0} registrada e no rascunho de {1}.", r.item.name, cliente) : tr("{0} registrada e na lista para guardar de {1}.", r.item.name, cliente), 'ok')
+      onFeito(r)
+    } catch (er) { vibrar(250); toast((er as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <Scrim onMouseDown={onFechar}><form ref={caixa} className="modal stack balcao-nova" style={{ maxWidth: 520, gap: 12 }} onMouseDown={e => e.stopPropagation()}
+    onSubmit={salvar} onKeyDown={teclas} role="dialog" aria-modal="true" aria-labelledby="pn-h">
+    <h3 id="pn-h" style={{ margin: 0 }}>{tr("Registrar peça nova")}</h3>
+    <p className="small muted" style={{ margin: 0 }}>{cobrar ? tr("Ao salvar, a peça já entra no rascunho de invoice de {0}.", cliente)
+      : tr("Ao salvar, a peça já entra na lista para guardar de {0}.", cliente)}</p>
+    <label className="fld"><span>{tr("Nome da peça")}</span>
+      <input value={f.nome} onChange={e => setF({ ...f, nome: e.target.value })} maxLength={100} autoComplete="off" placeholder={tr("Front bumper Tony Kart")} /></label>
+    <label className="fld"><span>{tr("Categoria")}</span><select value={f.category} onChange={e => setF({ ...f, category: e.target.value })}>
+      <option value="">—</option>{prat.map(p => <option key={p.code} value={p.code}>{p.nome}</option>)}</select></label>
+    <label className="fld"><span>{tr("Código da etiqueta")} <i>{tr("opcional")}</i></span>
+      <input value={f.codigo} onChange={e => setF({ ...f, codigo: e.target.value })} maxLength={200} autoComplete="off" autoCapitalize="off" spellCheck={false} /></label>
+    {cobrar && <label className="fld"><span>{tr("Preço (US$)")}{!gerente && <i> {tr("fica marcado como digitado; o gerente confere")}</i>}</span>
+      <input inputMode="decimal" value={f.price} onChange={e => setF({ ...f, price: e.target.value })} aria-invalid={precoRuim} /></label>}
+    <FotoPeca previa={previa} onFile={escolher} />
+    {onLigarCodigo && f.codigo.trim() && <button type="button" className="btn ghost" onClick={onLigarCodigo}>{tr("Já está no estoque? Ligar este código a ela")}</button>}
+    <div className="row wrap" style={{ justifyContent: 'flex-end', gap: 8 }}>
+      <button type="button" className="btn" onClick={onFechar}>{tr("Cancelar")}</button>
+      <button className="btn primary" disabled={indo || !f.nome.trim() || precoRuim}>{indo ? <span className="spin" /> : cobrar ? tr("Salvar e pôr no rascunho") : tr("Salvar e guardar")}</button></div>
+  </form></Scrim>
+}
+
+/** GUARDAR: o que está sendo guardado para o cliente, pendente até o Confirmar (dono, 20/10). Fica no servidor. */
+function ListaGuardando({ clientId, cliente, itens, onMudou, onConfirmou }: { clientId: number; cliente: string; itens: Guardando[]
+  onMudou: (g: Guardando[]) => void; onConfirmou: (e: Partial<Estado>) => void }) {
+  const toast = useToast()
+  const [indo, setIndo] = useState(false)
+  async function mudar(g: Guardando, corpo: { qty?: number; local?: string }) {
+    try { onMudou((await api.patch<{ guardando: Guardando[] }>(`/balcao/cliente/${clientId}/guardando/${g.id}`, corpo)).guardando) }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function tirar(g: Guardando) {
+    try { onMudou((await api.del<{ guardando: Guardando[] }>(`/balcao/cliente/${clientId}/guardando/${g.id}`)).guardando) }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function confirmar() {
+    setIndo(true)
+    try {
+      const r = await api.post<Partial<Estado> & { guardadas: number }>(`/balcao/cliente/${clientId}/guardando/confirmar`)
+      vibrar([30, 40, 30]); toast(tr("{0} peça(s) guardada(s) para {1}.", r.guardadas, cliente), 'ok'); onConfirmou(r)
+    } catch (e) { vibrar(250); toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  const total = itens.reduce((n, g) => n + g.qty, 0)
+  return <Section title={tr("Guardando para {0}", cliente)} count={itens.length}>
+    {!itens.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Digite ou leia a peça acima: ela aparece aqui para conferir antes de guardar.")}</p>
+      : <div className="stack" style={{ gap: 10 }}>
+        <ul className="balcao-guard">{itens.map(g => <li key={g.id}>
+          <b className="grow">{g.nome}</b>
+          <div className="balcao-guard-ctl">
+            <button type="button" className="btn" aria-label={tr("Menos um de {0}", g.nome)} disabled={g.qty <= 1} onClick={() => mudar(g, { qty: g.qty - 1 })}>−</button>
+            <span className="mono" aria-label={tr("Quantidade de {0}", g.nome)}>{g.qty}</span>
+            <button type="button" className="btn" aria-label={tr("Mais um de {0}", g.nome)} onClick={() => mudar(g, { qty: g.qty + 1 })}>+</button>
+            <select aria-label={tr("Onde guardar {0}", g.nome)} value={g.local} onChange={e => mudar(g, { local: e.target.value })}>
+              {LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select>
+            <button type="button" className="btn ghost" aria-label={tr("Tirar {0} da lista", g.nome)} onClick={() => tirar(g)}>{tr("Tirar")}</button>
+          </div></li>)}</ul>
+        <button type="button" className="btn balcao-btn-guardar balcao-confirmar" disabled={indo} onClick={confirmar}>
+          {indo ? <span className="spin" /> : tr("Confirmar {0} peça(s)", total)}</button>
+      </div>}
+  </Section>
+}
+
 export function Balcao() {
   const { can } = useAuth()
   const { clientId } = useParams()
@@ -627,10 +801,11 @@ export function Balcao() {
   const [modo, setModo] = useState<Modo>('cobrar')
   const [local, setLocal] = useState(lerLocal)
   const [texto, setTexto] = useState('')
-  const [teclado, setTeclado] = useState(false)
+  const [qrCliente, setQrCliente] = useState('')
   const [camera, setCamera] = useState(false)
   const [est, setEst] = useState<Estado | null>(null)
   const [novo, setNovo] = useState<string | null>(null)
+  const [pecaNova, setPecaNova] = useState<{ nome: string; codigo: string } | null>(null)
   const [semQbo, setSemQbo] = useState<Item | null>(null)
   const [abrindo, setAbrindo] = useState(false)
   // #341: o rascunho de invoice do card. Aberto, a peça lida no COBRAR entra nele; a peça sem preço final vai para ele
@@ -658,15 +833,19 @@ export function Balcao() {
   const [semCliente, setSemCliente] = useState<{ item: Item; codigo: string } | null>(null)
   const [indo, setIndo] = useState(false)
   const campo = useRef<HTMLInputElement>(null)
+  const campoCliente = useRef<HTMLInputElement>(null)
   const cid = clientId ? Number(clientId) : null
+  const nomeCliente = est?.cliente.nome || ''
 
   const carregar = useCallback(() => {
     if (!cid) { setEst(null); return }
     api.get<Estado>(`/balcao/cliente/${cid}`).then(setEst).catch(e => toast((e as ApiError).message, 'crit'))
   }, [cid, toast])
   useEffect(() => { carregar() }, [carregar])
-  const focar = () => setTimeout(() => campo.current?.focus(), 30)
-  useEffect(() => { focar() }, [cid, modo])
+  const focar = () => setTimeout(() => (cid ? campo : campoCliente).current?.focus(), 30)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (cid) focar() }, [cid, modo])
+  function mudarLocal(v: string) { setLocal(v); try { localStorage.setItem('balcao.local', v) } catch { /* sem armazenamento */ } }
 
   async function lancar(item: Item, codigo: string, m: string, confirmado = false) {
     if (!cid) return
@@ -685,38 +864,83 @@ export function Balcao() {
     } finally { setIndo(false); focar() }
   }
 
-  const ler = useCallback(async (bruto: string) => {
+  /** GUARDAR: a peça vai para a lista do cliente (pendente até o Confirmar). */
+  async function paraALista(itemId: number, nome: string, codigo: string | null) {
+    if (!cid) return
+    setIndo(true)
+    try {
+      const r = await api.post<{ guardando: Guardando[] }>(`/balcao/cliente/${cid}/guardando`, { item_id: itemId, local, codigo })
+      setEst(e => e ? { ...e, guardando: r.guardando } : e); vibrar(40)
+      toast(tr("{0}: na lista para guardar.", nome), 'ok')
+    } catch (e) { vibrar(250); toast((e as ApiError).message, 'crit') } finally { setIndo(false); focar() }
+  }
+
+  /** O que a pessoa digitou e não existe: o pop-up já vem com o nome (ou com o código, se parece um código). */
+  function abrirNova(digitado: string, codigo?: string) {
+    const t = digitado.trim()
+    const pareceCodigo = !!t && !/\s/.test(t) && /\d/.test(t)
+    setPecaNova({ nome: codigo ? (pareceCodigo ? '' : t) : t, codigo: codigo ?? (pareceCodigo ? t : '') })
+  }
+
+  const ler = useCallback(async (bruto: string, daCamera = false) => {
     const t = bruto.trim()
-    setTexto(''); setCamera(false)
+    setTexto(''); setQrCliente(''); setCamera(false)
     if (!t) return
     try {
       const r = await api.get<Lido>(`/balcao/ler${qs({ codigo: t, client_id: cid })}`)
       if (r.tipo === 'cliente') { vibrar(40); nav(`/balcao/${r.cliente.id}`); return }
-      // #346: não bateu com nada; no COBRAR com cliente aberto, o que mais se parece (tocar para pôr no rascunho)
       if (r.tipo === 'desconhecido') {
-        if (cid && modo === 'cobrar') {
+        if (!cid) { setNovo(r.codigo); return }
+        // #346: no COBRAR, o que mais se parece com o código lido (tocar para pôr no rascunho)
+        if (modo === 'cobrar' && daCamera) {
           const px = await api.get<{ itens: unknown[] }>(`/balcao/aproximado${qs({ q: t.slice(0, 120) })}`).catch(() => ({ itens: [] }))
-          if (px.itens.length) { setProximos({ texto: t, codigo: r.codigo }); return }   // nada parecido: direto ao código novo
+          if (px.itens.length) { setProximos({ texto: t, codigo: r.codigo }); return }
         }
-        setNovo(r.codigo); return
+        vibrar(250)
+        if (daCamera) setPecaNova({ nome: '', codigo: r.codigo }); else abrirNova(t, /\s/.test(t) ? '' : undefined)
+        return
       }
       if (!cid) { vibrar(40); setSemCliente({ item: r.item, codigo: r.codigo }); return }
-      if (modo === 'cobrar' && rzAberto) {
+      if (modo === 'guardar') { await paraALista(r.item.id, r.item.name, r.codigo); return }
+      if (rzAberto) {
         await adicionarLinha(cid, { origem: 'estoque', item_id: r.item.id, local })
         vibrar(40); setRzVersao(v => v + 1); toast(tr("{0}: no rascunho.", r.item.name), 'ok'); return
       }
-      await lancar(r.item, r.codigo, modo === 'cobrar' ? 'cobrar' : 'guardar')
+      await lancar(r.item, r.codigo, 'cobrar')
     } catch (e) { toast((e as ApiError).message, 'crit'); vibrar(250) } finally { focar() }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cid, modo, local, est?.gerente, rzAberto])
+  const lerDaCamera = useCallback((t: string) => ler(t, true), [ler])
+
+  async function sugestao(s: Sugestao) {
+    if (!cid) return
+    setTexto('')
+    if (s.origem === 'quickbooks') {
+      if (modo === 'guardar') { setPecaNova({ nome: s.nome, codigo: '' }); return }   // guardar pede uma peça do estoque
+      try {
+        await adicionarLinha(cid, { origem: 'quickbooks', qbo_item_id: s.qbo_item_id, local })
+        vibrar(40); setRzVersao(v => v + 1); toast(tr("{0}: no rascunho.", s.nome), 'ok')
+      } catch (e) { vibrar(250); toast((e as ApiError).message, 'crit') } finally { focar() }
+      return
+    }
+    const id = s.item_id as number
+    if (modo === 'guardar') { await paraALista(id, s.nome, null); return }
+    if (rzAberto) {
+      try { await adicionarLinha(cid, { origem: 'estoque', item_id: id, local }); vibrar(40); setRzVersao(v => v + 1); toast(tr("{0}: no rascunho.", s.nome), 'ok') }
+      catch (e) { vibrar(250); toast((e as ApiError).message, 'crit') } finally { focar() }
+      return
+    }
+    const item: Item = { id, name: s.nome, price: s.preco, unit: 'un', qbo_item_id: null, qbo_item_name: null, codigos: [], nosso: 0 }
+    await lancar(item, s.codigo || '', 'cobrar')
+  }
 
   async function paraOCliente(id: number, nome: string) {
     const lido = semCliente
     setSemCliente(null)
     if (!lido) return
     try {
-      await api.post('/balcao/lancar', { client_id: id, item_id: lido.item.id, modo, codigo: lido.codigo, local })
-      vibrar(40); toast(`${lido.item.name} → ${nome}: ${MODO_TXT[modo]}.`, 'ok')
+      await api.post('/balcao/lancar', { client_id: id, item_id: lido.item.id, modo: 'cobrar', codigo: lido.codigo, local })
+      vibrar(40); toast(`${lido.item.name} → ${nome}: ${MODO_TXT.cobrar}.`, 'ok')
     } catch (e) { vibrar(250); toast((e as ApiError).message, 'crit') }
     nav(`/balcao/${id}`)
   }
@@ -728,44 +952,59 @@ export function Balcao() {
 
   const guardar = modo === 'guardar'
   return <div className={`stack balcao ${guardar ? 'modo-guardar' : 'modo-cobrar'}`} style={{ gap: 14 }}>
-    <PageHeader title={tr("Balcão")} help={tr("Leia o QR do cliente e depois cada peça. Cobrar: a peça entra na invoice de peças do dia (não é enviada sozinha). Guardar: vai para o estoque do cliente, sem cobrar.")}>
+    <PageHeader title={tr("Balcão")} help={tr("Primeiro o cliente; depois COBRAR ou GUARDAR; depois a peça (digite ou leia). Cobrar: a peça entra na invoice de peças do dia (não é enviada sozinha). Guardar: a peça entra na lista do cliente e vai para o estoque dele no Confirmar, sem cobrar.")}>
       <button type="button" className="btn primary" onClick={abrirCelular} disabled={abrindo} aria-busy={abrindo}>
         {abrindo ? tr("Abrindo o balcão…") : tr("Abrir o balcão do celular")}</button></PageHeader>
-    <div className="balcao-modos" role="radiogroup" aria-label={tr("O que fazer com a peça lida")}>
-      <button role="radio" aria-checked={!guardar} className="balcao-modo cobrar" onClick={() => setModo('cobrar')}>{tr("COBRAR")}<small>{tr("entra na invoice")}</small></button>
-      <button role="radio" aria-checked={guardar} className="balcao-modo guardar" onClick={() => setModo('guardar')}>{tr("GUARDAR")}<small>{tr("estoque do cliente")}</small></button>
-    </div>
-    <div className={`balcao-aviso ${guardar ? 'guardar' : 'cobrar'}`} role="status">
-      {guardar ? tr("Modo GUARDAR: a peça vai para o estoque do cliente e NÃO é cobrada.") : rzAberto && cid ? tr("Modo COBRAR com rascunho aberto: cada peça lida entra no rascunho de invoice.") : tr("Modo COBRAR: cada peça lida entra na invoice de peças de hoje.")}
-    </div>
-    <form className="balcao-leitor" onSubmit={e => { e.preventDefault(); ler(texto) }}>
-      <label className="fld grow"><span>{cid ? tr("Leia a peça (ou outro cliente)") : tr("Leia o QR do cliente")}</span>
-        <input ref={campo} value={texto} onChange={e => setTexto(e.target.value)} autoComplete="off" autoCapitalize="off" spellCheck={false}
-          inputMode={teclado ? 'text' : 'none'} enterKeyHint="go" disabled={indo} aria-describedby="balcao-dica" /></label>
-      <div className="row wrap" style={{ gap: 8 }}>
-        <button type="button" className="btn primary" onClick={() => setCamera(true)}>{tr("Ler com a câmera")}</button>
-        <button type="button" className="btn sm ghost" onClick={() => { setTeclado(x => !x); focar() }}>{teclado ? tr("Esconder teclado") : tr("Digitar")}</button>
-        <select aria-label={tr("Onde a peça está")} value={local} onChange={e => { setLocal(e.target.value); try { localStorage.setItem('balcao.local', e.target.value) } catch { /* sem armazenamento */ } }}>
-          {LOCAIS.map(([k, r]) => <option key={k} value={k}>{r}</option>)}</select>
-      </div>
-      <p id="balcao-dica" className="small muted" style={{ margin: 0 }}>{tr("O leitor digita aqui sozinho. Se o campo perder o foco, toque nele.")}</p>
-    </form>
 
+    {/* 1. o cliente, antes de tudo (dono, 20/10: "a primeira coisa no balcão a ser mostrada é qual cliente que é") */}
+    {!cid && <Section title={tr("Quem é o cliente?")}>
+      <div className="stack" style={{ gap: 10 }}>
+        <PilotosDoDia onEscolher={id => nav(`/balcao/${id}`)} />
+        <Picker label={tr("Buscar o cliente pelo nome")} value={null} onPick={(c: Client | null) => { if (c) nav(`/balcao/${c.id}`) }} />
+        <form className="balcao-leitor" onSubmit={e => { e.preventDefault(); ler(qrCliente) }}>
+          <label className="fld grow"><span>{tr("Leia o QR do cliente")}</span>
+            <input ref={campoCliente} type="text" value={qrCliente} onChange={e => setQrCliente(e.target.value)} autoComplete="off" autoCapitalize="off"
+              spellCheck={false} enterKeyHint="go" /></label>
+          <div className="balcao-leitor-acoes"><button type="button" className="btn primary" onClick={() => setCamera(true)}>{tr("Ler com a câmera")}</button></div>
+        </form>
+      </div>
+    </Section>}
     {cid && !est && <span className="spin" />}
-    {est && <>
-      <div className="card card-b row wrap" style={{ gap: 10 }}>
-        <div className="grow"><h2 className="h2" style={{ margin: 0 }}>{est.cliente.nome}</h2>
+    {cid && est && <>
+      <div className="card card-b row wrap balcao-cliente" style={{ gap: 10 }}>
+        <div className="grow"><span className="small muted">{tr("Cliente")}</span><h2 className="h2" style={{ margin: 0 }}>{est.cliente.nome}</h2>
           {est.cliente.responsavel !== est.cliente.nome && <div className="small muted">{tr("Responsável:")} {est.cliente.responsavel}</div>}</div>
         <Link className="btn sm ghost" to={`/clients/${est.cliente.id}`}>{tr("Card")}</Link>
         <button className="btn sm ghost" onClick={() => nav('/balcao')}>{tr("Trocar cliente")}</button>
       </div>
-      <WaiverDoCard waivers={est.waivers || []} clientId={est.cliente.id} vip={est.cliente.vip} onMudou={ws => setEst(e => e ? { ...e, waivers: ws } : e)} />
-      {est.guardado.length > 0 && <Banner tone="warn">{tr("Guardado deste cliente com a gente:")} {est.guardado.map(g => `${g.name} (${g.qty} · ${g.local})`).join(', ')}{tr(". Não cobre o que é dele.")}</Banner>}
-      <Section title={tr("Invoice de peças")}>
-        {!est.invoices.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nenhuma peça cobrada hoje.")}</p>
-          : <div className="cd-grade">{est.invoices.map(p => <CartaoInvoice key={p.id} p={p} gerente={est.gerente} onMudou={carregar} />)}</div>}
-      </Section>
-      {!guardar && <RascunhoInvoice clientId={est.cliente.id} versao={rzVersao} onEstado={setRzAberto} onFaturou={carregar} />}
+      {/* 2. COBRAR ou GUARDAR */}
+      <div className="balcao-modos" role="radiogroup" aria-label={tr("O que fazer com a peça")}>
+        <button role="radio" aria-checked={!guardar} className="balcao-modo cobrar" onClick={() => setModo('cobrar')}>{tr("COBRAR")}<small>{tr("entra na invoice")}</small></button>
+        <button role="radio" aria-checked={guardar} className="balcao-modo guardar" onClick={() => setModo('guardar')}>{tr("GUARDAR")}<small>{tr("estoque do cliente")}</small></button>
+      </div>
+      <div className={`balcao-aviso ${guardar ? 'guardar' : 'cobrar'}`} role="status">
+        {guardar ? tr("Modo GUARDAR: a peça vai para o estoque do cliente e NÃO é cobrada.") : rzAberto ? tr("Modo COBRAR com rascunho aberto: cada peça lida entra no rascunho de invoice.") : tr("Modo COBRAR: cada peça lida entra na invoice de peças de hoje.")}
+      </div>
+      {/* 3. a peça: digitar primeiro, ou ler */}
+      <CampoPeca campo={campo} texto={texto} setTexto={setTexto} indo={indo} guardar={guardar} onLer={t => ler(t)} onSugestao={sugestao}
+        onNova={t => abrirNova(t)} onCamera={() => setCamera(true)} local={local} setLocal={mudarLocal} />
+      {/* 4. o que já foi lançado */}
+      {guardar ? <>
+        <ListaGuardando clientId={est.cliente.id} cliente={est.cliente.nome} itens={est.guardando || []}
+          onMudou={g => setEst(e => e ? { ...e, guardando: g } : e)} onConfirmou={r => setEst(e => e ? { ...e, ...r } : e)} />
+        <Section title={tr("Já guardado deste cliente")} count={est.guardado.length}>
+          {!est.guardado.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nada guardado ainda.")}</p>
+            : <div className="tbl">{est.guardado.map(g => <div className="tr" key={`${g.item_id}-${g.local}`}>
+              <span className="grow">{g.name}</span><span className="small muted">{g.local}</span><b className="mono">{g.qty}</b></div>)}</div>}
+        </Section>
+      </> : <>
+        {est.guardado.length > 0 && <Banner tone="warn">{tr("Guardado deste cliente com a gente:")} {est.guardado.map(g => `${g.name} (${g.qty} · ${g.local})`).join(', ')}{tr(". Não cobre o que é dele.")}</Banner>}
+        <RascunhoInvoice clientId={est.cliente.id} versao={rzVersao} onEstado={setRzAberto} onFaturou={carregar} />
+        <Section title={tr("Invoice de peças")}>
+          {!est.invoices.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nenhuma peça cobrada hoje.")}</p>
+            : <div className="cd-grade">{est.invoices.map(p => <CartaoInvoice key={p.id} p={p} gerente={est.gerente} onMudou={carregar} />)}</div>}
+        </Section>
+      </>}
       <Section title={tr("Leituras")} count={est.leituras.length}>
         {!est.leituras.length ? <p className="small muted" style={{ margin: 0 }}>{tr("Nada lido ainda.")}</p>
           : <div className="tbl">{est.leituras.map(l => <div className="tr" key={l.id}>
@@ -774,23 +1013,23 @@ export function Balcao() {
               : <button className="btn sm ghost" onClick={() => desfazer(l)}>{tr("Desfazer")}</button>}
           </div>)}</div>}
       </Section>
+      <WaiverDoCard waivers={est.waivers || []} clientId={est.cliente.id} vip={est.cliente.vip} onMudou={ws => setEst(e => e ? { ...e, waivers: ws } : e)} />
     </>}
-    {!cid && <Section title={tr("Abrir um cliente")}>
-      <p className="small muted" style={{ marginTop: 0 }}>{tr("Os pilotos de hoje, ou escolha o cliente pelo nome.")}</p>
-      <PilotosDoDia onEscolher={id => nav(`/balcao/${id}`)} />
-      <Picker label={tr("Cliente")} value={null} onPick={(c: Client | null) => { if (c) nav(`/balcao/${c.id}`) }} />
-    </Section>}
     {!cid && can('MANAGER') && <Revisao />}
     {!cid && <ContarEstoque />}
     {!cid && can('MANAGER') && <EtiquetasPrateleira />}
     {!cid && <AEnviar />}
 
     {semCliente && <DeQuemE item={semCliente.item} onEscolher={paraOCliente} onFechar={() => { setSemCliente(null); focar() }} />}
-    {camera && <Camera onLer={ler} onFechar={() => { setCamera(false); focar() }} />}
+    {camera && <Camera onLer={lerDaCamera} onFechar={() => { setCamera(false); focar() }} />}
     {novo && <CodigoNovo codigo={novo} gerente={!!est?.gerente} onFechar={() => { setNovo(null); focar() }}
-      onFeito={i => { const c = novo; setNovo(null); if (cid && c) lancar(i, c, guardar ? 'guardar' : 'cobrar') }} />}
+      onFeito={i => { const c = novo; setNovo(null); if (!cid || !c) return; if (guardar) paraALista(i.id, i.name, c); else lancar(i, c, 'cobrar') }} />}
+    {pecaNova && cid && <PecaNova clientId={cid} cliente={nomeCliente} modo={modo} nome={pecaNova.nome} codigo={pecaNova.codigo} local={local}
+      gerente={!!est?.gerente} onFechar={() => { setPecaNova(null); focar() }}
+      onLigarCodigo={pecaNova.codigo ? () => { const c = pecaNova.codigo; setPecaNova(null); setNovo(c) } : undefined}
+      onFeito={r => { setPecaNova(null); if (r.guardando) setEst(e => e ? { ...e, guardando: r.guardando } : e); else setRzVersao(v => v + 1); focar() }} />}
     {proximos && cid && <MaisProximos clientId={cid} texto={proximos.texto} onFeito={() => setRzVersao(v => v + 1)}
-      onCodigoNovo={() => { const c = proximos.codigo; setProximos(null); setNovo(c) }} onFechar={() => { setProximos(null); focar() }} />}
+      onCodigoNovo={() => { const c = proximos.codigo; setProximos(null); setPecaNova({ nome: '', codigo: c }) }} onFechar={() => { setProximos(null); focar() }} />}
     {porRz && cid && <PorNoRascunho clientId={cid} item={porRz.item} motivo={porRz.motivo} onFeito={() => setRzVersao(v => v + 1)}
       onFechar={() => { setPorRz(null); focar() }} />}
     {semQbo && <ItemQbo item={semQbo} onFechar={() => setSemQbo(null)} onFeito={() => setSemQbo(null)} />}
