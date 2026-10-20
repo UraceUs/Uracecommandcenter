@@ -239,12 +239,73 @@ def escolher_fluxo(con, client_id, fluxo):
     atualizar(con, "clients", client_id, waiver_flow=fluxo)
 
 
+DOCUSIGN_OK = ("CONNECTED", "SYNCING", "DEGRADED")
+
+
+def _item(chave, rotulo, ok, como_resolver, detalhe=None, obrigatorio=True):
+    return {"chave": chave, "rotulo": rotulo, "ok": bool(ok), "como_resolver": None if ok else como_resolver,
+            "detalhe": detalhe, "obrigatorio": obrigatorio}
+
+
+def prerequisitos(con):
+    """#364 (dono, 20/10): "mostrar os pré-requisitos por provedor". Por provedor, a lista
+    `{chave, rotulo, ok, como_resolver}` e `pronto` (todos os obrigatórios ok). Só lê: o banco e o disco, sem chamar o
+    DocuSign (o "conectado" é a última sondagem de Integrações). A nativa indisponível NÃO é falha do DocuSign: cada
+    provedor tem a sua lista."""
+    from command_center.providers import selo_waiver
+    feitos = sum(1 for k in MODELOS if modelo(con, k))
+    faltam = len(MODELOS) - feitos
+    selo = selo_waiver.estado()
+    integ = um(con, "SELECT status, last_error, last_success_at FROM integrations WHERE system='docusign'") or {}
+    st = integ.get("status") or "DISCONNECTED"
+    nativa = [
+        _item("modelos", f"Os {len(MODELOS)} modelos da waiver importados do DocuSign", faltam == 0,
+              "Site › Waiver › Importar do DocuSign (ADMIN). Só lê os modelos: nada muda no DocuSign.",
+              f"{feitos} de {len(MODELOS)} importados") | {"faltam": faltam},
+        _item("selo", "Selo digital (PAdES) configurado", selo["configured"],
+              "Configure o selo da waiver no servidor (comando selo-waiver; veja Site › Waiver).",
+              None if selo["configured"] else selo["reason"]),
+        _item("chave_geral", "Chave geral ligada (Site › Waiver)", ligada(con),
+              "Só conta para os cards em Padrão: o ADMIN liga em Site › Waiver, depois do sim do advogado. "
+              "No card, escolher Nativa não depende dela.", obrigatorio=False),
+    ]
+    docusign = [
+        _item("conectado", "DocuSign conectado", st in DOCUSIGN_OK,
+              "Integrações › Verificar agora; se continuar, confira a credencial do DocuSign no servidor.",
+              st if st in DOCUSIGN_OK else (integ.get("last_error") or st)),
+        _item("modelo", "Modelos de waiver do DocuSign definidos (adult e parental)",
+              all(MODELOS.get(k) for k in ("adult", "parental")),
+              "Os dois modelos (adult e parental) precisam estar definidos no sistema."),
+    ]
+
+    def bloco(itens):
+        return {"pronto": all(i["ok"] for i in itens if i["obrigatorio"]), "itens": itens}
+    return {"docusign": bloco(docusign), "nativa": bloco(nativa)}
+
+
+def motivo_da_nativa(prq):
+    """A frase do card quando a nativa não pode ser escolhida (None = pode). Deixa claro que não é o DocuSign."""
+    if prq["nativa"]["pronto"]:
+        return None
+    falta = []
+    for i in prq["nativa"]["itens"]:
+        if i["obrigatorio"] and not i["ok"]:
+            if i["chave"] == "modelos":
+                n = i["faltam"]
+                falta.append(f"faltam os {n} modelos importados" if n > 1 else "falta 1 modelo importado")
+            elif i["chave"] == "selo":
+                falta.append(f"o selo não está configurado ({i['detalhe']})")
+    return f"Nativa indisponível: {' e '.join(falta)}. Isso não é falha do DocuSign."
+
+
 def fluxo_do_card(con, client_id):
-    """O que o card 360 mostra: a escolha, o que vale agora, a chave geral e se a nativa pode ser escolhida."""
-    m = None if _modelos_prontos(con) else "Os dois modelos da waiver ainda não foram importados (Site › Waiver)."
-    m = m or motivo_sem_nativa()
+    """O que o card 360 mostra: a escolha, o que vale agora, a chave geral, se a nativa pode ser escolhida e os
+    pré-requisitos de cada provedor (#364)."""
+    prq = prerequisitos(con)
+    m = motivo_da_nativa(prq)
     return {"choice": fluxo_escolhido(con, client_id), "effective": fluxo_da_waiver(con, client_id),
-            "general": "nativa" if ligada(con) else "docusign", "native_available": m is None, "native_reason": m}
+            "general": "nativa" if ligada(con) else "docusign", "native_available": m is None, "native_reason": m,
+            "prerequisites": prq}
 
 
 # ------------------------------------------------------------------ modelos

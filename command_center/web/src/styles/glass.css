@@ -1296,3 +1296,11 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .balcao-confirmar{width:100%;min-height:52px;font-size:17px;font-weight:800}
 .balcao-nova .btn{min-height:44px}
 .balcao-cliente h2{overflow-wrap:anywhere}
+
+/* #364: pré-requisitos da waiver por provedor, no card (um embaixo do outro no celular) */
+.prereq-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px}
+.prereq{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.prereq li{display:flex;gap:6px;align-items:flex-start;min-width:0;overflow-wrap:anywhere}
+.prereq .prereq-m{flex:none;width:16px;font-weight:700}
+.prereq li.ok .prereq-m{color:var(--ok)}
+.prereq li.falta .prereq-m{color:var(--warn)}

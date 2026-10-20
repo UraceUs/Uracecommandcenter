@@ -657,7 +657,9 @@ gerente. Use Aceitar."
 3. **Waiver:** se o piloto não tem waiver válida no dia da sessão, sai pelo DocuSign. Com a waiver
    nativa ligada, o cliente assina na área do cliente. O card pode escolher outro fluxo no switch **Waiver** (card ›
    Waivers, gerente+): **DocuSign** sempre manda o DocuSign; **Nativa** assina na área do cliente mesmo com a chave
-   geral desligada (#348).
+   geral desligada (#348). Debaixo do switch, cada provedor mostra os pré-requisitos com ✓/✗ (#364): DocuSign
+   conectado e modelos; nativa com os 2 modelos importados, o selo e a chave geral. "Nativa indisponível" não é
+   falha do DocuSign.
 4. **Confirma sozinha** quando a invoice aparece paga e a waiver está em dia.
 5. **Lembrete ao cliente** por e-mail 3 dias e 1 dia antes, dizendo o que falta.
 6. Falhou algo (sem card, sem cliente no QuickBooks, serviço sem item)? O motivo fica escrito no

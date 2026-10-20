@@ -6332,3 +6332,30 @@ def test_balcao_quadro_da_waiver_confere_o_documento_no_celular(servidor, navega
     assert not r["rola"] and not r["culpados"], r
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390])
+def test_card_mostra_os_prerequisitos_da_waiver_por_provedor(servidor, navegador, largura):
+    """#364, dono 20/10: "mostrar os pré-requisitos por provedor" — a semente tem o DocuSign com o token expirado e a
+    nativa pronta (modelos e selo); cada provedor mostra a sua lista com ✓/✗, sem rolar para o lado no celular."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    abrir(pg, servidor, "/clients/1")
+    pg.get_by_role("button", name=re.compile(r"^Waivers \(")).click()
+    ds = pg.get_by_role("list", name="Pré-requisitos: DocuSign")
+    na = pg.get_by_role("list", name="Pré-requisitos: Nativa")
+    ds.wait_for(); na.wait_for()
+    con = ds.locator("li", has_text="DocuSign conectado")
+    assert "falta" in con.get_attribute("class") and "✗" in con.inner_text()
+    assert "Verificar agora" in con.inner_text(), "o que falta diz como resolver"
+    mod = na.locator("li", has_text="Os 2 modelos da waiver importados do DocuSign")
+    assert mod.get_attribute("class") == "ok" and "✓" in mod.inner_text()
+    assert na.locator("li", has_text="Selo digital (PAdES) configurado").get_attribute("class") == "ok"
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.evaluate(_PEQUENOS)
+    anterior = 0
+    for n, t in _cabecalhos(pg):
+        assert n <= anterior + 1, f"pulou de h{anterior} para h{n} ({t!r})"
+        anterior = n
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()

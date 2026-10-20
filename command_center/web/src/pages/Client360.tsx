@@ -750,8 +750,61 @@ function ConviteWaiver({ cid, onMuda }: { cid: number; onMuda?: () => void }) {
 /* #348 (dono, 19/10): "um switch para escolher dentro do card de cada cliente se vamos usar o fluxo pelo DocuSign
  * ou pela waiver nativa". Padrão segue a chave geral (Site › Waiver). Só decide a PRÓXIMA waiver: a já assinada vale.
  * Nativa só com o selo configurado; o gerente (ou acima) muda. */
+/* #364 (dono, 20/10): "mostrar os pré-requisitos por provedor" — cada um com a sua lista, para a nativa indisponível
+ * não parecer falha do DocuSign. O texto vem do servidor em português; aqui cada chave tem a sua tradução. */
+interface PreRequisito { chave: string; rotulo: string; ok: boolean; como_resolver: string | null; detalhe: string | null; obrigatorio: boolean
+  faltam?: number }
+interface Provedor { pronto: boolean; itens: PreRequisito[] }
 interface FluxoDoCard { choice: 'padrao' | 'docusign' | 'nativa'; effective: 'nativa' | 'docusign'; general: 'nativa' | 'docusign'
-  native_available: boolean; native_reason: string | null }
+  native_available: boolean; native_reason: string | null; prerequisites?: { docusign: Provedor; nativa: Provedor } }
+
+const ROTULO_PRE: Record<string, () => string> = {
+  'docusign.conectado': () => tr("DocuSign conectado"),
+  'docusign.modelo': () => tr("Modelos de waiver do DocuSign definidos (adult e parental)"),
+  'nativa.modelos': () => tr("Os 2 modelos da waiver importados do DocuSign"),
+  'nativa.selo': () => tr("Selo digital (PAdES) configurado"),
+  'nativa.chave_geral': () => tr("Chave geral ligada (Site › Waiver)"),
+}
+const RESOLVER_PRE: Record<string, () => string> = {
+  'docusign.conectado': () => tr("Integrações › Verificar agora; se continuar, confira a credencial do DocuSign no servidor."),
+  'docusign.modelo': () => tr("Os dois modelos (adult e parental) precisam estar definidos no sistema."),
+  'nativa.modelos': () => tr("Site › Waiver › Importar do DocuSign (ADMIN). Só lê os modelos: nada muda no DocuSign."),
+  'nativa.selo': () => tr("Configure o selo da waiver no servidor (comando selo-waiver; veja Site › Waiver)."),
+  'nativa.chave_geral': () => tr("Só conta para os cards em Padrão: o ADMIN liga em Site › Waiver, depois do sim do advogado. No card, escolher Nativa não depende dela."),
+}
+
+function motivoDaNativa(p: Provedor): string {
+  const falta: string[] = []
+  for (const i of p.itens) {
+    if (!i.obrigatorio || i.ok) continue
+    if (i.chave === 'modelos') {
+      const n = i.faltam ?? 2
+      falta.push(n > 1 ? tr("faltam os {0} modelos importados", String(n)) : tr("falta 1 modelo importado"))
+    } else if (i.chave === 'selo') falta.push(tr("o selo não está configurado"))
+  }
+  return tr("Nativa indisponível: {0}. Isso não é falha do DocuSign.", falta.join(tr(" e ")))
+}
+
+function PreRequisitos({ nome, chave, p }: { nome: string; chave: 'docusign' | 'nativa'; p: Provedor }) {
+  return <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+    <p className="small" style={{ margin: 0 }}><strong>{nome}</strong>{' · '}
+      <span style={{ color: p.pronto ? 'var(--ok)' : 'var(--warn)' }}>{p.pronto ? tr("pronto") : tr("não pronto")}</span></p>
+    <ul className="prereq" aria-label={tr("Pré-requisitos: {0}", nome)}>
+      {p.itens.map(i => {
+        const k = `${chave}.${i.chave}`
+        const rot = ROTULO_PRE[k] ? ROTULO_PRE[k]() : i.rotulo
+        const res = RESOLVER_PRE[k] ? RESOLVER_PRE[k]() : i.como_resolver
+        return <li key={i.chave} className={i.ok ? 'ok' : 'falta'}>
+          <span aria-hidden="true" className="prereq-m">{i.ok ? '✓' : '✗'}</span>
+          <span className="sr-only">{i.ok ? tr("ok") : tr("falta")}</span>
+          <span className="grow">{rot}{!i.obrigatorio && <span className="muted"> {tr("(opcional no card)")}</span>}
+            {i.detalhe && !i.ok && <span className="muted"> · {i.chave === 'modelos' ? tr("{0} de 2 importados", String(2 - (i.faltam ?? 2))) : i.detalhe}</span>}
+            {!i.ok && res && <span className="small muted" style={{ display: 'block' }}>{res}</span>}</span>
+        </li>
+      })}
+    </ul>
+  </div>
+}
 
 function FluxoWaiver({ cid, pode }: { cid: number; pode: boolean }) {
   const d = useGet<FluxoDoCard>(`/clients/${cid}/waiver-flow`)
@@ -776,12 +829,16 @@ function FluxoWaiver({ cid, pode }: { cid: number; pode: boolean }) {
       <div className="seg" role="group" aria-label={tr("Waiver: fluxo deste card")}>
         {opcoes.map(([k, rot, ok]) => <button key={k} type="button" aria-pressed={x.choice === k}
           className={`btn sm${x.choice === k ? '' : ' ghost'}`} disabled={!pode || indo || !ok} onClick={() => escolher(k)}
-          title={!ok && x.native_reason ? x.native_reason : undefined}>{rot}</button>)}
+          title={!ok && x.native_reason ? (x.prerequisites ? motivoDaNativa(x.prerequisites.nativa) : x.native_reason) : undefined}>{rot}</button>)}
       </div>
     </div>
     <p className="small muted" style={{ margin: 0 }}>{tr("A próxima waiver deste card sai por: {0}. A já assinada continua valendo.", nome(x.effective))}
       {!pode && <> {tr("(só gerente muda)")}</>}</p>
     {x.choice === 'nativa' && x.effective !== 'nativa' && <p className="small" role="alert" style={{ margin: 0, color: 'var(--warn)' }}>{tr("O card está em Nativa, mas ela não está pronta: sai pelo DocuSign.")} {x.native_reason}</p>}
-    {!x.native_available && x.choice !== 'nativa' && <p className="small muted" style={{ margin: 0 }}>{tr("Nativa desligada:")} {x.native_reason}</p>}
+    {!x.native_available && x.choice !== 'nativa' && <p className="small muted" style={{ margin: 0 }}>{x.prerequisites ? motivoDaNativa(x.prerequisites.nativa) : <>{tr("Nativa desligada:")} {x.native_reason}</>}</p>}
+    {x.prerequisites && <div className="prereq-grid">
+      <PreRequisitos nome="DocuSign" chave="docusign" p={x.prerequisites.docusign} />
+      <PreRequisitos nome={tr("Nativa")} chave="nativa" p={x.prerequisites.nativa} />
+    </div>}
   </div>
 }
