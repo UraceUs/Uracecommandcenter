@@ -474,7 +474,7 @@ def test_sim_depois_do_stop_nao_reativa(ambiente, monkeypatch):
 
 
 def test_sms_sai_em_nome_do_escritorio(monkeypatch):
-    """20/10: o SMS saiu pela linha pessoal (407 487-3184); com o grupo, sai pelo número do escritório."""
+    """20/10: o SMS saiu pela linha pessoal; com o grupo, sai pelo número do escritório."""
     import urllib.request
     monkeypatch.delenv("CC_DIALPAD_FAKE", raising=False)
     monkeypatch.setenv("DIALPAD_ENV", "/nao/existe")
