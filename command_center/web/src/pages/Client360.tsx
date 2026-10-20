@@ -686,7 +686,8 @@ function QrBalcao({ cid, nome }: { cid: number; nome: string }) {
  * nascimento, ou com a assinatura nativa desligada) o botão fica desligado e diz por quê. */
 interface DestinoConvite { client_id: number; kind: 'adult' | 'parental' | null; signer_name: string | null; email: string | null
   driver_name: string; driver_birth_date: string | null; age: number | null; responsible: string; enabled: boolean
-  can_send: boolean; reason: string | null; valid_hours: number; valid_waiver_until: string | null }
+  can_send: boolean; reason: string | null; valid_hours: number; valid_waiver_until: string | null
+  valid_waiver_source?: 'nativa' | 'docusign' | null; renewal?: boolean; renewal_days?: number }
 interface ConviteFeito { id: number; kind: 'adult' | 'parental'; signer_name: string; email: string; driver_name: string
   created_at: string; created_by: string; created_by_name: string | null; expires_at: string; sent_at: string | null
   opened_at: string | null; used_at: string | null; waiver_id: number | null; revoked_reason: string | null
@@ -715,7 +716,10 @@ function ConviteWaiver({ cid, onMuda }: { cid: number; onMuda?: () => void }) {
           ? tr("{0} tem {1} anos: assina a própria waiver (adult).", x.driver_name, x.age ?? '?')
           : tr("{0} tem {1} anos: o responsável assina por ele (parental, pai ou mãe).", x.driver_name, x.age ?? '?')}</div>
         <div className="small muted">{tr("O link é pessoal, vale uma vez e vence em {0} h.", x.valid_hours)}{aberto ? ' ' + tr("O link anterior deixa de valer.") : ''}</div>
-        {x.valid_waiver_until && <div className="small" style={{ color: 'var(--warn)' }}>{tr("Este card já tem waiver {0} válida até {1}.", x.kind || '', fmtDate(x.valid_waiver_until))}</div>}
+        {/* #354: com waiver valendo, o convite só sai nos últimos dias dela, e é a renovação */}
+        {x.valid_waiver_until && <div className="small" style={{ color: 'var(--warn)' }}>{x.renewal
+          ? tr("Renovação: a waiver atual vale até {0}. A nova passa a valer quando assinada.", fmtDate(x.valid_waiver_until))
+          : tr("Este card já tem waiver {0} válida até {1}.", x.kind || '', fmtDate(x.valid_waiver_until))}</div>}
       </div> })
     if (!ok) return
     setIndo(true)

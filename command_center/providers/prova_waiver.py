@@ -380,8 +380,15 @@ def _auditoria(con, w, trilha):
         utc, local = _horas(r["at"])
         saida.append(_limpo({"id": r["id"], "at": r["at"], "at_florida": local, "event": r["event"], "actor": r["actor"],
                              "user_id": r["user_id"], "entity_type": r["entity_type"], "entity_id": r["entity_id"],
-                             "ip": r["ip"], "detail": _detalhe(r["detail"])}))
+                             "ip": _ip_da_linha(r), "detail": _detalhe(r["detail"])}))
     return saida
+
+
+def _ip_da_linha(r):
+    """#354: a linha de alguém da equipe (`user:<id>`) mostra o IP do servidor, não o da pessoa. O `audit_logs` não tem
+    hash por linha (a trava dele é o trigger append-only), então trocar só na saída não quebra prova nenhuma."""
+    from command_center.providers import trilha_waiver as tw
+    return tw.ip_do_servidor() if str(r["actor"] or "").startswith("user:") else r["ip"]
 
 
 def _janela_da_conta(con, w, trilha):
@@ -496,6 +503,7 @@ def _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo, problema
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
     from command_center.providers.waiver_nativa import MARGEM_PE, _quebra
+    from command_center.providers import trilha_waiver as tw
     buf = io.BytesIO()
     cv = canvas.Canvas(buf, pagesize=letter, invariant=1)
     cv.setTitle(f"Certificate of completion — waiver record {w['id']}")
@@ -576,7 +584,10 @@ def _certificado(w, trilha, eventos, cadeia, anulacao, carimbo, modelo, problema
     for e in eventos:
         quem = "reported by the signer's browser" if e["source"] == "client" else "recorded by URACE's server"
         topo = f"#{e['id']} · {e['at_florida']} ({e['at_utc']} UTC) · {e['label']} · {fases[e['phase']]} · {quem}"
-        aparelho = f"IP {e.get('ip') or '—'} · Device: {(e.get('user_agent') or '—')[:160]}"
+        if tw.da_equipe(e.get("flow"), e["event"]):      # #354: da equipe, o IP do servidor (o events.json fica cru)
+            aparelho = f"IP {tw.ip_do_servidor()} (URACE's server) · Device: {tw.UA_EQUIPE}"
+        else:
+            aparelho = f"IP {e.get('ip') or '—'} · Device: {(e.get('user_agent') or '—')[:160]}"
         det = _detalhe(e.get("detail"))
         det = {k: v for k, v in det.items() if k not in ("covers", "user_id")} if isinstance(det, dict) else det
         extra = "; ".join(f"{k}: {v}" for k, v in sorted(det.items())) if isinstance(det, dict) else (str(det) if det else "")

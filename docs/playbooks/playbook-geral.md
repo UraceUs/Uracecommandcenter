@@ -453,6 +453,17 @@ data de nascimento do piloto; o piloto é menor e o card não tem o responsável
 ou o card está no DocuSign (o switch **Waiver** do card, ou a chave geral de Site › Waiver no Padrão). Se o card mudar
 de e-mail ou de data de nascimento depois do envio, o link para de valer: reenvie.
 
+**Renovação (#354).** Dono, 20/10: *"as novas waivers entram quando as atuais forem vencendo"*.
+- Com uma waiver **valendo** no card ou no piloto (a do sistema ou a do DocuSign, que vale 1 ano da assinatura), o botão
+  fica desligado e diz até quando ela vale e em que dia a renovação libera.
+- Nos **últimos 30 dias** dela o convite libera, como **renovação**. Em **Precisa de atenção** aparece "*piloto*: a
+  waiver vence em N dia(s)", com o botão **✉ Mandar convite de renovação** (mostra para quem vai e pede confirmação).
+  Nada sai sozinho: só com o clique de alguém da equipe.
+- A parental que vale até a véspera dos 18 não renova pelo convite: no aniversário o próprio piloto assina a dele.
+- A cobrança da sessão marcada pelo site continua mandando a waiver só quando não há uma válida no dia da sessão.
+- A área do cliente mostra as waivers dos pilotos daquela conta: quem tem o piloto ligado vê também a waiver que o
+  responsável (o e-mail do card) assinou pelo convite. Fica assim (dono, 20/10).
+
 #### Como o cliente assina: revisar antes do clique final (#112)
 
 Vale para a área do cliente (**Drivers › Sign now**) e para o link do convite. A Flórida (§668.50(10))
@@ -665,6 +676,12 @@ com **hora, IP e aparelho**, e nenhum se muda nem se apaga (o próprio banco rec
 - **Depois de assinar** (cópia por e-mail, com o message-id, ou a falha (#114); PDF baixado pelo cliente ou
   pela equipe; anulada; documento conferido, ou que não conferiu, no balcão (#117); **pacote de prova exportado**,
   com o hash do ZIP (#115)) **não** entra no PDF, que não muda: fica na trilha e no certificado avulso do pacote de prova.
+- **IP da equipe (#354).** Dono, 20/10: *"mostrar o IP do servidor de onde o sistema opera"*. Nos passos da equipe
+  (convite enviado, PDF baixado, anulada, documento conferido, cópia reenviada, pacote exportado), desde 20/10 a trilha
+  grava o **IP público do servidor** (a VPS, variável `CC_SERVER_IP` no `~/.urace/adminai.env`) e o aparelho
+  "URACE Command Center (staff)"; o nome de quem fez continua. Os passos antigos não mudam (a cadeia não pode
+  quebrar), mas no pacote de prova o certificado avulso e o `audit_logs.json` mostram o IP do servidor nas linhas da
+  equipe; o `events.json` fica como foi gravado. O IP e o aparelho de **quem assina** não mudam: são a prova.
 - **Onde ver:** Site › Waiver › Assinadas aqui › **Trilha** (gerente+): os passos de antes, a assinatura e
   o que veio depois, e se a trilha inteira está **íntegra** (cada passo leva o hash do anterior; uma linha
   mexida aparece como "trilha com linha mexida no evento #n").

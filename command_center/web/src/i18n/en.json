@@ -4682,5 +4682,10 @@
 "aguardando revisão do gerente": "waiting for manager review",
 "É esta? Toque para pôr no rascunho.": "Is it this one? Tap to add it to the draft.",
 "É uma peça nova: cadastrar o código": "It's a new part: register the code",
-"A peça vendida sem saldo aparece em Precisa de atenção para recontar. Leia a peça ou a etiqueta da prateleira, digite quanto tem e grave: o próximo item já aparece.": "Parts sold without stock show up in Needs attention to be recounted. Scan the part or the shelf label, type how many there are and save: the next item comes up right away."
+"A peça vendida sem saldo aparece em Precisa de atenção para recontar. Leia a peça ou a etiqueta da prateleira, digite quanto tem e grave: o próximo item já aparece.": "Parts sold without stock show up in Needs attention to be recounted. Scan the part or the shelf label, type how many there are and save: the next item comes up right away.",
+"Renovação: a waiver atual vale até {0}. A nova passa a valer quando assinada.": "Renewal: the current waiver is valid until {0}. The new one takes effect once signed.",
+"O convite não pode sair deste card agora.": "The invitation cannot go out for this card right now.",
+"Mandar o convite de renovação da waiver?": "Send the waiver renewal invitation?",
+"Para: {0} · {1}\n\nO link é pessoal, vale uma vez e vence em 72 h.": "To: {0} · {1}\n\nThe link is personal, works once and expires in 72 h.",
+"Mandar convite de renovação": "Send renewal invitation"
 }
