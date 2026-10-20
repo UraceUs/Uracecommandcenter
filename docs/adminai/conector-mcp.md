@@ -9,7 +9,7 @@ HTTP. É só isso que foi acrescentado: `POST /ops/mcp`, com as mesmas ferrament
 
 ## O que ele dá
 
-Dezesseis ferramentas, **todas de leitura** — dez do painel e seis do Kommo:
+Dezenove ferramentas, **todas de leitura** — treze do painel e seis do Kommo:
 
 | ferramenta | o que responde |
 |---|---|
@@ -19,8 +19,11 @@ Dezesseis ferramentas, **todas de leitura** — dez do painel e seis do Kommo:
 | `urace_estoque_item` | uma peça com o razão que explica o saldo |
 | `urace_clientes` | busca de clientes |
 | `urace_cliente` | ficha completa: serviços, invoices, waivers, peças dele |
-| `urace_invoices` | quem deve, quanto, desde quando |
-| `urace_corridas` | calendário da equipe |
+| `urace_invoices` | quem deve, quanto, desde quando (com `client_id`, só as daquele card) |
+| `urace_corridas` | calendário da equipe (com `client_id`, só as corridas para que o card foi convidado) |
+| `urace_cliente_reservas` | reservas de UM card: agendamentos do site/portal, corridas, sessões do carrinho (#363) |
+| `urace_cliente_pedidos` | pedidos de UM card: loja, planos do site, Suits (#363) |
+| `urace_cliente_pagamentos` | pagamentos de UM card: invoices QBO, mensalidades, peças, Stripe, reembolso do depósito (#363) |
 | `urace_auditoria` | quem fez o quê e quando |
 | `urace_precos_cobrados` | quanto já se cobrou de cada peça e serviço (das invoices, linha por linha) |
 | `urace_kommo_conta` | a conta do Kommo ligada (nome, moeda, funis) |

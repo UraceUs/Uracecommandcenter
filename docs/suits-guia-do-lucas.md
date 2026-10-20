@@ -70,6 +70,8 @@ nome.
 - `urace_api`: executa uma operação (método, caminho, corpo). É exatamente o mesmo que clicar no
   botão do painel.
 - `urace_resumo` e `urace_atencao`: o panorama e o que precisa de gente hoje.
+- `urace_cliente_pedidos` e `urace_cliente_pagamentos` com o `client_id` (número do card): os pedidos
+  (Suits incluídos) e os pagamentos só daquele cliente, sem trazer dado de outro.
 
 **Confirmação:** o que manda algo para fora (e-mail, rascunho no Gmail, QuickBooks, Asana) não
 acontece na primeira chamada. O painel devolve o que vai fazer. O Claude mostra para você e só
