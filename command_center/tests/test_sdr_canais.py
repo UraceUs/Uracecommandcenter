@@ -268,3 +268,142 @@ def test_script_do_dialpad_nunca_mostra_chave():
     spec.loader.exec_module(m)
     texto = m.mascarar('{"hook_url": "https://ops.urace.us/ops/api/dialpad/webhook?key=abc123", "secret": "s3cr3t"}')
     assert "abc123" not in texto and "s3cr3t" not in texto and "key=***" in texto
+
+
+# ------------------------------------------------------------------ revisão: STOP, rajada, eco, só lead, falha
+@pytest.mark.parametrize("texto", ["STOP", "Stop.", "stop", " PARE ", "unsubscribe"])
+def test_stop_sozinho_encerra_sem_resposta_mesmo_com_o_robo_desligado(ambiente, texto):
+    con = ambiente["con"]
+    r = sdr_canais.sms_evento(con, sms(texto), esperar=False)
+    assert "STOP" in r["robo"] and enviados("sms") == []
+    assert um(con, "SELECT opt_out FROM sdr_canal_contatos WHERE canal='sms'")["opt_out"] == 1
+
+
+def test_start_devolve_o_contato(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    sdr_canais.sms_evento(con, sms("STOP"), esperar=False)
+    sdr_canais.sms_evento(con, sms("START", sid="s-2"), esperar=False)
+    assert um(con, "SELECT opt_out FROM sdr_canal_contatos WHERE canal='sms'")["opt_out"] == 0
+
+
+def test_rajada_com_threads_de_verdade_uma_resposta_so(ambiente, monkeypatch):
+    """O caminho do servidor: cada SMS abre uma thread que espera; só a da última mensagem responde."""
+    import threading
+    import time
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    monkeypatch.setenv("SDR_CANAL_RAJADA_SEG", "0.3")
+    chamadas = []
+    original = sdr_canais.perguntar_ao_robo
+
+    def ponte_lenta(*a, **k):
+        chamadas.append(a[2])
+        time.sleep(0.5)
+        return original(*a, **k)
+    monkeypatch.setattr(sdr_canais, "perguntar_ao_robo", ponte_lenta)
+    monkeypatch.setattr(sdr_canais, "_intervalo", lambda t: 0)
+    con = ambiente["con"]
+    sdr_canais.sms_evento(con, sms("Oi", sid="r-1"))
+    time.sleep(0.1)
+    sdr_canais.sms_evento(con, sms("quanto custa?", sid="r-2"))
+    for t in [t for t in threading.enumerate() if t.name == "sdr-sms"]:
+        t.join(timeout=5)
+    assert chamadas == ["Oi\nquanto custa?"], chamadas
+    assert len(enviados("sms")) == 2
+
+
+def test_eco_que_chega_durante_o_envio_nao_pausa_o_robo(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    original = sdr_canais.enviar_sms
+
+    def envia_e_ecoa(numero, texto):
+        saida = original(numero, texto)
+        from command_center.db import conectar as c2
+        outra = c2()
+        sdr_canais.sms_evento(outra, sms(texto, direcao="outbound", sid=f"eco-{len(texto)}"), esperar=False)
+        outra.close()
+        return saida
+    monkeypatch.setattr(sdr_canais, "enviar_sms", envia_e_ecoa)
+    sdr_canais.sms_evento(con, sms("Oi"), esperar=False)
+    row = um(con, "SELECT * FROM sdr_canal_contatos WHERE canal='sms'")
+    assert not sdr_canais.pausado(row), row
+
+
+def test_conversa_ja_passada_para_a_equipe_o_robo_fica_quieto(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    ponte({"rota": "escalar", "motivo": "PEDIDO_HUMANO", "precisa_gente": True, "nota": "Pediu uma pessoa.",
+           "mensagens": ["Já passei para a equipe."]})
+    sdr_canais.sms_evento(con, sms("quero falar com uma pessoa"), esperar=False)
+    r = sdr_canais.sms_evento(con, sms("alô?", sid="s-2"), esperar=False)
+    assert "passou esta conversa" in r["robo"] and len(enviados("sms")) == 1
+
+
+def test_card_do_kommo_com_a_equipe_o_robo_nao_responde(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    inserir(con, "crm_leads", external_id="k-1", name="Ana", stage_name="ATENDIMENTO", contact_phone="+1 407 555 0199",
+            tags="[]")
+    con.commit()
+    r = sdr_canais.sms_evento(con, sms("Oi"), esperar=False)
+    assert "ATENDIMENTO" in r["robo"] and enviados("sms") == []
+
+
+def test_card_do_kommo_na_entrada_e_do_robo(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    inserir(con, "crm_leads", external_id="k-2", name="Ana", stage_name="ENTRADA", contact_phone="+1 407 555 0199",
+            tags="[]")
+    con.commit()
+    assert sdr_canais.sms_evento(con, sms("Oi"), esperar=False)["robo"] == "respondeu"
+
+
+def test_falha_no_envio_vira_atencao(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+
+    def recusa(numero, texto):
+        raise RuntimeError("Dialpad recusou o SMS (403)")
+    monkeypatch.setattr(sdr_canais, "enviar_sms", recusa)
+    r = sdr_canais.sms_evento(con, sms("Oi"), esperar=False)
+    assert r["robo"] == "falhou o envio"
+    c = um(con, "SELECT * FROM sdr_canal_contatos WHERE canal='sms'")
+    assert c["precisa_gente"] == 1 and "não conseguiu enviar" in c["precisa_motivo"]
+    assert um(con, "SELECT COUNT(*) AS n FROM sdr_canal_mensagens WHERE por='robo'")["n"] == 0
+
+
+def test_email_de_oportunidade_com_o_closer_fica_com_a_equipe(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    con = ambiente["con"]
+    inserir(con, "opportunities", name="Ana Souza", email="ana@example.com", stage="CONVERSA", source="site",
+            closer_user_id=1)
+    con.commit()
+    caixa([thread()])
+    r = sdr_canais.ler_email(con)
+    assert "closer" in r["conversas"][0]["robo"] and enviados("email") == []
+
+
+def test_ligar_o_canal_nao_responde_email_velho_de_uma_vez(ambiente, monkeypatch):
+    con = ambiente["con"]
+    caixa([thread()])
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    monkeypatch.setenv("SDR_CANAL_SO_PARA", "outra@example.com")
+    sdr_canais.ler_email(con)                                  # visto, mas fora da lista
+    con.execute("UPDATE sdr_canal_mensagens SET at='2026-01-01T00:00:00.000Z'")
+    con.commit()
+    monkeypatch.delenv("SDR_CANAL_SO_PARA")                   # liberou para todos
+    sdr_canais.ler_email(con)
+    assert enviados("email") == []
+    n = um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='sdr.canal.email.sem_resposta'")["n"]
+    assert n == 1, "uma auditoria por mensagem, não uma por passada"
+
+
+def test_resumo_mostra_onde_esta_a_configuracao(ambiente):
+    r = sdr_canais.resumo(ambiente["con"])
+    assert r["configuracao"]["arquivo"] == "/nao/existe" and r["configuracao"]["existe"] is False
+
+
+def test_numero_de_10_digitos_vira_com_1():
+    assert sdr_canais.contato_de("sms", "(407) 555-0199") == "14075550199"
+    assert sdr_canais.contato_de("sms", "+1 407 555 0199") == "14075550199"

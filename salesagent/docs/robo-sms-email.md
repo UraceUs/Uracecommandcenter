@@ -15,8 +15,12 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | Lead escreve para support@ | responde na mesma conversa, num e-mail curto, assinado "Chase, URACE" |
 | "Oi" e "quanto custa" logo em seguida | espera 8 s e responde uma vez só |
 | Objeção, pronto para fechar, já compete, pede pessoa | oferece a call (ou a frase de espera) e a conversa entra em **Precisa de atenção** |
-| "pare" / STOP / unsubscribe | confirma uma vez e nunca mais escreve para o contato |
-| Cliente do painel ou oportunidade com o closer | **não responde**: é da equipe |
+| SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (a operadora confirma) e nunca mais escreve; START devolve |
+| "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
+| Cliente do painel, oportunidade com o closer, card do Kommo fora das etapas do robô ou com tag de passagem | **não responde**: é da equipe |
+| Conversa que o robô já passou para a equipe | **fica quieto** até alguém marcar resolvido |
+| Falhou o envio (Dialpad ou Gmail recusou) | vira **Precisa de atenção** |
+| Canal ligado depois de dias desligado | **não responde e-mail velho** (só o que chegou nos últimos 30 min) |
 | E-mail automático, newsletter, lista, resposta de férias, @urace.us, já marcado por filtro do Gmail | **ignora** |
 | Uma pessoa da equipe responde à mão (SMS pelo Dialpad ou e-mail na conversa) | **pausa o robô naquele contato** por 72 h; para voltar: `POST /ops/api/sdr/canais/{id}` com `reativar` |
 | Nível do robô em Observar ou Organizar | não envia nada |
@@ -52,3 +56,17 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | `SDR_CANAL_PAUSA_HORAS` | 72 | quanto tempo o robô fica fora depois que uma pessoa responde |
 | `SDR_CANAL_EMAIL_MIN` | 3 | de quantos em quantos minutos ele lê a support@ |
 | `SDR_CANAL_RAJADA_SEG` | 8 | quanto ele espera mensagens seguidas no SMS antes de responder |
+
+## Onde está a configuração
+
+`GET /ops/api/sdr/canais` mostra o caminho do `sdr-canais.env` que o painel está lendo e se o arquivo existe. Ele fica
+na mesma pasta do `bridge.env` (a `URACE_DIR` do serviço). Se aparecer `existe: false`, o arquivo foi criado em outra
+pasta.
+
+## Em aberto (decisão do dono)
+
+- **Formulário do site**: se ele chega na support@ vindo de noreply@ com Reply-To, o robô hoje o ignora como
+  automático. Responder pelo Reply-To?
+- **10DLC**: confirmar que o registro do número da empresa cobre resposta automática (senão a operadora pode
+  filtrar) e se o Dialpad já responde o STOP sozinho.
+- **Tela**: as conversas e o "Reativar" existem só na API. Um card no painel do robô antes de liberar a todos.

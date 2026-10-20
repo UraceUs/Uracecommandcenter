@@ -48,10 +48,14 @@ ASSINATURA = "Chase\nURACE · urace.us"
 _cache_env = {"lido": None, "valores": {}}
 
 
-def _ler_env():
+def _caminho_env():
     # a mesma pasta do bridge.env que o painel já usa (URACE_DIR do serviço), não a home de quem roda
     base = os.environ.get("URACE_DIR") or os.path.expanduser("~/.urace")
-    caminho = Path(os.path.expanduser(os.environ.get("SDR_CANAIS_ENV") or os.path.join(base, "sdr-canais.env")))
+    return Path(os.path.expanduser(os.environ.get("SDR_CANAIS_ENV") or os.path.join(base, "sdr-canais.env")))
+
+
+def _ler_env():
+    caminho = _caminho_env()
     try:
         marca = caminho.stat().st_mtime
     except OSError:
@@ -80,7 +84,10 @@ def so_digitos(tel):
 
 
 def contato_de(canal, valor):
-    return so_digitos(valor) if canal == "sms" else (valor or "").strip().lower()
+    if canal != "sms":
+        return (valor or "").strip().lower()
+    d = so_digitos(valor)
+    return "1" + d if len(d) == 10 else d                   # número dos EUA sem o 1 vira +1…
 
 
 def permitido(canal, contato):
@@ -106,6 +113,10 @@ def pausa_horas():
         return max(1, int(cfg("SDR_CANAL_PAUSA_HORAS", "72")))
     except ValueError:
         return 72
+
+
+def _menos_minutos(m):
+    return (datetime.now(timezone.utc) - timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
 def _mais_horas(h):
@@ -144,6 +155,44 @@ def pausar(con, row, motivo):
             detail={"motivo": motivo, "horas": pausa_horas()})
 
 
+# As etapas do Kommo em que o robô atende (as mesmas do Instagram); fora delas o card é da equipe.
+ETAPAS_DO_ROBO = {"first contact", "cold leads", "follow up 1", "entrada"}
+TAGS_DA_EQUIPE = {"escalated", "sdr:handoff", "sdr:agora-nao"}
+
+
+def da_equipe(con, canal, valor):
+    """Por que este contato é da equipe e não do robô (None = é lead para o robô). Cliente, oportunidade em
+    aberto com o closer e card do Kommo fora das etapas do robô ou com tag de passagem."""
+    from command_center.providers import identidade
+    if canal == "sms":
+        from command_center.api import dialpad
+        achado = dialpad.liga_a_quem(con, valor)
+        if achado.get("client_id"):
+            return "cliente do painel: é a equipe que responde"
+        if achado.get("opportunity_id"):
+            return "oportunidade em aberto com o closer"
+        lead = um(con, "SELECT * FROM crm_leads WHERE id=?", (achado["lead_id"],)) if achado.get("lead_id") else None
+    else:
+        email = contato_de("email", valor)
+        cli, _ = identidade.acha_pessoa(con, email=email)
+        if cli:
+            return "cliente do painel: é a equipe que responde"
+        if um(con, "SELECT 1 FROM opportunities WHERE email=? AND stage NOT IN ('GANHO','PERDIDO')", (email,)):
+            return "oportunidade em aberto com o closer"
+        lead = um(con, "SELECT * FROM crm_leads WHERE contact_email=? ORDER BY id DESC LIMIT 1", (email,))
+    if lead:
+        try:
+            tags = {str(x).lower() for x in json.loads(lead.get("tags") or "[]")}
+        except (ValueError, TypeError):
+            tags = set()
+        if tags & TAGS_DA_EQUIPE:
+            return f"card do Kommo com a equipe ({', '.join(sorted(tags & TAGS_DA_EQUIPE))})"
+        etapa = (lead.get("stage_name") or "").strip().lower()
+        if etapa and etapa not in ETAPAS_DO_ROBO:
+            return f"card do Kommo em {lead.get('stage_name')}: é a equipe que responde"
+    return None
+
+
 def bloqueio(con, canal, row, cliente=False):
     """Por que o robô NÃO responde a este contato agora (None = pode responder)."""
     if not ligado(canal):
@@ -156,8 +205,10 @@ def bloqueio(con, canal, row, cliente=False):
         return "pediu para parar"
     if pausado(row):
         return f"uma pessoa assumiu ({row.get('pausa_motivo') or 'pausa'})"
+    if row.get("precisa_gente"):
+        return "o robô já passou esta conversa para a equipe (resolva em Precisa de atenção)"
     if cliente:
-        return "cliente ou oportunidade com o closer: é a equipe que responde"
+        return cliente if isinstance(cliente, str) else "cliente ou oportunidade com o closer: é a equipe que responde"
     return None
 
 
@@ -179,11 +230,19 @@ def perguntar_ao_robo(canal, contato_, texto, nome, primeira):
         return json.loads(resp.read() or b"{}")
 
 
+def falhou_envio(con, row, canal, erro):
+    atualizar(con, "sdr_canal_contatos", row["id"], precisa_gente=1,
+              precisa_motivo=f"O robô não conseguiu enviar a resposta por {canal}: {str(erro)[:160]}")
+    auditar(con, f"sdr.canal.{canal}.falhou", "system", entity_type="sdr_canal", entity_id=row["id"],
+            detail={"erro": f"{type(erro).__name__}: {str(erro)[:300]}"})
+    con.commit()
+
+
 def _depois_de_responder(con, row, resposta, quando):
     campos = {"respostas": (row.get("respostas") or 0) + 1, "ultima_resposta_em": quando}
     if resposta.get("rota") == "confirmar_opt_out":
         campos["opt_out"] = 1
-    if resposta.get("precisa_gente") or resposta.get("rota") == "adiar":
+    if resposta.get("precisa_gente"):
         campos["precisa_gente"] = 1
         campos["precisa_motivo"] = (resposta.get("nota") or resposta.get("motivo") or "o robô passou para a equipe")[:300]
     atualizar(con, "sdr_canal_contatos", row["id"], **campos)
@@ -275,26 +334,52 @@ def sms_evento(con, ev, esperar=True):
     if not guardar(con, "sms", row["contato"], "entrada", "lead", s["texto"], s["id"]):
         return {"sms": "duplicado"}
     atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora())
+    # STOP (lei e operadora): vale sempre, com o robô ligado ou não. Quem confirma é a operadora/Dialpad;
+    # o robô só nunca mais escreve. START/UNSTOP devolve.
+    if _STOP.match(s["texto"]):
+        atualizar(con, "sdr_canal_contatos", row["id"], opt_out=1)
+        auditar(con, "sdr.canal.sms.stop", "system", entity_type="sdr_canal", entity_id=row["id"])
+        con.commit()
+        return {"sms": "recebido", "robo": "STOP: nunca mais escreve para este número"}
+    if _START.match(s["texto"]) and row.get("opt_out"):
+        atualizar(con, "sdr_canal_contatos", row["id"], opt_out=0)
+        row = dict(row, opt_out=0)
     con.commit()
-    from command_center.api import dialpad
-    achado = dialpad.liga_a_quem(con, s["numero"])
-    motivo = bloqueio(con, "sms", row, cliente=bool(achado.get("client_id") or achado.get("opportunity_id")))
+    motivo = bloqueio(con, "sms", row, cliente=da_equipe(con, "sms", s["numero"]))
     if motivo:
         auditar(con, "sdr.canal.sms.sem_resposta", "system", entity_type="sdr_canal", entity_id=row["id"],
                 detail={"motivo": motivo})
         con.commit()
         return {"sms": "recebido", "robo": motivo}
+    gatilho = um(con, "SELECT MAX(id) AS id FROM sdr_canal_mensagens WHERE canal='sms' AND contato=? AND por='lead'",
+                 (row["contato"],))["id"]
     if not esperar:
         return {"sms": "recebido", **responder_sms(con, row["id"], esperar=False)}
-    threading.Thread(target=_responder_sms_depois, args=(row["id"],), daemon=True, name="sdr-sms").start()
+    threading.Thread(target=_responder_sms_depois, args=(row["id"], gatilho), daemon=True, name="sdr-sms").start()
     return {"sms": "recebido", "robo": "respondendo"}
 
 
-def _responder_sms_depois(contato_id):
+_STOP = re.compile(r"^\W*(stop|stopall|unsubscribe|cancel|end|quit|pare|parar|alto|arr[eê]t)\W*$", re.I)
+_START = re.compile(r"^\W*(start|unstop|yes)\W*$", re.I)
+_TRAVAS = {}
+_TRAVAS_LOCK = threading.Lock()
+
+
+def _trava(contato_id):
+    with _TRAVAS_LOCK:
+        return _TRAVAS.setdefault(contato_id, threading.Lock())
+
+
+def _responder_sms_depois(contato_id, gatilho):
     from command_center.db import conectar
     time.sleep(float(cfg("SDR_CANAL_RAJADA_SEG", "8")))     # "oi" + "quanto custa" logo em seguida: uma resposta só
     con = conectar()
     try:
+        row = um(con, "SELECT contato FROM sdr_canal_contatos WHERE id=?", (contato_id,))
+        ultima = um(con, "SELECT MAX(id) AS id FROM sdr_canal_mensagens WHERE canal='sms' AND contato=? AND por='lead'",
+                    (row["contato"],))["id"]
+        if ultima and gatilho and ultima > gatilho:
+            return                                          # chegou mensagem mais nova: a thread dela responde tudo
         responder_sms(con, contato_id)
     except Exception as e:                                  # noqa: BLE001 — nunca derruba o servidor
         auditar(con, "sdr.canal.sms.falhou", "system", entity_type="sdr_canal", entity_id=contato_id,
@@ -305,7 +390,12 @@ def _responder_sms_depois(contato_id):
 
 
 def responder_sms(con, contato_id, esperar=True):
-    """Responde o que o lead mandou desde a última resposta do robô, numa resposta só."""
+    """Responde o que o lead mandou desde a última resposta do robô, numa resposta só (uma por vez por contato)."""
+    with _trava(contato_id):
+        return _responder_sms(con, contato_id, esperar)
+
+
+def _responder_sms(con, contato_id, esperar):
     row = um(con, "SELECT * FROM sdr_canal_contatos WHERE id=?", (contato_id,))
     novas = todos(con, """SELECT * FROM sdr_canal_mensagens WHERE canal='sms' AND contato=? AND por='lead'
                           AND id > COALESCE((SELECT MAX(id) FROM sdr_canal_mensagens WHERE canal='sms' AND contato=?
@@ -321,10 +411,21 @@ def responder_sms(con, contato_id, esperar=True):
     for i, balao in enumerate(baloes):
         if i and esperar:
             time.sleep(_intervalo(balao))
-        enviado = enviar_sms("+" + row["contato"], balao)
-        guardar(con, "sms", row["contato"], "saida", "robo", balao, str(enviado.get("id") or "") or None,
-                resposta.get("rota"), resposta.get("motivo"))
+        # grava ANTES de enviar: o eco do Dialpad pode chegar antes do envio voltar, e sem a linha o robô
+        # pausaria a si mesmo achando que foi a equipe
+        guardar(con, "sms", row["contato"], "saida", "robo", balao, None, resposta.get("rota"), resposta.get("motivo"))
+        mid = um(con, "SELECT MAX(id) AS id FROM sdr_canal_mensagens WHERE canal='sms' AND contato=? AND por='robo'",
+                 (row["contato"],))["id"]
         con.commit()
+        try:
+            enviado = enviar_sms("+" + row["contato"], balao)
+        except Exception as e:                              # noqa: BLE001
+            con.execute("DELETE FROM sdr_canal_mensagens WHERE id=?", (mid,))
+            falhou_envio(con, row, "SMS", e)
+            return {"robo": "falhou o envio", "erro": str(e)[:200]}
+        if enviado.get("id"):
+            atualizar(con, "sdr_canal_mensagens", mid, external_id=str(enviado["id"]))
+            con.commit()
     _depois_de_responder(con, row, resposta, agora())
     atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=novas[-1]["external_id"])
     auditar(con, "sdr.canal.sms.resposta", "system", entity_type="sdr_canal", entity_id=row["id"],
@@ -431,19 +532,28 @@ def ler_email(con):
         # uma pessoa da equipe já escreveu nesta conversa (e não foi o robô): é dela
         equipe = [m for m in msgs[:-1] if _email_de(m.get("de")).endswith("@urace.us") and m["message_id"] not in robo_ids]
         auto = automatico(remetente, ultima.get("cabecalhos"), ultima.get("marcadores"))
-        from command_center.providers import sync
-        cliente = sync._acha_cliente(con, email=email) is not None
-        guardar(con, "email", row["contato"], "entrada", "lead", sem_citacao(ultima.get("corpo")), ultima["message_id"])
-        atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora(), thread_id=th.get("thread_id"))
+        cliente = da_equipe(con, "email", email)
+        nova = guardar(con, "email", row["contato"], "entrada", "lead", sem_citacao(ultima.get("corpo")), ultima["message_id"])
+        if nova:
+            atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora(), thread_id=th.get("thread_id"))
+        else:
+            vista = um(con, "SELECT at FROM sdr_canal_mensagens WHERE canal='email' AND external_id=?", (ultima["message_id"],))
+            if vista and vista["at"] < _menos_minutos(30):
+                # visto há mais de 30 min e não respondido (canal desligado, fora da lista): ligar o robô não
+                # dispara resposta para e-mail velho de uma vez
+                atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=ultima["message_id"])
+                con.commit()
+                continue
         if equipe and not pausado(row):
             pausar(con, row, "a equipe respondeu por e-mail")
             row = um(con, "SELECT * FROM sdr_canal_contatos WHERE id=?", (row["id"],))
         motivo = auto or bloqueio(con, "email", row, cliente=cliente)
         if motivo:
-            if auto or cliente or row.get("opt_out") or pausado(row):          # definitivo: não olha de novo
+            if auto or cliente or row.get("opt_out") or pausado(row) or row.get("precisa_gente"):   # definitivo
                 atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=ultima["message_id"])
-            auditar(con, "sdr.canal.email.sem_resposta", "system", entity_type="sdr_canal", entity_id=row["id"],
-                    detail={"motivo": motivo})
+            if nova:                                          # uma auditoria por mensagem, não uma por passada
+                auditar(con, "sdr.canal.email.sem_resposta", "system", entity_type="sdr_canal", entity_id=row["id"],
+                        detail={"motivo": motivo})
             con.commit()
             feitos.append({"para": email, "robo": motivo})
             continue
@@ -461,7 +571,13 @@ def ler_email(con):
         if not assunto.lower().startswith("re:"):
             assunto = "Re: " + assunto
         corpo = "\n\n".join(baloes) + "\n\n" + ASSINATURA
-        enviado = enviar_email(email, assunto, corpo, th.get("thread_id"), ultima.get("message_id_header"))
+        try:
+            enviado = enviar_email(email, assunto, corpo, th.get("thread_id"), ultima.get("message_id_header"))
+        except Exception as e:                                # noqa: BLE001
+            atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=ultima["message_id"])
+            falhou_envio(con, row, "e-mail", e)
+            feitos.append({"para": email, "robo": "falhou o envio"})
+            continue
         guardar(con, "email", row["contato"], "saida", "robo", corpo, enviado.get("id"), resposta.get("rota"),
                 resposta.get("motivo"))
         _depois_de_responder(con, row, resposta, agora())
@@ -502,6 +618,8 @@ def resumo(con):
     contatos = todos(con, """SELECT id, canal, contato, nome, respostas, opt_out, pausado_ate, pausa_motivo, precisa_gente,
                                     precisa_motivo, ultima_entrada_em, ultima_resposta_em
                                FROM sdr_canal_contatos ORDER BY COALESCE(ultima_entrada_em, '') DESC LIMIT 50""")
-    return {"sms": {"ligado": ligado("sms")}, "email": {"ligado": ligado("email"), "caixa": CAIXA_EMAIL},
+    caminho = _caminho_env()
+    return {"configuracao": {"arquivo": str(caminho), "existe": caminho.exists()},
+            "sms": {"ligado": ligado("sms")}, "email": {"ligado": ligado("email"), "caixa": CAIXA_EMAIL},
             "nivel": nivel(), "lista_de_teste": bool(cfg("SDR_CANAL_SO_PARA")),
             "pausa_horas": pausa_horas(), "contatos": contatos}
