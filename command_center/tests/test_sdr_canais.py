@@ -283,7 +283,7 @@ def test_start_devolve_o_contato(ambiente, monkeypatch):
     monkeypatch.setenv("SDR_CANAL_SMS", "1")
     con = ambiente["con"]
     sdr_canais.sms_evento(con, sms("STOP"), esperar=False)
-    sdr_canais.sms_evento(con, sms("START", sid="s-2"), esperar=False)
+    sdr_canais.sms_evento(con, sms("UNSTOP", sid="s-2"), esperar=False)
     assert um(con, "SELECT opt_out FROM sdr_canal_contatos WHERE canal='sms'")["opt_out"] == 0
 
 
@@ -456,3 +456,18 @@ def test_oportunidade_nova_do_site_e_lead_e_com_closer_e_da_equipe(ambiente, mon
     con.commit()
     caixa([thread(mid="m-5", corpo="And Sundays?")])
     assert "closer" in sdr_canais.ler_email(con)["conversas"][0]["robo"]
+
+
+@pytest.mark.parametrize("texto", ["HELP", "help", "Info"])
+def test_help_quem_responde_e_o_dialpad(ambiente, monkeypatch, texto):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    r = sdr_canais.sms_evento(ambiente["con"], sms(texto), esperar=False)
+    assert "HELP" in r["robo"] and enviados("sms") == []
+
+
+def test_sim_depois_do_stop_nao_reativa(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    sdr_canais.sms_evento(con, sms("STOP"), esperar=False)
+    r = sdr_canais.sms_evento(con, sms("yes", sid="s-2"), esperar=False)
+    assert "parar" in r["robo"] and enviados("sms") == []

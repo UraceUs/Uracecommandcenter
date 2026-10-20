@@ -15,7 +15,8 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | Lead escreve para support@ | responde na mesma conversa, num e-mail curto, assinado "Chase, URACE" |
 | "Oi" e "quanto custa" logo em seguida | espera 8 s e responde uma vez só |
 | Objeção, pronto para fechar, já compete, pede pessoa | oferece a call (ou a frase de espera) e a conversa entra em **Precisa de atenção** |
-| SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (a operadora confirma) e nunca mais escreve; START devolve |
+| SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (o Dialpad confirma e bloqueia o contato) e nunca mais escreve; UNSTOP devolve |
+| SMS só com HELP / INFO | **não responde**: o Dialpad manda a mensagem de ajuda do escritório |
 | "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
 | Cliente do painel, oportunidade com o closer, card do Kommo fora das etapas do robô ou com tag de passagem | **não responde**: é da equipe |
 | Conversa que o robô já passou para a equipe | **fica quieto** até alguém marcar resolvido |
@@ -77,5 +78,9 @@ Pausar, Reativar e Resolvido.
 
 ## Em aberto
 
-- **10DLC**: confirmar que o registro do número da empresa cobre resposta automática (senão a operadora pode
-  filtrar) e se o Dialpad já responde o STOP sozinho.
+- **10DLC (trava do SMS)**: sem campanha A2P **Registered**, as operadoras bloqueiam SMS do número da empresa
+  para celulares dos EUA. Conferir em Admin Portal → Company Settings → SMS Management → SMS Registration
+  (`dialpad.com/campaignregistration`, só Company Admin). A campanha precisa marcar mensagem **automatizada e
+  conversacional**, ter 2+ exemplos com "URACE", objetivo e "Reply STOP to opt out", e o site precisa da política
+  de SMS (dado de celular não é compartilhado para marketing). Aprovação leva ~3 semanas. O Dialpad já trata
+  STOP, UNSTOP e HELP sozinho. **Só ligar `SDR_CANAL_SMS` com a campanha Registered**; o e-mail não depende disso.

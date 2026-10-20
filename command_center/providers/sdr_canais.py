@@ -344,13 +344,16 @@ def sms_evento(con, ev, esperar=True):
     if not guardar(con, "sms", row["contato"], "entrada", "lead", s["texto"], s["id"]):
         return {"sms": "duplicado"}
     atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora())
-    # STOP (lei e operadora): vale sempre, com o robô ligado ou não. Quem confirma é a operadora/Dialpad;
-    # o robô só nunca mais escreve. START/UNSTOP devolve.
+    # STOP (lei e operadora): vale sempre, com o robô ligado ou não. Quem confirma é o Dialpad (ele trata STOP, UNSTOP
+    # e HELP sozinho e bloqueia a resposta para quem mandou STOP); o robô só nunca mais escreve. UNSTOP/START devolve.
     if _STOP.match(s["texto"]):
         atualizar(con, "sdr_canal_contatos", row["id"], opt_out=1)
         auditar(con, "sdr.canal.sms.stop", "system", entity_type="sdr_canal", entity_id=row["id"])
         con.commit()
         return {"sms": "recebido", "robo": "STOP: nunca mais escreve para este número"}
+    if _HELP.match(s["texto"]):
+        con.commit()
+        return {"sms": "recebido", "robo": "HELP: o Dialpad responde com a mensagem de ajuda"}
     if _START.match(s["texto"]) and row.get("opt_out"):
         atualizar(con, "sdr_canal_contatos", row["id"], opt_out=0)
         row = dict(row, opt_out=0)
@@ -370,7 +373,10 @@ def sms_evento(con, ev, esperar=True):
 
 
 _STOP = re.compile(r"^\W*(stop|stopall|unsubscribe|cancel|end|quit|pare|parar|alto|arr[eê]t)\W*$", re.I)
-_START = re.compile(r"^\W*(start|unstop|yes)\W*$", re.I)
+_START = re.compile(r"^\W*(start|unstop)\W*$", re.I)
+# HELP/INFO sozinho: o Dialpad responde sozinho com a mensagem de ajuda do escritório (Admin Settings → Office →
+# Help Message). O robô não responde junto (duas respostas para o mesmo HELP).
+_HELP = re.compile(r"^\W*(help|info|ajuda|ayuda)\W*$", re.I)
 _TRAVAS = {}
 _TRAVAS_LOCK = threading.Lock()
 
