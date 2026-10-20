@@ -1441,14 +1441,14 @@ def test_balcao_no_celular_cliente_guardar_digitar_peca_nova_e_confirmar(servido
     """Dono, 20/10: "quando eu vou digitar a peça pelo celular, não aparece o teclado" — o campo tinha inputmode="none".
     E a ordem: o cliente primeiro, COBRAR/GUARDAR, o campo da peça; a peça que não existe abre o pop-up, que já põe no
     cliente; no GUARDAR, a lista do que está guardando e o Confirmar lá embaixo."""
-    pg = entrar(navegador, servidor, largura=390, altura=844)
+    pg = entrar(navegador, servidor, largura=390, altura=844)        # outro card que não o David: os testes do celular contam com ele
     abrir(pg, servidor, "/balcao")
     pg.get_by_role("heading", name="Quem é o cliente?", level=2).wait_for()
     assert pg.get_by_role("radio", name="GUARDAR").count() == 0, "sem cliente, nada mais aparece"
     busca = pg.get_by_label("Buscar o cliente pelo nome")
-    busca.fill("Pedalo")
-    pg.locator(".lpick-menu .opt", has_text="David Pedalo").first.click()
-    pg.get_by_role("heading", name="David Pedalo", level=2).wait_for()
+    busca.fill("Sapata")
+    pg.locator(".lpick-menu .opt", has_text="Bryan Sapata").first.click()
+    pg.get_by_role("heading", name="Bryan Sapata", level=2).wait_for()
     pg.get_by_role("radio", name="GUARDAR").click()
     campo = pg.get_by_label("Peça: digite o nome ou o código")
     assert campo.get_attribute("inputmode") != "none" and campo.get_attribute("readonly") is None
@@ -1464,7 +1464,7 @@ def test_balcao_no_celular_cliente_guardar_digitar_peca_nova_e_confirmar(servido
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     salvar.click()
-    pg.get_by_text("Seat strut e2e novo registrada e na lista para guardar de David Pedalo.").wait_for()
+    pg.get_by_text("Seat strut e2e novo registrada e na lista para guardar de Bryan Sapata.").wait_for()
     lista = pg.locator(".balcao-guard")
     lista.get_by_text("Seat strut e2e novo").wait_for()
     # a segunda peça, já conhecida, pelo código
@@ -1483,7 +1483,7 @@ def test_balcao_no_celular_cliente_guardar_digitar_peca_nova_e_confirmar(servido
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     confirmar.click()
-    pg.get_by_text("2 peça(s) guardada(s) para David Pedalo.").wait_for()
+    pg.get_by_text("2 peça(s) guardada(s) para Bryan Sapata.").wait_for()
     pg.locator(".tbl .tr", has_text="Seat strut e2e novo").first.wait_for()
     assert pg.locator(".tbl .tr", has_text="guardada para o cliente").count() >= 2
     pg.locator(".tbl .tr", has_text="Front bumper (e2e)").first.wait_for()
