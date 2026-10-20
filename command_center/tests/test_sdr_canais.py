@@ -407,3 +407,52 @@ def test_resumo_mostra_onde_esta_a_configuracao(ambiente):
 def test_numero_de_10_digitos_vira_com_1():
     assert sdr_canais.contato_de("sms", "(407) 555-0199") == "14075550199"
     assert sdr_canais.contato_de("sms", "+1 407 555 0199") == "14075550199"
+
+
+# ------------------------------------------------------------------ formulário do site (dono, 20/10)
+def _formulario(monkeypatch, mensagem="My son is 9, when can he start?"):
+    monkeypatch.setenv("CC_SDR_FORMULARIO_SINCRONO", "1")
+    monkeypatch.delenv("CC_SITE_HOSTS", raising=False)
+    monkeypatch.delenv("CC_SITE_PREVIEW", raising=False)
+    with TestClient(app, base_url="https://novo.urace.us") as cli:
+        return cli.post("/ops/api/vitrine/contato", json={"nome": "Ana Lima", "email": "ana@exemplo.com",
+                                                         "assunto": "academy", "mensagem": mensagem})
+
+
+def test_formulario_do_site_o_robo_escreve_o_follow_up(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    r = _formulario(monkeypatch)
+    assert r.status_code == 200
+    e = enviados("email")
+    para_ana = [m for m in e if m["to"] == "ana@exemplo.com"]
+    assert len(para_ana) == 1, e
+    assert para_ana[0]["from"] == "support@urace.us" and "Oi! Aqui é o Chase" in para_ana[0]["text"]
+    assert "We got your message" not in para_ana[0]["subject"], "a confirmação genérica não sai junto"
+    assert any(m["to"] == "support@urace.us" for m in e), "a equipe continua avisada"
+    con = conectar()
+    assert um(con, "SELECT title FROM opp_events WHERE actor='sdr'")["title"].startswith("O robô respondeu")
+    con.close()
+
+
+def test_formulario_robo_falhou_sai_a_confirmacao_de_sempre(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+
+    def fora(*a, **k):
+        raise RuntimeError("ponte fora do ar")
+    monkeypatch.setattr(sdr_canais, "perguntar_ao_robo", fora)
+    _formulario(monkeypatch)
+    para_ana = [m for m in enviados("email") if m["to"] == "ana@exemplo.com"]
+    assert len(para_ana) == 1 and "We got your message" in para_ana[0]["subject"]
+
+
+def test_oportunidade_nova_do_site_e_lead_e_com_closer_e_da_equipe(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    con = ambiente["con"]
+    oid = inserir(con, "opportunities", name="Ana", email="ana@example.com", stage="NOVO", source="Site")
+    con.commit()
+    caixa([thread()])
+    assert sdr_canais.ler_email(con)["conversas"][0]["robo"] == "respondeu"
+    con.execute("UPDATE opportunities SET closer_user_id=1 WHERE id=?", (oid,))
+    con.commit()
+    caixa([thread(mid="m-5", corpo="And Sundays?")])
+    assert "closer" in sdr_canais.ler_email(con)["conversas"][0]["robo"]

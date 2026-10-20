@@ -160,6 +160,12 @@ ETAPAS_DO_ROBO = {"first contact", "cold leads", "follow up 1", "entrada"}
 TAGS_DA_EQUIPE = {"escalated", "sdr:handoff", "sdr:agora-nao"}
 
 
+def oportunidade_da_equipe(opp):
+    """Oportunidade que já está com uma pessoa: tem closer, ou passou de NOVO. A que acabou de chegar pelo
+    formulário do site (NOVO, sem closer) é lead para o robô (dono, 20/10: "ele monta o e-mail para follow up")."""
+    return bool(opp.get("closer_user_id")) or (opp.get("stage") or "NOVO") != "NOVO"
+
+
 def da_equipe(con, canal, valor):
     """Por que este contato é da equipe e não do robô (None = é lead para o robô). Cliente, oportunidade em
     aberto com o closer e card do Kommo fora das etapas do robô ou com tag de passagem."""
@@ -170,15 +176,19 @@ def da_equipe(con, canal, valor):
         if achado.get("client_id"):
             return "cliente do painel: é a equipe que responde"
         if achado.get("opportunity_id"):
-            return "oportunidade em aberto com o closer"
+            opp = um(con, "SELECT stage, closer_user_id FROM opportunities WHERE id=?", (achado["opportunity_id"],))
+            if opp and oportunidade_da_equipe(opp):
+                return "oportunidade em aberto com o closer"
         lead = um(con, "SELECT * FROM crm_leads WHERE id=?", (achado["lead_id"],)) if achado.get("lead_id") else None
     else:
         email = contato_de("email", valor)
         cli, _ = identidade.acha_pessoa(con, email=email)
         if cli:
             return "cliente do painel: é a equipe que responde"
-        if um(con, "SELECT 1 FROM opportunities WHERE email=? AND stage NOT IN ('GANHO','PERDIDO')", (email,)):
-            return "oportunidade em aberto com o closer"
+        for opp in todos(con, "SELECT stage, closer_user_id FROM opportunities WHERE email=? AND stage NOT IN ('GANHO','PERDIDO')",
+                         (email,)):
+            if oportunidade_da_equipe(opp):
+                return "oportunidade em aberto com o closer"
         lead = um(con, "SELECT * FROM crm_leads WHERE contact_email=? ORDER BY id DESC LIMIT 1", (email,))
     if lead:
         try:
@@ -587,6 +597,45 @@ def ler_email(con):
         con.commit()
         feitos.append({"para": email, "robo": "respondeu", "rota": resposta.get("rota")})
     return {"email": "lido", "conversas": feitos}
+
+
+# ------------------------------------------------------------------ formulário do site (dono, 20/10)
+def vai_responder_formulario(con, email):
+    """O robô vai escrever o follow-up de quem preencheu o formulário? (Senão sai a confirmação de sempre.)"""
+    row = contato(con, "email", email)
+    return bloqueio(con, "email", row, cliente=da_equipe(con, "email", email)) is None
+
+
+def responder_formulario(con, oid, nome, email, assunto, mensagem):
+    """O follow-up do formulário de contato: o robô lê o que a pessoa escreveu e responde da support@, no lugar da
+    confirmação genérica. A resposta dela cai na support@ e segue com o robô (ou com quem assumir). Devolve True
+    se enviou; com False, quem chamou manda a confirmação de sempre."""
+    row = contato(con, "email", email, nome)
+    if bloqueio(con, "email", row, cliente=da_equipe(con, "email", email)):
+        return False
+    texto = f"{assunto}\n{mensagem}"
+    guardar(con, "email", row["contato"], "entrada", "lead", texto, f"site-{oid}")
+    resposta = perguntar_ao_robo("email", row["contato"], texto, nome, (row.get("respostas") or 0) == 0)
+    baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
+    if not baloes:
+        return False
+    corpo = "\n\n".join(baloes) + "\n\n" + ASSINATURA
+    try:
+        enviado = enviar_email(email, f"{assunto} | URACE", corpo, None, None)
+    except Exception as e:                                    # noqa: BLE001
+        falhou_envio(con, row, "e-mail", e)
+        return False
+    guardar(con, "email", row["contato"], "saida", "robo", corpo, enviado.get("id"), resposta.get("rota"),
+            resposta.get("motivo"))
+    _depois_de_responder(con, row, resposta, agora())
+    atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora(),
+              thread_id=enviado.get("thread_id") or row.get("thread_id"))
+    inserir(con, "opp_events", opp_id=oid, kind="note", title="O robô respondeu por e-mail (support@)",
+            detail=corpo[:2000], at=agora(), actor="sdr")
+    auditar(con, "sdr.canal.email.formulario", "system", entity_type="opportunity", entity_id=oid,
+            detail={"rota": resposta.get("rota"), "paragrafos": len(baloes)})
+    con.commit()
+    return True
 
 
 def laco_email():

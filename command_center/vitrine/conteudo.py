@@ -82,8 +82,8 @@ TRACK = ("Orlando Kart Center’s 8/10 mile professional kart racing track is yo
 
 TERMOS = (
     "The program price is URACE’s fee for coaching and trackside support only. Track fees are not included: driver and "
-    "guest passes are paid directly to the Orlando Kart Center, and the amount changes with the day. Guest passes "
-    "range from $15 to $22 and are charged directly by the track.",
+    "guest passes are paid directly to the Orlando Kart Center: driver pass $90 Monday to Friday and $65 Saturday "
+    "and Sunday, spectator pass $5, charged directly by the track.",
     # idades: decisão do dono de 08/10 (o site atual ainda lista Micro/Mini 6–13 e Junior/Senior 11+)
     "There are different categories of kart available: Baby Kart (ages 4–7), 4-stroke (7+), 2-stroke (7+) and Adult "
     "Shifter (14+, experience required). The difference between 2t and 4t kart options is the performance. We recommend "
@@ -367,8 +367,9 @@ ARRIVE = {
           "All weekday training sessions must be confirmed by Sunday. All weekend sessions must be confirmed 24h in "
           "advance. Please call if you have any questions.")),
         ("Track fees (paid to the Orlando Kart Center)",
-         ("Driver pass Wednesday to Friday $100–230.", "Driver pass Saturday and Sunday $100–125.",
-          "Guest (spectator) pass $15–22, charged directly by the track.")),
+         # dono, 20/10: "siga o do robô" (os mesmos valores que o robô SDR diz no chat)
+         ("Driver pass Monday to Friday $90.", "Driver pass Saturday and Sunday $65.",
+          "Spectator pass $5, charged directly by the track.")),
         *FAQ_COMUM,
     ),
     "depoimentos": DEPOIMENTOS_EVENTOS,

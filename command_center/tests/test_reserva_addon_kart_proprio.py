@@ -126,5 +126,7 @@ def test_convidado_varia_de_15_a_22_e_e_cobrado_pela_pista(loja):  # noqa: F811
         assert "Extra guests must pay $15 each" not in texto, caminho
         assert "Spectator pass any day $22" not in texto and "spectator pass any day $22" not in texto, caminho
     texto = re.sub(r"<[^>]+>", " ", cli.get("/services/arrive-and-drive/").text)
-    assert "$15 to $22" in texto or "$15–22" in texto
+    # dono, 20/10: a taxa de pista do site é a mesma que o robô SDR diz ("siga o do robô")
+    assert "$15 to $22" not in texto and "$15–22" not in texto and "$100–230" not in texto
+    assert "Spectator pass $5" in texto and "Driver pass Monday to Friday $90" in texto
     assert "charged directly by the track" in texto

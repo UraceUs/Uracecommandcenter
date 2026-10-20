@@ -63,10 +63,19 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 na mesma pasta do `bridge.env` (a `URACE_DIR` do serviço). Se aparecer `existe: false`, o arquivo foi criado em outra
 pasta.
 
-## Em aberto (decisão do dono)
+## Formulário do site (dono, 20/10: "ele monta o e-mail para follow up")
 
-- **Formulário do site**: se ele chega na support@ vindo de noreply@ com Reply-To, o robô hoje o ignora como
-  automático. Responder pelo Reply-To?
+Com o e-mail ligado, quem preenche o formulário de contato recebe o follow-up **escrito pelo robô**, saindo da
+support@, no lugar da confirmação genérica. A oportunidade nova em Vendas (NOVO, sem closer) é lead para o robô; a
+resposta da pessoa cai na support@ e segue com ele. Quando um closer pega a oportunidade (ou ela passa de NOVO), o
+robô sai. Se o robô não conseguir responder, sai a confirmação de sempre. A equipe continua avisada como antes.
+
+## Tela
+
+Painel → Robô SDR → **Robô no SMS e no e-mail**: as conversas, o que está ligado, e os botões Ver conversa,
+Pausar, Reativar e Resolvido.
+
+## Em aberto
+
 - **10DLC**: confirmar que o registro do número da empresa cobre resposta automática (senão a operadora pode
   filtrar) e se o Dialpad já responde o STOP sozinho.
-- **Tela**: as conversas e o "Reativar" existem só na API. Um card no painel do robô antes de liberar a todos.

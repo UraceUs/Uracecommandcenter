@@ -332,8 +332,8 @@ CAREER = {
               "URACE is not affiliated with, endorsed by or a partner of any of them — we prepare and enter drivers, nothing more.",
               "URACE is not the racetrack. We are a racing team providing coaching and programs to racers and enthusiasts at the "
               "Orlando Kart Center, a third-party circuit, and we follow their rules and operating hours. Track fees are charged "
-              "by the circuit, separately from URACE services: driver pass Wednesday to Friday $100–230, driver pass Saturday and "
-              "Sunday $100–125, guest (spectator) pass $15–22 — charged directly by the track."),
+              "by the circuit, separately from URACE services: driver pass $90 Monday to Friday, $65 Saturday and Sunday, "
+              "spectator pass $5 — charged directly by the track."),
     "fecho": "You don’t need to know which rung is yours",
     "fecho_sub": ("Tell us who the driver is and whether they’ve been in a race kart before. That one answer decides the rest — "
                   "and we’ll tell you honestly where to start, even if it’s the cheapest rung on the ladder."),
