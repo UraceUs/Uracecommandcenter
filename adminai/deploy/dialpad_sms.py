@@ -10,6 +10,9 @@ Uso, no VPS:
     python3 adminai/deploy/dialpad_sms.py --criar      cria a assinatura de SMS (as duas direções) no nosso webhook;
                                                       se ela já existe, não faz nada
     python3 adminai/deploy/dialpad_sms.py --apagar ID  apaga a assinatura de SMS com esse id (voltar atrás)
+    ... --criar --alvo office:ID                       a assinatura presa ao escritório (o número da empresa é do
+                                                      escritório "Urace.us"); use quando a da empresa inteira não
+                                                      entrega o SMS
 
 Se a API responder 404/400, o caminho mudou: cole a resposta para ajustar
 (referência: developers.dialpad.com, "SMS Event Subscription").
@@ -82,22 +85,37 @@ def ver(chave):
     for s in subs:
         wh = s.get("webhook") or {}
         print(f"  id={s.get('id')}  direção={s.get('direction')}  ligada={s.get('enabled')}  "
-              f"webhook={wh.get('id') or s.get('webhook_id')}")
+              f"webhook={wh.get('id') or s.get('webhook_id')}  alvo={s.get('target_type') or 'empresa'}:{s.get('target_id') or '-'}")
     if not subs:
         print("  nenhuma")
 
 
+def _alvo():
+    if "--alvo" not in sys.argv:
+        return None
+    i = sys.argv.index("--alvo")
+    if i + 1 >= len(sys.argv) or ":" not in sys.argv[i + 1]:
+        sys.exit("uso: --alvo office:ID (ou user:ID, department:ID, callcenter:ID)")
+    tipo, _, ident = sys.argv[i + 1].partition(":")
+    return tipo.strip(), ident.strip()
+
+
 def criar(chave):
+    alvo = _alvo()
     w = nosso_webhook(chave)
     if not w:
         sys.exit("FALHA: não achei o webhook do painel no Dialpad. Ele é criado pelo passo 3 de "
                  "docs/adminai/dialpad-conexao.md (o mesmo das ligações).")
     for s in itens(chamar(chave, "GET", "/subscriptions/sms")):
         wid = (s.get("webhook") or {}).get("id") or s.get("webhook_id")
-        if str(wid) == str(w.get("id")):
+        mesmo_alvo = (str(s.get("target_id") or "") == (alvo[1] if alvo else "")) or (not alvo and not s.get("target_id"))
+        if str(wid) == str(w.get("id")) and mesmo_alvo:
             print(f"OK: a assinatura de SMS já existe (id={s.get('id')}, direção={s.get('direction')}). Nada a fazer.")
             return
-    r = chamar(chave, "POST", "/subscriptions/sms", {"webhook_id": w["id"], "direction": "all", "enabled": True})
+    corpo = {"webhook_id": w["id"], "direction": "all", "enabled": True}
+    if alvo:
+        corpo.update(target_type=alvo[0], target_id=alvo[1])
+    r = chamar(chave, "POST", "/subscriptions/sms", corpo)
     print(f"OK: assinatura de SMS criada (id={r.get('id')}, direção={r.get('direction')}) no webhook {w['id']}.")
     print("Agora mande um SMS de teste para o número da empresa e confira: "
           "sudo journalctl -u urace-command-center -n 30 --no-pager | grep -i sms")
