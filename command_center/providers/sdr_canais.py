@@ -305,7 +305,13 @@ def enviar_sms(numero, texto):
              "infer_country_code": False}
     remetente = dialpad._cfg("DIALPAD_SMS_FROM")
     usuario = dialpad._cfg("DIALPAD_SMS_USER_ID") or dialpad._cfg("DIALPAD_USER_ID")
-    if remetente:
+    # 20/10: sem grupo, o SMS saía pela linha pessoal do usuário (407 487-3184), não pelo número da empresa.
+    # DIALPAD_SMS_GRUPO=office:<id> manda em nome do escritório Urace.us, dono da linha principal (407 250-2291).
+    grupo = dialpad._cfg("DIALPAD_SMS_GRUPO")
+    if grupo and ":" in grupo:
+        tipo, _, gid = grupo.partition(":")
+        corpo["sender_group_type"], corpo["sender_group_id"] = tipo.strip(), gid.strip()
+    elif remetente:
         corpo["from_number"] = remetente
     if usuario:
         corpo["user_id"] = usuario

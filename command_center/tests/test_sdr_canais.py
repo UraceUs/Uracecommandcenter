@@ -471,3 +471,24 @@ def test_sim_depois_do_stop_nao_reativa(ambiente, monkeypatch):
     sdr_canais.sms_evento(con, sms("STOP"), esperar=False)
     r = sdr_canais.sms_evento(con, sms("yes", sid="s-2"), esperar=False)
     assert "parar" in r["robo"] and enviados("sms") == []
+
+
+def test_sms_sai_em_nome_do_escritorio(monkeypatch):
+    """20/10: o SMS saiu pela linha pessoal (407 487-3184); com o grupo, sai pelo número do escritório."""
+    import urllib.request
+    monkeypatch.delenv("CC_DIALPAD_FAKE", raising=False)
+    monkeypatch.setenv("DIALPAD_ENV", "/nao/existe")
+    monkeypatch.setenv("DIALPAD_API_KEY", "k")
+    monkeypatch.setenv("DIALPAD_USER_ID", "4984574604558336")
+    monkeypatch.setenv("DIALPAD_SMS_GRUPO", "office:6037417788784640")
+    pedidos = []
+
+    class Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"id": "1"}'
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=0: pedidos.append(json.loads(req.data)) or Resp())
+    sdr_canais.enviar_sms("+14075550199", "Oi")
+    corpo = pedidos[0]
+    assert corpo["sender_group_type"] == "office" and corpo["sender_group_id"] == "6037417788784640"
+    assert corpo["user_id"] == "4984574604558336" and "from_number" not in corpo and corpo["to_numbers"] == ["+14075550199"]
