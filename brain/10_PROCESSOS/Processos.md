@@ -27,3 +27,4 @@ processo**.
 | [[Stand-by e escalação]] | — | como perguntar sem travar |
 | [[Pedido incompleto]] | AI Command | criar com o que tem · cobrar o resto em rodadas |
 | [[Etapa de conexão]] | — | o que falta de acesso |
+| [[Mio - papel em cada fluxo]] | MCP do painel | observar · cobrar a equipe · **preparar para aprovação** |
