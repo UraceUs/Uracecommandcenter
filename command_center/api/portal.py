@@ -435,6 +435,7 @@ class AgendarIn(BaseModel):
     origin: str | None = None                # #164: "site" quando veio do site novo
     utm: dict | None = None                  # #164: utm_source, utm_campaign… (para o marketing)
     quote: str | None = None                 # #314: o hash da cotação que o aluno recorrente viu (409 se mudou)
+    avulsa: bool = False                     # #355: "Book as a regular session" — fica com o nome do serviço
 
 
 def _vender(bid):
@@ -456,14 +457,21 @@ def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=De
     from command_center.providers import agenda_lote
     try:
         with transacao(con):                  # duas pessoas na última vaga: só uma leva
+            nome = None
             if dados.quote is not None:
                 # #314: o aluno recorrente viu "Included in your plan" ou "Extra session · $X": se mudou, revisa antes
-                agenda_lote.conferir(con, cid, dados.driver_id, dados.service_id,
-                                     [{"date": dados.date, "period": dados.period}], dados.quote)
+                q = agenda_lote.conferir(con, cid, dados.driver_id, dados.service_id,
+                                         [{"date": dados.date, "period": dados.period}], dados.quote)
+                nome = q["slots"][0].get("title")                      # #355: "Training Day 2/4"
             bid = ag.agendar(con, cid, dados.date, dados.period, dados.driver_id, dados.notes, dados.service_id)
-            from command_center.providers import cobranca_agenda, venda_site
+            from command_center.providers import cobranca_agenda, contrato, venda_site
+            if nome is None and not dados.avulsa:
+                # #355: o pro com a Mensalidade em montagem marca "Training Day" (sem número)
+                p = um(con, "SELECT client_id FROM portal_pilots WHERE id=?", (dados.driver_id,))
+                if p and contrato.pro_sem_mensal(con, p["client_id"]):
+                    nome = agenda_lote.titulo()
             atualizar(con, "bookings", bid, origin="site" if dados.origin == "site" else "portal",
-                      utm=venda_site.utm_limpo(dados.utm))
+                      utm=venda_site.utm_limpo(dados.utm), **({"service_name": nome} if nome else {}))
             cobranca_agenda.ao_marcar(con, bid)      # contrato + waiver em dia: confirma sozinha (dono, 06/10)
             _aud(con, request, "portal.booking", cid, {"agendamento": bid, "data": dados.date, "periodo": dados.period,
                                                         "servico": dados.service_id})

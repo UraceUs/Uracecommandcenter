@@ -45,6 +45,29 @@ class CotacaoMudou(ErroLote):
     """A vaga ou o preço mudou entre a cotação e o pedido: o cliente revisa antes (409)."""
 
 
+TRAINING_DAY = "Training Day"
+
+
+def titulo(numero=None, total=None, extra=False, preco=None):
+    """#355 (dono, 20/10): *"para clientes do mensal/pro colocar os serviços que vão aparecer para esse cliente mensal
+    será training day sendo 1/4, sendo o X/4 a sessão atual da mensalidade vigente e 1/X a quantidade de sessões que
+    estão inclusas na mensalidade"*. O nome da sessão do pacote: "Training Day 2/4" (X = a sessão do pacote no mês,
+    Y = as incluídas); acima do pacote, "Training Day · extra $X"; sem a Mensalidade no card (pro em montagem), só
+    "Training Day" — sem número inventado."""
+    if extra:
+        return f"{TRAINING_DAY} · extra" + (f" ${preco:,.2f}" if preco is not None else "")
+    return f"{TRAINING_DAY} {numero}/{total}" if numero and total else TRAINING_DAY
+
+
+def proximo_titulo(con, card, mes=None):
+    """O nome da próxima sessão do pacote do mês: usadas + 1 de Y; com o pacote cheio, a extra."""
+    mes = mes or contrato._hoje().isoformat()[:7]
+    total, usadas = contrato.sessoes_por_mes(con, card), contrato.usadas_do_pacote(con, card, mes)
+    if usadas >= total:
+        return titulo(extra=True, preco=contrato.preco_extra(con, card))
+    return titulo(usadas + 1, total)
+
+
 def rotulo(cobertura, preco):
     """O que o cliente lê em cada dia. O contador do mês vem à parte, no `plano_do_piloto` (#340)."""
     if cobertura == "plano":
@@ -88,7 +111,12 @@ def plano_do_piloto(con, conta_id, piloto_id):
     if rec:
         k = contrato.contador(con, card)
         servicos, achou = servicos_para_o_plano(con, card)
-        saida.update(counter=k, services=[x["id"] for x in servicos], services_matched=achou, addon=addon_para_o_plano(con))
+        saida.update(counter=k, services=[x["id"] for x in servicos], services_matched=achou, addon=addon_para_o_plano(con),
+                     training_day=proximo_titulo(con, card))
+    elif saida["setup"]:
+        # #355: o pro em montagem também marca "Training Day" (sem número: o card ainda não diz quantas são incluídas)
+        servicos, achou = servicos_para_o_plano(con, card)
+        saida.update(services=[x["id"] for x in servicos], services_matched=achou, training_day=titulo())
     return saida
 
 
@@ -154,6 +182,17 @@ def cotar(con, conta_id, piloto_id, servico_id, slots):
             x["reason"] = "fora_do_plano"
         else:
             x["coverage"], x["price"] = a["coverage"], (float(a["price"]) if a["price"] is not None else None)
+    # #355: cada dia do pacote ganha o seu número no mês, em ordem de data ("Training Day 3/4"); a extra, o seu nome
+    total_mes, seguinte = contrato.sessoes_por_mes(con, card), {}
+    for x in sorted((y for y in linhas if not y["reason"]), key=lambda y: (y["date"], y["period"])):
+        if x.get("coverage") == "plano":
+            mes = x["date"][:7]
+            if mes not in seguinte:
+                seguinte[mes] = contrato.usadas_do_pacote(con, card, mes)
+            seguinte[mes] += 1
+            x["title"] = titulo(seguinte[mes], total_mes)
+        elif x.get("coverage") == "extra":
+            x["title"] = titulo(extra=True, preco=x.get("price"))
     saida = []
     for x in linhas:
         ok = not x["reason"]
@@ -163,6 +202,7 @@ def cotar(con, conta_id, piloto_id, servico_id, slots):
         saida.append({"date": x["date"], "period": x["period"], "ok": ok, "reason": x["reason"], "message": msg,
                       "coverage": x.get("coverage") if ok else None, "price": x.get("price") if ok else None,
                       "label": rotulo(x.get("coverage"), x.get("price")) if ok else None,
+                      "title": x.get("title") if ok else None,
                       "addon": {"id": addon["id"], "name": addon["name"], "price": addon["price"]} if com_addon else None})
     extras = [x for x in saida if x["coverage"] == "extra"]
     total = sum((contrato.centavos(x["price"]) for x in extras if x["price"] is not None), contrato.ZERO)
@@ -197,6 +237,7 @@ def marcar(con, conta_id, piloto_id, servico_id, slots, cotacao, notas=None, ori
             raise ErroLote(f"{date.fromisoformat(x['date']).strftime('%a, %b %d').replace(' 0', ' ')}: {e}")
         a = x["addon"] or {}
         atualizar(con, "bookings", bid, group_id=gid, origin="site" if origem == "site" else "portal", utm=utm,
+                  **({"service_name": x["title"]} if x.get("title") else {}),
                   **({"addon_service_id": a["id"], "addon_name": a["name"], "addon_price": a["price"]} if a else {}))
         ids.append(bid)
     cob.alocar_grupo(con, ids)

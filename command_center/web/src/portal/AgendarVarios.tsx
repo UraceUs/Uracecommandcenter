@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { dataLonga, faixa, PERIODOS } from './Agendar'
-import { papi, PortalError, usd, type AgendaCfg, type CheckoutGrupo, type Cotacao, type Dia, type PlanoPiloto, type Servico, type Turno } from './api'
+import { nomeNoPlano, papi, PortalError, usd, type AgendaCfg, type CheckoutGrupo, type Cotacao, type Dia, type PlanoPiloto, type Servico, type Turno } from './api'
 import { ContadorDoPlano } from './Contador'
 
 const MAX_DIAS = 12
@@ -153,7 +153,9 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
       <fieldset className="portal-servicos"><legend className="small">Session type in your plan</legend>
         {doPlano.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
           <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />
-          <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span></label>)}</fieldset>
+          {/* #355 (dono, 20/10): o aluno do plano marca "Training Day X/Y", não o Arrive and Drive */}
+          <span className="grow"><b>{plano.training_day ? nomeNoPlano(plano.training_day, x, achou) : x.name}</b>
+            {achou && x.site_kart && <span className="small muted"> · {x.site_kart}</span>}</span></label>)}</fieldset>
       {outros && <p className="small muted" style={{ margin: 0 }}>Another session type?{' '}
         <button type="button" className="btn ghost" onClick={() => onAvulso()}>Book as a regular session</button></p>}
 
@@ -200,6 +202,7 @@ export function AgendarVarios({ piloto, plano, dias, cfg, servicos, servico, set
             const d = porData[date], c = cotado(date)
             return <li key={date} className={`portal-varios-dia${c && !c.ok ? ' ruim' : ''}`}>
               <div className="portal-varios-cab"><b>{curta(date)}</b>
+                {c?.ok && c.title && <span className="small">{c.coverage === 'extra' ? 'Training Day · extra' : c.title}</span>}
                 {c?.ok ? <span className={`chip ${c.coverage === 'extra' ? 'warn' : 'ok'}`}>{c.label}</span>
                   : !servico ? <span className="small muted">Pick the session type</span>
                   : !c && cotando ? <span className="small muted">checking…</span> : null}</div>

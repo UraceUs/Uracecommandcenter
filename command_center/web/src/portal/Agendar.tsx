@@ -4,7 +4,7 @@
  * Piloto com medida vencida (60+ dias) ou cadastro incompleto não marca até atualizar. */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { papi, PortalError, rotuloCobertura, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type PlanoPiloto, type Servico } from './api'
+import { nomeNoPlano, papi, PortalError, rotuloCobertura, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type PlanoPiloto, type Servico } from './api'
 import { porNoCarrinhoDoSite } from './carrinhoSite'
 import { PlanoEmMontagem } from './Contador'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
@@ -172,6 +172,12 @@ export function Agendar({ conta }: { conta: Account }) {
   const pilotoEscolhido = conta.drivers.find(p => p.id === piloto)
 
   const plano = planos?.find(x => x.driver_id === piloto) || null
+  // #355: o pro com a Mensalidade em montagem marca "Training Day" (o serviço do kart do plano por baixo), não a lista do
+  // Arrive and Drive; "Book as a regular session" (avulsa) volta à lista de sempre
+  const comTd = !!plano?.training_day && !avulsa
+  const listaServicos = comTd && plano?.services?.length ? servicos.filter(x => plano.services?.includes(x.id)) : servicos
+  const servicoFora = comTd && servico != null && !listaServicos.some(x => x.id === servico)
+  useEffect(() => { if (servicoFora) setServico(listaServicos.length === 1 ? listaServicos[0].id : null) }, [servicoFora, listaServicos])
   // a sessão avulsa do aluno recorrente paga como a de qualquer cliente: no carrinho (Stripe) se ligado, senão invoice
   // #340: o piloto pro nunca vai para o carrinho (dono, 19/10: "nao cobrar na marcação e sim na invoice pelo QuickBooks")
   const noCarrinho = plano?.payment === 'stripe' || (avulsa && !!plano?.recurring && carrinho && !plano?.pro)
@@ -192,7 +198,8 @@ export function Agendar({ conta }: { conta: Account }) {
     if (!dia || !periodo || !servico || !piloto) return
     setIndo(true); setErro(null); setOk(null)
     try {
-      const r = await papi<{ id: number; auto_sell: boolean }>('POST', '/bookings', { date: dia, period: periodo, service_id: servico, driver_id: piloto, notes: nota || null })
+      const r = await papi<{ id: number; auto_sell: boolean }>('POST', '/bookings', { date: dia, period: periodo, service_id: servico, driver_id: piloto, notes: nota || null,
+        ...(avulsa ? { avulsa: true } : {}) })
       if (r.auto_sell) { nav(`/portal/sessions/${r.id}`); return }       // #164: venda automática: vai para as etapas (pagar, waiver)
       setOk('Request sent! We will confirm your session soon.')
       setDia(null); setPeriodo(null); setNota(''); carregar()
@@ -227,9 +234,11 @@ export function Agendar({ conta }: { conta: Account }) {
           <b>{doSite.kart}</b> is not open for online booking right now. Pick one of the sessions below, or talk to us:{' '}
           <a href="mailto:support@urace.us">support@urace.us</a> · <a href="tel:+14072502291">+1 (407) 250 2291</a>.</div></div>}
         <fieldset className="portal-servicos"><legend className="small">Session type</legend>
-          {servicos.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
+          {listaServicos.map(x => <label key={x.id} className={`portal-servico${servico === x.id ? ' on' : ''}`}>
             <input type="radio" name="servico" checked={servico === x.id} onChange={() => setServico(x.id)} />
-            <span className="grow"><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</span>
+            <span className="grow">{comTd && plano?.training_day
+              ? <><b>{nomeNoPlano(plano.training_day, x, !!plano.services_matched)}</b>{plano.services_matched && x.site_kart && <span className="small muted"> · {x.site_kart}</span>}</>
+              : <><b>{x.name}</b>{x.description && <span className="small muted"> · {x.description}</span>}</>}</span>
             {!semPreco && <b>{usd(x.price)}</b>}</label>)}</fieldset>
         <div className="row"><button className="btn ghost sm" aria-label="Previous month" disabled={meses.indexOf(mes) <= 0} onClick={() => setMes(meses[meses.indexOf(mes) - 1])}>‹</button>
           <b className="grow" style={{ textAlign: 'center' }}>{new Date(mes + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</b>

@@ -738,6 +738,18 @@ ja gerar a invoice e enviar das sessões a mais"* — *"deixe os add ons disponi
 - **Mensalidade em aberto não trava** (dono, 19/10: *"pode"*): o pro marca normalmente; a tela só mostra a
   situação.
 
+- **"Training Day X/Y"** (#355, dono, 20/10: *"para clientes do mensal/pro colocar os serviços que vão aparecer para
+  esse cliente mensal será training day sendo 1/4, sendo o X/4 a sessão atual da mensalidade vigente e 1/X a quantidade
+  de sessões que estão inclusas na mensalidade"*): o aluno do plano **não vê a lista do Arrive and Drive**. Vê uma
+  opção só, **Training Day 2/4** (Y = as sessões por mês do card; X = a próxima do pacote no mês, usadas + 1), com o
+  kart do plano embaixo (é o serviço do kart que dá preço, agenda e vagas). Sem o Plano mensal no card (o kart), cada
+  kart vira "Training Day 2/4 · 4-stroke". Em vários dias, cada dia ganha o seu número no mês, em ordem de data
+  ("Training Day 3/4", "Training Day 4/4"); o que passa do pacote vira **"Training Day · extra $689.23"** (cobrado como
+  acima); o mês seguinte recomeça em 1/Y. O **pro com a Mensalidade em montagem** vê só **"Training Day"**, sem número
+  (o painel não inventa quantas são). **O agendamento leva esse nome**: é o que a equipe vê em Agendamentos, no card,
+  na tarefa do Asana/Google Agenda e nos e-mails. "Book as a regular session" continua com a lista de sempre (e o nome
+  do serviço); os add-ons continuam.
+
 **O contador** (o cliente vê no **Dashboard**, seção "Monthly plan", e em **Book sessions**; a equipe vê o mesmo na
 aba **Mensalidade e contrato** do card, em "O que o cliente vê", e na lista de Agendamentos). Por mês e por
 piloto:
