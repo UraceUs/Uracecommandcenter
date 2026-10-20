@@ -247,3 +247,12 @@ o que está nas instruções (preços, dias, endereço, idade, links) é base s�
   contraproposta ("faz por X", "fecho hoje") passou a ser negociação: vai para a call.
 - **Vídeo**: linha nova para quem compara escolas (vídeo "Who we are") e regra "se vídeo e página servem, manda
   o vídeo".
+
+## 20/10 — O robô no SMS (Dialpad) e no e-mail (support@)
+Dono: "esse robô precisa ler o Dialpad para atender por lá e e-mail também". Escolhas dele: envio automático
+igual ao Instagram, e-mail só da support@ e só lead, SMS pelo VPS (o Heroku antigo não existe mais).
+A ponte ganhou `/tools/canal` (mesmo turno do Instagram, sem Kommo, sessão por contato); o painel é dono do
+canal (`command_center/providers/sdr_canais.py`): SMS pelo webhook do Dialpad, e-mail lendo a support@ a cada
+3 min, só lead (cliente e oportunidade com o closer ficam com a equipe), robô nunca responde a robô, a pessoa
+que responde à mão pausa o robô 72 h no contato, "pare" encerra. Começa desligado (`sdr-canais.env`) e com lista
+de teste. Sem follow-up por SMS/e-mail nesta fase (FTSA da Flórida). Roteiro: `salesagent/docs/robo-sms-email.md`.

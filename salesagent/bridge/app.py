@@ -325,17 +325,12 @@ _RX_SESSAO = re.compile(r"^[a-z0-9-]{6,40}$")
 _playground: dict[str, dict] = {}
 
 
-def turno_de_teste(sessao: str, texto: str, nome: str = "") -> dict:
-    texto = (texto or "").strip()[:1000]
-    if not _RX_SESSAO.match(sessao or "") or not texto:
-        raise HTTPException(400, "sessao e texto são obrigatórios")
-    conv = _playground.setdefault(sessao, {"enviadas": 0})
-    if len(_playground) > 200:
-        for velha in list(_playground)[:50]:
-            _playground.pop(velha, None)
+def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, session_key: str) -> dict:
+    """Um turno do robô fora do Kommo: rota antes do modelo, modelo, guarda depois dele. Não escreve em
+    card nenhum; quem chama decide o que fazer com a decisão (o painel de teste mostra, o canal envia)."""
     rota = sdr_ponte.rotear(texto)
     saida = {"rota": rota.get("acao"), "motivo": rota.get("motivo"), "diretivas": [],
-             "cortes": [], "nota": "", "mensagens": []}
+             "cortes": [], "nota": "", "mensagens": [], "precisa_gente": False}
     if rota["acao"] == "silenciar":
         saida["nota"] = "Não é lead (spam, e-mail automático, código): o robô não responderia."
         return saida
@@ -350,33 +345,68 @@ def turno_de_teste(sessao: str, texto: str, nome: str = "") -> dict:
                                            or sdr_ponte.objecao_de_preco(texto)):
         tipo = holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "") or "objecao"
         resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None, motivo=tipo)
+        saida["precisa_gente"] = True
         saida["nota"] = {"objecao": "Objeção de preço: a ponte oferece a call e passa a conversa para a equipe.",
                          "decisao": "Lead pronto para decidir: a ponte oferece a call e avisa a equipe na hora.",
                          "competidor": "Piloto que já compete: a ponte oferece a call e avisa a equipe."}[tipo]
     elif rota["acao"] == "escalar":
-        resposta = holding.waiting_message(texto, 0, contact_name=nome or None,
-                                           first_contact=not conv["enviadas"])
+        resposta = holding.waiting_message(texto, 0, contact_name=nome or None, first_contact=primeira)
+        saida["precisa_gente"] = True
         saida["nota"] = (f"Passaria para a equipe ({rota.get('motivo')}): o lead recebe a mensagem de "
                          "espera e a pessoa é avisada.")
     else:
         instrucoes = _sem_nomes_do_time(_instrucoes_comercial(0))
-        mensagem = ("[SYSTEM] Teste no painel: conversa de treino, sem lead no Kommo. Responda "
-                    "exatamente como responderia a um lead real.\n"
-                    f"{instrucoes}"
-                    f"Memória do lead: nome={nome or '?'} (sem histórico)\n"
-                    "[FIM DO SYSTEM]\n\nMensagem do lead: " + texto)
+        mensagem = (f"[SYSTEM] {contexto}\n{instrucoes}{_idioma_do_turno(texto)}"
+                    f"Memória do lead: nome={nome or '?'}\n[FIM DO SYSTEM]\n\nMensagem do lead: " + texto)
         try:
-            raw, diretivas = _call_agent(0, mensagem, session_key=f"playground-{sessao}")
+            raw, diretivas = _call_agent(0, mensagem, session_key=session_key)
         except Exception as exc:
             raise HTTPException(502, f"agente não respondeu: {exc}")
         saida["diretivas"] = diretivas
+        if any(d.lstrip("[").startswith("escalate") or d.lstrip("[").startswith("unknown") for d in diretivas):
+            saida["precisa_gente"] = True
         resposta = textproc.customer_facing(raw)
-    limpo, cortes = sdr_ponte.limpar_texto(resposta, primeira=not conv["enviadas"])
+    limpo, cortes = sdr_ponte.limpar_texto(resposta, primeira=primeira)
     saida["cortes"] = cortes
     saida["mensagens"] = dividir_em_mensagens(limpo) if limpo else []
+    return saida
+
+
+def turno_de_teste(sessao: str, texto: str, nome: str = "") -> dict:
+    texto = (texto or "").strip()[:1000]
+    if not _RX_SESSAO.match(sessao or "") or not texto:
+        raise HTTPException(400, "sessao e texto são obrigatórios")
+    conv = _playground.setdefault(sessao, {"enviadas": 0})
+    if len(_playground) > 200:
+        for velha in list(_playground)[:50]:
+            _playground.pop(velha, None)
+    saida = _turno_sem_kommo(texto, nome, not conv["enviadas"],
+                             "Teste no painel: conversa de treino, sem lead no Kommo. Responda exatamente como "
+                             "responderia a um lead real.", f"playground-{sessao}")
+    saida.pop("precisa_gente", None)
     if saida["mensagens"]:
         conv["enviadas"] += 1
     return saida
+
+
+# SMS (Dialpad) e e-mail (support@): o painel é dono do canal (recebe, filtra, envia, guarda a conversa);
+# a ponte só decide o que responder. Dono, 20/10: "esse robô precisa ler o Dialpad para atender por lá e e-mail".
+_CONTEXTO_CANAL = {
+    "sms": ("Canal: SMS pelo número da empresa (Dialpad), não Instagram. Não existe card no Kommo nesta conversa: "
+            "não use [[crm]], não fale de etapa, e a janela de 24 h da Meta não vale aqui. Mesmas regras de tom, "
+            "balões curtos, preço da tabela e oferta de call."),
+    "email": ("Canal: e-mail para support@urace.us, não Instagram. Não existe card no Kommo nesta conversa: não use "
+              "[[crm]], não fale de etapa, e a janela de 24 h da Meta não vale aqui. Responda curto como no chat (cada "
+              "linha vira um parágrafo do e-mail), sem saudação de carta e sem assinatura: o painel assina."),
+}
+
+
+def turno_de_canal(canal: str, contato: str, texto: str, nome: str = "", primeira: bool = True) -> dict:
+    texto = (texto or "").strip()[:3000]
+    if canal not in _CONTEXTO_CANAL or not texto or not (contato or "").strip():
+        raise HTTPException(400, "canal, contato e texto são obrigatórios")
+    chave = hashlib.sha256(f"{canal}:{contato.strip().lower()}".encode()).hexdigest()[:20]
+    return _turno_sem_kommo(texto, nome, primeira, _CONTEXTO_CANAL[canal], f"canal-{canal}-{chave}")
 
 
 @app.post("/tools/playground")
@@ -385,6 +415,17 @@ async def tool_playground(request: Request, x_api_key: str | None = Header(None)
     p = await request.json()
     return {"ok": True, **await asyncio.to_thread(
         turno_de_teste, str(p.get("sessao", "")), str(p.get("texto", "")), str(p.get("nome", "")))}
+
+
+@app.post("/tools/canal")
+async def tool_canal(request: Request, x_api_key: str | None = Header(None)):
+    """Um turno do robô para SMS ou e-mail: o painel manda o texto do lead e recebe os balões e a decisão.
+    Nada aqui envia nem escreve no Kommo."""
+    _auth(x_api_key)
+    p = await request.json()
+    return {"ok": True, **await asyncio.to_thread(
+        turno_de_canal, str(p.get("canal", "")), str(p.get("contato", "")), str(p.get("texto", "")),
+        str(p.get("nome", "")), bool(p.get("primeira", True)))}
 
 
 @app.post("/tools/sdr")

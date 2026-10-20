@@ -2425,3 +2425,39 @@ CREATE TABLE IF NOT EXISTS counter_keep_lines (
   created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 CREATE INDEX IF NOT EXISTS counter_keep_lines_cliente ON counter_keep_lines(client_id, id);
+
+-- Robô SDR no SMS (Dialpad) e no e-mail (support@) (dono, 20/10: "esse robô precisa ler o Dialpad para atender por
+-- lá e e-mail também"). O painel é dono do canal: recebe, filtra (só lead), envia e guarda a conversa; a ponte do robô
+-- só decide o que responder. Um contato por canal; a pessoa da equipe que responde à mão pausa o robô ali.
+CREATE TABLE IF NOT EXISTS sdr_canal_contatos (
+  id                 INTEGER PRIMARY KEY,
+  canal              TEXT NOT NULL CHECK (canal IN ('sms','email')),
+  contato            TEXT NOT NULL,             -- sms: só dígitos (com DDI); email: minúsculo
+  nome               TEXT,
+  respostas          INTEGER NOT NULL DEFAULT 0, -- quantas vezes o robô respondeu (0 = primeira resposta)
+  opt_out            INTEGER NOT NULL DEFAULT 0, -- pediu para parar: o robô nunca mais escreve
+  pausado_ate        TEXT,                       -- uma pessoa assumiu; até aqui o robô não responde
+  pausa_motivo       TEXT,
+  precisa_gente      INTEGER NOT NULL DEFAULT 0, -- o robô passou para a equipe (vira Precisa de atenção)
+  precisa_motivo     TEXT,
+  ultima_entrada_em  TEXT,
+  ultima_resposta_em TEXT,
+  ultima_tratada     TEXT,                       -- id externo da última mensagem do lead já tratada
+  thread_id          TEXT,                       -- e-mail: a conversa no Gmail
+  UNIQUE (canal, contato)
+);
+CREATE TABLE IF NOT EXISTS sdr_canal_mensagens (
+  id          INTEGER PRIMARY KEY,
+  canal       TEXT NOT NULL CHECK (canal IN ('sms','email')),
+  contato     TEXT NOT NULL,
+  direcao     TEXT NOT NULL CHECK (direcao IN ('entrada','saida')),
+  por         TEXT NOT NULL CHECK (por IN ('lead','robo','equipe')),
+  texto       TEXT,
+  external_id TEXT,
+  rota        TEXT,
+  motivo      TEXT,
+  at          TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS sdr_canal_mensagens_contato ON sdr_canal_mensagens(canal, contato, at);
+CREATE UNIQUE INDEX IF NOT EXISTS sdr_canal_mensagens_externo ON sdr_canal_mensagens(canal, external_id)
+  WHERE external_id IS NOT NULL;

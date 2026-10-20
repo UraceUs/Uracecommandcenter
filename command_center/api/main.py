@@ -160,6 +160,8 @@ async def _ciclo(app):
         import threading
         threading.Thread(target=_autosync, daemon=True, name="cc-autosync").start()
         threading.Thread(target=_laco_do_chat, daemon=True, name="cc-chat").start()
+        from command_center.providers import sdr_canais        # 20/10: o robô SDR lendo a support@ (desligado por padrão)
+        threading.Thread(target=sdr_canais.laco_email, daemon=True, name="cc-sdr-email").start()
     yield
 
 

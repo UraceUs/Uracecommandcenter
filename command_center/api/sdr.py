@@ -546,6 +546,51 @@ def teste(dados: TesteIn, request: Request, u=Depends(auth.exige("OPERATOR")),
     return {k: resposta.get(k) for k in ("mensagens", "rota", "motivo", "diretivas", "cortes", "nota")}
 
 
+# ------------------------------------------------------------------ SMS e e-mail (20/10)
+@r.get("/canais")
+def canais(u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    """O robô no SMS (Dialpad) e no e-mail (support@): o que está ligado e as conversas recentes."""
+    from command_center.providers import sdr_canais
+    return sdr_canais.resumo(con)
+
+
+@r.get("/canais/{cid}")
+def canal_conversa(cid: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection = Depends(get_db)):
+    c = um(con, "SELECT * FROM sdr_canal_contatos WHERE id=?", (cid,))
+    if not c:
+        raise HTTPException(404, "conversa não encontrada")
+    msgs = todos(con, """SELECT direcao, por, texto, rota, motivo, at FROM sdr_canal_mensagens
+                          WHERE canal=? AND contato=? ORDER BY id DESC LIMIT 60""", (c["canal"], c["contato"]))
+    return {"contato": c, "mensagens": list(reversed(msgs))}
+
+
+class CanalAcaoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    acao: str          # reativar | pausar | resolvido
+
+
+@r.post("/canais/{cid}")
+def canal_acao(cid: int, dados: CanalAcaoIn, request: Request, u=Depends(auth.exige("OPERATOR")),
+               con: sqlite3.Connection = Depends(get_db)):
+    """Reativar o robô num contato (depois que a pessoa resolveu), pausar à mão, ou marcar como resolvido."""
+    from command_center.providers import sdr_canais
+    c = um(con, "SELECT * FROM sdr_canal_contatos WHERE id=?", (cid,))
+    if not c:
+        raise HTTPException(404, "conversa não encontrada")
+    if dados.acao == "reativar":
+        atualizar(con, "sdr_canal_contatos", cid, pausado_ate=None, pausa_motivo=None)
+    elif dados.acao == "pausar":
+        sdr_canais.pausar(con, c, f"pausado por {u['name']}")
+    elif dados.acao == "resolvido":
+        atualizar(con, "sdr_canal_contatos", cid, precisa_gente=0, precisa_motivo=None)
+    else:
+        raise HTTPException(400, "ação inválida: reativar, pausar ou resolvido")
+    auditar(con, f"sdr.canal.{dados.acao}", f"user:{u['id']}", user_id=u["id"], entity_type="sdr_canal",
+            entity_id=cid, ip=auth._ip(request))
+    con.commit()
+    return {"ok": True}
+
+
 # ------------------------------------------------------------------ o painel
 @r.get("/painel")
 def painel(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):

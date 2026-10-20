@@ -241,6 +241,15 @@ async def webhook(request: Request, con: sqlite3.Connection = Depends(get_db)):
     except Exception:
         pass
 
+    # SMS (20/10): o robô SDR atende por aqui. A assinatura de SMS manda as duas direções; quem decide o que
+    # responder é a ponte, e o resto (só lead, pessoa que assumiu, pare) é sdr_canais.
+    from command_center.providers import sdr_canais
+    if sdr_canais.eh_sms(ev):
+        saida = sdr_canais.sms_evento(con, ev)
+        auditar(con, "dialpad.sms", "dialpad", entity_type="sdr_canal", detail=saida)
+        con.commit()
+        return {"ok": True, **saida}
+
     dados = _normaliza(ev)
     if not dados.get("external_id"):
         auditar(con, "dialpad.webhook", "dialpad", detail={"ignorado": "evento sem call_id"})

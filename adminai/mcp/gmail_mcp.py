@@ -727,6 +727,15 @@ def mensagens_da_thread(conta, thread_id, limite=8000):
     return {"thread_id": thread_id, "mensagens": saida}
 
 
+def cabecalhos(conta, message_id, nomes=("Message-ID", "References", "Auto-Submitted", "Precedence",
+                                         "List-Unsubscribe", "List-Id", "X-Autoreply", "X-Autorespond")):
+    """Porta do robô SDR no e-mail (20/10): os cabeçalhos que dizem se a mensagem é resposta automática,
+    lista ou newsletter (o robô nunca responde a robô) e o Message-ID para responder na mesma conversa."""
+    q = "&".join(f"metadataHeaders={urllib.parse.quote(n)}" for n in nomes)
+    m = _req(conta, f"{GMAIL}/messages/{message_id}?format=metadata&{q}")
+    return {n: _cabecalho(m, n) for n in nomes}
+
+
 def anexo_bytes(conta, message_id, attachment_id):
     """O conteúdo de um anexo, em bytes."""
     r = _req(conta, f"{GMAIL}/messages/{message_id}/attachments/{attachment_id}")
