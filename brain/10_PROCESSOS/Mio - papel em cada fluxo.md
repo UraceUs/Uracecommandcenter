@@ -25,14 +25,21 @@ auditoria (`mcp.call`) com o nome dessa pessoa.
 |---|---|---|---|
 | **Observa** | Lê pelas ferramentas `urace_*`, junta no resumo do dia e aponta o que está fora do normal. Não muda nada. | Conector só de leitura (já funciona hoje) | Nunca |
 | **Cobra a equipe** | Avisa **a pessoa responsável** no chat da equipe (`/equipe`): o que está parado, desde quando e qual o próximo passo. Na rodada seguinte confere se andou. | Conector com "Também operar o painel como você" e papel OPERATOR ou acima. Enquanto não tiver, a cobrança vai no resumo do dia para o Ítalo repassar. | Nunca |
-| **Prepara para aprovação** | Monta a chamada `urace_api`. O painel devolve `precisa_confirmar` com o que vai acontecer. O Mio mostra isso na conversa e **só manda `confirmar=true` depois do "pode" explícito** de uma pessoa ali. | Conector com operar e o papel que a rota exige (o mesmo do botão do painel) | Só pelo que a pessoa aprovou |
+| **Prepara para aprovação** | Monta a chamada `urace_api`. O painel devolve `precisa_confirmar` com o que vai acontecer. O Mio mostra isso na conversa e **só manda `confirmar=true` depois do "pode" explícito do Ítalo** ou de alguém que o Ítalo autorizou por escrito para aquele tipo de ação. | Conector com operar e o papel que a rota exige (o mesmo do botão do painel) | Só pelo que foi aprovado |
+
+**Antes de pedir a aprovação**, o Mio mostra exatamente:
+- o destinatário (o e-mail ou o lead que vai receber);
+- o documento (o número da invoice, o valor, o card);
+- o efeito (o que sai, o que muda no painel e no QuickBooks).
+
+Sem esses três, não há o que aprovar.
 
 **O Mio nunca:**
 - liga ou desliga uma regra de Automação;
 - muda o nível do SDR, liga o envio automático dos macacões ou a venda automática do site;
 - une ou apaga card;
 - mexe em chave ou credencial;
-- passa `confirmar=true` sem aprovação na conversa;
+- passa `confirmar=true` sem a aprovação do Ítalo ou de quem ele autorizou;
 - põe serviço de um cliente no card de outro. Diagnóstico de um cliente é **pelo número do card**: ver #363.
 
 ## Fluxo a fluxo
@@ -99,16 +106,39 @@ troca de domínio (#173) e waiver nativa (só depois dos dois modelos, do selo e
 
 ## Antes de liberar a escrita para o Mio
 
-Os testes de aceite são **no card de teste (#584)** e cada um é aprovado pelo dono:
+Os testes de aceite são **no card de teste (#584)**. Cada um é aprovado pelo Ítalo ou por quem ele
+autorizar. Documentação não aprova teste: só a execução, com o resultado anotado aqui.
 
-- [ ] Reconectar o Mio marcando "Também operar o painel como você" e conferir em
-      `urace_operacoes` que `opera=true`.
+**Card de teste não é ambiente isolado.** O painel é o de produção. Um lembrete de invoice manda
+e-mail de verdade pelo QuickBooks ao e-mail de cobrança do card, e uma mensagem no Kommo chega ao
+lead. Por isso cada teste de escrita escreve **antes** destes três itens, e o Ítalo aprova em cima
+deles:
+- o destinatário exato (o e-mail de cobrança do card #584 tem que ser uma caixa da URACE);
+- o documento exato (o número da invoice, o valor);
+- o efeito exato (o que sai e o que muda).
+
+Os testes:
+
+- [ ] **Acesso:** reconectar o Mio marcando "Também operar o painel como você" e conferir em
+      `urace_operacoes` que `opera=true`. Com o #362, o `por_que` explica o resultado.
 - [ ] **Cobrar:** o Mio escreve no chat da equipe sobre um item de Atenção do card de teste, e a
-      mensagem aparece para a pessoa certa.
-- [ ] **Preparar:** o Mio monta o lembrete de uma invoice do card de teste. A primeira chamada
-      volta `precisa_confirmar` e nada sai. Só depois do "pode" ele confirma, e a auditoria mostra
-      `mcp.call` com `confirmado=true`.
-- [ ] **Recusa:** o Mio tenta uma rota de gerente com um usuário OPERATOR e o painel recusa.
-- [ ] **Card errado:** pedir os pagamentos do card de teste não traz nada de outro card.
+      mensagem aparece só para a pessoa certa.
+- [ ] **Preparar não faz nada:** o Mio monta o lembrete de uma invoice do card de teste e a
+      primeira chamada volta `precisa_confirmar`. Depois dela, conferir que:
+      - nenhum e-mail saiu (o histórico de envio da invoice no QuickBooks não mudou);
+      - a auditoria não tem `mcp.call` desta rota;
+      - nada mudou na invoice nem no card.
+- [ ] **Confirmar faz uma vez só:** com o "pode" do Ítalo, o Mio confirma.
+      - A auditoria mostra um `mcp.call` com `confirmado=true` e sai **um** e-mail.
+      - Repetir a mesma confirmação **não duplica**: o painel recusa ou devolve o mesmo resultado,
+        e não sai um segundo e-mail.
+      - Se duplicar, o teste reprova, e a rota ganha a trava antes de liberar.
+- [ ] **Recusa por papel:** o Mio tenta uma rota de gerente com um usuário OPERATOR e o painel
+      recusa.
+- [ ] **Card certo:** pedir reservas, pedidos e pagamentos do card de teste não traz nada de outro
+      card. O Mio só roda este teste quando as ferramentas `urace_cliente_*` do #363 aparecerem no
+      catálogo do conector. Até lá, o critério fica **não validado**, nem aprovado nem reprovado. O
+      Mio não manda filtro que o catálogo não declara: um parâmetro ignorado devolveria dados de
+      outros clientes.
 
-Só com essas cinco marcadas o Mio passa de "observa" para "cobra" e "prepara" em produção.
+Só com todos marcados o Mio passa de "observa" para "cobra" e "prepara" em produção.
