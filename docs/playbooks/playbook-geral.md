@@ -1216,6 +1216,25 @@ Depois, no Claude Code, digite `/mcp`, escolha **urace** e **Authenticate**. Ent
 Sem a caixa marcada, o Claude **só lê**. Ninguém copia senha, token ou chave para o chat: o login
 é pelo navegador.
 
+### Leitura ou Operar: por quê (#362)
+
+São **duas travas separadas**, e o conector só opera com as duas abertas:
+
+1. **O seu papel** no painel: OPERATOR, MANAGER e ADMIN podem operar; VIEWER só lê.
+2. **O que o conector recebeu** quando você clicou em **Autorizar**: com a caixa
+   **"Também operar o painel como você"** marcada, operar; sem ela, só leitura.
+
+Em **Equipe › Conectar o Claude** aparece **"Seu papel: X"** e a lista **Seus conectores**: cada
+conector que você autorizou (Claude, ChatGPT…), com **Leitura** ou **Operar**, a data e o motivo.
+Só os seus; token e segredo nunca aparecem. O `urace_operacoes` devolve o mesmo, separado em
+`papel_permite_operar`, `conector_permite_operar`, `opera` e `por_que`.
+
+| Situação | O que fazer |
+|---|---|
+| Papel ADMIN (ou OPERATOR/MANAGER), conector **Leitura** | No app do Claude ou ChatGPT, desconecte o conector e conecte de novo marcando **"Também operar o painel como você"** |
+| Papel VIEWER | Peça a um ADMIN que mude o seu papel para OPERATOR ou acima (tela **Usuários**); depois conecte de novo marcando a caixa |
+| Papel que opera e conector **Operar** | Já opera: o que vai para o cliente ou cobra pede confirmação antes |
+
 ### As ferramentas
 
 | Ferramenta | Para quê |

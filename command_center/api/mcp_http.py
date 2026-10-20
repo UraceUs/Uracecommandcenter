@@ -308,8 +308,8 @@ def _instrucoes(quem):
             "panorama, ou urace_atencao para o que precisa de gente hoje. As urace_kommo_* leem o CRM "
             "comercial (Kommo). ")
     if (quem or {}).get("somente_leitura"):
-        return base + ("Este acesso é SÓ DE LEITURA: nada aqui escreve. Para operar, a pessoa conecta de "
-                       "novo e marca 'Também operar o painel como você'.")
+        from command_center.api.mcp_operar import permissao
+        return base + f"Este acesso é SÓ DE LEITURA: nada aqui escreve. {permissao(quem)['por_que']}"
     return base + (f"Este acesso OPERA o painel como {(quem or {}).get('name')} ({(quem or {}).get('role')}): "
                    "use urace_operacoes para ver o que dá para fazer e urace_api para fazer. Valem as regras "
                    "do painel e o papel da pessoa. Antes de enviar algo ao cliente ou cobrar, mostre o que vai "

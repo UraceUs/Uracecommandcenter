@@ -169,3 +169,72 @@ def test_cartao_conectar_o_claude_mostra_o_endereco_do_login_e_o_papel(cli):
         assert d["terminal"] == f"claude mcp add --transport http urace {d['url']}"
     cli.cookies.clear()
     assert cli.get("/ops/api/equipe/conector-claude").status_code == 401
+
+
+# --------------------------------------------------------------- #362: papel x conector
+def _admin_do_teste():
+    con = conectar()
+    if not um(con, "SELECT id FROM users WHERE email='admin.teste@example.com'"):
+        auth.criar_usuario(con, "admin.teste@example.com", "Admin Teste", "ADMIN", SENHA)
+        con.commit()
+    con.close()
+    return "admin.teste@example.com"
+
+
+def test_admin_com_conector_so_de_leitura_explica_que_o_bloqueio_e_do_conector(cli):
+    """#362 (dono): "explicar no painel por que ADMIN está com opera=false, separando papel do
+    usuário e permissão do conector"."""
+    h = token(_admin_do_teste(), operar=False)
+    lista, _ = ferramenta(cli, h, "urace_operacoes", limite=5)
+    assert lista["papel"] == "ADMIN" and lista["opera"] is False
+    assert lista["papel_permite_operar"] is True and lista["conector_permite_operar"] is False
+    esperado = ("Seu papel (ADMIN) permite operar, mas este conector foi autorizado só para leitura: "
+                "desconecte e conecte de novo marcando 'Também operar o painel como você'.")
+    assert lista["por_que"] == esperado
+    res, erro = ferramenta(cli, h, "urace_api", metodo="POST", caminho="/ops/api/clients", corpo={"name": "Não Pode"})
+    assert erro and esperado in res, "o erro de urace_api usa o mesmo texto"
+
+
+def test_viewer_explica_que_o_bloqueio_e_do_papel(cli):
+    for operar in (False, True):
+        lista, _ = ferramenta(cli, token("ver@urace.us", operar=operar), "urace_operacoes", limite=5)
+        assert lista["papel"] == "VIEWER" and lista["opera"] is False
+        assert lista["papel_permite_operar"] is False and lista["conector_permite_operar"] is operar
+        assert "seu papel (VIEWER) só permite ler" in lista["por_que"].replace("Seu papel", "seu papel")
+        assert "OPERATOR ou acima" in lista["por_que"]
+
+
+def test_tudo_liberado_explica_que_opera(cli):
+    lista, _ = ferramenta(cli, token(_admin_do_teste()), "urace_operacoes", limite=5)
+    assert lista["opera"] is True and lista["papel_permite_operar"] and lista["conector_permite_operar"]
+    assert lista["por_que"].startswith("Seu papel (ADMIN) permite operar e este conector foi autorizado para operar")
+
+
+def test_cartao_lista_os_conectores_da_propria_pessoa_sem_token(cli):
+    email = _admin_do_teste()
+    con = conectar()
+    if not um(con, "SELECT 1 FROM oauth_clients WHERE client_id='chatgpt-teste'"):
+        inserir(con, "oauth_clients", client_id="chatgpt-teste", name="ChatGPT", redirect_uris='["http://localhost/cb"]')
+        inserir(con, "oauth_clients", client_id="revogado-teste", name="Revogado", redirect_uris='["http://localhost/cb"]')
+    adm = um(con, "SELECT id FROM users WHERE email=?", (email,))["id"]
+    outro = um(con, "SELECT id FROM users WHERE email='ger@urace.us'")["id"]
+    lido = oauth._emitir(con, "chatgpt-teste", adm, oauth.ESCOPO)
+    oauth._emitir(con, "claude-code", adm, f"{oauth.ESCOPO} {oauth.ESCOPO_OPERAR}")
+    oauth._emitir(con, "chatgpt-teste", outro, f"{oauth.ESCOPO} {oauth.ESCOPO_OPERAR}")   # de outra pessoa
+    oauth._emitir(con, "revogado-teste", adm, oauth.ESCOPO)
+    con.execute("UPDATE oauth_tokens SET revoked_at=? WHERE client_id='revogado-teste'", ("2026-01-01T00:00:00.000Z",))
+    con.commit(); con.close()
+
+    cli.cookies.clear()
+    assert cli.post("/ops/api/auth/login", json={"email": email, "password": SENHA}).status_code == 200
+    r = cli.get("/ops/api/equipe/conector-claude")
+    d = r.json()
+    por_nome = {c["nome"]: c for c in d["conectores"]}
+    assert set(por_nome) == {"ChatGPT", "Claude Code"}, "só os da pessoa, e só os que valem"
+    assert por_nome["ChatGPT"]["escopo"] == "leitura" and por_nome["ChatGPT"]["opera"] is False
+    assert "foi autorizado só para leitura" in por_nome["ChatGPT"]["por_que"]
+    assert por_nome["Claude Code"]["escopo"] == "operar" and por_nome["Claude Code"]["opera"] is True
+    assert all(c["autorizado_em"] for c in d["conectores"])
+    assert lido["access_token"] not in r.text and lido["refresh_token"] not in r.text
+    assert not any(k in r.text for k in ("token_hash", "secret", "client_id"))
+    cli.cookies.clear()

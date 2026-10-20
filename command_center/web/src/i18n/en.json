@@ -4745,5 +4745,16 @@
 "{0} resposta(s) do robô": "{0} bot reply(ies)",
 "última mensagem": "last message",
 "Ver conversa": "View conversation",
-"Pausar": "Pause"
+"Pausar": "Pause",
+"Operar": "Operate",
+"Seus conectores": "Your connectors",
+"desde {0}": "since {0}",
+"Seu papel:": "Your role:",
+"permite operar": "can operate",
+"só permite ler": "can only read",
+"Nenhum conector autorizado ainda.": "No connector authorized yet.",
+"Seu papel ({0}) permite operar e este conector foi autorizado para operar.": "Your role ({0}) can operate and this connector was authorized to operate.",
+"Seu papel ({0}) permite operar, mas este conector foi autorizado só para leitura: desconecte e conecte de novo marcando \"Também operar o painel como você\".": "Your role ({0}) can operate, but this connector was authorized read-only: disconnect and connect again checking \"Também operar o painel como você\" (also operate the panel as you).",
+"Este conector foi autorizado para operar, mas seu papel ({0}) só permite ler o painel: para operar, peça a um ADMIN que mude o seu papel para OPERATOR ou acima.": "This connector was authorized to operate, but your role ({0}) can only read the panel: to operate, ask an ADMIN to change your role to OPERATOR or above.",
+"Seu papel ({0}) só permite ler o painel, e este conector também foi autorizado só para leitura.": "Your role ({0}) can only read the panel, and this connector was also authorized read-only."
 }
