@@ -35,7 +35,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from command_center.api import auth
-from command_center.db import agora, auditar, get_db, inserir, um
+from command_center.db import agora, auditar, get_db, inserir, todos, um
 
 r = APIRouter(prefix="/ops/oauth", tags=["oauth"])
 
@@ -194,6 +194,63 @@ cliente ou cobra pede confirmação antes. Tudo fica na auditoria com o seu nome
 
 def pode_operar(papel):
     return auth.pode(papel or "", PAPEL_PARA_OPERAR)
+
+
+MARCAR = "'Também operar o painel como você'"
+
+
+def permissao(papel, conector_permite, livre=False, chave=False):
+    """#362 (dono: "explicar no painel por que ADMIN está com opera=false, separando papel do
+    usuário e permissão do conector"). Duas travas independentes: o PAPEL da pessoa (OPERATOR
+    ou acima opera) e o que o CONECTOR recebeu na autorização (o escopo `mcp:write`, ou a chave
+    de API não ser só de leitura). Só opera com as duas abertas; `por_que` diz qual fechou."""
+    papel = papel or "?"
+    papel_ok = bool(livre) or pode_operar(papel)
+    conector_ok = bool(conector_permite)
+    este = "esta chave de API" if chave else "este conector"
+    refazer = ("peça a um ADMIN para mudar a chave para operação (Chaves de API)" if chave else
+               f"desconecte e conecte de novo marcando {MARCAR}")
+    subir = f"peça a um ADMIN que mude o seu papel para {PAPEL_PARA_OPERAR} ou acima"
+    if papel_ok and conector_ok:
+        por_que = (f"Seu papel ({papel}) permite operar e {este} foi autorizado para operar: faz o que o "
+                   "seu papel faz no painel, e o que vai para o cliente ou cobra pede confirmação antes.")
+    elif papel_ok:
+        por_que = f"Seu papel ({papel}) permite operar, mas {este} foi autorizado só para leitura: {refazer}."
+    elif conector_ok:
+        por_que = (f"{este[0].upper()}{este[1:]} foi autorizado para operar, mas seu papel ({papel}) só "
+                   f"permite ler o painel: para operar, {subir}.")
+    else:
+        por_que = (f"Seu papel ({papel}) só permite ler o painel, e {este} também foi autorizado só para "
+                   f"leitura: para operar, {subir} e depois {refazer}.")
+    return {"papel": papel, "papel_permite_operar": papel_ok, "conector_permite_operar": conector_ok,
+            "opera": papel_ok and conector_ok, "por_que": por_que}
+
+
+def conectores_da_pessoa(con, user_id, papel):
+    """Os conectores OAuth que a própria pessoa autorizou e ainda valem (token não revogado nem
+    vencido): o nome do cliente, se o escopo é de leitura ou de operar, e quando. Nada de token,
+    hash, segredo ou client_id: é o que a tela mostra."""
+    linhas = todos(con, """SELECT t.client_id, c.name, t.scope, t.created_at, t.last_used_at
+                             FROM oauth_tokens t JOIN oauth_clients c ON c.client_id = t.client_id
+                            WHERE t.user_id=? AND t.revoked_at IS NULL AND c.revoked_at IS NULL
+                              AND (t.expires_at IS NULL OR t.expires_at >= ?)
+                            ORDER BY t.created_at DESC""", (user_id, agora()))
+    por_cliente = {}
+    for t in linhas:
+        atual = por_cliente.setdefault(t["client_id"], {"nome": t["name"], "escopo": t["scope"] or ESCOPO,
+                                                         "autorizado_em": t["created_at"], "usado_em": None})
+        if (t["scope"] or ESCOPO) == atual["escopo"]:
+            atual["autorizado_em"] = min(atual["autorizado_em"], t["created_at"])
+        if t["last_used_at"] and (atual["usado_em"] or "") < t["last_used_at"]:
+            atual["usado_em"] = t["last_used_at"]
+    saida = []
+    for c in por_cliente.values():
+        escrita = ESCOPO_OPERAR in c["escopo"].split()
+        p = permissao(papel, escrita)          # como `usuario_do_token` decide: o papel, não o acesso livre
+        saida.append({"nome": c["nome"], "escopo": "operar" if escrita else "leitura",
+                      "autorizado_em": c["autorizado_em"], "usado_em": c["usado_em"],
+                      "papel_permite_operar": p["papel_permite_operar"], "opera": p["opera"], "por_que": p["por_que"]})
+    return saida
 
 
 def _campos_ocultos(p):

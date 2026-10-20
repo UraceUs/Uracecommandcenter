@@ -62,7 +62,10 @@ claude mcp add --transport http urace https://ops.urace.us/ops/mcp
 Depois, dentro do Claude Code, digite `/mcp`, escolha **urace** e **Authenticate**. Entre com o
 seu usuário e marque **"Também operar o painel como você"**.
 
-Sem a caixa marcada, o Claude só lê. Tudo o que ele faz fica na auditoria do painel com o **seu**
+Sem a caixa marcada, o Claude só lê, mesmo com papel ADMIN: o papel e o conector são travas
+separadas. Em **Equipe › Conectar o Claude**, a lista **Seus conectores** mostra cada um como
+**Leitura** ou **Operar** e o motivo; se estiver **Leitura**, desconecte e conecte de novo marcando
+a caixa. Tudo o que ele faz fica na auditoria do painel com o **seu**
 nome.
 
 **Ferramentas que aparecem para o Claude:**
