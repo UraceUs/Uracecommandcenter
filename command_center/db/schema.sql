@@ -2409,3 +2409,19 @@ CREATE TABLE IF NOT EXISTS store_deposit_refunds (
   done_at          TEXT
 );
 CREATE INDEX IF NOT EXISTS store_deposit_refunds_linha ON store_deposit_refunds(order_id, item_id);
+
+-- Balcão no celular (dono, 20/10): "abaixo mostra o que está guardando para poder confirmar naquele cliente … aí lá
+-- embaixo um botãozinho de confirmar". A peça lida (ou digitada, ou registrada na hora) no GUARDAR entra aqui, ainda
+-- PENDENTE, ligada ao card; só o "Confirmar" põe tudo no estoque do cliente, numa vez só (cada uma vira a leitura
+-- `guardar` de sempre, com a auditoria). Fica no servidor: recarregar ou abrir em outro aparelho mostra a mesma lista.
+CREATE TABLE IF NOT EXISTS counter_keep_lines (
+  id          INTEGER PRIMARY KEY,
+  client_id   INTEGER NOT NULL REFERENCES clients(id),
+  item_id     INTEGER NOT NULL REFERENCES stock_items(id),
+  qty         REAL NOT NULL DEFAULT 1 CHECK (qty > 0),
+  location    TEXT NOT NULL DEFAULT 'sede',
+  code        TEXT,
+  created_by  INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS counter_keep_lines_cliente ON counter_keep_lines(client_id, id);

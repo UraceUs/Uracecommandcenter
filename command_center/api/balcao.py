@@ -726,3 +726,134 @@ def inv_revisao_confirmar(request: Request, pid: int = Path(..., ge=1, le=2**63 
                       u=Depends(auth.exige("MANAGER"))):
     p = _revisao_erro(lambda: rz.revisar_confirmar(con, pid, u["id"], ip=auth._ip(request)))
     return b.invoice_publica(con, p)
+
+
+# ------------------------------------------------------------------ balcão no celular (dono, 20/10)
+# GUARDAR: a peça entra na lista do card, pendente; o "Confirmar" põe tudo no estoque do cliente numa vez só.
+# Peça que não existe: o pop-up registra e já adiciona ao cliente (na lista do GUARDAR ou no rascunho do COBRAR).
+from command_center.providers import balcao_guardar as bg  # noqa: E402
+
+
+def _guardando(con, client_id):
+    return {"guardando": bg.lista(con, client_id)}
+
+
+class GuardandoIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    item_id: int = Field(..., ge=1, le=2**63 - 1)
+    qty: float = Field(1, gt=0, le=bg.MAX_QTY)
+    local: str | None = Field(None, max_length=20)
+    codigo: str | None = Field(None, max_length=200)
+
+
+@r.get("/cliente/{client_id}/guardando")
+def guardando(client_id: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+              u=Depends(auth.exige("OPERATOR"))):
+    try:
+        bg._cliente(con, client_id)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    return _guardando(con, client_id)
+
+
+@r.post("/cliente/{client_id}/guardando", status_code=201)
+def guardando_adicionar(dados: GuardandoIn, request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1),
+                        con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    def f():
+        with transacao(con, imediata=True):
+            lid = bg.adicionar(con, client_id, dados.item_id, u["id"], dados.qty, dados.local, dados.codigo)
+            _aud(con, request, u, "balcao.guardando.adicionar", "client", client_id,
+                 {"linha": lid, "item": dados.item_id, "qty": dados.qty, "local": dados.local})
+        return {"linha": lid, **_guardando(con, client_id)}
+    return _revisao_erro(f)
+
+
+class GuardandoEditarIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    qty: float | None = Field(None, gt=0, le=bg.MAX_QTY)
+    local: str | None = Field(None, max_length=20)
+
+
+@r.patch("/cliente/{client_id}/guardando/{lid}")
+def guardando_editar(dados: GuardandoEditarIn, request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1),
+                     lid: int = Path(..., ge=1, le=2**63 - 1), con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("OPERATOR"))):
+    def f():
+        with transacao(con, imediata=True):
+            antes = bg.editar(con, client_id, lid, dados.qty, dados.local)
+            _aud(con, request, u, "balcao.guardando.editar", "client", client_id,
+                 {"linha": lid, "item": antes["item_id"], "qty_antes": antes["qty"], "qty": dados.qty,
+                  "local_antes": antes["location"], "local": dados.local})
+        return _guardando(con, client_id)
+    return _revisao_erro(f)
+
+
+@r.delete("/cliente/{client_id}/guardando/{lid}")
+def guardando_remover(request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1), lid: int = Path(..., ge=1, le=2**63 - 1),
+                      con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    def f():
+        with transacao(con, imediata=True):
+            li = bg.remover(con, client_id, lid)
+            _aud(con, request, u, "balcao.guardando.remover", "client", client_id,
+                 {"linha": lid, "item": li["item_id"], "qty": li["qty"]})
+        return _guardando(con, client_id)
+    return _revisao_erro(f)
+
+
+@r.post("/cliente/{client_id}/guardando/confirmar")
+def guardando_confirmar(request: Request, client_id: int = Path(..., ge=1, le=2**63 - 1),
+                        con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    feitas = _revisao_erro(lambda: bg.confirmar(con, client_id, u["id"], ip=auth._ip(request)))
+    return {"guardadas": len(feitas), **b.do_cliente(con, client_id)}
+
+
+class PecaNovaIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    client_id: int = Field(..., ge=1, le=2**63 - 1)
+    modo: Literal["guardar", "cobrar"]
+    nome: str = Field(..., min_length=1, max_length=100)
+    category: str | None = Field(None, max_length=40)
+    codigo: str | None = Field(None, max_length=200)
+    price: float | None = Field(None, ge=0, le=rz.MAX_PRECO)
+    qty: float = Field(1, gt=0, le=bg.MAX_QTY)
+    local: str | None = Field(None, max_length=20)
+
+
+@r.post("/peca-nova", status_code=201)
+def peca_nova(dados: PecaNovaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+              u=Depends(auth.exige("OPERATOR"))):
+    """A peça que o sistema não conhece: cria a peça (e o código da etiqueta, se veio) e **já adiciona ao cliente** —
+    no GUARDAR, na lista para confirmar; no COBRAR, no rascunho de invoice do card (o item do QuickBooks nasce no
+    "Criar invoice", como toda linha do rascunho). O preço final da peça é do gerente; o do mecânico vale só para a
+    linha e fica marcado como digitado."""
+    gerente = _gerente(u)
+    nome = " ".join(dados.nome.split())
+
+    def f():
+        with transacao(con, imediata=True):
+            bg._cliente(con, dados.client_id)
+            item_id = estoque.criar_item(con, "peca", nome, category=dados.category or None,
+                                         price=dados.price if gerente else None)
+            cod = b.cadastrar_codigo(con, dados.codigo, item_id, u["id"]) if (dados.codigo or "").strip() else None
+            _aud(con, request, u, "balcao.peca_nova", "stock_item", item_id,
+                 {"client_id": dados.client_id, "modo": dados.modo, "codigo": cod, "nome": nome,
+                  "preco": dados.price, "preco_da_peca": gerente and dados.price is not None})
+            if dados.modo == "guardar":
+                lid = bg.adicionar(con, dados.client_id, item_id, u["id"], dados.qty, dados.local, cod)
+                _aud(con, request, u, "balcao.guardando.adicionar", "client", dados.client_id,
+                     {"linha": lid, "item": item_id, "qty": dados.qty, "local": dados.local, "peca_nova": True})
+                return {"item": b.item_publico(con, estoque.item(con, item_id)), "modo": "guardar",
+                        **_guardando(con, dados.client_id)}
+            d, li, novo, digitado = rz.adicionar(con, dados.client_id, "estoque", u["id"], item_id=item_id, qty=dados.qty,
+                                                 preco=dados.price, local=dados.local, confirmado=True)
+            if novo:
+                _aud(con, request, u, "balcao.rascunho.criar", "counter_draft", d["id"], {"client_id": dados.client_id})
+            _aud(con, request, u, "balcao.rascunho.linha", "counter_draft", d["id"],
+                 {"client_id": dados.client_id, "linha": li["id"], "origem": "estoque", "item": item_id, "nome": nome,
+                  "qty": dados.qty, "preco": li["unit_price"], "peca_nova": True})
+            if digitado:
+                _aud(con, request, u, "balcao.rascunho.preco", "counter_draft", d["id"],
+                     {"client_id": dados.client_id, "linha": li["id"], "nome": nome, "preco_tabela": li["ref_price"],
+                      "preco": li["unit_price"]})
+        return {"item": b.item_publico(con, estoque.item(con, item_id)), "modo": "cobrar", **_resposta(con, dados.client_id, u)}
+    return _revisao_erro(f)

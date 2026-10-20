@@ -2,7 +2,7 @@
 
 **Command Center da URACE — calendário e balcão de peças**
 
-Para quem trabalha no box, com o celular na mão. Atualizado em 19/10/2026 (#350: o balcão cobra mesmo sem saldo e a peça vai para recontar).
+Para quem trabalha no box, com o celular na mão. Atualizado em 20/10/2026 (balcão no celular: o cliente primeiro, o teclado abre, peça nova num pop-up e o GUARDAR com Confirmar).
 O guia do painel inteiro está no playbook geral (`docs/playbooks/playbook-geral.md`).
 
 ---
@@ -262,23 +262,45 @@ revisão.
 Pelo celular, você desfaz **a sua própria leitura**, enquanto ela ainda espera a revisão. Depois
 que o gerente confirmou, só ele corrige.
 
-### O balcão completo (no painel)
+### O balcão completo (no painel, também no celular)
 
-Em **Balcão**, no painel, existe também o balcão completo. Ele é usado com o leitor de
-código de barras (coletor) ou com **"Ler com a câmera"**. Ele funciona diferente:
+Em **Balcão**, no painel, existe também o balcão completo. Dono, 20/10: *"a primeira coisa no balcão a ser
+mostrada é qual cliente que é. E aí seleciona se é para cobrar, se é para guardar. E aí, logo abaixo"* a peça. A
+tela é de cima para baixo, nesta ordem:
 
-1. Primeiro leia o **QR do cliente**, toque num dos **pilotos de hoje** (em "Abrir um
-   cliente") ou toque em **Peças** num serviço do Meu dia. Leu a peça antes do cliente? Abre
-   **"De quem é?"** com os pilotos de hoje: toque no piloto e a peça entra na invoice dele.
-2. Escolha o modo, no topo:
-   - **COBRAR**: cada peça lida **entra direto** na invoice de peças de hoje daquele cliente;
-   - **GUARDAR**: a peça vai para o estoque do cliente e **não é cobrada**.
-3. Escolha onde a peça está: **Galpão**, **Trailer** ou **Pista**.
-4. Leia cada peça.
-5. Errou? Em **Leituras**, toque em **Desfazer**. Funciona enquanto a invoice não foi
-   enviada nem paga.
+1. **Quem é o cliente?** Toque num dos **pilotos de hoje**, busque pelo nome em **"Buscar o cliente pelo nome"**,
+   leia o **QR do cliente** (no campo ou em **"Ler com a câmera"**) ou toque em **Peças** num serviço do Meu dia.
+   Sem cliente escolhido, o resto não aparece. Leu a peça antes do cliente? Abre **"De quem é?"** com os pilotos de
+   hoje: toque no piloto e a peça entra na invoice dele.
+2. **COBRAR** ou **GUARDAR** (os dois botões grandes):
+   - **COBRAR**: cada peça **entra direto** na invoice de peças de hoje daquele cliente (ou no rascunho de invoice,
+     se ele estiver aberto);
+   - **GUARDAR**: a peça vai para a lista **"Guardando para …"** e **não é cobrada**.
+3. **A peça**, no campo **"Peça: digite o nome ou o código"**. **Toque no campo e o teclado abre** (antes ele
+   ficava escondido por causa do leitor). Enquanto você digita, aparecem as peças do **estoque** e os itens do
+   **QuickBooks** mais parecidos: toque na certa. O leitor (coletor) digita no mesmo campo; quem só usa o coletor
+   toca em **"Só o leitor (sem teclado)"** (o aparelho lembra; **"⌨ Digitar"** volta). **"📷 Ler com a câmera"** lê o
+   código pela câmera. Escolha também onde a peça está: **Galpão**, **Trailer** ou **Pista**.
+4. **O que já foi lançado:** no COBRAR, o rascunho e a **Invoice de peças**; no GUARDAR, a lista do que está
+   guardando e o que **já está guardado** do cliente. Em **Leituras**, **Desfazer** corrige um erro enquanto a
+   invoice não foi enviada nem paga.
 
-Aqui **não há revisão**: a peça já cobra. Confira o modo e o cliente antes de ler.
+**A peça não existe no sistema?** Digitou e não achou (ou toque em **"+ Registrar peça nova"**): abre o pop-up
+**"Registrar peça nova"**, com o nome que você digitou (ou o código da etiqueta, se leu). Diga a **categoria**, o
+**código** (opcional), o **preço** (só no COBRAR) e, se quiser, tire a **foto**. **Salvar** cria a peça e **já põe
+no cliente**: no GUARDAR, entra na lista; no COBRAR, entra no **rascunho de invoice** dele (o item do QuickBooks
+nasce no **Criar invoice**, na categoria Parts). O preço que o mecânico digita fica marcado como **preço digitado**;
+o do gerente vira o preço final da peça. A peça já existe e só o código é novo? **"Já está no estoque? Ligar este
+código a ela"**.
+
+**GUARDAR com Confirmar.** Dono, 20/10: *"abaixo mostra o que está guardando para poder confirmar naquele cliente
+… aí lá embaixo um botãozinho de confirmar"*. Cada peça lida, digitada ou registrada entra em **"Guardando para
+…"**, ainda **pendente**: mude a quantidade (**−** e **+**), o local ou toque em **Tirar**. Só no botão
+**"Confirmar N peça(s)"**, lá embaixo, elas entram de fato no **estoque do cliente**, todas de uma vez (com a
+auditoria). A lista fica salva no servidor: recarregar ou abrir em outro aparelho mostra a mesma, e ela é **só
+deste cliente**.
+
+No COBRAR **não há revisão**: a peça já cobra. Confira o modo e o cliente antes de ler.
 
 Se a peça já é do cliente (guardada com a gente), o sistema pergunta antes:
 **"Usar a dele (sem cobrar)"** ou **"Cobrar uma nova"**.
@@ -384,9 +406,10 @@ A tela mostra **"Código novo"** e a frase **"O gerente diz que peça é na revi
 2. Ou toque em **Ler outra**, se leu o código errado.
 3. Avise o gerente que a etiqueta ou o código não foi reconhecido.
 
-No balcão completo (painel), código novo abre a janela **"Código novo"**. Ali você diz que peça
-é: escolhe uma peça do estoque **ou** cria uma peça nova (nome, prateleira e foto). O preço e o
-item do QuickBooks o gerente completa antes de cobrar.
+No balcão completo (painel), com o cliente aberto, código novo abre **"Registrar peça nova"** (veja acima): a peça
+nasce e já vai para o cliente. Sem cliente aberto, abre a janela **"Código novo"**: você diz que peça é (uma do
+estoque **ou** uma nova, com nome, prateleira e foto). O preço e o item do QuickBooks o gerente completa antes de
+cobrar.
 
 ### Contar o estoque (e a peça vendida sem saldo)
 
