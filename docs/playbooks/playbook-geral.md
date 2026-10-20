@@ -1223,6 +1223,7 @@ Sem a caixa marcada, o Claude **só lê**. Ninguém copia senha, token ou chave 
 | `urace_resumo` | o panorama |
 | `urace_atencao` | o que precisa de gente hoje |
 | `urace_clientes`, `urace_cliente`, `urace_corridas`, `urace_estoque`, `urace_invoices`, `urace_precos_cobrados`, `urace_auditoria`, `urace_kommo_*` | leituras prontas |
+| `urace_cliente_reservas`, `urace_cliente_pedidos`, `urace_cliente_pagamentos` | **diagnóstico de um cliente pelo card**: pedem o `client_id` (número do card) e só trazem as linhas dele (agendamentos e corridas; loja, planos e Suits; invoices, mensalidades, peças, Stripe e reembolso do depósito), paginadas com `limit` (padrão 20, teto 100), `offset` e `total`. `urace_invoices` e `urace_corridas` também aceitam `client_id` |
 | `urace_operacoes` | lista **as operações que o seu papel alcança**. Filtre com uma palavra: `venda`, `waiver`, `invoice`, `suits`... |
 | `urace_api` | executa uma operação (método, caminho, corpo). É a **mesma rota** do botão do painel |
 
@@ -1424,6 +1425,8 @@ auditoria com o nome dela.
 ### Como trabalhar
 
 1. **Comece pelo panorama:** `urace_resumo` e `urace_atencao`.
+   Para diagnosticar **um** cliente, consulte pelo card: `urace_cliente_reservas`,
+   `urace_cliente_pedidos` e `urace_cliente_pagamentos` com o `client_id` (não traz dado de outro cliente).
 2. **Descubra antes de agir:** `urace_operacoes` com uma palavra (`clients`, `sales`, `suits`,
    `waiver`, `invoice`...). Ela só lista o que o papel da pessoa alcança. Não chute rota.
 3. **Leia antes de perguntar:** procure o cliente (`GET /ops/api/clients?q=…`), o pedido, a
