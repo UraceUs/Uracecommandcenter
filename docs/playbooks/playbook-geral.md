@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 19/10/2026 (#340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
+> Atualizado em 20/10/2026 (#355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
 > equipe, só o serviço do plano, add-ons e a invoice das extras na hora da marcação; antes, #115, o **pacote de prova** da waiver para o advogado; antes, #117, conferir o documento da
 > waiver no balcão e o nascimento travado, e #313, o
 > cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
@@ -396,7 +396,7 @@ Dentro do card (`/ops/clients/<n>`), as abas:
 | Aba | O que tem |
 |---|---|
 | Linha do tempo | serviço, waiver enviada/assinada, ação da IA, invoice |
-| Mensalidade e contrato | plano mensal e contrato da Academy (valor: gerente+). #314: também o **valor** e o **item do QuickBooks** da sessão extra (acima do pacote do mês); vazio, vale o do plano ou o mensal ÷ sessões. #340: **"O que o cliente vê"** — o contador do mês (usadas de Y, livres, zera no dia 1), a mensalidade do mês pelo QuickBooks (paga, aberta, sem invoice), as extras do mês e o **em aberto** (sessões já feitas sem invoice paga, com quais sessões e quais invoices). O cliente vê o mesmo contador no Dashboard e em Book sessions. **Piloto pro sem mensalidade** (★ Pro e Mensalidade vazia): aviso no topo do card e em Precisa de atenção — preencha sessões por mês, valor mensal e o Plano mensal (o kart); até lá ele não vai para o carrinho e nenhuma invoice sai pelo preço da tabela. Detalhes no [playbook de vendas](playbook-vendas.md), "Piloto pro" |
+| Mensalidade e contrato | plano mensal e contrato da Academy (valor: gerente+). #314: também o **valor** e o **item do QuickBooks** da sessão extra (acima do pacote do mês); vazio, vale o do plano ou o mensal ÷ sessões. #340: **"O que o cliente vê"** — o contador do mês (usadas de Y, livres, zera no dia 1), a mensalidade do mês pelo QuickBooks (paga, aberta, sem invoice), as extras do mês e o **em aberto** (sessões já feitas sem invoice paga, com quais sessões e quais invoices). O cliente vê o mesmo contador no Dashboard e em Book sessions. **Piloto pro sem mensalidade** (★ Pro e Mensalidade vazia): aviso no topo do card e em Precisa de atenção — preencha sessões por mês, valor mensal e o Plano mensal (o kart); até lá ele não vai para o carrinho e nenhuma invoice sai pelo preço da tabela. #355: o aluno do plano (e o pro em montagem) marca **"Training Day X/Y"** (a próxima sessão do pacote no mês: "Training Day 2/4"; acima do pacote, "Training Day · extra $X"; sem Mensalidade, só "Training Day") em vez da lista do Arrive and Drive, e o agendamento fica com esse nome em Agendamentos, Asana e e-mails. Detalhes no [playbook de vendas](playbook-vendas.md), "Piloto pro" |
 | ★ Equipamento e ★ Corridas | só para Pro Racing Driver |
 | Peças | o QR que o mecânico lê no balcão e as peças do cliente |
 | Conta no site | a conta da área do cliente ligada ao card |

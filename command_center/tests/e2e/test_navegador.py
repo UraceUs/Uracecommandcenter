@@ -692,7 +692,7 @@ def test_aluno_recorrente_marca_toda_quarta_num_pedido_so_no_celular(servidor, n
         assert c.get_by_text("2756").count() == 0, "o cliente não vê a conta do mensal"
         # #340 (dono, 19/10): o cliente agora vê o contador do mês
         c.get_by_text("This month: 0 of 1 session used · 1 left · resets on the 1st").wait_for()
-        c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
+        c.get_by_role("radio", name=re.compile(r"Training Day 1.1 · 4-stroke")).check()
         c.get_by_role("button", name="Every Wed").click()
         dias = c.locator(".portal-varios-dia")
         dias.first.wait_for()
@@ -768,6 +768,10 @@ def test_piloto_pro_ve_o_contador_so_o_servico_do_plano_e_o_add_on(servidor, nav
         c.get_by_role("heading", name="Book a session", level=1).wait_for()
         c.get_by_text("Your monthly plan is being set up by our team").wait_for()
         assert c.get_by_role("button", name="Add to cart").count() == 0 and c.get_by_text("$719").count() == 0
+        # #355 (dono, 20/10): no lugar da lista do Arrive and Drive, "Training Day" (sem número: a Mensalidade está vazia)
+        nomes = c.locator(".portal-servico b").all_inner_texts()
+        assert nomes and all(n.startswith("Training Day · ") for n in nomes) and not any("Arrive and Drive" in n for n in nomes), \
+            "sem o Plano mensal, o cliente escolhe o kart do Training Day"
         abrir(g, servidor, f"/clients/{card}")
         g.get_by_text("Piloto pro sem mensalidade no card").first.wait_for()
         # a equipe preenche a Mensalidade (números fictícios do teste) e o Plano mensal
@@ -787,6 +791,7 @@ def test_piloto_pro_ve_o_contador_so_o_servico_do_plano_e_o_add_on(servidor, nav
         c.get_by_text("This month: 0 of 2 sessions used · 2 left · resets on the 1st").wait_for()
         servicos = c.locator(".portal-servicos .portal-servico")
         assert servicos.count() == 1 and "4-stroke" in servicos.first.inner_text(), "só o serviço do plano"
+        assert servicos.first.locator("b").inner_text() == "Training Day 1/2", "#355: Training Day X/Y, não o Arrive and Drive"
         c.get_by_role("button", name="Book as a regular session").first.wait_for()
         c.get_by_role("button", name="Every Wed").click()
         c.locator(".portal-varios-dia").first.wait_for()
@@ -851,7 +856,7 @@ def test_aluno_no_ultimo_mes_do_plano_marca_o_mes_seguinte_como_sessao_avulsa(se
         c.get_by_role("button", name=f"{rotulo}, available").click()
         assert c.get_by_role("button", name=f"{rotulo}, selected").get_attribute("aria-pressed") == "true"
         c.get_by_text("Pick the session type above to see what is included.").wait_for()
-        c.get_by_role("radio", name=re.compile("Arrive and Drive 4-stroke")).check()
+        c.get_by_role("radio", name=re.compile(r"Training Day [0-9]+.[0-9]+ · 4-stroke")).check()
         c.get_by_text("Your monthly plan does not cover this date").wait_for()
         assert c.get_by_role("button", name=re.compile(r"^Book \d+ session")).is_disabled()
         r = c.evaluate(_VAZA)

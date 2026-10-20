@@ -126,11 +126,18 @@ export interface PlanoPiloto { driver_id: number; recurring: boolean; plan: stri
   /** #314, parte 3: como paga a sessão — do plano (QuickBooks), carrinho (Stripe), invoice ou, #340, pela equipe
    * (o piloto pro com a mensalidade ainda sendo configurada: nunca o carrinho) */
   payment?: 'plano' | 'stripe' | 'invoice' | 'equipe'
-  pro?: boolean; setup?: boolean; counter?: Contador | null; services?: number[]; services_matched?: boolean; addon?: AddOn | null }
+  pro?: boolean; setup?: boolean; counter?: Contador | null; services?: number[]; services_matched?: boolean; addon?: AddOn | null
+  /** #355: o nome da próxima sessão do pacote ("Training Day 2/4"; sem Mensalidade, só "Training Day") */
+  training_day?: string | null }
+/** #355: o nome que o aluno do plano vê no lugar do serviço: "Training Day 2/4" (o kart do plano embaixo) ou, sem kart no
+ * plano, "Training Day 2/4 · 4-stroke" (o kart). */
+export const nomeNoPlano = (td: string, x: Servico, umKart: boolean) => umKart ? td : `${td} · ${x.site_kart || x.name}`
 export type Turno = 'manha' | 'tarde' | 'dia'
 /** #314: um dia do pedido, como o servidor vê: aberto ou não, e do plano ou extra. */
 export interface DiaCotado { date: string; period: Turno; ok: boolean; reason: string | null; message: string | null
-  coverage: Cobertura; price: number | null; label: string | null; addon?: AddOn | null }
+  coverage: Cobertura; price: number | null; label: string | null; addon?: AddOn | null
+  /** #355: "Training Day 3/4" ou "Training Day · extra $X" */
+  title?: string | null }
 export interface Cotacao { slots: DiaCotado[]; included: number; extras: number; extras_total: number; extra_price_missing: boolean
   addons?: number; addons_total?: number; invoice_total?: number
   service: string; hash: string }

@@ -352,3 +352,37 @@ def test_contador_e_em_aberto_nao_misturam_o_card_do_irmao(amb):
     k = contrato.contador(con, amb["card"])
     assert (k["used"], k["extras"]) == (0, []), "a do pacote do irmão não ocupa a vaga do Theo"
     assert contrato.em_aberto(con, irmao)["count"] == 1 and contrato.contador(con, irmao)["used"] == 1
+
+
+# ------------------------------------------------------------------ "Training Day X/Y" (#355)
+def test_recorrente_marca_training_day_numerado_e_o_nome_fica_no_agendamento(amb):
+    """Dono, 20/10: "será training day sendo 1/4, sendo o X/4 a sessão atual da mensalidade vigente". 4 por mês e 1
+    usada: a próxima é 2/4; um pedido de 4 dias no mês vira 2/4, 3/4, 4/4 e uma extra."""
+    con = amb["con"]
+    mensal(amb, sessoes=4, valor=2756.90)
+    dias = do_mesmo_mes(4)
+    mes = dias[0][:7]
+    _sessao(con, amb, f"{mes}-01", coverage="plano", charge_kind="contrato", price=0)
+    from command_center.providers import agenda_lote
+    assert agenda_lote.proximo_titulo(con, amb["card"], mes) == "Training Day 2/4"
+    if mes == _mes():
+        assert amb["cli"].get(f"{P}/plan").json()["drivers"][0]["training_day"] == "Training Day 2/4"
+    q, r = pedir(amb, dias)
+    assert [x["title"] for x in sorted(q["slots"], key=lambda y: y["date"])] == \
+        ["Training Day 2/4", "Training Day 3/4", "Training Day 4/4", "Training Day · extra $689.23"]
+    nomes = [b["service_name"] for b in todos(con, "SELECT service_name FROM bookings WHERE group_id=? ORDER BY date", (r["group_id"],))]
+    assert nomes == ["Training Day 2/4", "Training Day 3/4", "Training Day 4/4", "Training Day · extra $689.23"], \
+        "o nome vai para Agendamentos, Asana e e-mails"
+
+
+def test_pro_sem_mensal_marca_training_day_sem_numero(amb):
+    p = amb["cli"].get(f"{P}/plan").json()["drivers"][0]
+    assert p["setup"] is True and p["training_day"] == "Training Day", "sem a Mensalidade, nenhum número inventado"
+    r = amb["cli"].post(f"{P}/bookings", headers=amb["h"], json={"date": quartas(1)[0], "period": "manha",
+                                                                  "service_id": amb["quatro"], "driver_id": amb["pid"]})
+    assert r.status_code == 201, r.text
+    assert um(amb["con"], "SELECT service_name FROM bookings WHERE id=?", (r.json()["id"],))["service_name"] == "Training Day"
+    r = amb["cli"].post(f"{P}/bookings", headers=amb["h"], json={"date": quartas(2)[1], "period": "manha", "avulsa": True,
+                                                                  "service_id": amb["quatro"], "driver_id": amb["pid"]})
+    assert um(amb["con"], "SELECT service_name FROM bookings WHERE id=?", (r.json()["id"],))["service_name"] == \
+        "Arrive and Drive 4-stroke", "a avulsa fica com o nome do serviço"
