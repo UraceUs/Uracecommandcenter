@@ -96,6 +96,27 @@ def metadados_recurso(request=None):
 
 
 # ------------------------------------------------------- registro dinâmico (RFC 7591)
+def _volta_segura(uri):
+    """#376 (análise do Mio): conferir por PREFIXO deixava passar `http://localhost.invasor.net` e
+    `http://127.0.0.1@invasor.net`. Aqui o endereço é desmontado: https com host, ou http só com o
+    host exatamente localhost/127.0.0.1, e nunca com usuário/senha na autoridade."""
+    from urllib.parse import urlsplit
+    if not isinstance(uri, str):
+        return False
+    try:
+        u = urlsplit(uri)
+        host = u.hostname
+        u.port                                   # porta inválida levanta ValueError
+    except ValueError:
+        return False
+    if not host or "@" in u.netloc or u.fragment:
+        return False
+    if u.scheme == "https":
+        return True
+    return u.scheme == "http" and host in ("localhost", "127.0.0.1")
+
+
+
 @r.post("/register")
 def registrar(dados: dict, request: Request, con: sqlite3.Connection = Depends(get_db)):
     """O cliente se apresenta e recebe um `client_id`. **Sem sessão**, de propósito: é o
@@ -105,7 +126,7 @@ def registrar(dados: dict, request: Request, con: sqlite3.Connection = Depends(g
     if not isinstance(uris, list) or not uris:
         raise HTTPException(400, "redirect_uris é obrigatório")
     for u in uris:
-        if not isinstance(u, str) or not u.startswith(("https://", "http://localhost", "http://127.0.0.1")):
+        if not _volta_segura(u):
             # http só em localhost: em qualquer outro lugar o código voltaria em claro.
             raise HTTPException(400, f"redirect_uri precisa ser https (ou localhost): {u}")
     nome = (dados.get("client_name") or "cliente sem nome")[:120]
@@ -161,7 +182,7 @@ h1{{font-size:19px;margin:0 0 4px}}.m{{color:#9aa0a6;font-size:13.5px}}
 ul{{margin:18px 0;padding-left:18px}}li{{margin:5px 0;color:#c9ccd1;font-size:14px}}
 .w{{background:#1d1a12;border:1px solid #3d3319;color:#e0c068;padding:10px 12px;
 border-radius:10px;font-size:13px;margin:16px 0}}
-form{{display:flex;gap:10px;margin-top:22px}}button{{flex:1;padding:11px;border-radius:10px;
+form{{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}}form .w{{flex-basis:100%}}button{{flex:1;padding:11px;border-radius:10px;
 border:1px solid #2d3139;font-size:14px;cursor:pointer;font-family:inherit}}
 .no{{background:transparent;color:#c9ccd1}}.ok{{background:#e8eaed;color:#0d0f12;font-weight:600;border-color:#e8eaed}}
 </style></head><body><div class="c">
@@ -172,9 +193,9 @@ border:1px solid #2d3139;font-size:14px;cursor:pointer;font-family:inherit}}
 <li>Ler o estoque e o que precisa de atenção</li>
 <li>Ler o rastro de auditoria</li>
 </ul>
-{operar}
 <p class="m">Você pode revogar quando quiser, no painel.</p>
 <form method="post" action="/ops/oauth/authorize">
+{operar}
 {campos}
 <input type="hidden" name="csrf" value="{csrf}">
 <button class="no" name="decisao" value="nao" type="submit">Cancelar</button>
@@ -186,7 +207,7 @@ SO_LEITURA = """<div class="w">Somente leitura. Este acesso <b>não</b> altera d
 cliente e não mexe em dinheiro — nem se pedirem.</div>"""
 
 OPERAR = """<label class="w" style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
-<input type="checkbox" name="operar" value="1" checked style="margin-top:3px">
+<input type="checkbox" name="operar" value="1" style="margin-top:3px">
 <span><b>Também operar o painel como você ({papel})</b>: agendar, criar e editar clientes, fechar
 venda, enviar invoice e waiver. Só o que o seu papel já pode fazer no painel; o que vai para o
 cliente ou cobra pede confirmação antes. Tudo fica na auditoria com o seu nome.</span></label>"""
@@ -280,9 +301,11 @@ def autorizar(request: Request, con: sqlite3.Connection = Depends(get_db)):
         destino = "/ops/login?" + urlencode({"next": f"/ops/oauth/authorize?{urlencode(p)}"})
         return RedirectResponse(destino, status_code=303)
 
+    # #376: o nome vem do registro dinâmico, que qualquer um faz sem login: vai escapado
+    from html import escape
     return HTMLResponse(PAGINA.format(
-        nome=cliente["name"], usuario=u.get("email") or u.get("name") or "você",
-        operar=OPERAR.format(papel=u.get("role")) if pode_operar(u.get("role")) else SO_LEITURA,
+        nome=escape(cliente["name"] or ""), usuario=escape(u.get("email") or u.get("name") or "você"),
+        operar=OPERAR.format(papel=escape(u.get("role") or "")) if pode_operar(u.get("role")) else SO_LEITURA,
         campos=_campos_ocultos(p),
         csrf=(request.cookies.get(auth.COOKIE_CSRF) or "")))
 
@@ -328,6 +351,12 @@ def decidir(request: Request, con: sqlite3.Connection = Depends(get_db),
     if decisao != "sim":
         return _volta_com_erro(redirect_uri, {"state": state}, "access_denied",
                                "a pessoa não autorizou")
+    # #376: o POST não confia que passou pelo GET — as mesmas exigências de lá
+    if response_type != "code":
+        return _volta_com_erro(redirect_uri, {"state": state}, "unsupported_response_type")
+    if not code_challenge or code_challenge_method != "S256":
+        return _volta_com_erro(redirect_uri, {"state": state}, "invalid_request",
+                               "PKCE com S256 é obrigatório neste servidor")
 
     # o escopo de operar vem da caixa marcada pela PESSOA (e do papel dela), nunca só do
     # que o cliente pediu na URL
@@ -396,7 +425,7 @@ def token(request: Request, con: sqlite3.Connection = Depends(get_db),
             return _erro_oauth("invalid_client", "client_id do cabeçalho e do formulário não batem", 401)
         client_id, client_secret = basico[0], client_secret or basico[1]
     if grant_type == "refresh_token":
-        return _renovar(con, refresh_token, client_id)
+        return _renovar(con, refresh_token, client_id, client_secret)
     if grant_type != "authorization_code":
         return _erro_oauth("unsupported_grant_type", f"não sei fazer {grant_type}")
 
@@ -423,10 +452,8 @@ def token(request: Request, con: sqlite3.Connection = Depends(get_db),
         return _erro_oauth("invalid_grant", "redirect_uri diferente do usado na autorização")
 
     cliente = um(con, "SELECT * FROM oauth_clients WHERE client_id=?", (linha["client_id"],))
-    if cliente and cliente["secret_hash"]:
-        if not client_secret or not hmac.compare_digest(
-                _hash((cliente["secret_salt"] or "") + client_secret), cliente["secret_hash"]):
-            return _erro_oauth("invalid_client", "segredo do cliente não confere", 401)
+    if not _segredo_confere(cliente, client_secret):
+        return _erro_oauth("invalid_client", "segredo do cliente não confere", 401)
     if not _confere_pkce(code_verifier, linha["code_challenge"]):
         return _erro_oauth("invalid_grant", "code_verifier não confere com o desafio")
 
@@ -438,13 +465,28 @@ def token(request: Request, con: sqlite3.Connection = Depends(get_db),
     return JSONResponse(saida)
 
 
-def _renovar(con, refresh, client_id):
+def _segredo_confere(cliente, client_secret):
+    """Cliente confidencial se prova com o segredo; o público (sem segredo) não tem o que provar."""
+    if not cliente or not cliente["secret_hash"]:
+        return True
+    return bool(client_secret) and hmac.compare_digest(
+        _hash((cliente["secret_salt"] or "") + client_secret), cliente["secret_hash"])
+
+
+def _renovar(con, refresh, client_id, client_secret=None):
     linha = um(con, "SELECT * FROM oauth_tokens WHERE token_hash=? AND kind='refresh'",
                (_hash(refresh or ""),))
     if not linha or linha["revoked_at"] or (linha["expires_at"] or "") < agora():
         return _erro_oauth("invalid_grant", "refresh token inválido ou expirado")
     if client_id and client_id != linha["client_id"]:
         return _erro_oauth("invalid_grant", "refresh token não é deste cliente")
+    # #376: antes, o refresh de um cliente confidencial renovava sem o segredo — quem roubasse só o
+    # refresh renovava sozinho. Agora o confidencial se prova aqui também, como no código.
+    cliente = um(con, "SELECT * FROM oauth_clients WHERE client_id=?", (linha["client_id"],))
+    if not cliente or cliente["revoked_at"]:
+        return _erro_oauth("invalid_grant", "cliente revogado")
+    if not _segredo_confere(cliente, client_secret):
+        return _erro_oauth("invalid_client", "segredo do cliente não confere", 401)
     # Rotação: o refresh usado morre e sai outro. Assim um refresh roubado só vale até o
     # dono legítimo renovar — e a renovação dele denuncia o roubo.
     con.execute("UPDATE oauth_tokens SET revoked_at=? WHERE token_hash=?",

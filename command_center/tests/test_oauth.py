@@ -456,3 +456,100 @@ def test_segredo_por_formulario_continua_valendo(cli):
 
 def test_os_metadados_anunciam_o_basic():
     assert "client_secret_basic" in oauth.metadados_servidor()["token_endpoint_auth_methods_supported"]
+
+
+# ------------------------------------------------- endurecimento (#376, análise do Mio de 21/10)
+def _escopo_do_codigo(codigo):
+    con = conectar()
+    try:
+        return um(con, "SELECT scope FROM oauth_codes WHERE code_hash=?", (oauth._hash(codigo),))["scope"]
+    finally:
+        con.close()
+
+
+def _decide(cli, cid, desafio, extra=None, **troca):
+    entra(cli)
+    p = {"response_type": "code", "client_id": cid, "redirect_uri": VOLTA,
+         "code_challenge": desafio, "code_challenge_method": "S256", "state": "s1"}
+    p.update(troca)
+    return cli.post("/ops/oauth/authorize",
+                    data={**p, "decisao": "sim", "csrf": cli.cookies.get("cc_csrf"), **(extra or {})})
+
+
+def test_a_caixa_de_operar_esta_dentro_do_formulario_e_vem_desmarcada(cli):
+    """A caixa ficava FORA do <form> (nunca era enviada) e vinha marcada: a tela dizia uma coisa
+    e o envio fazia outra. Agora ela vai junto e começa desmarcada."""
+    entra(cli)
+    cid = registrar(cli)
+    _, desafio = pkce()
+    r = cli.get("/ops/oauth/authorize", params={
+        "response_type": "code", "client_id": cid, "redirect_uri": VOLTA,
+        "code_challenge": desafio, "code_challenge_method": "S256"})
+    form = r.text[r.text.index("<form"):r.text.index("</form>")]
+    caixa = form[form.index('name="operar"') - 40:form.index('name="operar"') + 60]
+    assert 'name="operar"' in form and "checked" not in caixa
+
+
+def test_desmarcado_so_le_marcado_opera(cli):
+    cid = registrar(cli)
+    _, desafio = pkce()
+    r = _decide(cli, cid, desafio)
+    so_le = parse_qs(urlparse(r.headers["location"]).query)["code"][0]
+    assert _escopo_do_codigo(so_le) == oauth.ESCOPO
+    r = _decide(cli, cid, desafio, extra={"operar": "1"})
+    opera = parse_qs(urlparse(r.headers["location"]).query)["code"][0]
+    assert oauth.ESCOPO_OPERAR in _escopo_do_codigo(opera).split()
+
+
+def test_o_nome_do_cliente_aparece_como_texto(cli):
+    """O registro é aberto (sem login): o nome não pode virar HTML na tela de consentimento."""
+    r = cli.post("/ops/oauth/register", json={
+        "client_name": "<img src=x onerror=alert(1)>", "redirect_uris": [VOLTA],
+        "token_endpoint_auth_method": "none"})
+    cid = r.json()["client_id"]
+    entra(cli)
+    _, desafio = pkce()
+    t = cli.get("/ops/oauth/authorize", params={
+        "response_type": "code", "client_id": cid, "redirect_uri": VOLTA,
+        "code_challenge": desafio, "code_challenge_method": "S256"}).text
+    assert "<img src=x" not in t and "&lt;img src=x" in t
+
+
+@pytest.mark.parametrize("uri", ["http://localhost.invasor.example.com/cb", "http://127.0.0.1.invasor.example.com/cb",
+                                 "http://127.0.0.1@invasor.example.com/cb", "http://localhost:abc/cb",
+                                 "https:///sem-host", "ftp://localhost/cb"])
+def test_volta_que_so_comeca_parecido_e_recusada(cli, uri):
+    r = cli.post("/ops/oauth/register", json={"client_name": "x", "redirect_uris": [uri]})
+    assert r.status_code == 400, uri
+
+
+@pytest.mark.parametrize("uri", ["http://localhost:8765/callback", "http://127.0.0.1/cb", VOLTA])
+def test_volta_local_e_https_continuam_valendo(cli, uri):
+    assert cli.post("/ops/oauth/register", json={"client_name": "x", "redirect_uris": [uri]}).status_code == 201
+
+
+@pytest.mark.parametrize("troca", [{"code_challenge_method": "plain"}, {"response_type": "token"},
+                                   {"code_challenge": ""}])
+def test_post_direto_sem_as_exigencias_do_get_nao_gera_codigo(cli, troca):
+    cid = registrar(cli)
+    _, desafio = pkce()
+    r = _decide(cli, cid, desafio, **troca)
+    q = parse_qs(urlparse(r.headers["location"]).query) if r.status_code == 303 else {}
+    assert "code" not in q, troca
+
+
+def test_refresh_de_cliente_confidencial_exige_o_segredo(cli):
+    cid, seg = _registrar_confidencial(cli, "client_secret_post")
+    verificador, desafio = pkce()
+    codigo = autorizar(cli, cid, desafio)
+    cli.cookies.clear()
+    t = cli.post("/ops/oauth/token", data={
+        "grant_type": "authorization_code", "code": codigo, "redirect_uri": VOLTA,
+        "client_id": cid, "client_secret": seg, "code_verifier": verificador}).json()
+    sem = cli.post("/ops/oauth/token", data={
+        "grant_type": "refresh_token", "refresh_token": t["refresh_token"], "client_id": cid})
+    assert sem.status_code == 401 and sem.json()["error"] == "invalid_client"
+    com = cli.post("/ops/oauth/token", data={
+        "grant_type": "refresh_token", "refresh_token": t["refresh_token"], "client_id": cid,
+        "client_secret": seg})
+    assert com.status_code == 200, com.text
