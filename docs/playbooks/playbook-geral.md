@@ -1223,8 +1223,9 @@ Cada pessoa pode ligar o **próprio** Claude ao painel. O Claude passa a agir **
 
 1. Configurações › **Conectores** › **Adicionar conector personalizado**.
 2. Nome: `URACE Command Center`. URL: `https://ops.urace.us/ops/mcp`
-3. **Conectar**, entre com o **seu** usuário do painel, deixe marcado
-   **"Também operar o painel como você"** e clique em **Autorizar**.
+3. **Conectar**, entre com o **seu** usuário do painel, marque
+   **"Também operar o painel como você"** se quiser que ele opere (desde 21/10 a caixa vem desmarcada:
+   sem marcar, o acesso é só de leitura) e clique em **Autorizar**.
 
 **No terminal (Claude Code):**
 

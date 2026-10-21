@@ -144,8 +144,8 @@ _CABECALHO_IA = """# URACE Command Center — instruções para a IA
 ## Antes de tudo: conectar
 
 - **MCP (recomendado):** no Claude, Configurações › Conectores › Adicionar conector personalizado,
-  URL `https://ops.urace.us/ops/mcp`. Entre com o **seu** usuário do painel e deixe marcado
-  **"Também operar o painel como você"**. No terminal: `claude mcp add --transport http urace
+  URL `https://ops.urace.us/ops/mcp`. Entre com o **seu** usuário do painel e marque
+  **"Também operar o painel como você"** (vem desmarcada; sem marcar, só lê). No terminal: `claude mcp add --transport http urace
   https://ops.urace.us/ops/mcp` e depois `/mcp` › urace › Authenticate. Detalhe no guia
   "Conectar a sua IA", no fim deste arquivo.
 - **API:** chave criada por um administrador em Usuários › Chaves de API. Chave "só leitura" só lê;

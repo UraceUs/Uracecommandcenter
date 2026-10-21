@@ -52,8 +52,9 @@ o dono, na tela **Usuários**. Ninguém manda senha pelo chat.
 **No app do Claude (claude.ai, celular ou computador):**
 1. Configurações › **Conectores** › **Adicionar conector personalizado**.
 2. Nome: `URACE Command Center`. URL: `https://ops.urace.us/ops/mcp`
-3. Clique em **Conectar**, entre com o **seu** usuário do painel, deixe marcado
-   **"Também operar o painel como você"** e clique em **Autorizar**.
+3. Clique em **Conectar**, entre com o **seu** usuário do painel, marque
+   **"Também operar o painel como você"** se quiser que ele opere (desde 21/10 a caixa vem desmarcada)
+   e clique em **Autorizar**.
 
 **No terminal (Claude Code):**
 ```

@@ -13,8 +13,8 @@ O passo a passo também está no painel: **Equipe › Conectar o Claude**, com o
 1. Configurações › **Conectores** › **Adicionar conector personalizado**.
 2. Nome: **URACE Command Center**. URL: **só** o endereço `https://ops.urace.us/ops/mcp`.
    O campo não aceita o comando do terminal.
-3. **Conectar**: entre com o **seu** usuário do painel, deixe marcado **"Também operar o painel como
-   você"** e clique em **Autorizar**.
+3. **Conectar**: entre com o **seu** usuário do painel, marque **"Também operar o painel como
+   você"** (desde 21/10 ela vem desmarcada) e clique em **Autorizar**.
 
 Se a conta do Claude for **Team ou Enterprise**, o dono pode adicionar o conector nas configurações
 da **organização** (Conectores): ele aparece para todos os membros, e cada um ainda entra com o
@@ -30,7 +30,7 @@ Depois, dentro do Claude Code, digite `/mcp`, escolha **urace** e **Authenticate
 abre o login do Command Center:
 
 1. entre com o **seu** usuário do painel (o de sempre);
-2. na tela de autorização, deixe marcado **"Também operar o painel como você"**;
+2. na tela de autorização, marque **"Também operar o painel como você"** (vem desmarcada);
 3. clique em **Autorizar**.
 
 Pronto. O Claude passa a agir **como você**, com o **seu** papel. Sem a caixa marcada, o acesso
