@@ -25,6 +25,12 @@ Travas, todas em código (nenhuma depende do modelo):
   * "pare" / STOP: o robô confirma uma vez e nunca mais escreve para o contato;
   * sem follow-up automático nesta fase (SMS de follow-up é solicitação pela lei da Flórida, a FTSA).
 
+Ritmo (dono, 21/10: "fazer por loop, horário comercial e de hora em hora, porque não parece automação quando leva
+um tempinho para responder"): o robô não responde na hora. Uma volta por hora cheia, só no expediente de Orlando
+(`SDR_CANAL_LOTE_MIN` 60, `SDR_CANAL_HORARIO` 8-18, `SDR_CANAL_DIAS` 1-7 com 1 = segunda), responde de uma vez o SMS
+e o e-mail que esperam. O que chega à noite espera a primeira volta da manhã. `SDR_CANAL_LOTE_MIN=0` volta a
+responder na hora. STOP, HELP, eco e "a pessoa assumiu" continuam valendo na hora em que chegam.
+
 Teste nunca envia: `CC_DIALPAD_FAKE=<arquivo>` e `CC_EMAIL_FAKE` gravam em arquivo, e `CC_PONTE_FAKE` responde
 no lugar da ponte.
 """
@@ -37,6 +43,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, um
 
@@ -113,6 +120,60 @@ def pausa_horas():
         return max(1, int(cfg("SDR_CANAL_PAUSA_HORAS", "72")))
     except ValueError:
         return 72
+
+
+# ------------------------------------------------------------------ ritmo: de hora em hora, no expediente (dono, 21/10)
+FUSO = ZoneInfo("America/New_York")
+
+
+def _inteiro(nome, padrao, minimo=0):
+    try:
+        return max(minimo, int(cfg(nome, str(padrao))))
+    except ValueError:
+        return padrao
+
+
+def lote_min():
+    """De quantos em quantos minutos o robô responde (0 = na hora, como antes de 21/10)."""
+    return _inteiro("SDR_CANAL_LOTE_MIN", 60)
+
+
+def horario():
+    """(abre, fecha) em horas de Orlando: `SDR_CANAL_HORARIO=8-18` responde das 8h até a volta das 17h."""
+    m = re.fullmatch(r"\s*(\d{1,2})\s*-\s*(\d{1,2})\s*", cfg("SDR_CANAL_HORARIO", "8-18"))
+    if m and 0 <= int(m.group(1)) < int(m.group(2)) <= 24:
+        return int(m.group(1)), int(m.group(2))
+    return 8, 18
+
+
+def dias():
+    """Dias da semana do expediente, 1 = segunda … 7 = domingo (`SDR_CANAL_DIAS=1-5`, `1-6` ou `1,2,3`)."""
+    saida = set()
+    for parte in cfg("SDR_CANAL_DIAS", "1-7").split(","):
+        a, _, b = parte.strip().partition("-")
+        if a.isdigit() and (not b or b.isdigit()):
+            saida.update(range(int(a), int(b or a) + 1))
+    return {d for d in saida if 1 <= d <= 7} or set(range(1, 8))
+
+
+def no_expediente(quando=None):
+    local = (quando or datetime.now(timezone.utc)).astimezone(FUSO)
+    abre, fecha = horario()
+    return local.isoweekday() in dias() and abre <= local.hour < fecha
+
+
+def vez_do_lote(quando=None):
+    """A volta em que estamos (dia e hora cheia), ou None fora do expediente. Uma passada por volta."""
+    local = (quando or datetime.now(timezone.utc)).astimezone(FUSO)
+    if not lote_min() or not no_expediente(local):
+        return None
+    return local.strftime("%Y-%m-%d"), (local.hour * 60 + local.minute) // lote_min()
+
+
+def ritmo():
+    abre, fecha = horario()
+    return {"lote_min": lote_min(), "abre": abre, "fecha": fecha, "dias": sorted(dias()),
+            "no_expediente": no_expediente()}
 
 
 def _menos_minutos(m):
@@ -358,6 +419,7 @@ def sms_evento(con, ev, esperar=True):
         con.commit()
         return {"sms": "recebido", "robo": "STOP: nunca mais escreve para este número"}
     if _HELP.match(s["texto"]):
+        atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=s["id"])     # o lote não responde junto
         con.commit()
         return {"sms": "recebido", "robo": "HELP: o Dialpad responde com a mensagem de ajuda"}
     if _START.match(s["texto"]) and row.get("opt_out"):
@@ -366,10 +428,14 @@ def sms_evento(con, ev, esperar=True):
     con.commit()
     motivo = bloqueio(con, "sms", row, cliente=da_equipe(con, "sms", s["numero"]))
     if motivo:
+        # tratada: ligar o robô depois (ou abrir a lista) não faz o lote responder SMS velho
+        atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=s["id"])
         auditar(con, "sdr.canal.sms.sem_resposta", "system", entity_type="sdr_canal", entity_id=row["id"],
                 detail={"motivo": motivo})
         con.commit()
         return {"sms": "recebido", "robo": motivo}
+    if lote_min():
+        return {"sms": "recebido", "robo": "na fila: responde na próxima volta do expediente"}
     gatilho = um(con, "SELECT MAX(id) AS id FROM sdr_canal_mensagens WHERE canal='sms' AND contato=? AND por='lead'",
                  (row["contato"],))["id"]
     if not esperar:
@@ -456,6 +522,47 @@ def _responder_sms(con, contato_id, esperar):
     return {"robo": "respondeu", "rota": resposta.get("rota"), "baloes": len(baloes)}
 
 
+def fila_sms(con):
+    """Os contatos de SMS com mensagem do lead ainda sem resposta do robô, já quietos há `SDR_CANAL_ESPERA_MIN`
+    minutos (10: quem ainda está digitando às 8h58 fica para a volta seguinte) e de até `SDR_CANAL_FILA_HORAS`
+    (72: cobre o fim de semana)."""
+    espera = _inteiro("SDR_CANAL_ESPERA_MIN", 10)
+    return todos(con, """
+        SELECT c.id FROM sdr_canal_contatos c
+         WHERE c.canal='sms' AND COALESCE(c.opt_out,0)=0 AND COALESCE(c.precisa_gente,0)=0
+           AND (c.pausado_ate IS NULL OR c.pausado_ate <= ?)
+           AND (SELECT MAX(m.at) FROM sdr_canal_mensagens m WHERE m.canal='sms' AND m.contato=c.contato
+                 AND m.por='lead') BETWEEN ? AND ?
+           AND EXISTS (SELECT 1 FROM sdr_canal_mensagens m WHERE m.canal='sms' AND m.contato=c.contato AND m.por='lead'
+                 AND m.id > COALESCE((SELECT MAX(s.id) FROM sdr_canal_mensagens s WHERE s.canal='sms'
+                                       AND s.contato=c.contato AND s.direcao='saida'), 0))
+           AND COALESCE(c.ultima_tratada,'') <> COALESCE((SELECT m.external_id FROM sdr_canal_mensagens m
+                 WHERE m.canal='sms' AND m.contato=c.contato AND m.por='lead' ORDER BY m.id DESC LIMIT 1),'')
+         ORDER BY c.id""", (agora(), _menos_minutos(60 * _inteiro("SDR_CANAL_FILA_HORAS", 72, 1)),
+                            _menos_minutos(espera) if espera else agora()))
+
+
+def responder_fila_sms(con, esperar=True):
+    """A volta do SMS: responde, um contato por vez, o que espera na fila."""
+    if not ligado("sms"):
+        return {"sms": "desligado"}
+    feitos = []
+    for f in fila_sms(con):
+        row = um(con, "SELECT * FROM sdr_canal_contatos WHERE id=?", (f["id"],))
+        motivo = bloqueio(con, "sms", row, cliente=da_equipe(con, "sms", row["contato"]))
+        if motivo:
+            feitos.append({"id": row["id"], "robo": motivo})
+            continue
+        try:
+            feitos.append({"id": row["id"], **responder_sms(con, row["id"], esperar)})
+        except Exception as e:                              # noqa: BLE001 — um contato não para a volta
+            auditar(con, "sdr.canal.sms.falhou", "system", entity_type="sdr_canal", entity_id=row["id"],
+                    detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+            con.commit()
+            feitos.append({"id": row["id"], "robo": "falhou"})
+    return {"sms": "volta", "conversas": feitos}
+
+
 # ------------------------------------------------------------------ e-mail (support@)
 _AUTOMATICO = re.compile(r"(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?@|bounce|"
                          r"newsletter|marketing@|news@|info@.*\.(?:mailchimp|sendgrid))", re.I)
@@ -521,7 +628,7 @@ def _ler_caixa():
     if falso:
         return json.loads(Path(falso).read_text(encoding="utf-8"))
     from command_center.providers import chamar
-    r = chamar("gmail", "gmail_buscar", conta=CAIXA, consulta="newer_than:2d", so_inbox=True, maximo=25)
+    r = chamar("gmail", "gmail_buscar", conta=CAIXA, consulta="newer_than:4d", so_inbox=True, maximo=40)
     saida = []
     for t in r.get("threads", []):
         th = chamar("gmail", "mensagens_da_thread", conta=CAIXA, thread_id=t["thread_id"], limite=6000)
@@ -560,8 +667,8 @@ def ler_email(con):
             atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora(), thread_id=th.get("thread_id"))
         else:
             vista = um(con, "SELECT at FROM sdr_canal_mensagens WHERE canal='email' AND external_id=?", (ultima["message_id"],))
-            if vista and vista["at"] < _menos_minutos(30):
-                # visto há mais de 30 min e não respondido (canal desligado, fora da lista): ligar o robô não
+            if vista and vista["at"] < _menos_minutos(max(30, 2 * lote_min())):
+                # visto há mais de 30 min (duas voltas, com o lote) e não respondido (canal desligado, fora da lista): ligar o robô não
                 # dispara resposta para e-mail velho de uma vez
                 atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=ultima["message_id"])
                 con.commit()
@@ -650,28 +757,46 @@ def responder_formulario(con, oid, nome, email, assunto, mensagem):
     return True
 
 
-def laco_email():
-    """Lê a support@ a cada `SDR_CANAL_EMAIL_MIN` minutos (3 por padrão), antes da triagem arquivar."""
+def volta(con, esperar=True):
+    """Uma volta do robô nos dois canais (o e-mail primeiro: a leitura da caixa é a parte lenta)."""
+    saida = {}
+    for nome, passo in (("email", ler_email), ("sms", responder_fila_sms)):
+        if not ligado(nome) or (nome == "sms" and not lote_min()):
+            continue
+        try:
+            saida[nome] = passo(con) if nome == "email" else passo(con, esperar)
+        except Exception as e:                               # noqa: BLE001 — um canal não para o outro
+            try:
+                auditar(con, f"sdr.canal.{nome}.falhou", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+                con.commit()
+            except Exception:                                # noqa: BLE001
+                pass
+    return saida
+
+
+def laco_canais():
+    """O relógio do robô nos canais. Com o lote (padrão): uma volta por hora cheia, só no expediente de Orlando.
+    Com `SDR_CANAL_LOTE_MIN=0`: lê a support@ a cada `SDR_CANAL_EMAIL_MIN` minutos e o SMS responde na hora."""
     from command_center.db import conectar
     time.sleep(30)
+    ultima_volta, ultimo_email = None, 0.0
     while True:
-        if ligado("email"):
+        vez = vez_do_lote()
+        if lote_min():
+            rodar = vez is not None and vez != ultima_volta
+        else:
+            rodar = time.monotonic() - ultimo_email >= 60 * _inteiro("SDR_CANAL_EMAIL_MIN", 3, 1)
+        if rodar:
+            ultima_volta, ultimo_email = vez, time.monotonic()
             con = conectar()
             try:
-                ler_email(con)
-            except Exception as e:                           # noqa: BLE001
-                try:
-                    auditar(con, "sdr.canal.email.falhou", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
-                    con.commit()
-                except Exception:                            # noqa: BLE001
-                    pass
+                if lote_min():
+                    volta(con)
+                elif ligado("email"):
+                    volta(con)        # sem lote o SMS responde na hora (webhook); aqui só a support@ é lida
             finally:
                 con.close()
-        try:
-            minutos = max(1, int(cfg("SDR_CANAL_EMAIL_MIN", "3")))
-        except ValueError:
-            minutos = 3
-        time.sleep(60 * minutos)
+        time.sleep(30)
 
 
 # ------------------------------------------------------------------ painel
@@ -683,4 +808,4 @@ def resumo(con):
     return {"configuracao": {"arquivo": str(caminho), "existe": caminho.exists()},
             "sms": {"ligado": ligado("sms")}, "email": {"ligado": ligado("email"), "caixa": CAIXA_EMAIL},
             "nivel": nivel(), "lista_de_teste": bool(cfg("SDR_CANAL_SO_PARA")),
-            "pausa_horas": pausa_horas(), "contatos": contatos}
+            "pausa_horas": pausa_horas(), "ritmo": ritmo(), "contatos": contatos}

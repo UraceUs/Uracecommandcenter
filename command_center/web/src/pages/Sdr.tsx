@@ -92,6 +92,7 @@ interface CanalContato {
 interface Canais {
   configuracao: { arquivo: string; existe: boolean }; sms: { ligado: boolean }; email: { ligado: boolean; caixa: string }
   nivel: string; lista_de_teste: boolean; pausa_horas: number; contatos: CanalContato[]
+  ritmo?: { lote_min: number; abre: number; fecha: number; dias: number[]; no_expediente: boolean }
 }
 interface CanalMsg { direcao: 'entrada' | 'saida'; por: 'lead' | 'robo' | 'equipe'; texto: string; at: string }
 const quemCanal = (c: CanalContato) => c.nome || (c.canal === 'sms' ? `+${c.contato}` : c.contato)
@@ -117,6 +118,9 @@ function CanaisCard({ pode }: { pode: boolean }) {
         <Chip tone={d.data.sms.ligado ? 'ok' : 'neutral'} dot>{d.data.sms.ligado ? tr("SMS ligado") : tr("SMS desligado")}</Chip>
         <Chip tone={d.data.email.ligado ? 'ok' : 'neutral'} dot>{d.data.email.ligado ? tr("e-mail ligado ({0})", d.data.email.caixa) : tr("e-mail desligado")}</Chip>
         {d.data.lista_de_teste && <Chip tone="warn">{tr("só a lista de teste")}</Chip>}
+        {d.data.ritmo && (d.data.ritmo.lote_min
+          ? <Chip tone={d.data.ritmo.no_expediente ? 'ok' : 'neutral'} title={tr("Responde de uma vez o que espera, só no expediente de Orlando. O que chega fora dele espera a primeira volta do dia.")}>{tr("responde a cada {0} min, {1}h–{2}h", d.data.ritmo.lote_min, d.data.ritmo.abre, d.data.ritmo.fecha)}{d.data.ritmo.dias.length < 7 ? ` · ${tr("dias {0}", d.data.ritmo.dias.join(','))}` : ''}</Chip>
+          : <Chip tone="neutral">{tr("responde na hora")}</Chip>)}
         {!d.data.configuracao.existe && <Chip tone="neutral" title={d.data.configuracao.arquivo}>{tr("sem arquivo de configuração")}</Chip>}
       </div>
       <p className="small muted" style={{ margin: 0 }}>{tr("O mesmo robô do Instagram, só para lead. Quando alguém da equipe responde pelo Dialpad ou pela support@, ele sai da conversa por {0} h. O que ele passa para a equipe aparece em Precisa de atenção.", d.data.pausa_horas)}</p>

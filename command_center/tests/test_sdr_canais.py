@@ -32,8 +32,10 @@ def ambiente(monkeypatch):
     monkeypatch.setenv("DIALPAD_HOOK_KEY", CHAVE)
     monkeypatch.delenv("DIALPAD_HOOK_SECRET", raising=False)
     monkeypatch.setenv("SDR_CANAIS_ENV", "/nao/existe")
-    for k in ("SDR_CANAL_SMS", "SDR_CANAL_EMAIL", "SDR_CANAL_SO_PARA"):
+    for k in ("SDR_CANAL_SMS", "SDR_CANAL_EMAIL", "SDR_CANAL_SO_PARA", "SDR_CANAL_HORARIO", "SDR_CANAL_DIAS",
+              "SDR_CANAL_ESPERA_MIN", "SDR_CANAL_FILA_HORAS"):
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "0")       # na hora; os testes do lote (21/10) ligam o ritmo
     monkeypatch.setenv("CC_DIALPAD_FAKE", os.path.join(pasta, "sms.jsonl"))
     monkeypatch.setenv("CC_EMAIL_FAKE", os.path.join(pasta, "email.jsonl"))
     monkeypatch.setenv("CC_PONTE_FAKE", os.path.join(pasta, "ponte.json"))
@@ -492,3 +494,77 @@ def test_sms_sai_em_nome_do_escritorio(monkeypatch):
     corpo = pedidos[0]
     assert corpo["sender_group_type"] == "office" and corpo["sender_group_id"] == "6037417788784640"
     assert corpo["user_id"] == "4984574604558336" and "from_number" not in corpo and corpo["to_numbers"] == ["+14075550199"]
+
+
+# ------------------------------------------------------------------ ritmo: de hora em hora, no expediente (21/10)
+def _orlando(dia, hora, minuto=0):
+    from datetime import datetime
+    return datetime(2026, 10, dia, hora, minuto, tzinfo=sdr_canais.FUSO)     # 19/10/2026 é segunda
+
+
+def test_volta_so_no_expediente_e_uma_por_hora(monkeypatch):
+    monkeypatch.setenv("SDR_CANAIS_ENV", "/nao/existe")
+    for k in ("SDR_CANAL_LOTE_MIN", "SDR_CANAL_HORARIO", "SDR_CANAL_DIAS"):
+        monkeypatch.delenv(k, raising=False)
+    assert sdr_canais.lote_min() == 60 and sdr_canais.horario() == (8, 18)
+    assert sdr_canais.vez_do_lote(_orlando(21, 7, 59)) is None                 # antes de abrir
+    assert sdr_canais.vez_do_lote(_orlando(21, 8, 0)) == sdr_canais.vez_do_lote(_orlando(21, 8, 59))
+    assert sdr_canais.vez_do_lote(_orlando(21, 9, 0)) != sdr_canais.vez_do_lote(_orlando(21, 8, 59))
+    assert sdr_canais.vez_do_lote(_orlando(21, 17, 30)) is not None
+    assert sdr_canais.vez_do_lote(_orlando(21, 18, 0)) is None                 # fechou
+    assert sdr_canais.vez_do_lote(_orlando(25, 10)) is not None                # domingo: todos os dias por padrão
+    monkeypatch.setenv("SDR_CANAL_DIAS", "1-5")
+    assert sdr_canais.vez_do_lote(_orlando(25, 10)) is None and sdr_canais.vez_do_lote(_orlando(23, 10))
+    monkeypatch.setenv("SDR_CANAL_HORARIO", "lixo")
+    assert sdr_canais.horario() == (8, 18)
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "0")
+    assert sdr_canais.vez_do_lote(_orlando(21, 10)) is None
+
+
+def test_com_lote_o_sms_espera_a_volta_e_sai_numa_resposta_so(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "60")
+    monkeypatch.setenv("SDR_CANAL_ESPERA_MIN", "0")
+    monkeypatch.setattr(sdr_canais, "_intervalo", lambda t: 0)
+    con = ambiente["con"]
+    chamadas = []
+    original = sdr_canais.perguntar_ao_robo
+    monkeypatch.setattr(sdr_canais, "perguntar_ao_robo", lambda *a, **k: chamadas.append(a[2]) or original(*a, **k))
+    assert "fila" in sdr_canais.sms_evento(con, sms("Oi", sid="f-1"))["robo"]
+    sdr_canais.sms_evento(con, sms("quanto custa?", sid="f-2"))
+    assert enviados("sms") == [] and chamadas == []                          # nada na hora
+    r = sdr_canais.volta(con, esperar=False)
+    assert r["sms"]["conversas"][0]["robo"] == "respondeu"
+    assert chamadas == ["Oi\nquanto custa?"] and len(enviados("sms")) == 2
+    assert sdr_canais.volta(con, esperar=False)["sms"]["conversas"] == []     # a volta seguinte não repete
+
+
+def test_lote_deixa_para_a_volta_seguinte_quem_ainda_esta_escrevendo(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "60")
+    con = ambiente["con"]
+    sdr_canais.sms_evento(con, sms("Oi"))
+    assert sdr_canais.fila_sms(con) == []                                    # chegou agora (espera 10 min)
+    con.execute("UPDATE sdr_canal_mensagens SET at='2020-01-01T00:00:00.000Z'")
+    assert sdr_canais.fila_sms(con) == []                                    # velho demais (72 h)
+
+
+def test_lote_nao_responde_help_nem_o_que_chegou_bloqueado(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "60")
+    monkeypatch.setenv("SDR_CANAL_ESPERA_MIN", "0")
+    con = ambiente["con"]
+    sdr_canais.sms_evento(con, sms("HELP"))
+    monkeypatch.setenv("SDR_CANAL_SO_PARA", "(407) 555-0111")
+    sdr_canais.sms_evento(con, sms("Oi", numero="+14075550122", sid="s-2"))   # fora da lista
+    monkeypatch.delenv("SDR_CANAL_SO_PARA")                                  # abriu a lista depois
+    assert sdr_canais.fila_sms(con) == [] and enviados("sms") == []
+
+
+def test_lote_responde_o_email_na_volta(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "60")
+    caixa([thread()])
+    r = sdr_canais.volta(ambiente["con"], esperar=False)
+    assert r["email"]["conversas"][0]["robo"] == "respondeu" and len(enviados("email")) == 1
+    assert "sms" not in r                                                    # SMS desligado: nem passa
