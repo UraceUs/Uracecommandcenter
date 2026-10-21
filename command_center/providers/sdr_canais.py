@@ -644,6 +644,20 @@ def _ler_caixa():
     return saida
 
 
+def velho(data):
+    """O cabeçalho Date do e-mail tem mais de `SDR_CANAL_EMAIL_IDADE_H` horas (24)? Sem data legível: não é velho."""
+    from email.utils import parsedate_to_datetime
+    try:
+        quando = parsedate_to_datetime(data)
+    except (TypeError, ValueError, IndexError):
+        return False
+    if quando is None:
+        return False
+    if quando.tzinfo is None:
+        quando = quando.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - quando > timedelta(hours=_inteiro("SDR_CANAL_EMAIL_IDADE_H", 24, 1))
+
+
 def ler_email(con):
     """Uma passada na support@: responde o que for lead e ainda não foi respondido."""
     if not ligado("email"):
@@ -668,6 +682,13 @@ def ler_email(con):
         auto = automatico(remetente, ultima.get("cabecalhos"), ultima.get("marcadores"))
         cliente = da_equipe(con, "email", email)
         nova = guardar(con, "email", row["contato"], "entrada", "lead", sem_citacao(ultima.get("corpo")), ultima["message_id"])
+        if nova and velho(ultima.get("data")):
+            # e-mail de dias atrás que o robô nunca tinha visto (a lista de teste aberta, a busca maior): não
+            # responde do nada; fica com a equipe
+            atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora(), ultima_tratada=ultima["message_id"])
+            con.commit()
+            feitos.append({"para": email, "robo": "e-mail velho demais"})
+            continue
         if nova:
             atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora(), thread_id=th.get("thread_id"))
         else:

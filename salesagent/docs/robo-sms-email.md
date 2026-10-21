@@ -60,6 +60,7 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | `SDR_CANAL_DIAS` | 1-7 | dias do expediente (1 = segunda … 7 = domingo); `1-5` = só dias úteis, `1-6` = até sábado |
 | `SDR_CANAL_ESPERA_MIN` | 10 | SMS que chegou há menos que isso fica para a volta seguinte (a pessoa ainda está escrevendo) |
 | `SDR_CANAL_FILA_HORAS` | 72 | SMS mais velho que isso não é respondido pela volta (cobre o fim de semana) |
+| `SDR_CANAL_EMAIL_IDADE_H` | 24 | e-mail mais velho que isso (cabeçalho Date) que o robô nunca viu não é respondido: fica com a equipe |
 | `SDR_CANAL_EMAIL_MIN` | 3 | só com `SDR_CANAL_LOTE_MIN=0`: de quantos em quantos minutos ele lê a support@ |
 | `SDR_CANAL_RAJADA_SEG` | 8 | só com `SDR_CANAL_LOTE_MIN=0`: quanto ele espera mensagens seguidas no SMS antes de responder |
 
