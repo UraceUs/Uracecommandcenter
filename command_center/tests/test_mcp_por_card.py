@@ -149,3 +149,27 @@ def test_instrucoes_falam_da_consulta_por_card():
     assert "Comece por urace_resumo" in texto
     for nome in FERRAMENTAS:
         assert nome in texto
+
+
+# ------------------------------------------- cada linha diz de que card é (#372)
+@pytest.mark.parametrize("nome", FERRAMENTAS)
+def test_cada_linha_traz_o_client_id_do_card_e_quando_mudou(banco, nome):
+    """Dono, 21/10 (validação do Mio): "como verificar que todas as linhas pertencem ao card
+    solicitado". Cada linha traz o card que o banco ligou a ela; quem lê confere uma por uma."""
+    for card in (banco["alfa"], banco["bravo"]):
+        d = dado(banco, nome, {"client_id": card, "limit": 100})
+        linhas = d[d["tipo"]]
+        assert linhas and len(linhas) == d["total"]
+        assert all(x["client_id"] == card for x in linhas), linhas
+        assert all("atualizado_em" in x for x in linhas)
+        assert all(x["atualizado_em"] for x in linhas if x["fonte"] != "invoice_qbo")
+
+
+def test_a_versao_do_servidor_e_o_commit_implantado():
+    """O ChatGPT guarda o catálogo; com a versão fixa em 1.0.0 nada dizia que ele mudou (#372)."""
+    r = mcp_http.tratar({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}, None,
+                        {"somente_leitura": True})
+    versao = r["result"]["serverInfo"]["version"]
+    assert versao != "1.0.0"
+    if mcp_http.COMMIT:
+        assert versao.endswith("+" + mcp_http.COMMIT)
