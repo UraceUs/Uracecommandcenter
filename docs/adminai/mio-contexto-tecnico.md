@@ -31,8 +31,8 @@ As cinco em questão:
 | `urace_cliente_reservas` | `client_id` | `client_id` (número do card) · `limit` (padrão 20, teto 100) · `offset` (padrão 0) |
 | `urace_cliente_pedidos` | `client_id` | idem |
 | `urace_cliente_pagamentos` | `client_id` | idem |
-| `urace_invoices` | — | `client_id` (opcional, só as do card) · `status` (`string`: paid, sent, overdue) · `limite` (padrão 80, teto 300) |
-| `urace_corridas` | — | `client_id` (opcional: só as corridas para que o card foi convidado, com a situação do convite) · `limite` (padrão 40, teto 200) |
+| `urace_invoices` | — | `client_id` (opcional, só as do card) · `status` (`string`: paid, sent, overdue) · `limit` (padrão 80, teto 300) · `offset` · `limite` (nome antigo de `limit`). Devolve `total`, `limit`, `offset` e, por linha, `client_id` e `atualizado_em` (#374) |
+| `urace_corridas` | — | `client_id` (opcional: só as corridas para que o card foi convidado, com a situação do convite) · `limit` (padrão 40, teto 200) · `offset` · `limite` (nome antigo). Devolve `total`, `limit`, `offset`; com card, cada linha traz `client_id` (#374) |
 
 Todos os schemas têm `additionalProperties: false`.
 
@@ -53,6 +53,10 @@ O que já se sabe, sem presumir:
 
 **Critério de pronto:** numa conversa nova, o catálogo lista `urace_cliente_reservas`,
 `urace_cliente_pedidos` e `urace_cliente_pagamentos`, e `urace_invoices` declara `client_id`.
+
+**Versão e sincronia sem depender do ChatGPT (#374):** `urace_resumo` traz:
+- `servidor`: `nome`, `versao` e `commit`;
+- `sincronia`: para cada integração, `status`, `ultima_ok`, `ultima_tentativa`, `erros_seguidos` e `ultimo_erro` (até 200 caracteres).
 
 ## 4. De onde vem cada dado
 

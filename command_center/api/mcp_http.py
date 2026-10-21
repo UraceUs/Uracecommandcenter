@@ -124,8 +124,13 @@ def _f_cliente(con, id=None, **_):
             "estoque_dele": estoque.do_cliente(con, id)}
 
 
-def _f_invoices(con, status=None, limite=80, client_id=None, **_):
-    sql = "SELECT id, client_id, doc_number, amount, balance, status, issued_on, due_on FROM invoices"
+def _pagina(limit, limite, offset, padrao, teto):
+    """#374: `limit`/`offset` como nas consultas por card; `limite` (o nome antigo) continua valendo."""
+    lim = limit if limit is not None else limite
+    return max(1, min(int(lim or padrao), teto)), max(0, int(offset or 0))
+
+
+def _f_invoices(con, status=None, limite=None, client_id=None, limit=None, offset=0, **_):
     onde, p = [], []
     if status:
         onde.append("UPPER(status)=UPPER(?)")
@@ -133,26 +138,36 @@ def _f_invoices(con, status=None, limite=80, client_id=None, **_):
     if client_id is not None:                    # #363: só as daquele card
         onde.append("client_id=?")
         p.append(int(client_id))
-    if onde:
-        sql += " WHERE " + " AND ".join(onde)
-    sql += " ORDER BY COALESCE(issued_on,'') DESC LIMIT ?"
-    p.append(min(int(limite or 80), 300))
-    linhas = [dict(i) for i in todos(con, sql, tuple(p))]
-    aberto = sum(float(i["balance"] or 0) for i in linhas)
-    return {"invoices": linhas, "total_em_aberto": round(aberto, 2)}
+    filtro = (" WHERE " + " AND ".join(onde)) if onde else ""
+    lim, desl = _pagina(limit, limite, offset, 80, 300)
+    total = um(con, f"SELECT COUNT(*) n, COALESCE(SUM(balance),0) aberto FROM invoices{filtro}", tuple(p))
+    linhas = [dict(i) for i in todos(
+        con, "SELECT id, client_id, doc_number, amount, balance, status, issued_on, due_on, synced_at AS atualizado_em "
+             f"FROM invoices{filtro} ORDER BY COALESCE(issued_on,'') DESC, id DESC LIMIT ? OFFSET ?",
+        (*p, lim, desl))]
+    return {"invoices": linhas, "total": total["n"], "limit": lim, "offset": desl,
+            "total_em_aberto": round(float(total["aberto"] or 0), 2),
+            "fonte": "espelho do QuickBooks (sincronia de 15 min); invoice sem client_id não foi ligada a card"}
 
 
-def _f_corridas(con, limite=40, client_id=None, **_):
+def _f_corridas(con, limite=None, client_id=None, limit=None, offset=0, **_):
+    lim, desl = _pagina(limit, limite, offset, 40, 200)
     if client_id is not None:                    # #363: as corridas para que aquele card foi convidado
-        return {"corridas": [dict(x) for x in todos(
-            con, "SELECT r.id, r.name, r.series, r.track, r.date_start, r.date_end, ri.status AS convite "
-                 "FROM race_invites ri JOIN races r ON r.id=ri.race_id WHERE ri.client_id=? "
-                 "ORDER BY COALESCE(r.date_start,'') DESC LIMIT ?",
-            (int(client_id), min(int(limite or 40), 200)))]}
-    return {"corridas": [dict(x) for x in todos(
+        cid = int(client_id)
+        total = um(con, "SELECT COUNT(*) n FROM race_invites ri JOIN races r ON r.id=ri.race_id WHERE ri.client_id=?",
+                   (cid,))["n"]
+        linhas = [dict(x) for x in todos(
+            con, "SELECT r.id, ri.client_id, r.name, r.series, r.track, r.date_start, r.date_end, ri.status AS convite, "
+                 "ri.invited_at AS atualizado_em FROM race_invites ri JOIN races r ON r.id=ri.race_id "
+                 "WHERE ri.client_id=? ORDER BY COALESCE(r.date_start,'') DESC, r.id DESC LIMIT ? OFFSET ?",
+            (cid, lim, desl))]
+        return {"client_id": cid, "corridas": linhas, "total": total, "limit": lim, "offset": desl}
+    total = um(con, "SELECT COUNT(*) n FROM races WHERE COALESCE(active,1)=1")["n"]
+    linhas = [dict(x) for x in todos(
         con, "SELECT id, name, series, track, date_start, date_end FROM races "
-             "WHERE COALESCE(active,1)=1 ORDER BY COALESCE(date_start,'') DESC LIMIT ?",
-        (min(int(limite or 40), 200),))]}
+             "WHERE COALESCE(active,1)=1 ORDER BY COALESCE(date_start,'') DESC, id DESC LIMIT ? OFFSET ?",
+        (lim, desl))]
+    return {"corridas": linhas, "total": total, "limit": lim, "offset": desl}
 
 
 # ------------------------------------------------------- consultas por card (#363)
@@ -285,6 +300,13 @@ def _f_resumo(con, **_):
         "itens_nunca_contados": len(estoque.nunca_contados(con)),
         "catalogo_fornecedor": n("supplier_products"),
         "precisa_de_atencao": len(atencao.coletar(con)),
+        # #374: o Mio (ChatGPT) não vê o `initialize`; a versão e a última sincronia vêm aqui
+        "servidor": {"nome": NOME, "versao": VERSAO, "commit": COMMIT},
+        "sincronia": [{"sistema": x["system"], "status": x["status"], "ultima_ok": x["last_success_at"],
+                       "ultima_tentativa": x["last_attempt_at"], "erros_seguidos": x["error_count"],
+                       "ultimo_erro": (x["last_error"] or "")[:200] or None}
+                      for x in todos(con, "SELECT system, status, last_success_at, last_attempt_at, error_count, "
+                                          "last_error FROM integrations ORDER BY system")],
     }
 
 
@@ -362,7 +384,8 @@ _POR_CARD = {
 FERRAMENTAS = {
     "urace_resumo": (
         "Panorama do negócio em números: clientes, serviços, invoices em aberto, waivers, "
-        "corridas, estoque e quantos itens precisam de reposição. É a melhor primeira pergunta.",
+        "corridas, estoque e quantos itens precisam de reposição, mais a versão do servidor (commit) e a "
+        "última sincronia de cada integração. É a melhor primeira pergunta.",
         {}, [], _f_resumo),
     "urace_atencao": (
         "O que precisa de ação humana hoje, já priorizado: waiver parada, invoice vencida, "
@@ -387,12 +410,16 @@ FERRAMENTAS = {
         "Invoices espelhadas do QuickBooks: quem deve, quanto e desde quando.",
         {"status": {"type": "string", "description": "opcional: paid, sent, overdue"},
          "client_id": {"type": "integer", "description": "opcional: só as do card (número do cliente)"},
-         "limite": {"type": "integer"}}, [], _f_invoices),
+         "limit": {"type": "integer", "description": "quantas linhas (padrão 80, teto 300)"},
+         "offset": {"type": "integer", "description": "quantas pular, para a próxima página (padrão 0)"},
+         "limite": {"type": "integer", "description": "nome antigo de limit"}}, [], _f_invoices),
     "urace_corridas": (
         "Calendário de corridas da equipe. Com client_id, só as corridas para que aquele card foi "
         "convidado, com a situação do convite.",
-        {"limite": {"type": "integer"},
-         "client_id": {"type": "integer", "description": "opcional: número do card"}}, [], _f_corridas),
+        {"client_id": {"type": "integer", "description": "opcional: número do card"},
+         "limit": {"type": "integer", "description": "quantas linhas (padrão 40, teto 200)"},
+         "offset": {"type": "integer", "description": "quantas pular, para a próxima página (padrão 0)"},
+         "limite": {"type": "integer", "description": "nome antigo de limit"}}, [], _f_corridas),
     # -------------------------------------------------- consultas por card (#363)
     "urace_cliente_reservas": (
         "Reservas de UM card: agendamentos do site e do portal (com a cobrança do agendamento), "
