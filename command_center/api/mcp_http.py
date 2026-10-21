@@ -40,7 +40,23 @@ r = APIRouter(prefix="/ops/mcp", tags=["mcp"])
 # Versão do protocolo que sabemos falar. Cliente que pedir outra recebe esta de volta —
 # é o que a especificação manda, e é melhor que recusar por diferença de data.
 PROTOCOLO = "2025-06-18"
-NOME, VERSAO = "urace-command-center", "1.0.0"
+NOME = "urace-command-center"
+
+
+def _commit():
+    """O commit implantado (#372). Com a versão fixa, o cliente (o ChatGPT guarda o catálogo) não
+    tinha como saber que as ferramentas mudaram; com o commit, cada deploy é uma versão nova."""
+    import subprocess
+    from pathlib import Path
+    try:
+        return subprocess.run(["git", "-C", str(Path(__file__).resolve().parents[2]), "rev-parse", "--short", "HEAD"],
+                              capture_output=True, text=True, timeout=5).stdout.strip() or None
+    except Exception:                                # noqa: BLE001
+        return None
+
+
+COMMIT = _commit()
+VERSAO = f"1.1.0+{COMMIT}" if COMMIT else "1.1.0"
 
 
 # ---------------------------------------------------------------- ferramentas
@@ -144,53 +160,56 @@ def _f_corridas(con, limite=40, client_id=None, **_):
 # dados de outros clientes durante um diagnóstico". Cada fonte junta pelo `client_id` gravado na
 # linha (ou pela conta/piloto do portal ligados ao card, a mesma regra do painel). NUNCA por nome ou
 # e-mail: o e-mail de um pedido pode ser de outra pessoa, e "parecido" traz outro cliente.
-# Colunas comuns, na ordem: fonte, id, data, descricao, status, valor, saldo, documento, pago_em.
+# Colunas comuns, na ordem: fonte, id, data, descricao, status, valor, saldo, documento, pago_em,
+# client_id, atualizado_em.
 def _reservas():
     from command_center.providers.contrato import CARD_DO_AGENDAMENTO
     return [
         ("agendamento_site",
          "SELECT 'agendamento_site', b.id, b.date, COALESCE(b.service_name, 'Site booking') || ' (' || b.period || ')', "
-         "b.status, b.price, NULL, b.invoice_doc, b.paid_at FROM bookings b "
+         "b.status, b.price, NULL, b.invoice_doc, b.paid_at, " + CARD_DO_AGENDAMENTO + ", COALESCE(b.updated_at, b.created_at) FROM bookings b "
          "JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id "
          f"WHERE {CARD_DO_AGENDAMENTO}=?"),
         ("corrida",
          "SELECT 'corrida', ri.id, r.date_start, r.name || COALESCE(' - ' || r.track, ''), ri.status, "
-         "NULL, NULL, NULL, NULL FROM race_invites ri JOIN races r ON r.id=ri.race_id WHERE ri.client_id=?"),
+         "NULL, NULL, NULL, NULL, ri.client_id, ri.invited_at FROM race_invites ri JOIN races r ON r.id=ri.race_id WHERE ri.client_id=?"),
         ("sessao_do_carrinho",       # sessão paga no carrinho que ainda não virou agendamento (ex.: sem vaga)
          "SELECT 'sessao_do_carrinho', i.id, i.date, COALESCE(i.service_name, i.name), i.status, i.amount, "
-         "NULL, NULL, NULL FROM store_order_items i WHERE i.kind='sessao' AND i.booking_id IS NULL AND i.client_id=?"),
+         "NULL, NULL, NULL, i.client_id, i.created_at FROM store_order_items i WHERE i.kind='sessao' AND i.booking_id IS NULL AND i.client_id=?"),
     ]
 
 
 _PEDIDOS = [
     ("loja",
-     "SELECT 'loja', id, created_at, product_name, status, amount, NULL, qbo_receipt_doc, paid_at "
-     "FROM store_orders WHERE client_id=?"),
+     "SELECT 'loja', id, created_at, product_name, status, amount, NULL, qbo_receipt_doc, paid_at, client_id, "
+     "COALESCE(updated_at, created_at) FROM store_orders WHERE client_id=?"),
     ("plano",
      "SELECT 'plano', id, created_at, service_name || ' x ' || months || ' meses', status, "
-     "COALESCE(invoice_total, price * months), NULL, invoice_doc, paid_at FROM plan_orders WHERE client_id=?"),
+     "COALESCE(invoice_total, price * months), NULL, invoice_doc, paid_at, client_id, "
+     "COALESCE(updated_at, created_at) FROM plan_orders WHERE client_id=?"),
     ("suit",
      "SELECT 'suit', id, COALESCE(order_date, created_at), title, "
-     "CASE WHEN discarded_at IS NOT NULL THEN 'descartado' ELSE status END, NULL, NULL, site_order, paid_at "
-     "FROM suit_orders WHERE client_id=?"),
+     "CASE WHEN discarded_at IS NOT NULL THEN 'descartado' ELSE status END, NULL, NULL, site_order, paid_at, client_id, "
+     "COALESCE(updated_at, created_at) FROM suit_orders WHERE client_id=?"),
 ]
 
 _PAGAMENTOS = [
     ("invoice_qbo",
-     "SELECT 'invoice_qbo', id, issued_on, 'Invoice QuickBooks', status, amount, balance, doc_number, NULL "
+     "SELECT 'invoice_qbo', id, issued_on, 'Invoice QuickBooks', status, amount, balance, doc_number, NULL, client_id, synced_at "
      "FROM invoices WHERE client_id=?"),
     ("mensalidade",
      "SELECT 'mensalidade', id, send_at, COALESCE(description, 'Mensalidade ' || month), status, amount, NULL, "
-     "doc_number, sent_at FROM monthly_invoices WHERE client_id=?"),
+     "doc_number, sent_at, client_id, COALESCE(updated_at, created_at) FROM monthly_invoices WHERE client_id=?"),
     ("invoice_pecas",
      "SELECT 'invoice_pecas', id, service_date, 'Peças do dia', status, total, "
-     "CASE WHEN paid_at IS NULL THEN total END, doc_number, paid_at FROM parts_invoices WHERE client_id=?"),
+     "CASE WHEN paid_at IS NULL THEN total END, doc_number, paid_at, client_id, "
+     "COALESCE(qbo_synced_at, sent_at, created_at) FROM parts_invoices WHERE client_id=?"),
     ("stripe",
      "SELECT 'stripe', id, COALESCE(paid_at, created_at), product_name, status, COALESCE(amount_paid, amount), "
-     "NULL, qbo_receipt_doc, paid_at FROM store_orders WHERE stripe_session_id IS NOT NULL AND client_id=?"),
+     "NULL, qbo_receipt_doc, paid_at, client_id, COALESCE(updated_at, created_at) FROM store_orders WHERE stripe_session_id IS NOT NULL AND client_id=?"),
     ("deposito_reembolso",
      "SELECT 'deposito_reembolso', d.id, d.created_at, 'Reembolso do security deposit', d.status, d.amount, "
-     "NULL, d.stripe_refund_id, d.done_at FROM store_deposit_refunds d JOIN store_orders o ON o.id=d.order_id "
+     "NULL, d.stripe_refund_id, d.done_at, o.client_id, COALESCE(d.done_at, d.created_at) FROM store_deposit_refunds d JOIN store_orders o ON o.id=d.order_id "
      "WHERE o.client_id=?"),
 ]
 
@@ -203,7 +222,10 @@ _FORA = {
                    "client_events": "sem dado novo: repete o pagamento do pedido (fonte stripe)"},
 }
 
-_COLUNAS = ("fonte", "id", "data", "descricao", "status", "valor", "saldo", "documento", "pago_em")
+# client_id: o card que o banco ligou à linha (o mesmo do filtro), para conferir linha a linha (#372).
+# atualizado_em: a última mudança da linha no painel (no espelho do QuickBooks, a última sincronia).
+_COLUNAS = ("fonte", "id", "data", "descricao", "status", "valor", "saldo", "documento", "pago_em",
+            "client_id", "atualizado_em")
 
 
 def _por_card(con, tipo, partes, client_id=None, limit=20, offset=0):
@@ -578,7 +600,7 @@ def rota_mcp_get(u=Depends(auth.exige("VIEWER"))):
     é perguntado — não envia nada por conta própria, e dizer isso é melhor que abrir um
     canal que nunca manda nada."""
     return Response(json.dumps({"ok": True, "transporte": "streamable-http (só POST)",
-                                "servidor": NOME, "versao": VERSAO,
+                                "servidor": NOME, "versao": VERSAO, "commit": COMMIT,
                                 "ferramentas": len(FERRAMENTAS), "somente_leitura": bool(u.get("somente_leitura", True))},
                                ensure_ascii=False),
                     media_type="application/json", status_code=200)
