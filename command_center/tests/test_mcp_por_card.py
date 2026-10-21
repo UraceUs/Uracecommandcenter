@@ -173,3 +173,25 @@ def test_a_versao_do_servidor_e_o_commit_implantado():
     assert versao != "1.0.0"
     if mcp_http.COMMIT:
         assert versao.endswith("+" + mcp_http.COMMIT)
+
+
+# ------------------------------- invoices e corridas paginadas; resumo com versão e sincronia (#374)
+def test_invoices_e_corridas_paginam_e_dizem_o_card_de_cada_linha(banco):
+    """Validação do Mio, 21/10: "Invoices e corridas: listas vazias, sem total/limit/offset"."""
+    for card in (banco["alfa"], banco["bravo"]):
+        inv = dado(banco, "urace_invoices", {"client_id": card})
+        assert (inv["total"], inv["limit"], inv["offset"]) == (1, 80, 0)
+        assert all(i["client_id"] == card for i in inv["invoices"])
+        cor = dado(banco, "urace_corridas", {"client_id": card})
+        assert (cor["client_id"], cor["total"], cor["offset"]) == (card, 1, 0)
+        assert all(x["client_id"] == card for x in cor["corridas"])
+    pag = dado(banco, "urace_invoices", {"limit": 1, "offset": 1})
+    assert pag["total"] == 2 and len(pag["invoices"]) == 1 and pag["limit"] == 1
+    assert dado(banco, "urace_corridas", {"limite": 1})["limit"] == 1, "o nome antigo continua valendo"
+
+
+def test_resumo_traz_a_versao_do_servidor_e_a_ultima_sincronia(banco):
+    r = dado(banco, "urace_resumo", {})
+    assert r["servidor"]["versao"] == mcp_http.VERSAO and "commit" in r["servidor"]
+    assert isinstance(r["sincronia"], list)
+    assert all({"sistema", "status", "ultima_ok", "ultima_tentativa"} <= set(x) for x in r["sincronia"])
