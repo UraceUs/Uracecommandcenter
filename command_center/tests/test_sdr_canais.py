@@ -569,3 +569,20 @@ def test_lote_responde_o_email_na_volta(ambiente, monkeypatch):
     r = sdr_canais.volta(ambiente["con"], esperar=False)
     assert r["email"]["conversas"][0]["robo"] == "respondeu" and len(enviados("email")) == 1
     assert "sms" not in r                                                    # SMS desligado: nem passa
+
+
+def test_email_de_dias_atras_o_robo_nao_responde(ambiente, monkeypatch):
+    """Lista de teste aberta para todo lead: e-mail de dias atrás que o robô nunca viu não ganha resposta do nada."""
+    from email.utils import format_datetime
+    from datetime import datetime, timedelta, timezone
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    velho = thread()
+    velho["mensagens"][-1]["data"] = format_datetime(datetime.now(timezone.utc) - timedelta(days=3))
+    novo = thread(tid="t-2", de="Bia <bia@example.com>", mid="m-2")
+    novo["mensagens"][-1]["data"] = format_datetime(datetime.now(timezone.utc) - timedelta(hours=2))
+    caixa([velho, novo])
+    r = sdr_canais.ler_email(ambiente["con"])
+    assert [c["robo"] for c in r["conversas"]] == ["e-mail velho demais", "respondeu"]
+    assert [e["to"] for e in enviados("email")] == ["bia@example.com"]
+    assert sdr_canais.ler_email(ambiente["con"])["conversas"] == []        # a volta seguinte não volta nele
+    assert not sdr_canais.velho("lixo") and not sdr_canais.velho(None)
