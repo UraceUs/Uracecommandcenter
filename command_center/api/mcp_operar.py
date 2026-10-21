@@ -14,14 +14,18 @@ nada escrito de novo aqui:
 - a trava de leitura: token sem o escopo de operar continua só lendo.
 
 O que vai para o cliente ou mexe em dinheiro pede `confirmar: true`: a primeira chamada
-devolve o que vai acontecer, e só a segunda faz. O resto do painel (login, chaves, área do
+devolve o que vai acontecer, e só a segunda faz. #378: a primeira chamada também devolve um código
+de `aprovacao` amarrado àquele conteúdo; a segunda só executa com ele, e repetir não executa de novo. O resto do painel (login, chaves, área do
 cliente) fica fora, porque não é operação de equipe.
 """
 import asyncio
+import hashlib
 import inspect
 import json
 import re
+import secrets
 import sys
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
@@ -153,7 +157,82 @@ def operacoes(quem, busca=None, limite=60):
                          "O que tem confirma=true precisa de confirmar=true — antes disso só mostra o que vai fazer."}
 
 
-def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=False):
+APROVACAO_VALE_MIN = 15
+
+
+def _agora():
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def _hash(texto):
+    return hashlib.sha256(texto.encode()).hexdigest()
+
+
+def _conteudo(metodo, caminho, corpo, consulta):
+    """O que foi mostrado à pessoa, numa forma só: mudar uma vírgula do corpo muda o hash."""
+    return _hash(json.dumps({"metodo": metodo, "caminho": caminho, "corpo": corpo, "consulta": consulta},
+                            sort_keys=True, ensure_ascii=False, default=str))
+
+
+def _nova_aprovacao(quem, metodo, caminho, corpo, consulta):
+    codigo = "apr_" + secrets.token_urlsafe(18)
+    agora = datetime.now(timezone.utc)
+    expira = (agora + timedelta(minutes=APROVACAO_VALE_MIN)).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    con = conectar()
+    try:
+        con.execute("INSERT INTO mcp_aprovacoes (codigo_hash, user_id, conteudo_hash, resumo, criado_em, expira_em) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (_hash(codigo), quem.get("id"), _conteudo(metodo, caminho, corpo, consulta),
+                     json.dumps({"metodo": metodo, "caminho": caminho}), _agora(), expira))
+        con.commit()
+    finally:
+        con.close()
+    return codigo, expira
+
+
+def _usar_aprovacao(quem, codigo, metodo, caminho, corpo, consulta):
+    """Confere o código e o marca como usado ANTES de executar (dois pedidos ao mesmo tempo: só um
+    passa). Devolve None para executar, ou o resultado guardado se o código já foi usado."""
+    if not codigo:
+        raise ValueError("falta o código de aprovacao: chame primeiro sem confirmar, mostre a prévia à "
+                         "pessoa e repita com confirmar=true e o código que veio na prévia")
+    con = conectar()
+    try:
+        a = con.execute("SELECT * FROM mcp_aprovacoes WHERE codigo_hash=?", (_hash(str(codigo)),)).fetchone()
+        if not a or a["user_id"] != quem.get("id"):
+            raise ValueError("código de aprovacao desconhecido: peça a prévia de novo")
+        if a["conteudo_hash"] != _conteudo(metodo, caminho, corpo, consulta):
+            raise ValueError("o pedido mudou depois da prévia (destinatário, valor ou caminho): a aprovação "
+                             "não vale para ele. Peça uma prévia nova e mostre à pessoa")
+        if a["usado_em"]:
+            guardada = json.loads(a["resposta"]) if a["resposta"] else None
+            return {"status": a["status"], "ok": bool(a["status"]) and 200 <= a["status"] < 300,
+                    "resposta": guardada, "repetido": True,
+                    "aviso": "esta aprovação já foi usada; nada foi executado de novo"}
+        if a["expira_em"] < _agora():
+            raise ValueError(f"a aprovação venceu ({APROVACAO_VALE_MIN} min): peça uma prévia nova")
+        marcou = con.execute("UPDATE mcp_aprovacoes SET usado_em=? WHERE codigo_hash=? AND usado_em IS NULL",
+                             (_agora(), a["codigo_hash"])).rowcount
+        con.commit()
+        if not marcou:
+            return {"status": None, "ok": False, "resposta": None, "repetido": True,
+                    "aviso": "esta aprovação já está sendo usada por outro pedido; nada foi executado de novo"}
+        return None
+    finally:
+        con.close()
+
+
+def _guardar_resultado(codigo, status, resposta):
+    con = conectar()
+    try:
+        con.execute("UPDATE mcp_aprovacoes SET status=?, resposta=? WHERE codigo_hash=?",
+                    (status, json.dumps(resposta, ensure_ascii=False, default=str)[:20000], _hash(str(codigo))))
+        con.commit()
+    finally:
+        con.close()
+
+
+def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=False, aprovacao=None):
     """Chama a rota do painel por dentro, como a pessoa. Devolve {status, resposta}."""
     metodo = str(metodo or "").upper()
     if metodo not in METODOS:
@@ -175,18 +254,28 @@ def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=Fals
     if not pode(quem, op["papel"]):
         raise ValueError(f"isto é do papel {op['papel']} ou acima; você é {quem.get('role')}")
     if op["confirma"] and not confirmar:
+        codigo, expira = _nova_aprovacao(quem, metodo, caminho, corpo, consulta)
         return {"precisa_confirmar": True, "vai_fazer": {"metodo": metodo, "caminho": caminho, "corpo": corpo,
                                                           "consulta": consulta},
-                "descricao": op["descricao"],
+                "descricao": op["descricao"], "aprovacao": codigo, "aprovacao_expira_em": expira,
                 "aviso": "isto vai para fora (cliente, QuickBooks, DocuSign, e-mail, Kommo ou Asana) ou cobra. "
-                         "Mostre à pessoa o que vai acontecer e chame de novo com confirmar=true."}
+                         "Mostre à pessoa o que vai acontecer e, com o sim dela, chame de novo com o MESMO "
+                         "pedido, confirmar=true e este código de aprovacao (vale "
+                         f"{APROVACAO_VALE_MIN} min, uma vez, só para este conteúdo)."}
+    if op["confirma"]:
+        repetido = _usar_aprovacao(quem, aprovacao, metodo, caminho, corpo, consulta)
+        if repetido:
+            return repetido
     status, resposta = _requisicao(ctx, metodo, caminho, corpo, consulta)
+    if op["confirma"]:
+        _guardar_resultado(aprovacao, status, resposta)
     if metodo != "GET":
         con = conectar()
         try:
             auditar(con, "mcp.call", f"user:{quem.get('id')}", user_id=quem.get("id"), entity_type="mcp",
                     detail={"metodo": metodo, "caminho": caminho, "status": status, "via": quem.get("via"),
-                            "cliente_oauth": quem.get("client_id"), "confirmado": bool(confirmar)})
+                            "cliente_oauth": quem.get("client_id"), "confirmado": bool(confirmar),
+                            "aprovacao": _hash(str(aprovacao))[:12] if op["confirma"] else None})
             con.commit()
         finally:
             con.close()

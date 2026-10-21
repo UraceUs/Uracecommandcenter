@@ -1274,8 +1274,8 @@ Só os seus; token e segredo nunca aparecem. O `urace_operacoes` devolve o mesmo
 O que vai para o cliente ou cobra (invoice, waiver, depósito, e-mail, QuickBooks, DocuSign, Asana,
 Kommo — inclusive o chat do Kommo em `/crm/…`: responder, anotar, etapa, tags —, agendamento do
 site) **não acontece na primeira chamada**. O painel devolve `precisa_confirmar`
-com o que vai fazer. O Claude mostra para você e só repete com `confirmar: true` depois do seu
-"pode mandar".
+com o que vai fazer e um código de `aprovacao`. O Claude mostra para você e só repete com
+`confirmar: true` e esse código depois do seu "pode mandar". A prévia traz um código de `aprovacao` (#378): ele vale só para aquele pedido exato, por 15 min e uma vez. Mudou destinatário, valor ou caminho, o código não serve; repetir a mesma chamada devolve o resultado da primeira, sem executar de novo.
 
 Ficam fora do MCP: login, senha e chaves (`/ops/api/auth/*`) e a área do cliente
 (`/ops/api/portal/*`).
@@ -1341,7 +1341,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | Notificação não chega no celular | permissão negada ou iPhone sem o painel na tela inicial | Equipe › ligar notificação; siga o aviso da tela |
 | **Pelo Claude:** "este acesso é só de leitura" | conectou sem marcar a caixa | conecte de novo e marque "Também operar o painel como você" |
 | **Pelo Claude:** "isto é do papel MANAGER ou acima; você é OPERATOR" | a rota pede papel acima do seu | peça a um gerente |
-| **Pelo Claude:** `precisa_confirmar` | vai sair da empresa ou cobrar | mostre à pessoa e repita com `confirmar: true` só depois do "pode mandar" |
+| **Pelo Claude:** `precisa_confirmar` | vai sair da empresa ou cobrar | mostre à pessoa e repita o mesmo pedido com `confirmar: true` e o código de `aprovacao` só depois do "pode mandar" |
 | **Pelo Claude:** "… não existe no painel (veja urace_operacoes)" | caminho errado | procure a operação certa com `urace_operacoes` |
 | **Pelo Claude:** "login, chaves e área do cliente não são operados pelo MCP" | rota fora do MCP | faça pelo painel |
 | Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |

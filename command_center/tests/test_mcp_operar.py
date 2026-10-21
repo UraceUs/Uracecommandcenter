@@ -98,9 +98,12 @@ def test_operador_nao_faz_o_que_e_do_gerente(cli):
 
 def test_gerente_faz_o_que_e_dele(cli):
     cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
+    previa, erro = ferramenta(cli, token("ger@urace.us"), "urace_api", metodo="PATCH",
+                              caminho=f"/ops/api/clients/{cid}/mensal", corpo={"monthly_sessions": 4})
+    assert not erro and previa["precisa_confirmar"], previa
     res, erro = ferramenta(cli, token("ger@urace.us"), "urace_api", metodo="PATCH",
                            caminho=f"/ops/api/clients/{cid}/mensal", corpo={"monthly_sessions": 4},
-                           confirmar=True)
+                           confirmar=True, aprovacao=previa["aprovacao"])
     assert not erro and res["ok"], res
     assert um(conectar(), "SELECT monthly_sessions FROM clients WHERE id=?", (cid,))["monthly_sessions"] == 4
 
@@ -238,3 +241,78 @@ def test_cartao_lista_os_conectores_da_propria_pessoa_sem_token(cli):
     assert lido["access_token"] not in r.text and lido["refresh_token"] not in r.text
     assert not any(k in r.text for k in ("token_hash", "secret", "client_id"))
     cli.cookies.clear()
+
+
+# ---------------------------------------------- aprovação amarrada ao conteúdo, uma vez (#378)
+def _previa(cli, h, cid, corpo):
+    res, erro = ferramenta(cli, h, "urace_api", metodo="PATCH", caminho=f"/ops/api/clients/{cid}/mensal", corpo=corpo)
+    assert not erro and res["precisa_confirmar"] and res["aprovacao"].startswith("apr_"), res
+    return res
+
+
+def _sessoes(cid):
+    return um(conectar(), "SELECT monthly_sessions FROM clients WHERE id=?", (cid,))["monthly_sessions"]
+
+
+def test_confirmar_sem_o_codigo_da_previa_nao_executa(cli):
+    """Análise do Mio, 21/10: "confirmar=true é um booleano; sozinho não comprova aprovação de uma
+    prévia exata nem idempotência"."""
+    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
+    antes = _sessoes(cid)
+    res, erro = ferramenta(cli, token("ger@urace.us"), "urace_api", metodo="PATCH",
+                           caminho=f"/ops/api/clients/{cid}/mensal", corpo={"monthly_sessions": antes + 7},
+                           confirmar=True)
+    assert erro and "aprovacao" in res
+    assert _sessoes(cid) == antes
+
+
+def test_a_previa_nao_muda_nada_e_o_codigo_so_vale_para_aquele_conteudo(cli):
+    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
+    h = token("ger@urace.us")
+    antes = _sessoes(cid)
+    p = _previa(cli, h, cid, {"monthly_sessions": antes + 1})
+    assert _sessoes(cid) == antes, "a prévia não muda nada"
+    res, erro = ferramenta(cli, h, "urace_api", metodo="PATCH", caminho=f"/ops/api/clients/{cid}/mensal",
+                           corpo={"monthly_sessions": antes + 99}, confirmar=True, aprovacao=p["aprovacao"])
+    assert erro and "mudou depois da prévia" in res
+    assert _sessoes(cid) == antes
+
+
+def test_repetir_a_mesma_aprovacao_nao_executa_de_novo(cli):
+    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
+    h = token("ger@urace.us")
+    alvo = _sessoes(cid) + 2
+    p = _previa(cli, h, cid, {"monthly_sessions": alvo})
+    args = dict(metodo="PATCH", caminho=f"/ops/api/clients/{cid}/mensal", corpo={"monthly_sessions": alvo},
+                confirmar=True, aprovacao=p["aprovacao"])
+    primeira, erro = ferramenta(cli, h, "urace_api", **args)
+    assert not erro and primeira["ok"] and not primeira.get("repetido")
+    con = conectar()
+    con.execute("UPDATE clients SET monthly_sessions=1 WHERE id=?", (cid,))
+    con.commit()
+    segunda, erro = ferramenta(cli, h, "urace_api", **args)
+    assert not erro and segunda["repetido"] is True and segunda["status"] == primeira["status"]
+    assert _sessoes(cid) == 1, "a repetição não executou de novo"
+
+
+def test_codigo_de_outra_pessoa_ou_vencido_nao_serve(cli):
+    cid = um(conectar(), "SELECT id FROM clients WHERE name='Joseph Kartian'")["id"]
+    antes = _sessoes(cid)
+    corpo = {"monthly_sessions": antes + 3}
+    p = _previa(cli, token("ger@urace.us"), cid, corpo)
+    con = conectar()
+    if not um(con, "SELECT id FROM users WHERE email='ger2.teste@example.com'"):
+        auth.criar_usuario(con, "ger2.teste@example.com", "Gerente Dois", "MANAGER", SENHA)
+        con.commit()
+    res, erro = ferramenta(cli, token("ger2.teste@example.com"), "urace_api", metodo="PATCH",
+                           caminho=f"/ops/api/clients/{cid}/mensal", corpo=corpo, confirmar=True,
+                           aprovacao=p["aprovacao"])
+    assert erro and "desconhecido" in res
+    con = conectar()
+    con.execute("UPDATE mcp_aprovacoes SET expira_em='2000-01-01T00:00:00Z'")
+    con.commit()
+    res, erro = ferramenta(cli, token("ger@urace.us"), "urace_api", metodo="PATCH",
+                           caminho=f"/ops/api/clients/{cid}/mensal", corpo=corpo, confirmar=True,
+                           aprovacao=p["aprovacao"])
+    assert erro and "venceu" in res
+    assert _sessoes(cid) == antes
