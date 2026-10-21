@@ -511,7 +511,8 @@ def test_volta_so_no_expediente_e_uma_por_hora(monkeypatch):
     assert sdr_canais.vez_do_lote(_orlando(21, 8, 0)) == sdr_canais.vez_do_lote(_orlando(21, 8, 59))
     assert sdr_canais.vez_do_lote(_orlando(21, 9, 0)) != sdr_canais.vez_do_lote(_orlando(21, 8, 59))
     assert sdr_canais.vez_do_lote(_orlando(21, 17, 30)) is not None
-    assert sdr_canais.vez_do_lote(_orlando(21, 18, 0)) is None                 # fechou
+    assert sdr_canais.vez_do_lote(_orlando(21, 18, 0)) is not None             # a volta do fechamento
+    assert sdr_canais.vez_do_lote(_orlando(21, 18, 1)) is None                 # fechou
     assert sdr_canais.vez_do_lote(_orlando(25, 10)) is not None                # domingo: todos os dias por padrão
     monkeypatch.setenv("SDR_CANAL_DIAS", "1-5")
     assert sdr_canais.vez_do_lote(_orlando(25, 10)) is None and sdr_canais.vez_do_lote(_orlando(23, 10))

@@ -139,7 +139,7 @@ def lote_min():
 
 
 def horario():
-    """(abre, fecha) em horas de Orlando: `SDR_CANAL_HORARIO=8-18` responde das 8h até a volta das 17h."""
+    """(abre, fecha) em horas de Orlando: `SDR_CANAL_HORARIO=8-18` responde das 8h até a volta das 18h."""
     m = re.fullmatch(r"\s*(\d{1,2})\s*-\s*(\d{1,2})\s*", cfg("SDR_CANAL_HORARIO", "8-18"))
     if m and 0 <= int(m.group(1)) < int(m.group(2)) <= 24:
         return int(m.group(1)), int(m.group(2))
@@ -165,7 +165,12 @@ def no_expediente(quando=None):
 def vez_do_lote(quando=None):
     """A volta em que estamos (dia e hora cheia), ou None fora do expediente. Uma passada por volta."""
     local = (quando or datetime.now(timezone.utc)).astimezone(FUSO)
-    if not lote_min() or not no_expediente(local):
+    if not lote_min():
+        return None
+    if not no_expediente(local):
+        # a volta do fechamento (18h00): o que chegou depois das 16h50 sai hoje, não na manhã seguinte
+        if local.isoweekday() in dias() and local.hour == horario()[1] and local.minute == 0:
+            return local.strftime("%Y-%m-%d"), "fechamento"
         return None
     return local.strftime("%Y-%m-%d"), (local.hour * 60 + local.minute) // lote_min()
 
