@@ -371,8 +371,9 @@ def _f_operacoes(con, busca=None, limite=60, _quem=None, **_):
     return mcp_operar.operacoes(_quem or {}, busca, limite)
 
 
-def _f_api(con, metodo=None, caminho=None, corpo=None, consulta=None, confirmar=False, _quem=None, _ctx=None, **_):
-    return mcp_operar.chamar(_quem or {}, _ctx or {}, metodo, caminho, corpo, consulta, bool(confirmar))
+def _f_api(con, metodo=None, caminho=None, corpo=None, consulta=None, confirmar=False, aprovacao=None,
+           _quem=None, _ctx=None, **_):
+    return mcp_operar.chamar(_quem or {}, _ctx or {}, metodo, caminho, corpo, consulta, bool(confirmar), aprovacao)
 
 
 _POR_CARD = {
@@ -483,12 +484,15 @@ FERRAMENTAS = {
     "urace_api": (
         "Executa uma operação do Command Center (as mesmas do painel), como você: o seu papel vale, "
         "a auditoria registra o seu nome. O que vai para o cliente ou cobra (invoice, waiver, e-mail, "
-        "QuickBooks, Asana) devolve primeiro o que vai fazer: mostre à pessoa e repita com confirmar=true.",
+        "QuickBooks, Asana) devolve primeiro o que vai fazer e um código de aprovacao: mostre à pessoa e, com o sim "
+        "dela, repita o MESMO pedido com confirmar=true e esse código. Repetir não executa de novo.",
         {"metodo": {"type": "string", "enum": list(mcp_operar.METODOS)},
          "caminho": {"type": "string", "description": "ex.: /ops/api/clients/584/mensal"},
          "corpo": {"type": "object", "description": "corpo JSON da operação"},
          "consulta": {"type": "object", "description": "parâmetros da URL (?a=b)"},
-         "confirmar": {"type": "boolean", "description": "true só depois de a pessoa ver o que vai acontecer"}},
+         "confirmar": {"type": "boolean", "description": "true só depois de a pessoa ver o que vai acontecer"},
+         "aprovacao": {"type": "string", "description": "o código que veio na prévia (precisa_confirmar); vale "
+                                                       "só para aquele conteúdo, uma vez, por 15 min"}},
         ["metodo", "caminho"], _f_api),
 }
 
@@ -506,7 +510,8 @@ def _instrucoes(quem):
     return base + (f"Este acesso OPERA o painel como {(quem or {}).get('name')} ({(quem or {}).get('role')}): "
                    "use urace_operacoes para ver o que dá para fazer e urace_api para fazer. Valem as regras "
                    "do painel e o papel da pessoa. Antes de enviar algo ao cliente ou cobrar, mostre o que vai "
-                   "acontecer e só repita com confirmar=true depois que a pessoa disser que sim.")
+                   "acontecer e só repita com confirmar=true e o código de aprovacao da prévia depois que a "
+                   "pessoa disser que sim.")
 
 
 def _resposta(ident, resultado):

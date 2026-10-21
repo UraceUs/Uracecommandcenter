@@ -1119,6 +1119,21 @@ CREATE TABLE IF NOT EXISTS oauth_clients (
   revoked_at    TEXT
 );
 
+-- #378: a aprovação de uma operação do MCP que vai para fora ou cobra. O código vale para AQUELE
+-- conteúdo (hash de método, caminho, corpo e consulta), daquela pessoa, por poucos minutos, e uma vez
+-- só: a repetição devolve o resultado guardado em vez de executar de novo.
+CREATE TABLE IF NOT EXISTS mcp_aprovacoes (
+  codigo_hash    TEXT PRIMARY KEY,
+  user_id        INTEGER,
+  conteudo_hash  TEXT NOT NULL,
+  resumo         TEXT,                 -- json: metodo, caminho (para a auditoria e para conferir)
+  criado_em      TEXT NOT NULL,
+  expira_em      TEXT NOT NULL,
+  usado_em       TEXT,
+  status         INTEGER,
+  resposta       TEXT                  -- json do que a rota devolveu na execução única
+);
+
 -- Código de autorização: vive minutos, serve UMA vez.
 CREATE TABLE IF NOT EXISTS oauth_codes (
   code_hash     TEXT PRIMARY KEY,

@@ -74,7 +74,7 @@ Tudo o que o seu papel faz no painel. O Claude descobre com a ferramenta **`urac
 O que vai para o cliente ou cobra (invoice, depósito, waiver, e-mail, QuickBooks, DocuSign, Asana,
 Kommo — inclusive o chat do Kommo, `/ops/api/crm/…`: responder, anotar, etapa, tags)
 **não acontece na primeira chamada**. O Claude recebe o que vai ser feito, mostra para você, e só
-repete com `confirmar: true` depois do seu "pode mandar".
+repete com `confirmar: true` e o código de `aprovacao` da prévia depois do seu "pode mandar". A prévia traz um código de `aprovacao` (#378): ele vale só para aquele pedido exato, por 15 min e uma vez. Mudou destinatário, valor ou caminho, o código não serve; repetir a mesma chamada devolve o resultado da primeira, sem executar de novo.
 
 ### Uma cobrança por vez (#310)
 

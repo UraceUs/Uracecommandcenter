@@ -142,3 +142,17 @@ Os testes:
       outros clientes.
 
 Só com todos marcados o Mio passa de "observa" para "cobra" e "prepara" em produção.
+
+## Escrita liberada para teste no card 584 (21/10)
+
+Em 21/10, na conversa com o Claude, o dono escreveu: *"libere a escrita ele pode testar envio de invoices tudo no card
+584 que é o card de teste"*.
+
+- **Escopo:** só o card 584, e só os testes de aceite acima: cobrar, preparar, confirmar uma vez e
+  recusa por papel. Nenhum outro card, nenhum cliente.
+- **Como:** o Mio reconecta marcando "Também operar o painel como você", que desde o #376 vem
+  desmarcada. A aprovação de cada envio é amarrada ao conteúdo e vale uma vez (#378).
+- **Antes de cada envio:** o Mio mostra o destinatário (o e-mail de cobrança do card 584), a
+  invoice, o valor e o efeito. Só confirma com o "pode" do Ítalo ou de quem ele autorizou.
+- **Depois dos testes:** o resultado de cada item é anotado aqui. O acesso de operar volta a ser
+  desmarcado, reconectando só para leitura, até uma nova decisão do dono.
