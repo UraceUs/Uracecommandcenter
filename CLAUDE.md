@@ -24,7 +24,7 @@ na VPS ... separa por blocos, de acordo com as issues, para jogar mais coisas de
   command_center/tests/e2e/test_pacote_de_provas.py`) e no **CI do GitHub**, que também gera o pacote de
   fotos como artefato.
 - O dono recebe **um deploy por bloco**, e só depois que o CI do **commit do branch da VPS** estiver
-  verde. Com os três jobs verdes no push ao branch da VPS, o CI grava a tag `ci-verde/<sha>`; o
+  verde. Com os três jobs verdes no push ao branch da VPS, o CI grava a tag `ci-verde/<sha>` (#387: se a árvore do merge é a mesma que passou no CI do PR, a tag sai na hora, sem repetir a bateria); o
   `servir_command_center.sh` procura essa tag pelo git (a chave do `git pull` — o repositório é privado e a
   VPS não lê a API do GitHub, #286) e, achando, **não roda a bateria na VPS**; na dúvida, roda. Por isso o
   bloco só vai ao dono **depois** que a tag do commit do merge existir. A prova com fotos na VPS (`testar_tudo.sh`) vira opcional.
