@@ -892,9 +892,13 @@ def _objetivo_do_toque(attempt: int) -> str:
                 "15-minute call with our team to talk it through and present our "
                 f"programs properly, and send the calendar link {link} alone on its "
                 "own line.")
-    return ("Goal: reactivate. Almost a day without a reply. Light and short: it's "
-            "been a little while since we talked, we're still here for them, and "
-            "ask if any question came up. No link.")
+    # 22/10 (prompts do comercial): o 2º toque é útil e dá a saída fácil; pergunta repetida ensina que o silêncio
+    # funciona, e "alguma dúvida?" não carrega nada
+    return ("Goal: reactivate. Almost a day without a reply. Plain text, no link: one useful "
+            "fact they didn't have about their case (what the day includes, the driver's "
+            "category), then an easy way out: if this isn't for them anymore, they can tell "
+            "you and you'll stop here. Never repeat the question they ignored, never ask "
+            "'any questions?' or 'still interested?'.")
 
 
 def compose_followup(lead_id: int, track: str, attempt: int) -> str:

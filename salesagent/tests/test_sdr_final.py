@@ -319,3 +319,20 @@ def test_frases_fixas_em_todos_os_idiomas():
     # a mensagem de espera sai no idioma do lead
     assert "チーム" in holding.waiting_message("いくらですか？")
     assert holding.waiting_message("いくらですか？", first_contact=True).startswith("こんにちは")
+
+
+# ------------------------------------------------------------------ prompts do comercial (22/10)
+def test_persona_com_os_prompts_do_comercial():
+    """Valor, diálogo/objeções e links (comercial, 22/10). Sem rede: só o texto."""
+    texto = (SALESAGENT / "instructions" / "urace-sales-agent.md").read_text(encoding="utf-8")
+    for link in ("urace.us/kart-training-packages", "urace.us/sim2grid-racing-simulator/", "urace.us/plan-your-career/",
+                 "urace.us/pro-team/", "urace.us/book-online/", "instagram.com/urace.us", "tiktok.com/@urace.usa",
+                 "calendar.app.google/KBbHhXjoRMS6sbHv8", "urace.us/for-beginners", "urace.us/store/"):
+        assert link in texto, link
+    assert "fj4pC42cGT5FMSex5" not in texto, "a agenda do documento abre a página genérica do Google Calendar"
+    for fora in ("Sim 2 Grid", "Hunter", "October promotional", "we do not earn it", "Ficou alguma dúvida"):
+        assert fora not in texto, fora
+    assert "If this isn't for you anymore" in texto and "never knock a competitor" in texto
+    assert "never next to a price" in texto, "o slogan nunca responde preço"
+    ponte = (SALESAGENT / "bridge" / "app.py").read_text(encoding="utf-8")
+    assert "easy way out" in ponte and "ask if any question came up" not in ponte, "o 2º toque do código segue a persona"
