@@ -306,9 +306,12 @@ def test_texto_do_urace_us_de_hoje_no_menu_na_home_e_no_blog(cli):
     menu e do rodapé, a home e o título dos artigos são os do urace.us de 13/10, nos caminhos novos."""
     r = cli.get("/")
     menu = r.text.split('<nav class="menu"')[1].split("</nav>")[0]
-    for rot, href in (("About URACE", "/about/"), ("Our Services", "/services/"), ("Plan Your Career", "/career/"),
+    for rot, href in (("About URACE", "/about/"), ("Plan Your Career", "/career/"),
                       ("Racing Team", "/pro-team/"), ("Contact us", "/contact/")):
         assert f'href="{href}">{rot}</a>' in menu
+    # #394: "Our Services" saiu do topo (o menu em grupos do dono) e segue no rodapé
+    rodape = r.text.split('<nav aria-label="Footer">')[1].split("</nav>")[0]
+    assert 'href="/services/">Our Services</a>' in rodape
     assert "<h1>The Champions Factory</h1>" in r.text
     assert "The ladder ends on our grid" in r.text and "Our Contents" in r.text
     assert "© 2026 URACE | All rights reserved" in r.text and ">Navigation<" in r.text
@@ -585,9 +588,9 @@ def test_busca_da_loja_e_do_servidor_e_funciona_sem_javascript(cli):
     assert '<form class="loja-busca" method="get" action="/store/" role="search">' in r.text
     for campo in ('name="s"', 'name="min_price"', 'name="max_price"', 'name="orderby"'):
         assert campo in r.text, campo
-    # nenhum script da loja: a página é montada no servidor (campanha.js e carrinho.js são os de
-    # todo o site — #260 e #236; sem SITE_GTM_ID não há medição, então medicao.js não entra)
-    assert re.findall(r'<script src="/_s/([a-z]+\.js)', r.text) == ["campanha.js", "carrinho.js"]
+    # nenhum script da loja: a página é montada no servidor (campanha.js, carrinho.js e site.js são os de
+    # todo o site — #260, #236 e #394; sem SITE_GTM_ID não há medição, então medicao.js não entra)
+    assert re.findall(r'<script src="/_s/([a-z]+\.js)', r.text) == ["campanha.js", "carrinho.js", "site.js"]
     # o código do produto (SKU) acha um só, e o nome acha o produto certo em primeiro lugar
     assert _nomes_na_grade(cli.get("/store/?s=MXCKIT").text) == ["OTK Magnesium Wheels Set MXC - 130mm, 210mm"]
     assert _nomes_na_grade(cli.get("/store/?s=mxc").text)[0] == "OTK Magnesium Wheels Set MXC - 130mm, 210mm"

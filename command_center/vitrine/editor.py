@@ -388,7 +388,7 @@ def extrair(html):
             lds.append(json.loads(x))
         except ValueError:
             pass
-    padrao = {"campanha.js", "carrinho.js", "medicao.js"}
+    padrao = {"campanha.js", "carrinho.js", "medicao.js", "site.js"}
     scripts = [s for s in re.findall(r'<script src="/_s/([a-z0-9_-]+\.js)\?v=', html) if s not in padrao]
     return {"secoes": p.secoes, "titulo": unescape(titulo.group(1)) if titulo else "",
             "descricao": unescape(desc.group(1)) if desc else "", "ld": lds, "scripts": list(dict.fromkeys(scripts))}

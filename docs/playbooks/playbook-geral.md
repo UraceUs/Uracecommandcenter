@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 20/10/2026 (#355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
+> Atualizado em 22/10/2026 (#394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
 > equipe, só o serviço do plano, add-ons e a invoice das extras na hora da marcação; antes, #115, o **pacote de prova** da waiver para o advogado; antes, #117, conferir o documento da
 > waiver no balcão e o nascimento travado, e #313, o
 > cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
@@ -819,6 +819,28 @@ abre o card dele).
 | **Financeiro** | invoices, lembretes e catálogo no QuickBooks. A conta é do **responsável**, nunca do piloto | tela QuickBooks (gerente+) |
 | **Medição de campanha no site** (#260, #171) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta) **só depois do Accept no banner de cookies**; o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |
 | **Chat do site** (#170) | o balão do Kommo no site público; a conversa cai no Chat do Kommo | esta seção, abaixo |
+| **Menu do site** (#394) | o menu em dropdown do site público (o da KartSport) e as animações do urace.us | esta seção, abaixo |
+
+### Menu do site e as animações (#394)
+Dono, 22/10: *"gosto do layout desse menu em dropdown ... incorpore no nosso site ... e tb coloque algumas animações
+assim como tinhamos no urace.us"*. Em toda página do site:
+
+| No topo | Abre (⌄) |
+|---|---|
+| **URACE Academy** | Academy · Racing Team · Arrive and Drive |
+| **For Beginners** | Sim 2 Grid (a página do SIM2GRID) · Plan Your Career |
+| **Store** | Engines · Chassis · Tires · Parts · Apparel · Suits — só a categoria que **tem produto** na loja; categoria vazia some do menu sozinha e volta quando um produto entra nela (Site › Produtos da loja) |
+| **About** | About URACE · Blog · Contact us |
+| ícones | **conta** (área do cliente), **busca da loja** (leva ao campo de busca da Store) e **carrinho** (com o número de itens) |
+| **Book now** | o botão vermelho: a reserva do Arrive and Drive |
+
+- **Computador:** o título leva à página do grupo; a setinha ⌄ abre a caixa com o mouse em cima, no clique ou no
+  teclado (Tab até a setinha e Enter; Esc fecha). Sobre a foto do topo a barra é transparente; ao rolar, fica escura.
+- **Celular:** o ☰ abre o menu em tela cheia; cada grupo abre e fecha no toque. Conta e busca da loja ficam no fim da lista.
+- **Our Services** saiu do topo e continua no rodapé e nas páginas. Nenhum link de antes sumiu do site.
+- **Animações:** botão sobe 2 px e cartão sobe 4 px com sombra (mouse em cima); as seções surgem ao rolar, uma vez;
+  os campeões da home são um carrossel no celular (arrastar ou as setas ‹ ›); o "Book now" pulsa de leve três vezes
+  e para. Quem pediu ao celular/computador **menos movimento** (prefers-reduced-motion) vê tudo parado e à mostra.
 
 ### Painel do site (#306)
 
