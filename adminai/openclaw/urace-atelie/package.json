@@ -1,0 +1,8 @@
+{
+  "name": "urace-atelie",
+  "version": "1.0.0",
+  "private": true,
+  "description": "URACE (#383): leva as mensagens dos grupos do ateliê no WhatsApp para o Command Center e cala o agente do OpenClaw no WhatsApp.",
+  "type": "module",
+  "openclaw": { "extensions": ["./index.js"] }
+}

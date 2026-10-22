@@ -22,6 +22,30 @@ O pedido vive na aba **Suits · Alpha Line** do Command Center (desde 08/10, #15
 SUITS do Asana foi importado para lá e **não é mais usado** (ver "Histórico", no fim).
 Guia para operar Suits pelo Claude: `docs/suits-guia-do-lucas.md`.
 
+## 💬 Desde 22/10/2026: os grupos do ateliê no WhatsApp (#383)
+
+O OpenClaw da VPS, logado num número interno da URACE (login por QR, feito pelo dono), dá acesso a
+**dois grupos** — "Macacão design Urace" (o designer) e "Urace Suits - Usman" ([[Usman]], o fornecedor) —
+e mais nenhum: DM desligada, outro grupo ignorado. O OpenClaw é **só transporte**: o plugin `urace-atelie`
+cala o agente dele no WhatsApp e entrega a mensagem (com a mídia) ao Command Center; o agente que age é o
+de Suits (o mesmo da ponte de e-mail). A saída é o Command Center chamando `openclaw message send`.
+
+- **Design:** o briefing (e os ajustes) vão ao designer pelo grupo, só com o design e "Suits #id". A arte
+  que volta cai no pedido certo e vai ao cliente **por e-mail** para aprovação.
+- **Fornecedor:** o pedido de produção continua por **e-mail**. No grupo: cobrar, conferir o suit (fotos),
+  e — **só com o pedido em `checked`** (a foto do grupo vira a foto de `photos_received` com um clique; a equipe confere) —
+  o endereço de envio (o pedido vai a `address_sent`) e o pedido do rastreio, que a
+  IA grava no pedido para a equipe passar ao cliente.
+- **Medidas em PDF e instruções extras:** a IA lê e grava (medidas e "Instruções extras ao fornecedor");
+  o e-mail ao fornecedor sai com elas.
+- **Vínculo só com evidência** (resposta à nossa mensagem, "#número", nome do piloto/design de um pedido
+  só). Ambíguo → "Precisa de alguém da equipe". Nunca o arquivo de um cliente no pedido de outro.
+- **Ao designer, sempre rascunho** (o designer passa por uma pessoa, #382); pedido de teste nunca manda.
+- **Ao fornecedor, a mesma chave da ponte:** envio automático desligado = rascunho com "aprovar" de um clique; ligado = sai
+  sozinho. Cobrança: no máximo uma por pedido, por grupo e por dia. "IA neste pedido" desligada vale aqui.
+- Configuração em `~/.urace/whatsapp-grupos.env` (fora do repositório); simulação até `WA_GRUPOS_APLICAR=1`.
+
+
 ## O caminho, do contato à entrega (como é desde 22/10, #382)
 
 Dono, 22/10: *"o envio sera direto ao cliente sem precisar enviar para a urace ... o fornecedor

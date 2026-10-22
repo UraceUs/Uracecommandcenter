@@ -935,10 +935,17 @@ def prompt(con, ev, cfg, anexos_baixados):
               "não responda: suits_precisa_humano com o motivo. No fim, se houver pedido, suits_anotar com o que fez em uma linha."
             + ("" if cfg.get("designer_email") else "\nO e-mail do designer ainda não foi configurado: se precisar falar com ele, "
                "use suits_precisa_humano dizendo o que mandaria.")
+            + _grupos_do_atelie()
             + f"\n\nPOLÍTICA DOS MACACÕES (do dono):\n{cfg['politica']}"
             + f"\n\nMODELO DE BOAS-VINDAS (referência; adapte ao idioma e ao pedido):\n{cfg['boas_vindas']}"
             + f"\n\nASSINATURA:\n{cfg['assinatura']}"
             + "\n\nMENSAGENS NOVAS:\n" + "\n".join(linhas) + historico)
+
+
+def _grupos_do_atelie():
+    """#383: com o grupo de design do WhatsApp configurado, o design vai ao designer por lá."""
+    from command_center.providers import atelie_whatsapp
+    return atelie_whatsapp.instrucao_para_ponte()
 
 
 def _admin(con):

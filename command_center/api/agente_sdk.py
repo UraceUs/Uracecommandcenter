@@ -78,7 +78,7 @@ FERRAMENTAS_EMBUTIDAS = ["Read", "Glob", "Grep", "WebSearch", "WebFetch", "ToolS
 LEITURAS = {"docusign_templates", "docusign_envelopes", "qbo_recorrencias", "gmail_baixar_anexo",
             "qbo_itens", "qbo_invoices", "qbo_invoice", "qbo_estimates",
             "suits_pedidos", "suits_pedido", "suits_leads", "suits_fornecedores", "suits_anexos",
-            "pendencias_abertas"}
+            "pendencias_abertas", "atelie_grupo_mensagens"}
 RX_APROVAR = re.compile(r"(^|_)(enviar|reenviar|send|lembrete|reminder|apagar|excluir|deletar|delete|remover|"
                         r"void|anular|unir|merge|substituir|atualizar_preco|pagamento|payment|pagar|recorrencia)(_|$)")
 
@@ -395,6 +395,7 @@ def ferramentas_dos_suits(user_id=None, escopo=None):
     from claude_agent_sdk import SdkMcpTool, create_sdk_mcp_server
 
     from command_center.api import suits
+    from command_center.providers import atelie_whatsapp
 
     def fabrica(fn):
         def chamar(args):
@@ -415,7 +416,9 @@ def ferramentas_dos_suits(user_id=None, escopo=None):
     return create_sdk_mcp_server(NOME_SUITS, "1.0.0", [
         SdkMcpTool(name=nome, description=desc, input_schema={"type": "object", "properties": props, "required": obrig},
                    handler=fabrica(fn))
-        for nome, desc, props, obrig, fn in suits.ferramentas_ia(escopo)])
+        for nome, desc, props, obrig, fn in suits.ferramentas_ia(escopo) + [
+            (n, d, p, o, f if escopo is None else suits._no_escopo(n, f, escopo))   # #382: só o pedido do evento
+            for n, d, p, o, f in atelie_whatsapp.ferramentas_ia()]])
 
 
 def ferramentas_das_pendencias(command_id=None, user_id=None):

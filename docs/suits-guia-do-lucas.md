@@ -250,6 +250,38 @@ desligada" (a ponte não age nem um instante) e "Pedido de teste": o de teste **
 nenhum (vira nota de simulação), e não entra nas contagens nem na Atenção. Pela API: `"ia_ligada": false`,
 `"is_test": true`.
 
+### Os grupos do ateliê no WhatsApp (#383)
+
+Dono, 22/10: o OpenClaw da VPS fica logado num **número interno da URACE** e lê **só dois grupos**:
+**Macacão design Urace** (o designer) e **Urace Suits - Usman** (o fornecedor). Conversa individual é
+desligada; mensagem de outro grupo ou pessoa nem chega ao painel. A lista é configurável (outros grupos
+virão). O agente que opera nos grupos é o mesmo da ponte de e-mail.
+
+| No grupo | O que acontece |
+|---|---|
+| **design** — pedido novo com design suficiente | a IA manda o briefing ao grupo (só o design e "Suits #id": nunca nome completo, e-mail, telefone, endereço ou pagamento do cliente) e move para `design_pending` |
+| **design** — o designer manda PDF/imagem | o arquivo vai para a pasta do pedido certo; a IA leva ao cliente **por e-mail** pedindo aprovação e move para `design_review`; o ajuste do cliente volta ao grupo |
+| **fornecedor** — o pedido de produção | continua **por e-mail** (o rascunho de sempre, em "Pedido ao fornecedor") |
+| **fornecedor** — fotos do suit pronto | ficam no pedido e a IA chama a equipe. Na seção *WhatsApp do ateliê*, **Usar como foto do suit** vira a nota com foto e move para `photos_received`; a equipe confere e move para `checked` (#382). Só então aparece **Mandar o endereço ao fornecedor**: o endereço vai ao grupo, com o pedido do rastreio, e o pedido passa a `address_sent` |
+| **fornecedor** — código de rastreio | a IA grava no pedido (campo Rastreio) e, de `address_sent`, move para `in_transit` (pela tabela de etapas); a equipe passa ao cliente |
+| PDF de medidas ou instruções extras | a IA lê, grava as medidas e as **Instruções extras ao fornecedor** (campo novo do Design); o e-mail ao fornecedor já sai com elas |
+| o que está em aberto há mais de 20 h | o painel **cobra uma vez por dia** por pedido e por grupo (09h–18h, segunda a sábado): a arte no grupo de design; a produção e o rastreio no do fornecedor |
+
+**De qual pedido é?** Só com evidência clara: resposta citando uma mensagem nossa, o **"#número"**
+do pedido, ou o nome do piloto / do design de **um** pedido aberto. Se puder ser de mais de um, ou não
+disser de qual é e tiver arquivo, vai para **Suits › WhatsApp › Sem pedido** e para "Precisa de
+atenção": alguém da equipe liga ao pedido certo. Ninguém adivinha.
+
+**Ao grupo de design, sempre com uma pessoa** (#382: o designer passa por uma pessoa): a mensagem ao designer é
+sempre rascunho, mesmo com o envio automático ligado. Pedido de teste nunca manda nada aos grupos (vira nota).
+
+**O que vai ao grupo do fornecedor segue a mesma chave "envio automático" da ponte.** Desligada (o padrão), cada
+mensagem vira um **rascunho** no pedido (seção *WhatsApp do ateliê*, e a lista em Suits › WhatsApp), com
+**Aprovar e enviar** (dá para corrigir o texto antes). Ligada, sai sozinho. E nada sai antes de o dono
+ligar `WA_GRUPOS_APLICAR=1` na VPS. A chave **IA neste pedido** vale aqui também: desligada, a IA não
+escreve nos grupos e não cobra; a mensagem que chegar fica para a equipe. No pedido também dá para
+**escrever no grupo** à mão (sai na hora, com as mesmas travas) e gravar o rastreio.
+
 ### A política dos macacões (vai nas boas-vindas)
 
 - três rodadas de revisão do design antes da produção, sem custo;
@@ -264,6 +296,13 @@ Tudo sujeito aos termos da compra e aos direitos do cliente. Conflito com isso s
 ---
 
 ## 7. As operações (o que o Claude chama com `urace_api`)
+
+WhatsApp do ateliê (#383), em `/ops/api/atelie` (Op.): `GET /pedidos/{id}` (mensagens e rascunhos do
+pedido), `POST /saidas/{id}/aprovar` (`{"texto": "…"}` opcional) e `/saidas/{id}/descartar`,
+`POST /pedidos/{id}/escrever` (`{"papel": "design|fornecedor", "texto": "…"}`),
+`POST /pedidos/{id}/endereco` (só em `checked`; move para `address_sent`), `POST /mensagens/{id}/foto-do-suit` (`{"nome": "foto.jpg"}`;
+move para `photos_received`), `POST /pedidos/{id}/rastreio` (`{"codigo", "transportadora"}`),
+`GET /whatsapp/sem-pedido` e `POST /mensagens/{id}/vincular` (`{"order_id": 12}`).
 
 Todos os caminhos começam com `/ops/api/suits`. "Op." é OPERATOR, "Ger." é MANAGER.
 

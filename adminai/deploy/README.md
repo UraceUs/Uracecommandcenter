@@ -235,3 +235,21 @@ E uma limitação técnica conhecida: **o conector do Asana não sobe
 arquivo**. Com o `ASANA_TOKEN` desta instalação isso passa a ser possível
 via REST `POST /attachments` — é o que destrava anexar a waiver assinada
 na tarefa (ver `P-09` no cérebro).
+
+## WhatsApp dos grupos do ateliê (#383)
+
+O OpenClaw só como transporte de dois grupos ("Macacão design Urace" e "Urace Suits - Usman"). Na VPS, uma vez:
+
+```bash
+cp ~/Uraceagent/adminai/deploy/whatsapp_grupos/whatsapp-grupos.env.example ~/.urace/whatsapp-grupos.env
+chmod 600 ~/.urace/whatsapp-grupos.env && nano ~/.urace/whatsapp-grupos.env   # o número interno; o resto já vem
+openclaw plugins install @openclaw/whatsapp            # se o canal ainda não estiver instalado
+openclaw channels login --channel whatsapp              # o QR aparece no terminal: escaneie com o celular do número
+openclaw channels status --channel whatsapp --probe     # tem que dizer linked/connected
+openclaw directory groups list --channel whatsapp       # os dois grupos têm que aparecer pelo nome
+bash ~/Uraceagent/adminai/deploy/whatsapp_grupos/configurar_whatsapp_grupos.sh   # SIMULAÇÃO: mostra o que faria
+# conferiu? WA_GRUPOS_APLICAR=1 no env e rode o script de novo (aplica a allowlist e o plugin urace-atelie)
+```
+
+Depois disso o deploy (`servir_command_center.sh`) roda o script sozinho a cada atualização, só se o env existir.
+Nada no repositório tem o número, os JIDs ou o segredo.

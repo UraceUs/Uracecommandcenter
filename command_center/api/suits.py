@@ -89,7 +89,9 @@ def listar(response: Response, estado: str = "abertos", status: str | None = Non
     sql = f"""SELECT o.id, o.title, o.product, o.quantity, o.customer_name, o.driver_name, o.status, o.closed, o.order_date, o.due_on,
                      o.source, o.created_at, o.updated_at, o.discarded_at, o.discard_reason, o.ia_ligada, o.is_test, s.name AS fornecedor,
                      (SELECT COUNT(*) FROM suit_notes n WHERE n.order_id=o.id AND n.kind!='etapa') AS notas,
-                     (SELECT MAX(created_at) FROM suit_notes n WHERE n.order_id=o.id) AS ultima_nota
+                     (SELECT MAX(created_at) FROM suit_notes n WHERE n.order_id=o.id) AS ultima_nota,
+                     (SELECT COUNT(*) FROM atelie_wa_saidas w WHERE w.order_id=o.id
+                      AND w.estado IN ('rascunho','falhou')) AS wa_rascunhos
               FROM suit_orders o LEFT JOIN suit_suppliers s ON s.id=o.supplier_id
               {'WHERE ' + ' AND '.join(where) if where else ''}
               ORDER BY o.closed, coalesce(o.discarded_at, o.updated_at, o.created_at) DESC, o.id DESC"""
