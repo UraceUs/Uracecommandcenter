@@ -265,6 +265,92 @@ def mudar_cartao(cid: int, dados: CartaoIn, request: Request, con: sqlite3.Conne
     return {"cartoes": cs.lista(con)}
 
 
+# ------------------------------------------------------------------ SIM2GRID (#392)
+# Dono, 22/10: "monte assim como montou o arrive and drive com todas as configurações ajustaveis". As regras e as faixas
+# de preço da hora de simulador; os formatos (nome, depósito, item do QuickBooks) são editados em Serviços e preços.
+@r.get("/sim2grid")
+def sim2grid_painel(de: str | None = None, ate: str | None = None, limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0),
+                    con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    from command_center.providers import sim2grid
+    _d(de), _d(ate)
+    return {**sim2grid.painel(con), "reservas": sim2grid.reservas(con, de, ate, limit, offset),
+            "pagina": sim2grid_pagina(), "desde": sim2grid.desde(con)}
+
+
+def sim2grid_pagina():
+    from command_center.vitrine.conteudo_sim2grid import CAMINHO
+    return CAMINHO
+
+
+class SimConfigIn(BaseModel):
+    online: bool | None = None
+    capacity: int | str | None = None
+    min_hours: int | str | None = None
+    max_hours: int | str | None = None
+    horizon_days: int | str | None = None
+    min_notice_hours: int | str | None = None
+    open_from: str | None = None
+    closed_dates: str | list[str] | None = None
+    min_age: int | str | None = None
+    waiver_required: bool | None = None
+    notice: str | None = None
+    raffle_text: str | None = None
+
+
+@r.patch("/sim2grid/config")
+def sim2grid_config(dados: SimConfigIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    from command_center.providers import sim2grid
+    try:
+        mud = sim2grid.mudar_config(con, u["id"], dados.model_dump(exclude_unset=True))
+    except sim2grid.ErroSim as e:
+        raise HTTPException(400, str(e))
+    if mud:
+        auditar(con, "sim2grid.config", f"user:{u['id']}", user_id=u["id"], entity_type="sim_config", entity_id=1,
+                detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))
+    con.commit()
+    return sim2grid.painel(con)
+
+
+class SimFaixaIn(BaseModel):
+    service_id: int | None = None
+    days: str | list[int] | None = None
+    start_hour: int | str | None = None
+    end_hour: int | str | None = None
+    price: float | str | None = None        # vazio = "ligue para nós" (sem venda online)
+    active: bool | None = None
+    sort: int | None = None
+
+
+@r.post("/sim2grid/faixas", status_code=201)
+def sim2grid_criar_faixa(dados: SimFaixaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                         u=Depends(auth.exige("MANAGER"))):
+    from command_center.providers import sim2grid
+    try:
+        fid = sim2grid.criar_faixa(con, u["id"], dados.model_dump(exclude_unset=True))
+    except sim2grid.ErroSim as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "sim2grid.rate.create", f"user:{u['id']}", user_id=u["id"], entity_type="sim_rate", entity_id=fid,
+            detail=dados.model_dump(exclude_unset=True), ip=auth._ip(request))
+    con.commit()
+    return {"id": fid, **sim2grid.painel(con)}
+
+
+@r.patch("/sim2grid/faixas/{fid}")
+def sim2grid_mudar_faixa(fid: int, dados: SimFaixaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                         u=Depends(auth.exige("MANAGER"))):
+    """Desativar não apaga: a faixa sai do site e continua no painel para voltar."""
+    from command_center.providers import sim2grid
+    try:
+        mud = sim2grid.mudar_faixa(con, u["id"], fid, dados.model_dump(exclude_unset=True))
+    except sim2grid.ErroSim as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    if mud:
+        auditar(con, "sim2grid.rate.update", f"user:{u['id']}", user_id=u["id"], entity_type="sim_rate", entity_id=fid,
+                detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))
+    con.commit()
+    return sim2grid.painel(con)
+
+
 # ------------------------------------------------------------------ produtos da loja (#298)
 @r.get("/produtos")
 def produtos(q: str = "", categoria: str | None = None, estado: str | None = None,

@@ -29,7 +29,7 @@ interface Cfg { morning_start: string; morning_end: string; afternoon_start: str
 interface Agenda { dias: Dia[]; semana: Regra[]; bloqueios: Bloqueio[]; config_completa: Cfg }
 interface Servico { id: number; name: string; description: string | null; price: number; qbo_item_id: string | null; qbo_item_name: string | null
   invoice_text: string | null; active: number; sort: number; updated_at: string | null; deposit?: number | null; site_kart?: string | null
-  kind?: 'session' | 'plan' | 'addon' | null; months?: number | null; sessions_month?: number | null
+  kind?: 'session' | 'plan' | 'addon' | 'sim' | null; months?: number | null; sessions_month?: number | null
   site_title?: string | null; site_subtitle?: string | null; site_note?: string | null; own_kart?: number | null
   deposit_required?: number | boolean | null
   /** #314: a sessão extra do plano — valor (vazio: mensal ÷ sessões) e o item do QuickBooks */
@@ -37,7 +37,7 @@ interface Servico { id: number; name: string; description: string | null; price:
   /** #312: onde o serviço aparece hoje no site (a mesma regra que monta as páginas) */
   no_site?: NoSite }
 /** #312: `servicos_site.onde_no_site` */
-interface NoSite { onde: 'kart' | 'addon' | 'plano' | 'area' | 'repetido' | 'nenhum' | 'desativado'; pagina: string | null; chave: string | null; com: string[] }
+interface NoSite { onde: 'kart' | 'addon' | 'plano' | 'sim2grid' | 'area' | 'repetido' | 'nenhum' | 'desativado'; pagina: string | null; chave: string | null; com: string[] }
 /** #312: as páginas do site em que um serviço ou um cartão entra (`servicos_site.paginas_do_site`) */
 interface PaginaSite { id: string; nome: string; caminho: string; cartoes: boolean }
 interface ItemQbo { id: string; name: string; full_name: string | null; price: number | null }
@@ -53,7 +53,8 @@ interface Ag { id: number; date: string; period: string; status: string; notes: 
   account_name: string; account_email: string; account_phone: string | null; driver: string | null; driver_birth: string | null; client_id: number | null
   asana_gid: string | null; asana_error: string | null }
 
-const TIPO_SERVICO: Record<string, string> = { session: tr("Sessão avulsa"), plan: tr("Plano mensal (Academy, Boost)"), addon: tr("Add-on do dia de treino (Lead and Follow)") }
+const TIPO_SERVICO: Record<string, string> = { session: tr("Sessão avulsa"), plan: tr("Plano mensal (Academy, Boost)"), addon: tr("Add-on do dia de treino (Lead and Follow)"),
+  sim: tr("Hora de simulador (SIM2GRID)") }      // #392
 /** #313: o tom da pílula do cartão D (o accent dos chips vira o azul da informação) */
 const tomD = (t: Tom): TomD => t === 'accent' ? 'info' : t
 const PER: Record<string, string> = { manha: tr("Manhã"), tarde: tr("Tarde"), dia: tr("Dia todo") }
@@ -318,6 +319,7 @@ function OndeNoSite({ n, paginas }: { n?: NoSite; paginas: PaginaSite[] }) {
   if (n.onde === 'kart') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("kart {0}", n.chave || '')}</Chip>{ver}</>
   if (n.onde === 'addon') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("add-on na reserva")}</Chip>{ver}</>
   if (n.onde === 'plano') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("plano mensal")}</Chip>{ver}</>
+  if (n.onde === 'sim2grid') return <><Chip tone="ok">{tr("no site:")} {pg?.nome} · {tr("formato da hora (preço nas faixas de Site › Sim2Grid)")}</Chip>{ver}</>
   if (n.onde === 'area') return <Chip tone="info">{tr("só na área do cliente")}</Chip>
   if (n.onde === 'repetido') return <Chip tone="crit">{tr("fora do site: a chave {0} também está em {1} (um serviço ativo por chave)", n.chave || '', n.com.join(', '))}</Chip>
   if (n.onde === 'nenhum') return <Chip tone="warn">{tr("fora do site: só o add-on Lead and Follow entra na reserva")}</Chip>
@@ -333,10 +335,10 @@ function OndeNoSite({ n, paginas }: { n?: NoSite; paginas: PaginaSite[] }) {
  * - Só na área do cliente: serviço de sessão sem kart.
  * Em cada página, o painel mostra o que já está nela hoje; o kart que já tem serviço ativo não se escolhe de novo
  * (dois serviços com o mesmo kart tiram o kart do site). */
-type Como = 'kart' | 'addon' | 'plano' | 'cartao' | 'area'
-const COMO_DA_PAGINA: Record<string, Como[]> = { 'arrive-and-drive': ['kart', 'addon'], academy: ['plano', 'cartao'], 'pro-team': ['cartao'], 'for-beginners': ['cartao'], area: ['area'] }
+type Como = 'kart' | 'addon' | 'plano' | 'sim' | 'cartao' | 'area'
+const COMO_DA_PAGINA: Record<string, Como[]> = { 'arrive-and-drive': ['kart', 'addon'], academy: ['plano', 'cartao'], 'pro-team': ['cartao'], 'for-beginners': ['cartao'], sim2grid: ['sim', 'cartao'], area: ['area'] }
 const NOME_COMO: Record<Como, string> = { kart: tr("Kart (reserva online)"), addon: tr("Add-on do dia (Lead and Follow)"), plano: tr("Plano mensal vendido pelo site"),
-  cartao: tr("Cartão de preço"), area: tr("Sessão avulsa") }
+  sim: tr("Formato da hora de simulador"), cartao: tr("Cartão de preço"), area: tr("Sessão avulsa") }
 
 function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: () => void }) {
   const toast = useToast()
@@ -353,8 +355,8 @@ function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: 
   const ativos = servicos.filter(s => s.active)
   const opcoes = [...paginas.map(p => ({ id: p.id, nome: p.nome })), { id: 'area', nome: tr("Só na área do cliente") }]
   const escolher = (pg: string) => { setPagina(pg); setComo(COMO_DA_PAGINA[pg][0]) }
-  const kind = como === 'plano' ? 'plan' : como === 'addon' ? 'addon' : 'session'
-  const sessao = kind === 'session'
+  const kind = como === 'plano' ? 'plan' : como === 'addon' ? 'addon' : como === 'sim' ? 'sim' : 'session'
+  const sessao = kind === 'session' || kind === 'sim'          // #392: a hora de simulador também pode ter depósito
   // o kart que já tem serviço ativo: mostra qual é e não deixa repetir
   const donoDoKart = (k: string) => ativos.filter(s => (s.kind ?? 'session') === 'session' && chaveDe(s.site_kart) === chaveDe(k))
   const karts = [...KARTS_DO_SITE, ...[...new Set(servicos.filter(s => (s.kind ?? 'session') === 'session' && s.site_kart && !KARTS_DO_SITE.includes(s.site_kart)).map(s => s.site_kart!))]]
@@ -368,6 +370,7 @@ function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: 
     ? [...servicos.filter(s => s.no_site?.onde === 'kart').map(s => tr("kart {0} ({1})", s.no_site!.chave || '', s.name)),
       ...servicos.filter(s => s.no_site?.onde === 'addon').map(s => tr("add-on {0}", s.name))]
     : pagina === 'area' ? servicos.filter(s => s.no_site?.onde === 'area').map(s => s.name)
+    : pagina === 'sim2grid' ? [...servicos.filter(s => s.no_site?.onde === 'sim2grid').map(s => tr("formato {0}", s.name)), ...cartoesDaPagina.map(rotuloCartao)]
     : [...(pagina === 'academy' ? servicos.filter(s => s.no_site?.onde === 'plano').map(s => tr("plano {0}", s.name)) : []),
       ...(escondePlano ? [] : cartoesDaPagina.map(rotuloCartao))]
   const kartEscolhido = novo.site_kart === NOVO_KART ? novo.kart_novo.trim() : novo.site_kart
@@ -378,12 +381,13 @@ function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: 
     try {
       await api.post('/site/servicos', { name: novo.name, description: novo.description || null, price: novo.price, qbo_item: novo.qbo_item || null, kind,
         site_kart: como === 'kart' ? kartEscolhido : como === 'addon' ? chave_addon : null,
-        site_title: como === 'kart' || como === 'addon' ? (novo.site_title || null) : null, site_subtitle: como === 'kart' ? (novo.site_subtitle || null) : null,
+        site_title: como === 'kart' || como === 'addon' || como === 'sim' ? (novo.site_title || null) : null, site_subtitle: como === 'kart' || como === 'sim' ? (novo.site_subtitle || null) : null,
         months: kind === 'plan' ? (novo.months || '1') : null, sessions_month: kind === 'plan' ? (novo.sessions_month || null) : null,
         extra_price: kind === 'plan' ? (novo.extra_price || null) : null, extra_item: kind === 'plan' ? (novo.extra_item || null) : null,
         deposit: sessao ? (novo.deposit || null) : null, deposit_required: sessao && novo.deposit_required })
       toast(kind === 'plan' ? tr("Plano criado: já aparece na página da Academy.") : como === 'addon' ? tr("Add-on criado: já aparece na reserva do Arrive and Drive.")
-        : como === 'kart' ? tr("Serviço criado: o kart já aparece no Arrive and Drive.") : tr("Serviço criado: o cliente já vê."), 'ok')
+        : como === 'kart' ? tr("Serviço criado: o kart já aparece no Arrive and Drive.") : como === 'sim' ? tr("Formato criado: ponha as faixas de preço em Site › Sim2Grid.")
+        : tr("Serviço criado: o cliente já vê."), 'ok')
       setNovo(vazio); recarregar()
     } catch (e) { toast((e as ApiError).message, 'crit') }
   }
@@ -435,8 +439,8 @@ function NovoServico({ dados, recarregar }: { dados: ListaServicos; recarregar: 
           {novo.site_kart === NOVO_KART &&
             <label className="fld"><span>{tr("Nome do kart novo")}</span><input value={novo.kart_novo} placeholder="Rental 2-stroke Pro"
               onChange={x => setNovo({ ...novo, kart_novo: x.target.value })} /></label>}</>}
-        {(como === 'kart' || como === 'addon') && <label className="fld"><span>{tr("Nome no site")}</span><input value={novo.site_title} onChange={x => setNovo({ ...novo, site_title: x.target.value })} /></label>}
-        {como === 'kart' && <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={novo.site_subtitle}
+        {(como === 'kart' || como === 'addon' || como === 'sim') && <label className="fld"><span>{tr("Nome no site")}</span><input value={novo.site_title} onChange={x => setNovo({ ...novo, site_title: x.target.value })} /></label>}
+        {(como === 'kart' || como === 'sim') && <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={novo.site_subtitle}
           onChange={x => setNovo({ ...novo, site_subtitle: x.target.value })} /></label>}
         <button className="btn sm primary" disabled={!pode} onClick={criar}>{tr("Criar")}</button>
       </div>
@@ -505,7 +509,7 @@ function Servicos() {
           // #312 (revisão): reativar não pode deixar dois ativos com a mesma chave (o kart ou a caixa do add-on sairia do site)
           const conflito = sv.active ? [] : outrosComChave(sv, sv.site_kart, sv.kind ?? 'session')
           const n = sv.no_site?.onde
-          const [rot, tom]: [string, TomD] = !sv.active || n === 'desativado' ? [tr("desativado"), 'neutral'] : n === 'kart' || n === 'addon' || n === 'plano' ? [tr("no site"), 'ok']
+          const [rot, tom]: [string, TomD] = !sv.active || n === 'desativado' ? [tr("desativado"), 'neutral'] : n === 'kart' || n === 'addon' || n === 'plano' || n === 'sim2grid' ? [tr("no site"), 'ok']
             : n === 'area' ? [tr("só na área do cliente"), 'info'] : n === 'repetido' ? [tr("fora do site"), 'crit'] : n === 'nenhum' ? [tr("fora do site"), 'warn'] : [tr("ativo"), 'ok']
           return <CartaoD key={sv.id} id={`servico-${sv.id}`} estado={rot} tom={tom} nome={sv.name}
             sub={[TIPO_SERVICO[sv.kind ?? 'session']]} grande={usd(sv.price)} detalhe={sv.kind === 'plan' ? tr("por mês") : null}
@@ -515,9 +519,10 @@ function Servicos() {
             <div className="cd-form"><div className="site-servico">
               <label className="fld"><span>{tr("Nome (o cliente lê, em inglês)")}</span><input value={e.name ?? sv.name} disabled={!gerente} onChange={x => muda(sv.id, { name: x.target.value })} /></label>
               <label className="fld"><span>{tr("Descrição")} <i>{tr("opcional")}</i></span><input value={e.description ?? sv.description ?? ''} disabled={!gerente} onChange={x => muda(sv.id, { description: x.target.value })} /></label>
-              <label className="fld"><span>{tr("Tipo")}</span><select value={e.kind ?? sv.kind ?? 'session'} disabled={!gerente} onChange={x => muda(sv.id, { kind: x.target.value as 'session' | 'plan' | 'addon' })}>
+              <label className="fld"><span>{tr("Tipo")}</span><select value={e.kind ?? sv.kind ?? 'session'} disabled={!gerente} onChange={x => muda(sv.id, { kind: x.target.value as 'session' | 'plan' | 'addon' | 'sim' })}>
                 <option value="session">{tr("Sessão avulsa")}</option><option value="plan">{tr("Plano mensal (Academy, Boost)")}</option>
-                <option value="addon">{tr("Add-on do dia de treino (Lead and Follow)")}</option></select></label>
+                <option value="addon">{tr("Add-on do dia de treino (Lead and Follow)")}</option>
+                <option value="sim">{tr("Hora de simulador (SIM2GRID)")}</option></select></label>
               <label className="fld"><span>{(e.kind ?? sv.kind) === 'plan' ? tr("Preço por mês (US$)") : tr("Preço (US$)")}</span><input inputMode="decimal" value={e.price_txt ?? String(sv.price)} disabled={!gerente} onChange={x => muda(sv.id, { price_txt: x.target.value })} /></label>
               {(e.kind ?? sv.kind) === 'plan' && <>
                 <label className="fld"><span>{tr("Meses do plano")}</span><input inputMode="numeric" value={e.months_txt ?? String(sv.months ?? 1)} disabled={!gerente} onChange={x => muda(sv.id, { months_txt: x.target.value })} /></label>
@@ -531,7 +536,7 @@ function Servicos() {
                 onChange={x => muda(sv.id, { qbo_item: x.target.value })} placeholder={tr("escolha ou escreva")} /></label>
               <label className="fld"><span>{tr("Depósito por sessão (US$)")} <i>{tr("0 = sem")}</i></span><input inputMode="decimal" value={e.deposit_txt ?? String(sv.deposit ?? 0)} disabled={!gerente}
                 onChange={x => muda(sv.id, { deposit_txt: x.target.value })} /></label>
-              {(e.kind ?? sv.kind ?? 'session') === 'session' &&
+              {['session', 'sim'].includes(e.kind ?? sv.kind ?? 'session') &&
                 <label className="check" style={{ minHeight: 40 }}><input type="checkbox" checked={!!(e.deposit_required ?? sv.deposit_required)} disabled={!gerente}
                   onChange={x => muda(sv.id, { deposit_required: x.target.checked })} /> {tr("Security deposit obrigatório")}</label>}
               {(e.kind ?? sv.kind ?? 'session') === 'session' &&
@@ -548,6 +553,8 @@ function Servicos() {
               {(e.site_kart ?? sv.site_kart) && <>
                 <label className="fld"><span>{tr("Nome no site")}</span><input value={e.site_title ?? sv.site_title ?? ''} disabled={!gerente}
                   placeholder={sv.name} onChange={x => muda(sv.id, { site_title: x.target.value })} /></label>
+                {(e.kind ?? sv.kind) === 'sim' && <label className="fld"><span>{tr("Linha de baixo no site")}</span><input value={e.site_subtitle ?? sv.site_subtitle ?? ''} disabled={!gerente}
+                  onChange={x => muda(sv.id, { site_subtitle: x.target.value })} /></label>}
                 {(e.kind ?? sv.kind ?? 'session') === 'session' && <>
                   <label className="fld"><span>{tr("Linha de baixo no site")} <i>{tr("ex.: Ages 7+")}</i></span><input value={e.site_subtitle ?? sv.site_subtitle ?? ''} disabled={!gerente}
                     onChange={x => muda(sv.id, { site_subtitle: x.target.value })} /></label>
@@ -629,7 +636,7 @@ function Cartoes() {
   </div>
 }
 
-const NOMES_CARTAO: Record<string, string> = { academy: 'Academy', 'pro-team': 'Pro Team', 'for-beginners': 'For Beginners' }
+const NOMES_CARTAO: Record<string, string> = { academy: 'Academy', 'pro-team': 'Pro Team', 'for-beginners': 'For Beginners', sim2grid: 'SIM2GRID' }
 
 /* #312: o formulário do cartão novo — o mesmo em Cartões das páginas e no "Adicionar serviço" (com a página já
  * escolhida, `pagina`). Cria do mesmo jeito de antes: POST /site/cartoes, e a página do site já mostra. */
@@ -1054,6 +1061,8 @@ const ProdutosDaLoja = lazy(() => import('./LojaProdutos').then(m => ({ default:
 const EditarProduto = lazy(() => import('./LojaProdutos').then(m => ({ default: m.EditarProduto })))
 /* #300: o editor visual do site, também em arquivo próprio. */
 /* #306: o painel do site (as métricas), a página de entrada da seção Site. */
+/* #392: o SIM2GRID (regras, faixas de preço por hora e reservas) em arquivo próprio */
+const SiteSim2Grid = lazy(() => import('./SiteSim2Grid').then(m => ({ default: m.SiteSim2Grid })))
 const SitePainel = lazy(() => import('./SitePainel').then(m => ({ default: m.SitePainel })))
 /* #317: o security deposit (devolver pelo Stripe e o valor cobrado), em arquivo próprio. */
 const SiteDepositos = lazy(() => import('./SiteDepositos').then(m => ({ default: m.SiteDepositos })))
@@ -1075,6 +1084,7 @@ const SUBSECOES: { aba: string; to: string; rotulo: string; min?: 'MANAGER' }[] 
   { aba: 'disponibilidade', to: '/site/disponibilidade', rotulo: tr("Disponibilidade") },
   { aba: 'servicos', to: '/site/servicos', rotulo: tr("Serviços e preços") },
   { aba: 'cartoes', to: '/site/cartoes', rotulo: tr("Cartões das páginas") },
+  { aba: 'sim2grid', to: '/site/sim2grid', rotulo: tr("Sim2Grid") },              // #392
   { aba: 'produtos', to: '/site/produtos', rotulo: tr("Produtos da loja") },
   { aba: 'estoque', to: '/site/estoque', rotulo: tr("Estoque do site") },        // #309
   { aba: 'editor', to: '/site/editor', rotulo: tr("Editor do site") },
@@ -1098,6 +1108,7 @@ export function SitePublico() {
     </nav>
     {atual.aba === '' ? <Suspense fallback={<Loading />}><SitePainel /></Suspense>
       : atual.aba === 'deposito' ? <Suspense fallback={<Loading />}><SiteDepositos /></Suspense>
+      : atual.aba === 'sim2grid' ? <Suspense fallback={<Loading />}><SiteSim2Grid /></Suspense>
       : atual.aba === 'estoque' ? <Suspense fallback={<Loading />}><EstoqueDoSite key={id || ''} produto={id} /></Suspense>
       : atual.aba === 'editor' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditorDePagina key={id} id={Number(id)} /> : <PaginasDoEditor />}</Suspense>
       : atual.aba === 'blog' ? <Suspense fallback={<Loading />}>{id && /^\d+$/.test(id) ? <EditarArtigo key={id} id={Number(id)} /> : <ArtigosDoBlog />}</Suspense>

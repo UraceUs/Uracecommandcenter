@@ -95,6 +95,8 @@ def _preparar(adm, base):
     semana = [{"weekday": d, "period": p, "open": True, "capacity": 5}
               for d in range(7) for p in ("manha", "tarde")]
     assert adm.request.put(base + "/api/site/agenda/semana", data=semana, headers=csrf).ok
+    # #392: a abertura do SIM2GRID (01/11/2026) é regra do painel; no banco descartável, a reserva já abre
+    assert adm.request.patch(base + "/api/site/sim2grid/config", data={"open_from": ""}, headers=csrf).ok
 
 
 def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
@@ -193,6 +195,39 @@ def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
     return erros
 
 
+def _sim2grid(cad, br, site, largura, altura):
+    """#392: a página do SIM2GRID (a LP) e a reserva por hora até o carrinho: formato, dia, hora, pessoas."""
+    v = br.new_page(viewport={"width": largura, "height": altura})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    with passo(cad, v, "sim2grid-pagina", "A página do SIM2GRID abre (#392)", "abri /sim2grid-racing-simulator/") as st:
+        v.goto(site + "/sim2grid-racing-simulator/")
+        v.get_by_role("heading", name="Your first step into motorsport starts here", level=1).wait_for()
+        v.locator(".agenda-dia.aberto").first.wait_for()
+        st["resposta"] = "a página abriu com o texto da LP, os formatos com o preço por hora do painel e o calendário"
+    with passo(cad, v, "sim2grid-hora", "Escolher o formato, o dia e a hora", "With coaching, o primeiro dia aberto e a primeira hora") as st:
+        v.get_by_role("radio", name=re.compile("With coaching")).check()
+        v.locator(".agenda-dia.aberto:not(.ligar)").first.click()
+        hora = v.locator(".sim-hora:not([disabled])").first
+        hora.wait_for()
+        texto = hora.inner_text().replace("\n", " ")
+        hora.click()
+        st["resposta"] = f"a hora mostra {texto!r} (o preço da faixa e os simuladores que sobram)"
+    with passo(cad, v, "sim2grid-pessoas", "Duas pessoas na mesma hora", "escolhi 2 em Simulators (people)") as st:
+        v.get_by_label("Simulators (people)").select_option("2")
+        r = v.evaluate(tn._VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        st["resposta"] = f"o botão somou as duas pessoas: {v.locator('.agenda-carrinho').inner_text().strip()!r}"
+    with passo(cad, v, "sim2grid-carrinho", "A hora de simulador no carrinho", 'cliquei em "Add to cart"') as st:
+        v.locator(".agenda-carrinho").click()
+        v.wait_for_url(re.compile(r"/cart/"))
+        v.locator(".carrinho-linha").nth(1).wait_for()
+        st["resposta"] = f"{v.locator('.carrinho-linha').count()} linhas no carrinho, uma por pessoa (um simulador cada)"
+        v.evaluate("() => window.uraceCarrinho.limpar()")
+    v.close()
+    return erros
+
+
 def _painel_da_venda(cad, br, base, largura, altura, quem, produto):
     """O outro lado: a venda GANHO, a sessão paga em Site › Agendamentos e o card do piloto."""
     adm = tn.entrar(br, base, email="italo@urace.us", largura=largura, altura=altura)
@@ -248,7 +283,8 @@ def _resumo(raiz, cadernos, erros_js):
          "**O que este pacote prova:** o site abre, o kart/dia/turno viram sessão com o preço do painel,",
          "a conta fictícia é criada no próprio site, o carrinho soma sessão + depósito + produto, o",
          "checkout fecha num pagamento só, a volta do pagamento mostra o pedido pago, e o painel registra",
-         "a venda GANHO, a sessão em Site › Agendamentos e o card do piloto. Mais: todas as telas do",
+         "a venda GANHO, a sessão em Site › Agendamentos e o card do piloto; a página do SIM2GRID leva",
+         "formato, dia, hora e pessoas ao carrinho (#392). Mais: todas as telas do",
          "painel abrem sem erro de JavaScript nem de API, em celular e em computador.", "",
          "**O que ele NÃO prova:** cobrança de verdade no Stripe (chave real), e-mail de verdade saindo,",
          "e nada de Asana, QuickBooks, DocuSign ou Google de verdade — tudo isso é falso aqui, de propósito.", ""]
@@ -305,6 +341,7 @@ def test_pacote_de_provas_do_site_e_da_venda(servidor, navegador):  # noqa: F811
                 "ip": f"10.9.{80 + i}.1"}
         erros += _venda(cad, br, base, site, largura, altura, produto, quem, dia)
         erros += _painel_da_venda(cad, br, base, largura, altura, quem, produto)
+        erros += _sim2grid(cad, br, site, largura, altura)
         _telas_do_painel(cad, br, base, largura, altura)
     _resumo(raiz, cadernos, erros)
     with open(os.path.join(raiz, "resumo.json"), "w", encoding="utf-8") as f:
