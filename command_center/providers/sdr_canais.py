@@ -175,6 +175,13 @@ def vez_do_lote(quando=None):
     return local.strftime("%Y-%m-%d"), (local.hour * 60 + local.minute) // lote_min()
 
 
+def responde_agora():
+    """O robô responde já (modo na hora e dentro do expediente)? Senão a mensagem espera a próxima volta.
+    Dono, 22/10: o expediente (`SDR_CANAL_HORARIO`, `SDR_CANAL_DIAS`) vale também no modo na hora; para responder
+    sempre, `SDR_CANAL_HORARIO=0-24` e `SDR_CANAL_DIAS=1-7`."""
+    return not lote_min() and no_expediente()
+
+
 def ritmo():
     abre, fecha = horario()
     return {"lote_min": lote_min(), "abre": abre, "fecha": fecha, "dias": sorted(dias()),
@@ -439,7 +446,7 @@ def sms_evento(con, ev, esperar=True):
                 detail={"motivo": motivo})
         con.commit()
         return {"sms": "recebido", "robo": motivo}
-    if lote_min():
+    if not responde_agora():
         return {"sms": "recebido", "robo": "na fila: responde na próxima volta do expediente"}
     gatilho = um(con, "SELECT MAX(id) AS id FROM sdr_canal_mensagens WHERE canal='sms' AND contato=? AND por='lead'",
                  (row["contato"],))["id"]
@@ -527,11 +534,11 @@ def _responder_sms(con, contato_id, esperar):
     return {"robo": "respondeu", "rota": resposta.get("rota"), "baloes": len(baloes)}
 
 
-def fila_sms(con):
+def fila_sms(con, espera=None):
     """Os contatos de SMS com mensagem do lead ainda sem resposta do robô, já quietos há `SDR_CANAL_ESPERA_MIN`
     minutos (10: quem ainda está digitando às 8h58 fica para a volta seguinte) e de até `SDR_CANAL_FILA_HORAS`
     (72: cobre o fim de semana)."""
-    espera = _inteiro("SDR_CANAL_ESPERA_MIN", 10)
+    espera = _inteiro("SDR_CANAL_ESPERA_MIN", 10) if espera is None else espera
     return todos(con, """
         SELECT c.id FROM sdr_canal_contatos c
          WHERE c.canal='sms' AND COALESCE(c.opt_out,0)=0 AND COALESCE(c.precisa_gente,0)=0
@@ -547,12 +554,12 @@ def fila_sms(con):
                             _menos_minutos(espera) if espera else agora()))
 
 
-def responder_fila_sms(con, esperar=True):
+def responder_fila_sms(con, esperar=True, espera=None):
     """A volta do SMS: responde, um contato por vez, o que espera na fila."""
     if not ligado("sms"):
         return {"sms": "desligado"}
     feitos = []
-    for f in fila_sms(con):
+    for f in fila_sms(con, espera):
         row = um(con, "SELECT * FROM sdr_canal_contatos WHERE id=?", (f["id"],))
         motivo = bloqueio(con, "sms", row, cliente=da_equipe(con, "sms", row["contato"]))
         if motivo:
@@ -645,7 +652,7 @@ def _ler_caixa():
 
 
 def velho(data):
-    """O cabeçalho Date do e-mail tem mais de `SDR_CANAL_EMAIL_IDADE_H` horas (24)? Sem data legível: não é velho."""
+    """O cabeçalho Date do e-mail tem mais de `SDR_CANAL_EMAIL_IDADE_H` horas (72: cobre o fim de semana fechado)? Sem data legível: não é velho."""
     from email.utils import parsedate_to_datetime
     try:
         quando = parsedate_to_datetime(data)
@@ -655,7 +662,7 @@ def velho(data):
         return False
     if quando.tzinfo is None:
         quando = quando.replace(tzinfo=timezone.utc)
-    return datetime.now(timezone.utc) - quando > timedelta(hours=_inteiro("SDR_CANAL_EMAIL_IDADE_H", 24, 1))
+    return datetime.now(timezone.utc) - quando > timedelta(hours=_inteiro("SDR_CANAL_EMAIL_IDADE_H", 72, 1))
 
 
 def ler_email(con):
@@ -759,7 +766,8 @@ def responder_formulario(con, oid, nome, email, assunto, mensagem):
     if bloqueio(con, "email", row, cliente=da_equipe(con, "email", email)):
         return False
     texto = f"{assunto}\n{mensagem}"
-    guardar(con, "email", row["contato"], "entrada", "lead", texto, f"site-{oid}")
+    # na hora a linha já nasce tratada (a fila de formulários não volta nela); a da fila já existe e não muda aqui
+    guardar(con, "email", row["contato"], "entrada", "lead", texto, f"site-{oid}", motivo="formulário na hora")
     resposta = perguntar_ao_robo("email", row["contato"], texto, nome, (row.get("respostas") or 0) == 0)
     baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
     if not baloes:
@@ -783,14 +791,55 @@ def responder_formulario(con, oid, nome, email, assunto, mensagem):
     return True
 
 
-def volta(con, esperar=True):
-    """Uma volta do robô nos dois canais (o e-mail primeiro: a leitura da caixa é a parte lenta)."""
+def enfileirar_formulario(con, oid, nome, email, assunto, mensagem):
+    """Formulário que chegou fora do expediente (ou com o lote): fica guardado para a próxima volta do robô."""
+    row = contato(con, "email", email, nome)
+    guardar(con, "email", row["contato"], "entrada", "lead", f"{assunto}\n{mensagem}", f"site-{oid}")
+    atualizar(con, "sdr_canal_contatos", row["id"], ultima_entrada_em=agora())
+    auditar(con, "sdr.canal.email.formulario_na_fila", "system", entity_type="opportunity", entity_id=oid)
+    con.commit()
+
+
+def responder_fila_formularios(con):
+    """A volta do formulário: o follow-up do robô para quem preencheu fora do expediente (até 72 h)."""
+    if not ligado("email"):
+        return {"formulario": "desligado"}
+    feitos = []
+    pendentes = todos(con, """
+        SELECT m.id, m.contato, m.texto, m.external_id, c.nome FROM sdr_canal_mensagens m
+          JOIN sdr_canal_contatos c ON c.canal='email' AND c.contato=m.contato
+         WHERE m.canal='email' AND m.por='lead' AND m.external_id LIKE 'site-%' AND m.motivo IS NULL AND m.at >= ?
+           AND NOT EXISTS (SELECT 1 FROM sdr_canal_mensagens s WHERE s.canal='email' AND s.contato=m.contato
+                           AND s.direcao='saida' AND s.id > m.id)
+         ORDER BY m.id""", (_menos_minutos(60 * _inteiro("SDR_CANAL_FILA_HORAS", 72, 1)),))
+    for p in pendentes:
+        assunto, _, mensagem = (p["texto"] or "").partition("\n")
+        oid = int(p["external_id"].split("-", 1)[1])
+        try:
+            ok = responder_formulario(con, oid, p["nome"], p["contato"], assunto, mensagem)
+        except Exception as e:                                # noqa: BLE001 — um formulário não para a volta
+            auditar(con, "sdr.canal.email.falhou", "system", entity_type="opportunity", entity_id=oid,
+                    detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+            ok = False
+        # tratado de um jeito ou de outro: a confirmação de sempre já saiu na hora em que a pessoa preencheu
+        atualizar(con, "sdr_canal_mensagens", p["id"], motivo="formulário respondido" if ok else "formulário sem resposta do robô")
+        con.commit()
+        feitos.append({"oportunidade": oid, "robo": "respondeu" if ok else "não respondeu"})
+    return {"formulario": "volta", "conversas": feitos}
+
+
+def volta(con, esperar=True, espera=None):
+    """Uma volta do robô: support@, fila do SMS e formulários do site (o e-mail primeiro: a leitura da caixa é a
+    parte lenta)."""
     saida = {}
-    for nome, passo in (("email", ler_email), ("sms", responder_fila_sms)):
-        if not ligado(nome) or (nome == "sms" and not lote_min()):
+    passos = (("email", "email", lambda: ler_email(con)),
+              ("sms", "sms", lambda: responder_fila_sms(con, esperar, espera)),
+              ("formulario", "email", lambda: responder_fila_formularios(con)))
+    for nome, canal, passo in passos:
+        if not ligado(canal):
             continue
         try:
-            saida[nome] = passo(con) if nome == "email" else passo(con, esperar)
+            saida[nome] = passo()
         except Exception as e:                               # noqa: BLE001 — um canal não para o outro
             try:
                 auditar(con, f"sdr.canal.{nome}.falhou", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
@@ -801,25 +850,39 @@ def volta(con, esperar=True):
 
 
 def laco_canais():
-    """O relógio do robô nos canais. Com o lote (padrão): uma volta por hora cheia, só no expediente de Orlando.
-    Com `SDR_CANAL_LOTE_MIN=0`: lê a support@ a cada `SDR_CANAL_EMAIL_MIN` minutos e o SMS responde na hora."""
+    """O relógio do robô nos canais, só no expediente de Orlando.
+    Com o lote: uma volta por hora cheia. Na hora (`SDR_CANAL_LOTE_MIN=0`): o SMS responde pelo webhook, a support@
+    é lida a cada `SDR_CANAL_EMAIL_MIN` minutos, e na abertura do dia uma volta responde o que chegou fora do
+    expediente (SMS e formulário)."""
     from command_center.db import conectar
     time.sleep(30)
-    ultima_volta, ultimo_email = None, 0.0
+    ultima_volta, ultima_abertura, ultimo_email = None, None, 0.0
     while True:
-        vez = vez_do_lote()
+        tarefa = None
         if lote_min():
-            rodar = vez is not None and vez != ultima_volta
-        else:
-            rodar = time.monotonic() - ultimo_email >= 60 * _inteiro("SDR_CANAL_EMAIL_MIN", 3, 1)
-        if rodar:
-            ultima_volta, ultimo_email = vez, time.monotonic()
+            vez = vez_do_lote()
+            if vez is not None and vez != ultima_volta:
+                ultima_volta, tarefa = vez, "volta"
+        elif no_expediente():
+            hoje = datetime.now(timezone.utc).astimezone(FUSO).date()
+            if hoje != ultima_abertura:
+                ultima_abertura, tarefa = hoje, "abertura"
+            elif ligado("email") and time.monotonic() - ultimo_email >= 60 * _inteiro("SDR_CANAL_EMAIL_MIN", 3, 1):
+                tarefa = "email"
+        if tarefa:
             con = conectar()
             try:
-                if lote_min():
-                    volta(con)
-                elif ligado("email"):
-                    volta(con)        # sem lote o SMS responde na hora (webhook); aqui só a support@ é lida
+                if tarefa == "email":
+                    ler_email(con)
+                else:
+                    volta(con, espera=0 if tarefa == "abertura" else None)   # na abertura, sem esperar a pessoa
+                ultimo_email = time.monotonic()
+            except Exception as e:                           # noqa: BLE001 — o relógio nunca para
+                try:
+                    auditar(con, "sdr.canal.email.falhou", "system", detail={"erro": f"{type(e).__name__}: {str(e)[:300]}"})
+                    con.commit()
+                except Exception:                            # noqa: BLE001
+                    pass
             finally:
                 con.close()
         time.sleep(30)

@@ -60,9 +60,15 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | `SDR_CANAL_DIAS` | 1-7 | dias do expediente (1 = segunda … 7 = domingo); `1-5` = só dias úteis, `1-6` = até sábado |
 | `SDR_CANAL_ESPERA_MIN` | 10 | SMS que chegou há menos que isso fica para a volta seguinte (a pessoa ainda está escrevendo) |
 | `SDR_CANAL_FILA_HORAS` | 72 | SMS mais velho que isso não é respondido pela volta (cobre o fim de semana) |
-| `SDR_CANAL_EMAIL_IDADE_H` | 24 | e-mail mais velho que isso (cabeçalho Date) que o robô nunca viu não é respondido: fica com a equipe |
+| `SDR_CANAL_EMAIL_IDADE_H` | 72 | e-mail mais velho que isso (cabeçalho Date) que o robô nunca viu não é respondido: fica com a equipe |
 | `SDR_CANAL_EMAIL_MIN` | 3 | só com `SDR_CANAL_LOTE_MIN=0`: de quantos em quantos minutos ele lê a support@ |
 | `SDR_CANAL_RAJADA_SEG` | 8 | só com `SDR_CANAL_LOTE_MIN=0`: quanto ele espera mensagens seguidas no SMS antes de responder |
+
+**Expediente também na hora (dono, 22/10).** Com `SDR_CANAL_LOTE_MIN=0` o robô responde na hora, mas só no
+expediente (`SDR_CANAL_HORARIO`, `SDR_CANAL_DIAS`). O que chega fora dele (SMS e formulário do site) espera a
+abertura do dia seguinte: logo na abertura, uma volta responde tudo. O formulário fora do expediente
+recebe a confirmação de sempre na hora e o follow-up do robô na abertura. Para responder sempre:
+`SDR_CANAL_HORARIO=0-24` e `SDR_CANAL_DIAS=1-7`.
 
 **Ritmo (dono, 21/10).** "Fazer por loop, horário comercial e de hora em hora, porque não parece automação quando
 leva um tempinho para responder." O robô não responde na hora: a cada hora cheia do expediente ele responde, de uma

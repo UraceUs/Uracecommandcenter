@@ -4740,6 +4740,8 @@
 "responde a cada {0} min, {1}h–{2}h": "replies every {0} min, {1}:00–{2}:00",
 "dias {0}": "days {0}",
 "responde na hora": "replies right away",
+"Fora do expediente a mensagem espera a abertura do dia seguinte.": "Outside business hours, messages wait for the next opening.",
+"responde na hora, {0}h–{1}h": "replies right away, {0}:00–{1}:00",
 "O mesmo robô do Instagram, só para lead. Quando alguém da equipe responde pelo Dialpad ou pela support@, ele sai da conversa por {0} h. O que ele passa para a equipe aparece em Precisa de atenção.": "The same bot as on Instagram, leads only. When someone on the team replies through Dialpad or support@, it steps out of the conversation for {0} h. Whatever it hands to the team shows up in Needs attention.",
 "As conversas de SMS e e-mail aparecem aqui assim que chegarem.": "SMS and email conversations show up here as soon as they arrive.",
 "SMS": "SMS",

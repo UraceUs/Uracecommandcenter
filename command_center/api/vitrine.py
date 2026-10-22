@@ -476,7 +476,12 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
     # dono, 20/10: com o robô ligado no e-mail, é ele quem escreve o follow-up (no lugar da confirmação genérica)
     from command_center.providers import sdr_canais
     if sdr_canais.vai_responder_formulario(con, c["email"]):
-        _robo_no_formulario(oid, c["nome"], c["email"].lower(), assunto, c["mensagem"], confirmacao)
+        if sdr_canais.responde_agora():
+            _robo_no_formulario(oid, c["nome"], c["email"].lower(), assunto, c["mensagem"], confirmacao)
+        else:
+            # 22/10: fora do expediente o robô responde na próxima volta; a pessoa recebe a confirmação agora
+            sdr_canais.enfileirar_formulario(con, oid, c["nome"], c["email"].lower(), assunto, c["mensagem"])
+            _confirmar_pessoa(c["email"], *confirmacao)
     else:
         _confirmar_pessoa(c["email"], *confirmacao)
     return _responde(request, True, "/contact/?sent=1")

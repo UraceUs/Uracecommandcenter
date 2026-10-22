@@ -32,10 +32,11 @@ def ambiente(monkeypatch):
     monkeypatch.setenv("DIALPAD_HOOK_KEY", CHAVE)
     monkeypatch.delenv("DIALPAD_HOOK_SECRET", raising=False)
     monkeypatch.setenv("SDR_CANAIS_ENV", "/nao/existe")
-    for k in ("SDR_CANAL_SMS", "SDR_CANAL_EMAIL", "SDR_CANAL_SO_PARA", "SDR_CANAL_HORARIO", "SDR_CANAL_DIAS",
+    for k in ("SDR_CANAL_SMS", "SDR_CANAL_EMAIL", "SDR_CANAL_SO_PARA", "SDR_CANAL_DIAS", "SDR_CANAL_EMAIL_IDADE_H",
               "SDR_CANAL_ESPERA_MIN", "SDR_CANAL_FILA_HORAS"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "0")       # na hora; os testes do lote (21/10) ligam o ritmo
+    monkeypatch.setenv("SDR_CANAL_HORARIO", "0-24")     # sempre no expediente (o CI roda a qualquer hora)
     monkeypatch.setenv("CC_DIALPAD_FAKE", os.path.join(pasta, "sms.jsonl"))
     monkeypatch.setenv("CC_EMAIL_FAKE", os.path.join(pasta, "email.jsonl"))
     monkeypatch.setenv("CC_PONTE_FAKE", os.path.join(pasta, "ponte.json"))
@@ -577,7 +578,7 @@ def test_email_de_dias_atras_o_robo_nao_responde(ambiente, monkeypatch):
     from datetime import datetime, timedelta, timezone
     monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
     velho = thread()
-    velho["mensagens"][-1]["data"] = format_datetime(datetime.now(timezone.utc) - timedelta(days=3))
+    velho["mensagens"][-1]["data"] = format_datetime(datetime.now(timezone.utc) - timedelta(days=4))
     novo = thread(tid="t-2", de="Bia <bia@example.com>", mid="m-2")
     novo["mensagens"][-1]["data"] = format_datetime(datetime.now(timezone.utc) - timedelta(hours=2))
     caixa([velho, novo])
@@ -586,3 +587,56 @@ def test_email_de_dias_atras_o_robo_nao_responde(ambiente, monkeypatch):
     assert [e["to"] for e in enviados("email")] == ["bia@example.com"]
     assert sdr_canais.ler_email(ambiente["con"])["conversas"] == []        # a volta seguinte não volta nele
     assert not sdr_canais.velho("lixo") and not sdr_canais.velho(None)
+
+
+# ------------------------------------------------------------------ expediente também no modo na hora (dono, 22/10)
+def test_na_hora_respeita_o_expediente(monkeypatch):
+    monkeypatch.setenv("SDR_CANAIS_ENV", "/nao/existe")
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "0")
+    monkeypatch.setenv("SDR_CANAL_HORARIO", "8-18")
+    monkeypatch.setenv("SDR_CANAL_DIAS", "1-5")
+    assert sdr_canais.no_expediente(_orlando(22, 10)) and not sdr_canais.no_expediente(_orlando(25, 10))   # domingo
+    monkeypatch.setattr(sdr_canais, "no_expediente", lambda quando=None: False)
+    assert not sdr_canais.responde_agora()
+    monkeypatch.setattr(sdr_canais, "no_expediente", lambda quando=None: True)
+    assert sdr_canais.responde_agora()
+    monkeypatch.setenv("SDR_CANAL_LOTE_MIN", "60")
+    assert not sdr_canais.responde_agora()
+
+
+def test_sms_fora_do_expediente_espera_a_abertura(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    monkeypatch.setattr(sdr_canais, "_intervalo", lambda t: 0)
+    monkeypatch.setattr(sdr_canais, "no_expediente", lambda quando=None: False)
+    con = ambiente["con"]
+    assert "fila" in sdr_canais.sms_evento(con, sms("Oi, sábado abre?"), esperar=False)["robo"]
+    assert enviados("sms") == []
+    r = sdr_canais.volta(con, esperar=False, espera=0)                     # a volta da abertura
+    assert r["sms"]["conversas"][0]["robo"] == "respondeu" and len(enviados("sms")) == 2
+
+
+def test_formulario_fora_do_expediente_confirma_agora_e_o_robo_responde_na_volta(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    monkeypatch.setattr(sdr_canais, "no_expediente", lambda quando=None: False)
+    _formulario(monkeypatch)
+    para_ana = [m for m in enviados("email") if m["to"] == "ana@exemplo.com"]
+    assert len(para_ana) == 1 and "We got your message" in para_ana[0]["subject"]   # só a confirmação
+    caixa([])
+    r = sdr_canais.volta(ambiente["con"], esperar=False, espera=0)
+    assert r["formulario"]["conversas"][0]["robo"] == "respondeu"
+    para_ana = [m for m in enviados("email") if m["to"] == "ana@exemplo.com"]
+    assert len(para_ana) == 2 and "Oi! Aqui é o Chase" in para_ana[1]["text"]
+    assert sdr_canais.volta(ambiente["con"], esperar=False)["formulario"]["conversas"] == []
+
+
+def test_formulario_que_falhou_na_hora_nao_volta_na_fila(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    original = sdr_canais.perguntar_ao_robo
+
+    def fora(*a, **k):
+        raise RuntimeError("ponte fora do ar")
+    monkeypatch.setattr(sdr_canais, "perguntar_ao_robo", fora)
+    _formulario(monkeypatch)
+    monkeypatch.setattr(sdr_canais, "perguntar_ao_robo", original)
+    caixa([])
+    assert sdr_canais.volta(ambiente["con"], esperar=False)["formulario"]["conversas"] == []

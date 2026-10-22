@@ -120,7 +120,7 @@ function CanaisCard({ pode }: { pode: boolean }) {
         {d.data.lista_de_teste && <Chip tone="warn">{tr("só a lista de teste")}</Chip>}
         {d.data.ritmo && (d.data.ritmo.lote_min
           ? <Chip tone={d.data.ritmo.no_expediente ? 'ok' : 'neutral'} title={tr("Responde de uma vez o que espera, só no expediente de Orlando. O que chega fora dele espera a primeira volta do dia.")}>{tr("responde a cada {0} min, {1}h–{2}h", d.data.ritmo.lote_min, d.data.ritmo.abre, d.data.ritmo.fecha)}{d.data.ritmo.dias.length < 7 ? ` · ${tr("dias {0}", d.data.ritmo.dias.join(','))}` : ''}</Chip>
-          : <Chip tone="neutral">{tr("responde na hora")}</Chip>)}
+          : <Chip tone={d.data.ritmo.no_expediente ? 'ok' : 'neutral'} title={tr("Fora do expediente a mensagem espera a abertura do dia seguinte.")}>{tr("responde na hora, {0}h–{1}h", d.data.ritmo.abre, d.data.ritmo.fecha)}{d.data.ritmo.dias.length < 7 ? ` · ${tr("dias {0}", d.data.ritmo.dias.join(','))}` : ''}</Chip>)}
         {!d.data.configuracao.existe && <Chip tone="neutral" title={d.data.configuracao.arquivo}>{tr("sem arquivo de configuração")}</Chip>}
       </div>
       <p className="small muted" style={{ margin: 0 }}>{tr("O mesmo robô do Instagram, só para lead. Quando alguém da equipe responde pelo Dialpad ou pela support@, ele sai da conversa por {0} h. O que ele passa para a equipe aparece em Precisa de atenção.", d.data.pausa_horas)}</p>
