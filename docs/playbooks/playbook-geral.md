@@ -165,7 +165,8 @@ pedem acesso de operador.
 | Site | **Agendamentos** | `/ops/site/agendamentos` | os pedidos de sessão do site e da área do cliente: aceitar, confirmar, recusar, cancelar (era `/ops/site` até o #306) | operador+ |
 | Site | **Disponibilidade** | `/ops/site/disponibilidade` | a agenda que abre e fecha: semana, horários, regras e bloqueios | operador+ (mudar: gerente+) |
 | Site | **Serviços e preços** | `/ops/site/servicos` | **Adicionar serviço** em cima, escolhendo **em qual página do site** ele entra (#312); o preço, o depósito (com **Security deposit obrigatório**, #317) e o item do QuickBooks de cada serviço, com o **cartão do kart no site**, o **kart novo** (#297) e **onde cada um aparece hoje no site** | operador+ (mudar: gerente+) |
-| Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team e do For Beginners (#297); **Adicionar cartão** em cima (#312) | operador+ (mudar: gerente+) |
+| Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team, do For Beginners e os **programas mensais do SIM2GRID** (#297, #392); **Adicionar cartão** em cima (#312) | operador+ (mudar: gerente+) |
+| Site | **Sim2Grid** | `/ops/site/sim2grid` | a hora de simulador do SIM2GRID (#392): as **regras** (vender online, simuladores por hora, horas mínimas e máximas, horizonte, antecedência, abertura, datas fechadas, idade, waiver, aviso e sorteio), as **faixas de preço por hora** de cada formato (com coach, sem coach; preço vazio = "ligue para nós") e as **reservas** que vêm do site, com o card de cada piloto. Detalhes na seção 6, "SIM2GRID" | operador+ (mudar: gerente+) |
 | Site | **Produtos da loja** | `/ops/site/produtos` | título, preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298), e **Como vendemos** (dropshipping ou em estoque, #309) | operador+ (mudar: gerente+) |
 | Site | **Estoque do site** | `/ops/site/estoque` (um produto: `/ops/site/estoque/<endereço>`) | o que é **dropshipping** e o que é **em estoque** (interno: o cliente nunca vê), o item do Estoque ligado a cada produto ou opção e **quanto tem** em cada local (*Galpão 5 · Pista 3*); ligar, criar o item a partir do produto e contar um local por vez (#309) | operador+ (contar); ligar, desligar e mudar o marcador: gerente+ |
 | Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
@@ -820,6 +821,40 @@ abre o card dele).
 | **Medição de campanha no site** (#260, #171) | o site público mede a campanha paga (Tag Manager, Analytics e pixel do Meta) **só depois do Accept no banner de cookies**; o painel e a área do cliente continuam sem script de fora | esta seção, abaixo |
 | **Chat do site** (#170) | o balão do Kommo no site público; a conversa cai no Chat do Kommo | esta seção, abaixo |
 
+### SIM2GRID: a hora de simulador (#392)
+
+Dono, 22/10: *"na pagina do sim2grid eu preciso replicar essa lp ... ali dentro sera um serviço um diferente das
+aulas de kart podendo agendar ate 5 pessoas para a mesma hora, o valor do serviço é cobrado por hora. monte assim
+como montou o arrive and drive com todas as configurações ajustaveis"*.
+
+- **A página**: `novo.urace.us/sim2grid-racing-simulator/` (o mesmo endereço do urace.us de hoje), com o texto da LP:
+  os formatos e os preços por hora, a reserva, os programas mensais, o caminho SIM2GRID → Arrive and Drive → Academy →
+  Racing Team, o endereço e as perguntas. O menu (**Sim 2 Grid**), a página de programas (`/services/`, que ficou com um
+  resumo e o botão) e a Career levam para ela.
+- **Formatos** são serviços de **Site › Serviços e preços** com o tipo **Hora de simulador (SIM2GRID)**: hoje, *sem
+  coach* e *com coach*. Ali mudam o nome, o **nome no site**, a linha de baixo, o texto, o **depósito** (com
+  "obrigatório") e o **item do QuickBooks**; desativar tira o formato da página. **Adicionar serviço → SIM2GRID →
+  Formato da hora de simulador** cria um formato novo (as faixas dele vêm depois, em Site › Sim2Grid).
+- **Faixas de preço** (Site › Sim2Grid): para cada formato, os **dias**, **de / até** (hora cheia; 24 = meia-noite) e o
+  **US$ por hora**. Preço **vazio** = *"Call our team for options"*: o horário aparece, mas não se vende online. Vale a
+  primeira faixa da lista que cobre o horário. **Vale o horário de início** (dono, 22/10): a hora final da faixa também
+  serve de início (7h–17h aceita começar às 17h, pela tarifa diurna) e a sessão inteira sai pela tarifa do início.
+  Desativar não apaga.
+- **Regras**: **Simuladores** (pessoas na mesma hora, 5), **horas mínimas e máximas seguidas**, **mostra até** (dias),
+  **antecedência**, **abre a partir de** (a inauguração, 01/11/2026), **datas fechadas**, **idade mínima** (vazio: o site
+  não diz e pede para ligar antes de reservar para criança), **waiver obrigatória**, o **aviso** perto do botão e o texto
+  do **sorteio do mês** (vazio: sem a caixa). **Vender online** desligado: a página mostra preços e telefone, sem botão.
+- **Como a pessoa reserva**: formato → dia → hora de início (cada hora diz quantos simuladores sobram) → quantas horas e
+  quantas pessoas → carrinho → conta → Stripe, o mesmo caminho do Arrive and Drive. **Cada pessoa é um simulador e uma
+  linha do carrinho**, com o piloto dela (cada piloto no seu card). O preço é a soma das horas pela faixa de cada uma.
+  O horário fica **segurado** enquanto o Checkout do Stripe vale (31 min); pago, vira **reserva paga** no card do piloto,
+  com a venda **GANHO** em Vendas e, com a waiver ligada, a waiver do piloto. Se a hora encheu entre o checkout e o
+  pagamento, a linha fica **sem vaga** no pedido (Precisa de atenção) para a equipe remarcar ou devolver.
+- **Reservas** (Site › Sim2Grid, embaixo): as pagas e as que estão no pagamento, da mais próxima para a frente, com o card
+  de cada piloto, o sorteio e a waiver. A hora de simulador **não** ocupa a agenda do kart (Disponibilidade).
+- **Os programas mensais** (3x, 2x, 1x por semana) são cartões da página em **Cartões das páginas › SIM2GRID**; o botão
+  abre o contato com o programa já escrito (assunto *SIM2GRID racing simulator*).
+
 ### Painel do site (#306)
 
 Dono, 16/10: *"uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada painel de lá …
@@ -1375,6 +1410,9 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |
 | "O kart 2-stroke já é vendido por "…": dois serviços ativos com o mesmo kart tiram o kart do site. Desative aquele antes ou escolha outro kart." (ou "O add-on … já é vendido por …") | criar, trocar o kart ou reativar um serviço deixaria dois ativos com a mesma chave (#312) | Site › Serviços e preços: desative o serviço de hoje daquele kart e depois crie, troque ou reative o novo; ou escolha outro kart (ou **Novo kart…**) |
 | No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263). O serviço ambíguo mostra, em vermelho, **fora do site: a chave … também está em …** (#312): desative um dos dois |
+| No SIM2GRID: "This time is booked by phone" / um dia em laranja que só mostra "Call us" | a faixa daquele formato e horário está **sem preço** (ligar), que alguém deixou sem preço | é de propósito; para vender online, ponha o preço da faixa em Site › Sim2Grid |
+| No SIM2GRID: "This time is full" ou "0 simulators left" | as reservas pagas e as que estão no pagamento já somam os simuladores daquela hora | outra hora, ou mais simuladores em Site › Sim2Grid › Regras (se houver simulador de verdade) |
+| No SIM2GRID: "Online booking is not open right now" | **Vender online** desligado, nenhum formato ativo, ou o Stripe fora | ligue em Site › Sim2Grid, ative um formato em Serviços e preços, ou confira o Stripe |
 | No site/reserva: "Online booking is closed right now" | **nenhum** serviço ativo em Serviços e preços: não há o que vender online | ative um serviço; enquanto isso o site manda a pessoa falar com a gente, e nenhuma vaga é prometida |
 | No calendário do site: "Pick a time to continue" | o dia está escolhido e falta o turno (Morning/Afternoon) | escolha o turno; é o próprio site pedindo o que falta (#253) |
 

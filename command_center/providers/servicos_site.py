@@ -105,7 +105,8 @@ def paginas_do_site():
     return [{"id": "arrive-and-drive", "nome": "Arrive and Drive", "caminho": ARRIVE["caminho"], "cartoes": False},
             {"id": "academy", "nome": "Academy", "caminho": PAGINAS["academy"], "cartoes": True},
             {"id": "pro-team", "nome": "Pro Team", "caminho": PAGINAS["pro-team"], "cartoes": True},
-            {"id": "for-beginners", "nome": "For Beginners", "caminho": PAGINAS["for-beginners"], "cartoes": True}]
+            {"id": "for-beginners", "nome": "For Beginners", "caminho": PAGINAS["for-beginners"], "cartoes": True},
+            {"id": "sim2grid", "nome": "SIM2GRID", "caminho": PAGINAS["sim2grid"], "cartoes": True}]       # #392
 
 
 def _chave(s):
@@ -121,6 +122,7 @@ def onde_no_site(servicos):
     - `addon`: add-on ativo com a chave do Lead and Follow, o único → caixa da reserva do Arrive and Drive
       (`addon_do_site`); add-on com outra chave o site não mostra (`nenhum`);
     - `plano`: plano ativo → página da Academy (`planos_para_cliente`);
+    - `sim2grid` (#392): formato de simulador ativo → página do SIM2GRID, com as faixas de preço de Site › Sim2Grid;
     - `area`: sessão ativa sem kart → só na área do cliente;
     - `repetido`: dois ou mais ativos do mesmo tipo com a mesma chave → o site não mostra nenhum (`com`: os outros);
     - `desativado`: fora do site e da área do cliente.
@@ -140,6 +142,8 @@ def onde_no_site(servicos):
             pass
         elif kind == "plan":
             d.update(onde="plano", pagina="academy")
+        elif kind == "sim":                       # #392: todo formato ativo de simulador entra na página do SIM2GRID
+            d.update(onde="sim2grid", pagina="sim2grid")
         elif kind == "addon" and k != lf:
             d.update(onde="nenhum")
         elif not k:
@@ -240,8 +244,9 @@ def _dados(con, d, parcial):
     if "deposit_required" in d and d["deposit_required"] is not None:
         s["deposit_required"] = 1 if d["deposit_required"] else 0     # #317: o checkout não passa sem o depósito
     if "kind" in d and d["kind"] is not None:
-        if d["kind"] not in ("session", "plan", "addon"):
-            raise ErroServico("tipo inválido: session (sessão avulsa), plan (plano mensal) ou addon (add-on do dia)")
+        if d["kind"] not in ("session", "plan", "addon", "sim"):
+            raise ErroServico("tipo inválido: session (sessão avulsa), plan (plano mensal), addon (add-on do dia) ou "
+                              "sim (hora de simulador do SIM2GRID)")
         s["kind"] = d["kind"]
     if "months" in d:
         m = int(d["months"]) if d["months"] not in (None, "") else None
@@ -278,7 +283,7 @@ MSG_DEPOSITO_OBRIGATORIO = ("Security deposit obrigatório: informe o valor do d
 def _confere_deposito(s):
     """#317 (dono, 16/10): "coloca em cada serviço … um checkbox para marcar que ele é obrigatório". Marcado, a
     sessão nunca fica sem depósito: nem ao salvar, nem no checkout."""
-    if (s.get("kind") or "session") == "session" and s.get("deposit_required") and not float(s.get("deposit") or 0) > 0:
+    if (s.get("kind") or "session") in ("session", "sim") and s.get("deposit_required") and not float(s.get("deposit") or 0) > 0:
         raise ErroServico(MSG_DEPOSITO_OBRIGATORIO)
 
 

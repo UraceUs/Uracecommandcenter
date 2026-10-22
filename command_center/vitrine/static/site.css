@@ -591,3 +591,26 @@ h3.ed-t.ed-tam-g { font-size: clamp(1.4rem, 3vw, 1.9rem) }
 .carrinho-cadastro input[aria-invalid="true"], .carrinho-cadastro select[aria-invalid="true"] { border-color: var(--vermelho) }
 .carrinho-aviso-piloto { color: var(--tinta); border-left: 3px solid var(--aviso); padding-left: 8px }
 .carrinho-cadastro .cad-entrar, .carrinho-erro a { display: inline-flex; align-items: center; min-height: 40px }
+
+/* --------------------------------------------------------------- SIM2GRID (#392): a hora de simulador */
+.hero-sim { background: radial-gradient(120% 90% at 80% 0%, #2a0b0c 0%, var(--preto) 60%) }
+.sim-selo { justify-self: start; border: 1px solid var(--vermelho-2); color: #fff; border-radius: 999px; padding: 6px 12px;
+  font-size: .82rem; font-weight: 700; letter-spacing: .02em }
+.sim-trilha { color: var(--cinza-claro); font-weight: 600 }
+.kart.sim-formato { grid-template-areas: "r nome preco" "r idade preco" "r texto texto"; align-items: start }
+.sim-formato .kart-preco { text-align: right; font-size: .9rem }
+.sim-texto { grid-area: texto; margin-top: 8px; color: #3c3d50; font-size: .9rem; line-height: 1.4; min-width: 0 }
+.sim-faixas { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px }
+.sim-faixas li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; border-top: 1px solid #e3e3ea; padding-top: 4px }
+.sim-faixas strong { font-variant-numeric: tabular-nums }
+.sim-horas { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px }
+.sim-hora { min-height: 52px }
+.sim-opcoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px }
+.sim-campo { display: grid; gap: 4px; font-size: .88rem; font-weight: 600 }
+.sim-campo select { min-height: 44px; border: 1.5px solid #e3e3ea; border-radius: var(--raio); padding: 0 10px; font: inherit; background: #fff }
+.agenda-dia.ligar { background: #fff4e5; color: #8a4b00 }
+.sim-aviso { margin: 0; font-size: .85rem; line-height: 1.4; color: #8a4b00; background: #fff4e5; border-radius: var(--raio); padding: 10px 12px }
+.sim-regras { margin: 0; padding-left: 18px; color: var(--cinza); display: grid; gap: 2px }
+.sim-foto { border-radius: 14px; width: 100%; height: auto; max-height: 520px; object-fit: cover; aspect-ratio: 3 / 4 }
+.sim-degraus li a { min-height: 40px; display: inline-flex; align-items: center; font-weight: 700; color: var(--vermelho) }
+.sim-degraus li p { margin: 0 }

@@ -43,6 +43,10 @@
       var igual = itens.filter(function (x) { return x.tipo === 'produto' && x.produto === item.produto && (x.variacao || '') === (item.variacao || '') })[0]
       if (igual) igual.quantidade = Math.min(20, (Number(igual.quantidade) || 1) + (Number(item.quantidade) || 1))
       else itens.push({ tipo: 'produto', produto: item.produto, variacao: item.variacao || '', quantidade: Math.max(1, Math.min(20, Number(item.quantidade) || 1)) })
+    } else if (item.tipo === 'sessao' && item.hora != null) {
+      // #392: a hora do SIMULADOR é uma linha por pessoa (um simulador cada): duas iguais são duas pessoas
+      itens.push({ tipo: 'sessao', servico: Number(item.servico), data: item.data, hora: Number(item.hora), horas: Number(item.horas) || 1,
+        sorteio: !!item.sorteio, piloto: item.piloto || null })
     } else if (item.tipo === 'sessao') {
       var ja = itens.filter(function (x) { return x.tipo === 'sessao' && x.servico === item.servico && x.data === item.data && x.turno === item.turno && !x.piloto })[0]
       // #279: o Lead and Follow vai junto da sessão; pedir de novo a mesma sessão com ele só liga o add-on
@@ -68,6 +72,12 @@
         var q = Math.max(1, Math.min(20, Number(x.quantidade) || 1))
         if (igual) igual.quantidade = Math.max(Number(igual.quantidade) || 1, q)
         else atuais.push({ tipo: 'produto', produto: String(x.produto), variacao: x.variacao || '', quantidade: q })
+      } else if (x.tipo === 'sessao' && x.hora != null) {
+        // #392: a hora de simulador volta como estava (uma linha por pessoa, com o piloto de cada uma)
+        var jaSim = atuais.some(function (y) { return y.tipo === 'sessao' && Number(y.servico) === Number(x.servico) && y.data === x.data
+          && Number(y.hora) === Number(x.hora) && (Number(y.piloto) || null) === (Number(x.piloto) || null) && x.piloto })
+        if (!jaSim) atuais.push({ tipo: 'sessao', servico: Number(x.servico), data: String(x.data), hora: Number(x.hora), horas: Number(x.horas) || 1,
+          piloto: Number(x.piloto) || null })
       } else if (x.tipo === 'sessao') {
         var ja = atuais.some(function (y) { return y.tipo === 'sessao' && Number(y.servico) === Number(x.servico) && y.data === x.data && y.turno === x.turno })
         if (!ja) atuais.push({ tipo: 'sessao', servico: Number(x.servico), data: String(x.data), turno: String(x.turno), piloto: Number(x.piloto) || null,

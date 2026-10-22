@@ -16,6 +16,7 @@ from urllib.parse import quote, urlencode
 from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
+from command_center.vitrine import conteudo_sim2grid as SG
 from command_center.vitrine import dica, idioma, medicao
 from command_center.vitrine.paginas import PORTAL, PRECO_KART, _lista, _negocio, estatico, foto_url, layout, preco_kart, tamanho_estatico, usd  # noqa: F401
 
@@ -242,8 +243,9 @@ def hub(host):
   <h2 id="h-lista">Every URACE program</h2><div class="servicos-grade">{cards}</div>
 </div></section>
 <section class="faixa escura" aria-labelledby="h-sim" id="sim2grid"><div class="largura duas">
-  <div><p class="eyebrow">{e(d['sim_abertura'])}</p><h2 id="h-sim">{e(d['sim_titulo'])}</h2>{_ps(d['sim'])}{_faq(d['sim_faq'], 'faq-sim')}</div>
-  <div class="fotos-duas">{"".join(f'<img src="{estatico("img/" + f)}" alt="URACE Sim 2 Grid" width="640" height="420" loading="lazy">' for f in d['sim_fotos'])}</div>
+  <div><p class="eyebrow">{e(d['sim_abertura'])}</p><h2 id="h-sim">{e(d['sim_titulo'])}</h2>{_ps(d['sim'])}
+    <p class="hero-acoes"><a class="btn" href="{e(d['sim_cta'][1])}">{e(d['sim_cta'][0])}</a></p></div>
+  <div class="fotos-duas">{"".join(f'<img src="{estatico("img/" + f)}" alt="URACE SIM2GRID racing simulator" width="640" height="420" loading="lazy">' for f in d['sim_fotos'])}</div>
 </div></section>
 {_fecho(d['fecho'], d['fecho_sub'], ('Tell us about the driver', '/contact/'))}"""
     lista = {"@context": "https://schema.org", "@type": "ItemList", "itemListElement": [
@@ -431,6 +433,209 @@ def beginners(host, cartoes=None):
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'])}"""
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
                   schemas=(_negocio(host), _faq_ld(d["faq"]), _trilha(host, ("For Beginners", d["caminho"]))), foto=d["foto"])
+
+
+# ------------------------------------------------------------------ SIM2GRID (#392)
+def _sim_padrao():
+    """Os formatos, as faixas e as regras de fábrica (`conteudo_sim2grid`), para a página com o banco fora. Sem id de
+    serviço: a página mostra os preços e o telefone, e a reserva online espera o painel responder."""
+    forms = [{"id": None, "name": n, "titulo": t, "linha": sub, "texto": tx, "deposit": 0.0, "key": k}
+             for k, n, t, sub, tx, _p, _o in SG.FORMATOS]
+    ids = {k: i for i, (k, *_r) in enumerate(SG.FORMATOS)}
+    fs = [{"service_id": ids[f], "days": d, "start_hour": a, "end_hour": b, "price": p, "active": 1}
+          for _c, f, d, a, b, p, _o in SG.FAIXAS]
+    for i, f in enumerate(forms):
+        f["_i"] = i
+    return forms, fs, dict(SG.REGRAS)
+
+
+def _sim_faixas_html(fs, sid):
+    from command_center.providers import sim2grid as sim
+    linhas = [f for f in fs if f["service_id"] == sid and f["active"]]
+    if not linhas:
+        return ""
+    return '<ul class="sim-faixas">' + "".join(
+        f'<li><span>{e(sim.dias_txt(f["days"]))} · {e(sim.faixa_txt(f["start_hour"], f["end_hour"]))}</span>'
+        + (f'<strong>{usd(f["price"])} / hour</strong>' if f["price"] is not None else '<strong>Call our team for options</strong>')
+        + "</li>" for f in linhas) + "</ul>"
+
+
+def sim2grid(host, formatos=None, faixas=None, regras=None, cartoes=None):
+    """#392: a LP do SIM2GRID com a reserva por hora. `formatos`/`faixas`/`regras` vêm do painel (Site › Sim2Grid e
+    Serviços e preços); None é o banco fora, e a página sai com os valores de fábrica e o telefone."""
+    from command_center.providers import sim2grid as sim
+    d = SG.PAGINA
+    padrao = formatos is None
+    if padrao:
+        formatos, faixas, regras = _sim_padrao()
+    chave = (lambda f: f["_i"]) if padrao else (lambda f: f["id"])
+    online = [f["price"] for f in faixas if f["active"] and f["price"] is not None and any(chave(x) == f["service_id"] for x in formatos)]
+    menor = min(online) if online else None
+    desde = f"Starting at {usd(menor)}" if menor is not None else "Call us for rates"
+    tel = f'<a href="tel:{e(C.SITE["telefone_e164"])}">{e(SG.TELEFONE)}</a>'
+    cards = []
+    for i, f in enumerate(formatos):
+        sid = chave(f)
+        precos = [x["price"] for x in faixas if x["service_id"] == sid and x["active"] and x["price"] is not None]
+        a_partir = f"from {usd(min(precos))} / hour" if precos else "Call us"
+        cards.append(f'<label class="kart sim-formato"><input type="radio" name="formato" value="{"" if f["id"] is None else f["id"]}"'
+                     f'{" checked" if i == 0 else ""}{" disabled" if f["id"] is None else ""} data-titulo="{e(f["titulo"])}">'
+                     f'<span class="kart-nome">{e(f["titulo"])}</span><span class="kart-idade">{e(f["linha"] or "")}</span>'
+                     f'<span class="kart-preco">{e(a_partir)}</span>'
+                     f'<span class="sim-texto">{e(f["texto"] or "")}{_sim_faixas_html(faixas, sid)}</span></label>')
+    vende = bool(regras.get("online")) and not padrao and bool(formatos)
+    escolha = ("".join(cards) or '<p class="agenda-indisponivel"><span>No simulator sessions are open online right now. '
+               f'Call us to book:</span> {tel}</p>')
+    sorteio = (f'<label class="addon sim-sorteio"><input type="checkbox" name="sorteio" value="1"><span class="addon-txt">'
+               f'{e(regras["raffle_text"])}</span><span class="addon-preco"></span></label>') if regras.get("raffle_text") else ""
+    regras_txt = []
+    if regras.get("min_age"):
+        regras_txt.append(f"Drivers must be {int(regras['min_age'])} or older.")
+    if regras.get("waiver_required"):
+        regras_txt.append("Each driver signs the URACE waiver in their account before the session.")
+    regras_txt.append(f"Up to {int(regras['capacity'])} people can drive at the same time, one simulator each. Each driver "
+                      "books and pays their own hour.")
+    aviso = f'<p class="sim-aviso" role="note">{e(regras["notice"])}</p>' if regras.get("notice") else ""
+    # o FAQ diz as faixas do painel por extenso (nunca um preço que o painel não tem)
+    solo = next((chave(f) for f in formatos if "coach" not in (f.get("key") or "")), chave(formatos[0]) if formatos else None)
+    coach = next((chave(f) for f in formatos if "coach" in (f.get("key") or "")), None)
+    marcas = {"solo": sim.texto_das_faixas(faixas, solo), "coach": sim.texto_das_faixas(faixas, coach),
+              "capacidade": str(int(regras["capacity"]))}
+    faq = [(t, tuple(p.format(**marcas) for p in ps)) for t, ps in d["faq"]]
+    if cartoes:
+        planos = _grupos_dos_cartoes(cartoes, assunto="sim2grid")
+    else:
+        planos = f'<h3 class="mt">{e(SG.PLANOS_GRUPO)}</h3>' + _planos(
+            [(n, s, t, pr, por, f"/contact/?assunto=sim2grid&produto={quote(n)}", "Apply for a place") for n, s, t, pr, por in SG.PLANOS])
+    paixao = "".join(f"""<article class="cartao"><p class="eyebrow">{e(n)}</p><h3>{e(t)}</h3><p><strong>{e(sub)}</strong></p><p>{e(tx)}</p>
+  <a class="btn btn-sm" href="{e(h)}">{e(rot)}</a></article>""" for n, t, sub, tx, (rot, h) in d["paixao"])
+    degraus = "".join(f"""<li><p class="eyebrow">{e(n)} · {e(passo)}</p><h3>{e(nome)}</h3><p><strong>{e(sub)}</strong></p><p>{e(tx)}</p>
+  <a href="{e(h)}">{'Start my racing journey' if h.startswith('#') else 'Discover ' + e(nome)}</a></li>""" for n, passo, nome, sub, tx, h in d["degraus"])
+    rua, cidade, onde = SG.ENDERECO
+    corpo = f"""
+<section class="hero hero-servico hero-sim">
+  <div class="hero-in">
+    <p class="eyebrow">{e(d['eyebrow'])}</p>
+    <h1>{e(d['h1'])}</h1>
+    <p class="hero-sub">{e(d['sub'].format(desde=desde))}</p>
+    <p class="sim-selo">{e(d['selo'])}</p>
+    <div class="hero-acoes"><a class="btn" href="#booking">Book my first session</a>
+      <a class="btn btn-linha" href="tel:{e(C.SITE['telefone_e164'])}">Questions? Call us</a></div>
+    <p class="sim-trilha">{e(d['trilha'])}</p>
+  </div>
+</section>
+
+<section class="faixa clara reserva-faixa" aria-labelledby="h-booking" id="booking">
+  <div class="largura reserva-grade">
+    <div class="reserva-info">
+      <p class="eyebrow">{e(d['reserva_eyebrow'])}</p>
+      <h2 id="h-booking">{e(d['reserva_titulo'])}</h2>
+      <p>{e(d['reserva_sub'])}</p>
+      <fieldset class="karts sim-formatos"><legend>{e(d['passo1'])}</legend>{escolha}</fieldset>
+      <p class="small muted">Rates are per hour. {e(d['fuso'])}</p>
+      <p><a href="#programs">Looking for regular training? See the monthly programs.</a></p>
+    </div>
+    <div class="agenda sim-agenda" data-api="/ops/api/vitrine/sim2grid" data-carrinho="/cart/"
+         data-servicos="/ops/api/vitrine/servicos" data-online="{1 if vende else 0}">
+      <h3>{e(d['passo2'])}</h3>
+      <p class="small muted">{e(d['passo2_sub'])}</p>
+      <div class="agenda-mes" hidden>
+        <button type="button" class="agenda-nav" data-ir="-1" aria-label="Previous month">‹</button>
+        <strong class="agenda-titulo" aria-live="polite"></strong>
+        <button type="button" class="agenda-nav" data-ir="1" aria-label="Next month">›</button>
+      </div>
+      <div class="agenda-grade" role="group" aria-label="Available days"></div>
+      <div class="sim-horas" role="group" aria-label="Start time" hidden></div>
+      <div class="sim-opcoes" hidden>
+        <label class="sim-campo">Hours in a row <select name="horas"></select></label>
+        <label class="sim-campo">Simulators (people) <select name="pessoas"></select></label>
+      </div>
+      <p class="agenda-aviso" role="status">{'Loading the open days…' if vende else 'Online booking is not open right now.'}</p>
+      <p class="agenda-indisponivel" role="status"{'' if not vende else ' hidden'}><span class="agenda-indisponivel-txt">Call us and we book your session for you:</span>
+        {tel} <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
+      {sorteio}
+      {aviso}
+      <ul class="sim-regras small">{"".join(f"<li>{e(t)}</li>" for t in regras_txt)}</ul>
+      <div class="agenda-total"><span class="agenda-resumo">Choose a date and a start time</span><strong class="agenda-preco"></strong></div>
+      <p class="agenda-deposito small" hidden>+ <span class="agenda-deposito-valor"></span> refundable security deposit per driver {dica.deposito()}</p>
+      <button type="button" class="btn btn-cheio agenda-carrinho" aria-disabled="true" disabled{'' if vende else ' hidden'}>Pick a day to continue</button>
+      <p class="carrinho-ok" role="status" aria-live="polite"></p>
+      <noscript><p class="agenda-indisponivel"><span>Booking online needs JavaScript. Turn it on, or call us and we book your
+        session for you:</span> {tel}</p></noscript>
+      <p class="agenda-nota">{e(d['nota'])}</p>
+      <p class="small muted">{e(d['fuso'])}</p>
+    </div>
+  </div>
+</section>
+
+<section class="faixa escura" aria-labelledby="h-planos" id="programs"><div class="largura">
+  <p class="eyebrow">{e(d['planos_capacidade'])}</p>
+  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{planos}
+</div></section>
+
+<section class="faixa clara" aria-labelledby="h-caminho"><div class="largura duas">
+  <div><p class="eyebrow">{e(d['caminho_eyebrow'])}</p><h2 id="h-caminho">{e(d['caminho_titulo'])}</h2>{_ps(d['caminho_texto'])}</div>
+  <img src="{estatico('img/' + d['foto'])}" alt="The URACE SIM2GRID racing simulator" width="1080" height="1440" loading="lazy" class="sim-foto">
+</div></section>
+
+<section class="faixa escura" aria-labelledby="h-paixao"><div class="largura">
+  <p class="eyebrow">{e(d['paixao_eyebrow'])}</p><h2 id="h-paixao">{e(d['paixao_titulo'])}</h2>
+  <div class="cartoes">{paixao}</div>
+</div></section>
+
+<section class="faixa clara" aria-labelledby="h-degraus"><div class="largura">
+  <p class="eyebrow">{e(d['degraus_eyebrow'])}</p><h2 id="h-degraus">{e(d['degraus_titulo'])}</h2><p>{e(d['degraus_sub'])}</p>
+  <ol class="passos sim-degraus">{degraus}</ol>
+</div></section>
+
+<section class="faixa escura" aria-labelledby="h-local"><div class="largura duas">
+  <div><h2 id="h-local">Location</h2>
+    <address>{e(rua)}, {e(cidade)} — {e(onde)}.</address>
+    <p>Phone – {tel}<br>E-mail – <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p></div>
+  <img src="{estatico('img/' + d['fotos'][0])}" alt="A driver in the URACE SIM2GRID cockpit" width="1080" height="1440" loading="lazy" class="sim-foto">
+</div></section>
+
+<section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita">
+  <p class="eyebrow">{e(d['faq_eyebrow'])}</p><h2 id="h-faq">{e(d['faq_titulo'])}</h2><p>{e(d['faq_sub'])}</p>
+  <p><a class="btn btn-sm" href="tel:{e(C.SITE['telefone_e164'])}">Call {e(SG.TELEFONE)}</a></p>
+  {_faq(faq)}
+</div></section>
+
+<section class="faixa vermelha" aria-labelledby="h-fecho"><div class="largura centro">
+  <p class="eyebrow">{e(d['fecho_eyebrow'])}</p><h2 id="h-fecho">{e(d['fecho'])}</h2><p class="fecho-sub">{e(d['fecho_sub'])}</p>
+  <div class="hero-acoes centro"><a class="btn btn-branco" href="#booking">Start my racing journey</a>
+    <a class="btn btn-linha-branca" href="tel:{e(C.SITE['telefone_e164'])}">Questions? Call us</a></div>
+</div></section>"""
+    # o Google lê as faixas como preço por hora (UnitPriceSpecification, HUR) — só as que se compram online
+    ofertas = []
+    for f in formatos:
+        for x in faixas:
+            if x["service_id"] == chave(f) and x["active"] and x["price"] is not None:
+                ofertas.append({"@type": "Offer", "name": f"{f['titulo']} — {sim.dias_txt(x['days'])}, {sim.faixa_txt(x['start_hour'], x['end_hour'])}",
+                                "priceCurrency": "USD", "url": f"https://{host}{d['caminho']}#booking",
+                                "priceSpecification": {"@type": "UnitPriceSpecification", "price": f"{x['price']:.2f}",
+                                                       "priceCurrency": "USD", "unitCode": "HUR", "referenceQuantity":
+                                                       {"@type": "QuantitativeValue", "value": 1, "unitCode": "HUR"}}})
+    for c in (_dos_cartoes(cartoes) if cartoes else []):
+        if _preco_numero(c[3]):
+            ofertas.append({"@type": "Offer", "name": f"SIM2GRID monthly program — {c[0]}", "price": _preco_numero(c[3]),
+                            "priceCurrency": "USD", "url": f"https://{host}{d['caminho']}#programs"})
+    oferta = {"@context": "https://schema.org", "@type": "Service", "name": "SIM2GRID racing simulator sessions",
+              "serviceType": "Racing simulator session", "description": d["descricao"],
+              "provider": {"@id": f"https://{host}/#business"}, "areaServed": "Orlando, FL",
+              "availableChannel": {"@type": "ServiceChannel", "serviceLocation": {"@type": "Place", "name": "URACE SIM2GRID",
+                                   "address": {"@type": "PostalAddress", "streetAddress": rua, "addressLocality": "Orlando",
+                                               "addressRegion": "FL", "postalCode": C.SITE["endereco"]["cep"], "addressCountry": "US"}}}}
+    if ofertas:
+        oferta["offers"] = ofertas
+    if vende:
+        oferta["potentialAction"] = {"@type": "ReserveAction", "target": {"@type": "EntryPoint",
+                                     "urlTemplate": f"https://{host}{d['caminho']}#booking",
+                                     "actionPlatform": ["http://schema.org/DesktopWebPlatform", "http://schema.org/MobileWebPlatform"]},
+                                     "result": {"@type": "Reservation", "name": "SIM2GRID simulator session"}}
+    return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
+                  schemas=(_negocio(host), oferta, _faq_ld(faq), _trilha(host, ("SIM2GRID", d["caminho"]))),
+                  scripts=("sim2grid.js",), foto=d["foto"])
 
 
 def career(host):
@@ -1417,7 +1622,7 @@ def _texto(h):
 def caminhos():
     """Todas as páginas do site, para o sitemap e o teste de "um h1 por página"."""
     d, no_ar = dados("posts.json"), posts()            # #172: só o que está no ar (o banco; sem banco, o arquivo)
-    out = ["/", "/services/", C.ARRIVE["caminho"]] + [s["caminho"] for s in S.SERVICOS] + [p["caminho"] for p in P.PAGINAS]
+    out = ["/", "/services/", C.ARRIVE["caminho"], SG.CAMINHO] + [s["caminho"] for s in S.SERVICOS] + [p["caminho"] for p in P.PAGINAS]
     out += ["/blog/"] + [f"/blog/category/{c['slug']}/" for c in d["categorias"]
                          if c["slug"] != "uncategorized" and any(_da_categoria(p, c["slug"]) for p in no_ar)]
     out += [f"/blog/{p['slug']}/" for p in no_ar]
