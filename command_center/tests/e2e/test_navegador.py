@@ -5847,7 +5847,7 @@ def test_adicionar_servico_no_topo_escolhe_a_pagina_e_o_site_mostra(servidor, na
         g.wait_for_function("() => document.activeElement && document.activeElement.textContent.trim() === 'Arrive and Drive'", timeout=3000)
         paginas = painel.get_by_role("radiogroup", name="Em qual página do site?").get_by_role("radio")
         assert [x.inner_text().strip() for x in paginas.all()] == ["Arrive and Drive", "Academy", "Pro Team", "For Beginners",
-                                                                   "Só na área do cliente"], "as páginas que o site tem"
+                                                                   "SIM2GRID", "Só na área do cliente"], "as páginas que o site tem"
         # Arrive and Drive · kart: o que está na página hoje, e o kart com serviço ativo não se escolhe de novo
         painel.get_by_role("radio", name="Arrive and Drive").click()
         assert painel.get_by_role("radio", name="Kart (reserva online)").get_attribute("aria-checked") == "true"
