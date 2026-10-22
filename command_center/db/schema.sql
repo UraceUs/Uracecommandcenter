@@ -2476,3 +2476,57 @@ CREATE TABLE IF NOT EXISTS sdr_canal_mensagens (
 CREATE INDEX IF NOT EXISTS sdr_canal_mensagens_contato ON sdr_canal_mensagens(canal, contato, at);
 CREATE UNIQUE INDEX IF NOT EXISTS sdr_canal_mensagens_externo ON sdr_canal_mensagens(canal, external_id)
   WHERE external_id IS NOT NULL;
+
+-- ------------------------------------------------- WhatsApp dos grupos do ateliê (#383)
+-- Dono, 22/10: o OpenClaw serve só para a VPS acessar os grupos internos ("Urace Suits - Usman" e
+-- "Macacão design Urace"). O OpenClaw é só o transporte: o que chega de um grupo da lista vem para cá
+-- (POST local com segredo), e o que sai é o Command Center chamando `openclaw message send`.
+CREATE TABLE IF NOT EXISTS atelie_wa_mensagens (
+  id           INTEGER PRIMARY KEY,
+  grupo_jid    TEXT NOT NULL,             -- o JID do grupo (…@g.us), da lista em ~/.urace/whatsapp-grupos.env
+  papel        TEXT NOT NULL,             -- design | fornecedor | (outro grupo da lista: só registro)
+  direcao      TEXT NOT NULL CHECK (direcao IN ('entrada','saida')),
+  message_id   TEXT,                      -- o id da mensagem no WhatsApp (resposta citando a nossa liga ao pedido)
+  remetente    TEXT,
+  remetente_nome TEXT,
+  texto        TEXT,
+  resposta_a   TEXT,                      -- o id da mensagem citada
+  resposta_texto TEXT,
+  anexos       TEXT,                      -- json [{nome, tipo, bytes}]
+  order_id     INTEGER REFERENCES suit_orders(id),
+  vinculo      TEXT,                      -- numero | nome | resposta | equipe | enviada
+  estado       TEXT NOT NULL DEFAULT 'nova'
+               CHECK (estado IN ('nova','tratada','sem_pedido','ambigua','registro')),
+  candidatos   TEXT,                      -- json [ids] quando mais de um pedido bate (ambígua: a equipe escolhe)
+  at           TEXT,                      -- a hora da mensagem no WhatsApp
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS atelie_wa_mensagens_id ON atelie_wa_mensagens(grupo_jid, message_id)
+  WHERE message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS atelie_wa_mensagens_pedido ON atelie_wa_mensagens(order_id, id);
+CREATE INDEX IF NOT EXISTS atelie_wa_mensagens_estado ON atelie_wa_mensagens(estado, id);
+
+-- O que vai para um grupo. Com "envio automático" desligado (o padrão da ponte de Suits), nasce como
+-- rascunho e sai com o "aprovar" de um clique; ligado, sai sozinho. Cobrança: no máximo uma por pedido,
+-- por grupo e por dia (o índice único trava).
+CREATE TABLE IF NOT EXISTS atelie_wa_saidas (
+  id           INTEGER PRIMARY KEY,
+  order_id     INTEGER NOT NULL REFERENCES suit_orders(id),
+  papel        TEXT NOT NULL,
+  motivo       TEXT NOT NULL DEFAULT 'mensagem' CHECK (motivo IN ('mensagem','cobranca','endereco')),
+  texto        TEXT NOT NULL,
+  anexos       TEXT,                      -- json [nomes de arquivo da pasta do pedido]
+  estado       TEXT NOT NULL DEFAULT 'rascunho' CHECK (estado IN ('rascunho','enviado','descartado','falhou')),
+  dia          TEXT,                      -- AAAA-MM-DD (Flórida) da cobrança
+  criado_por   TEXT NOT NULL DEFAULT 'ia', -- ia | sistema | user:<id>
+  command_id   INTEGER REFERENCES ai_commands(id),
+  decidido_por INTEGER REFERENCES users(id),
+  decidido_em  TEXT,
+  message_id   TEXT,
+  erro         TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS atelie_wa_saidas_pedido ON atelie_wa_saidas(order_id, id);
+CREATE INDEX IF NOT EXISTS atelie_wa_saidas_estado ON atelie_wa_saidas(estado, id);
+CREATE UNIQUE INDEX IF NOT EXISTS atelie_wa_cobranca_dia ON atelie_wa_saidas(order_id, papel, dia)
+  WHERE motivo = 'cobranca';

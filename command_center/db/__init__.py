@@ -426,6 +426,11 @@ MIGRACOES = [
     ("parts_invoices", "review_pending", "INTEGER NOT NULL DEFAULT 0"),
     ("parts_invoices", "reviewed_by", "INTEGER REFERENCES users(id)"),
     ("parts_invoices", "reviewed_at", "TEXT"),
+    # #383 (dono, 22/10): no grupo do Usman, "depois de aprovado manda o endereço de envio do suit". Quem aprova o
+    # suit pronto (as fotos do fornecedor) é a equipe, no pedido; só então o endereço pode ir ao grupo.
+    ("suit_orders", "suit_approved_at", "TEXT"),
+    ("suit_orders", "suit_approved_by", "INTEGER REFERENCES users(id)"),
+    ("suit_orders", "address_sent_at", "TEXT"),
 ]
 INDICES_EXTRA = [
     "CREATE UNIQUE INDEX IF NOT EXISTS clients_scan_code ON clients(scan_code) WHERE scan_code IS NOT NULL",

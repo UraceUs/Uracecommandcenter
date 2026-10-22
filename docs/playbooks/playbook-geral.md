@@ -329,6 +329,7 @@ cada rotina em **Automação e memória**.
 |---|---|
 | a cada 15 minutos | o espelho lê de novo as fontes (Asana, DocuSign, Gmail, QuickBooks) |
 | a cada 15 minutos | a ponte de e-mail dos Suits lê o Gmail `urace@` (ver o [guia de Suits](../suits-guia-do-lucas.md)) |
+| a cada 15 minutos | os grupos do ateliê no WhatsApp: a IA trata as mensagens novas e, das 09h às 18h, a cobrança do dia (#383) |
 | 06:00 | varre Gmail e DocuSign de cada cliente ativo e liga o que achar ao card |
 | 07:00, 13:00, 21:00 | triagem do Gmail pela IA: marca e move para o marcador principal |
 | 07:00, 22:00 | testa cada integração com uma chamada real |
@@ -1126,6 +1127,20 @@ ponho os mesmos ids do site antigo?"*: **"sim pfvr"**. É o que mede quanto cada
 - Enquanto o banner de cookies está aberto, o balão do chat fica **acima** dele; fechado o banner, ele
   volta ao canto (#284). Para o balão ter forma, o site libera **estilo** inline quando o chat está
   ligado — script inline continua proibido.
+
+### Suits: os grupos do ateliê no WhatsApp (#383)
+
+- **Suits › WhatsApp** (`/ops/suits/whatsapp`): o estado da ligação com os grupos "Macacão design Urace" e
+  "Urace Suits - Usman", os **rascunhos para aprovar** de todos os pedidos e as mensagens **sem pedido**
+  (ou que podem ser de mais de um), para ligar ao pedido certo pelo número.
+- No pedido, a seção **WhatsApp do ateliê**: as mensagens dos grupos com os arquivos, os rascunhos com
+  **Aprovar e enviar** (o texto pode ser corrigido), **Escrever no grupo** (sai na hora), **Suit conferido e
+  aprovado** (só depois disso o endereço vai ao fornecedor) e **Gravar rastreio**.
+- Na lista de pedidos, a etiqueta **WhatsApp para aprovar** mostra quantos rascunhos esperam.
+- O que vai ao grupo segue a chave **envio automático** da ponte de e-mail (desligada = rascunho) e nada sai
+  antes de `WA_GRUPOS_APLICAR=1` na VPS. Cobrança: uma por dia por pedido e por grupo, das 09h às 18h.
+
+Detalhe e rotinas no [guia de Suits](../suits-guia-do-lucas.md).
 
 ### Suits: duas novidades
 

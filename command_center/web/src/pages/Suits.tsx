@@ -26,7 +26,7 @@ interface Meta { etapas: Etapa[]; medidas: Medida[]; design: Campo[] }
 interface Linha { id: number; title: string; product: string; quantity: number; customer_name: string | null; driver_name: string | null
   status: string; closed: number; order_date: string | null; due_on: string | null; source: string; fornecedor: string | null
   notas: number; ultima_nota: string | null; updated_at: string | null; created_at: string
-  discarded_at?: string | null; discard_reason?: string | null; ia_ligada?: number }
+  discarded_at?: string | null; discard_reason?: string | null; ia_ligada?: number; wa_rascunhos?: number }
 interface Nota { id: number; status: string | null; kind: string; text: string | null; tem_imagem: number; command_id: number | null
   created_at: string; autor: string | null; ia?: { status: string; output: string | null; error: string | null } | null }
 type Valor = { v: number; u: string } | { t: string }
@@ -61,7 +61,7 @@ const TOM: Record<string, 'neutral' | 'warn' | 'info' | 'accent' | 'ok' | 'crit'
   standby: 'neutral', awaiting_measurements: 'warn', design_pending: 'info', design_review: 'warn', approved: 'accent',
   sent_to_supplier: 'info', in_production: 'info', in_transit: 'accent', delivered: 'ok', canceled: 'neutral' }
 const IDIOMAS: [string, string][] = [['en', tr("Inglês")], ['pt', tr("Português")], ['es', tr("Espanhol")], ['it', tr("Italiano")], ['fr', tr("Francês")], ['de', tr("Alemão")]]
-const KIND: Record<string, string> = { nota: tr("nota"), etapa: tr("etapa"), ia: 'IA', email: tr("e-mail") }
+const KIND: Record<string, string> = { nota: tr("nota"), etapa: tr("etapa"), ia: 'IA', email: tr("e-mail"), whatsapp: 'WhatsApp' }
 const horaFL = (iso: string) => { const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z'); return isNaN(d.getTime()) ? iso
   : d.toLocaleString(LOCALE(), { timeZone: 'America/New_York', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '') }
 const dia = (iso: string | null) => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—'
@@ -73,7 +73,7 @@ const tomD = (t: string): TomD => t === 'accent' ? 'info' : (t as TomD)
 function EtapaChip({ meta, s }: { meta: Meta | null; s: string }) { return <Chip tone={TOM[s] || 'neutral'}>{nomeEtapa(meta, s)}</Chip> }
 
 /* ============================================================ a aba */
-const ABAS: [string, string][] = [['', tr("Pedidos")], ['leads', tr("Leads")], ['fornecedores', tr("Fornecedores")], ['ponte', tr("Ponte de e-mail")], ['modelo', tr("E-mail ao fornecedor")]]
+const ABAS: [string, string][] = [['', tr("Pedidos")], ['leads', tr("Leads")], ['fornecedores', tr("Fornecedores")], ['ponte', tr("Ponte de e-mail")], ['whatsapp', 'WhatsApp'], ['modelo', tr("E-mail ao fornecedor")]]
 
 export function Suits() {
   const { aba = '' } = useParams()
@@ -107,6 +107,7 @@ export function Suits() {
       : aba === 'fornecedores' ? <Fornecedores />
       : aba === 'modelo' ? <Modelo />
       : aba === 'ponte' ? <Ponte />
+      : aba === 'whatsapp' ? <WhatsApp />
       : <Pedidos meta={meta.data} resumo={resumo.data} />}
     {novo && <NovoPedido meta={meta.data} onClose={() => setNovo(false)} onDone={id => nav(`/suits/${id}`)} />}
   </>
@@ -140,8 +141,9 @@ function Pedidos({ meta, resumo }: { meta: Meta | null; resumo: Resumo | null })
           sub={[[p.product !== 'Suit' ? p.product : null, p.quantity > 1 ? `${p.quantity} un.` : null, p.fornecedor].filter(Boolean).join(' · '),
             p.source === 'asana' ? 'do Asana' : p.source === 'ia' ? 'pela IA' : null]}
           grande={p.order_date ? dia(p.order_date) : null} detalhe={p.order_date ? tr("pedido") : null}>
-          {((!p.discarded_at && p.ia_ligada === 0) || p.notas > 0) && <CdLista>
+          {((!p.discarded_at && p.ia_ligada === 0) || p.notas > 0 || !!p.wa_rascunhos) && <CdLista>
             {!p.discarded_at && p.ia_ligada === 0 && <CdItem tom="warn">{tr("IA desligada")}</CdItem>}
+            {!!p.wa_rascunhos && <CdItem tom="warn" valor={p.wa_rascunhos}>{tr("WhatsApp para aprovar")}</CdItem>}
             {p.notas > 0 && <CdItem tom="info" glifo="✎" valor={p.notas}>{tr("notas")}</CdItem>}
           </CdLista>}
         </Cartao>)}</div>}
@@ -226,6 +228,7 @@ export function SuitPedido() {
     <Medidas meta={meta.data} pedido={d} onDone={p.reload} />
     <Design meta={meta.data} pedido={d} onDone={p.reload} />
     <PonteDoPedido pedido={d} onDone={p.reload} />
+    <WhatsAppDoPedido pedido={d} onDone={p.reload} />
     <EmailFornecedor pedido={d} onDone={p.reload} />
     <Linha_do_tempo meta={meta.data} notas={d.notas} />
     {d.asana_notes || d.asana_gid ? <Section title={tr("Como estava no Asana")}>
@@ -667,4 +670,153 @@ function Modelo() {
         <button className="btn ghost" onClick={() => setEd({ ...m.data!.padrao })}>{tr("Voltar ao padrão")}</button><button className="btn primary" onClick={salvar}>{tr("Salvar modelo")}</button></div>
     </> : <><div className="small muted">{tr("Assunto:")} <b>{v.subject}</b></div><pre className="suit-pre">{v.body}</pre></>}
   </Section>
+}
+
+/* ============================================================ WhatsApp do ateliê (#383) */
+interface WaGrupo { papel: string; nome: string; configurado: boolean; idioma: string }
+interface WaCfg { existe: boolean; aplicar: boolean; tem_segredo: boolean; numero: string | null; grupos: WaGrupo[] }
+interface WaEstado { config: WaCfg; envio_automatico: boolean; rascunhos: number; sem_pedido: number }
+interface WaAnexo { nome: string; tipo?: string | null; bytes?: number; nao_guardado?: boolean }
+interface WaMsg { id: number; papel: string; direcao: string; remetente_nome: string | null; texto: string | null; resposta_texto?: string | null
+  anexos: string | null; vinculo?: string | null; estado?: string; candidatos?: string | null; at: string | null }
+interface WaSaida { id: number; order_id?: number; title?: string; papel: string; motivo: string; texto: string; anexos: string | null
+  estado: string; erro?: string | null; created_at: string }
+interface WaPedido { mensagens: WaMsg[]; saidas: WaSaida[]; pedido: { id: number; tracking: string | null; suit_approved_at: string | null
+  address_sent_at: string | null }; config: WaCfg }
+const GRUPO: Record<string, string> = { design: tr("Grupo de design"), fornecedor: tr("Grupo do fornecedor") }
+const MOTIVO: Record<string, string> = { mensagem: tr("mensagem"), cobranca: tr("cobrança do dia"), endereco: tr("endereço de envio") }
+const anexosDe = (j: string | null): WaAnexo[] => { try { return j ? JSON.parse(j) : [] } catch { return [] } }
+
+/** Um rascunho para o grupo: o texto pode ser corrigido antes do aprovar. */
+function RascunhoWa({ s, onDone }: { s: WaSaida; onDone: () => void }) {
+  const toast = useToast()
+  const [texto, setTexto] = useState(s.texto)
+  const [indo, setIndo] = useState(false)
+  async function acao(qual: 'aprovar' | 'descartar') {
+    setIndo(true)
+    try {
+      await api.post(`/atelie/saidas/${s.id}/${qual}`, qual === 'aprovar' ? { texto } : {})
+      toast(qual === 'aprovar' ? tr("Enviado ao grupo.") : tr("Rascunho descartado."), 'ok'); onDone()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  return <li className="wa-rascunho">
+    <div className="small muted">{GRUPO[s.papel] || s.papel} · {MOTIVO[s.motivo] || s.motivo} · {horaFL(s.created_at)}
+      {s.order_id ? <> · <Link to={`/suits/${s.order_id}`}>{s.title || `#${s.order_id}`}</Link></> : null}</div>
+    {s.erro && <p className="small" style={{ color: 'var(--crit)', margin: '4px 0' }}>{tr("Não saiu:")} {s.erro}</p>}
+    <label className="fld"><span className="sr-only">{tr("Texto da mensagem")}</span>
+      <textarea rows={Math.min(8, Math.max(2, texto.split('\n').length))} value={texto} onChange={e => setTexto(e.target.value)} /></label>
+    {anexosDe(s.anexos).length > 0 && <p className="small muted">{tr("Anexos:")} {anexosDe(s.anexos).map(a => typeof a === 'string' ? a : a.nome).join(', ')}</p>}
+    <div className="row gap wrap"><button className="btn primary" disabled={indo} onClick={() => acao('aprovar')}>{tr("Aprovar e enviar")}</button>
+      <button className="btn ghost" disabled={indo} onClick={() => acao('descartar')}>{tr("Descartar")}</button></div>
+  </li>
+}
+
+function MensagemWa({ m, pedido }: { m: WaMsg; pedido?: number }) {
+  const anexos = anexosDe(m.anexos)
+  return <li className={`wa-msg ${m.direcao === 'saida' ? 'nossa' : ''}`}>
+    <div className="small muted">{GRUPO[m.papel] || m.papel} · {m.direcao === 'saida' ? tr("URACE") : (m.remetente_nome || tr("participante"))}{m.at ? ` · ${horaFL(m.at)}` : ''}</div>
+    {m.resposta_texto && <div className="small muted wa-citada">↪ {m.resposta_texto.slice(0, 160)}</div>}
+    {m.texto && <div className="suit-texto">{m.texto}</div>}
+    {anexos.length > 0 && <ul className="suit-lista">{anexos.map(a => <li key={a.nome}>
+      {a.nao_guardado ? <span className="small muted">{a.nome} {tr("(grande demais, não guardado)")}</span>
+        : <a className="suit-linha" target="_blank" rel="noreferrer"
+            href={pedido ? `/ops/api/suits/${pedido}/anexos/${encodeURIComponent(a.nome)}` : `/ops/api/atelie/mensagens/${m.id}/anexos/${encodeURIComponent(a.nome)}`}>
+            <span className="grow truncate">{a.nome}</span>{a.bytes ? <span className="small muted">{tamanho(a.bytes)}</span> : null}</a>}</li>)}</ul>}
+  </li>
+}
+
+function WhatsAppDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {
+  const toast = useToast()
+  const w = useGet<WaPedido>(`/atelie/pedidos/${pedido.id}?v=${pedido.notas.length}`, 30000)
+  const [papel, setPapel] = useState('design')
+  const [texto, setTexto] = useState('')
+  const [codigo, setCodigo] = useState('')
+  const [transp, setTransp] = useState('')
+  const [indo, setIndo] = useState('')
+  if (w.error) return <Section title={tr("WhatsApp do ateliê")}><ErrorState error={w.error} retry={w.reload} /></Section>
+  if (!w.data) return null
+  const d = w.data
+  const grupos = d.config.grupos.filter(g => g.configurado && GRUPO[g.papel])
+  const pendentes = d.saidas.filter(s => s.estado === 'rascunho' || s.estado === 'falhou')
+  const recarregar = () => { w.reload(); onDone() }
+  async function fazer(qual: string, rota: string, corpo: object, ok: string) {
+    setIndo(qual)
+    try { await api.post(rota, corpo); toast(ok, 'ok'); recarregar(); return true }
+    catch (e) { toast((e as ApiError).message, 'crit'); return false } finally { setIndo('') }
+  }
+  return <Section title={tr("WhatsApp do ateliê")} count={d.mensagens.length}>
+    {!grupos.length ? <p className="small muted">{tr("Os grupos do WhatsApp ainda não estão ligados na VPS (Suits › WhatsApp).")}</p> : <>
+      <p className="small muted">{tr("O designer e o fornecedor no WhatsApp. O que vai ao grupo segue a chave de envio automático da ponte: desligada, fica aqui para aprovar.")}</p>
+      {pendentes.length > 0 && <><h3 className="h3">{tr("Para aprovar")}</h3>
+        <ul className="suit-lista">{pendentes.map(s => <RascunhoWa key={s.id} s={s} onDone={recarregar} />)}</ul></>}
+      <h3 className="h3" style={{ marginTop: 12 }}>{tr("Escrever no grupo")}</h3>
+      <div className="suit-form">
+        <label className="fld"><span>{tr("Grupo")}</span><select value={papel} onChange={e => setPapel(e.target.value)}>
+          {grupos.map(g => <option key={g.papel} value={g.papel}>{GRUPO[g.papel]}{g.nome ? ` (${g.nome})` : ''}</option>)}</select></label>
+      </div>
+      <label className="fld"><span>{tr("Mensagem (sai na hora, com o número do pedido)")}</span>
+        <textarea rows={3} value={texto} onChange={e => setTexto(e.target.value)} placeholder={tr("Ao designer, só o design: nada de contato ou pagamento do cliente.")} /></label>
+      <div className="row gap wrap"><button className="btn" disabled={!!indo || !texto.trim()} onClick={async () => {
+        if (await fazer('escrever', `/atelie/pedidos/${pedido.id}/escrever`, { papel, texto }, tr("Enviado ao grupo."))) setTexto('') }}>{tr("Enviar ao grupo")}</button></div>
+      <h3 className="h3" style={{ marginTop: 12 }}>{tr("Suit pronto e envio")}</h3>
+      {d.pedido.suit_approved_at
+        ? <p className="small">{tr("Suit aprovado pela equipe em {0}.", horaFL(d.pedido.suit_approved_at))} {d.pedido.address_sent_at ? tr("Endereço enviado ao fornecedor.") : tr("O endereço espera o aprovar acima.")}</p>
+        : <><p className="small muted">{tr("Confira as fotos do fornecedor. Aprovado, o endereço de entrega vai ao grupo dele (só depois disso).")}</p>
+          <button className="btn" disabled={!!indo} onClick={() => fazer('suit', `/atelie/pedidos/${pedido.id}/suit-aprovado`, {}, tr("Suit aprovado: o endereço foi para o grupo do fornecedor."))}>{tr("Suit conferido e aprovado")}</button></>}
+      <div className="suit-form" style={{ marginTop: 10 }}>
+        <label className="fld"><span>{tr("Código de rastreio")}</span><input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={pedido.tracking || ''} /></label>
+        <label className="fld"><span>{tr("Transportadora (opcional)")}</span><input value={transp} onChange={e => setTransp(e.target.value)} /></label>
+      </div>
+      <button className="btn ghost" disabled={!!indo || !codigo.trim()} onClick={async () => {
+        if (await fazer('rastreio', `/atelie/pedidos/${pedido.id}/rastreio`, { codigo, transportadora: transp || null }, tr("Rastreio gravado no pedido."))) { setCodigo(''); setTransp('') } }}>{tr("Gravar rastreio")}</button>
+    </>}
+    {d.mensagens.length > 0 && <><h3 className="h3" style={{ marginTop: 12 }}>{tr("Mensagens dos grupos")}</h3>
+      <ol className="suit-lista">{d.mensagens.map(m => <MensagemWa key={m.id} m={m} pedido={pedido.id} />)}</ol></>}
+  </Section>
+}
+
+function WhatsApp() {
+  const toast = useToast()
+  const e = useGet<WaEstado>('/atelie/whatsapp', 30000)
+  const rasc = usePaginado<WaSaida>('/atelie/whatsapp/rascunhos', 50)
+  const soltas = usePaginado<WaMsg>('/atelie/whatsapp/sem-pedido', 50)
+  const [alvo, setAlvo] = useState<Record<number, string>>({})
+  if (e.error) return <div className="card"><ErrorState error={e.error} retry={e.reload} /></div>
+  if (!e.data) return <div className="card"><Loading /></div>
+  const c = e.data.config
+  async function ligar(m: WaMsg) {
+    const n = Number((alvo[m.id] || '').replace('#', ''))
+    if (!n) { toast(tr("Diga o número do pedido."), 'warn'); return }
+    try { await api.post(`/atelie/mensagens/${m.id}/vincular`, { order_id: n }); toast(tr("Mensagem ligada ao pedido #{0}.", n), 'ok'); soltas.recarregar(); e.reload() }
+    catch (x) { toast((x as ApiError).message, 'crit') }
+  }
+  return <>
+    <Section title={tr("WhatsApp do ateliê")}>
+      <p className="small muted">{tr("O OpenClaw na VPS lê só os grupos da lista (DM desligada) e o agente de Suits opera neles: manda o pedido de design, recebe a arte, cobra o que está em aberto uma vez por dia, manda o endereço ao fornecedor depois do suit aprovado e grava o rastreio.")}</p>
+      {!c.existe ? <p className="small" style={{ color: 'var(--warn)' }}>{tr("Ainda não configurado na VPS (~/.urace/whatsapp-grupos.env).")}</p> : <>
+        {!c.aplicar && <p className="small" style={{ color: 'var(--warn)' }}><b>{tr("Em simulação:")}</b> {tr("nada sai para os grupos (WA_GRUPOS_APLICAR=0). As mensagens ficam como rascunho nos pedidos.")}</p>}
+        {c.aplicar && !e.data.envio_automatico && <p className="small"><b>{tr("Com aprovação:")}</b> {tr("cada mensagem ao grupo espera o aprovar de um clique (envio automático da ponte desligado).")}</p>}
+        {c.aplicar && e.data.envio_automatico && <p className="small" style={{ color: 'var(--ok)' }}><b>{tr("Envio automático ligado:")}</b> {tr("a IA manda sem esperar aprovação.")}</p>}
+        <dl className="suit-dl">
+          <div><dt>{tr("Número logado")}</dt><dd>{c.numero || <span className="muted">—</span>}</dd></div>
+          {c.grupos.map(g => <div key={g.papel}><dt>{GRUPO[g.papel] || g.papel}</dt><dd>{g.nome || '—'} · {g.configurado ? tr("ligado") : <span style={{ color: 'var(--warn)' }}>{tr("sem o JID ainda")}</span>}</dd></div>)}
+        </dl>
+      </>}
+    </Section>
+    <Section title={tr("Para aprovar")} count={rasc.total}>
+      {rasc.erro ? <ErrorState error={rasc.erro} retry={rasc.recarregar} /> : !rasc.itens.length ? <p className="small muted">{tr("Nada esperando aprovação.")}</p>
+        : <ul className="suit-lista">{rasc.itens.map(s => <RascunhoWa key={s.id} s={s} onDone={() => { rasc.recarregar(); e.reload() }} />)}</ul>}
+      {rasc.temMais && <button className="btn ghost" onClick={rasc.mais}>{tr("Carregar mais")}</button>}
+    </Section>
+    <Section title={tr("Sem pedido")} count={soltas.total}>
+      <p className="small muted">{tr("Mensagens dos grupos que não dizem de qual pedido são, ou que podem ser de mais de um. Ninguém adivinha: ligue ao pedido certo.")}</p>
+      {soltas.erro ? <ErrorState error={soltas.erro} retry={soltas.recarregar} /> : !soltas.itens.length ? <p className="small muted">{tr("Nenhuma.")}</p>
+        : <ul className="suit-lista">{soltas.itens.map(m => <li key={m.id}><ul className="suit-lista"><MensagemWa m={m} /></ul>
+            {m.estado === 'ambigua' && m.candidatos && <p className="small" style={{ color: 'var(--warn)' }}>{tr("Pode ser de:")} {(JSON.parse(m.candidatos) as number[]).map(n => `#${n}`).join(', ')}</p>}
+            <div className="row gap wrap"><label className="fld"><span>{tr("Número do pedido")}</span>
+              <input inputMode="numeric" value={alvo[m.id] || ''} onChange={ev => setAlvo(x => ({ ...x, [m.id]: ev.target.value }))} placeholder="#" /></label>
+              <button className="btn" onClick={() => ligar(m)}>{tr("Ligar ao pedido")}</button></div></li>)}</ul>}
+      {soltas.temMais && <button className="btn ghost" onClick={soltas.mais}>{tr("Carregar mais")}</button>}
+    </Section>
+  </>
 }

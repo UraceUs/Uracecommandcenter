@@ -44,7 +44,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
          "/site/produtos", "/site/produtos/235", "/site/estoque", "/site/editor", "/site/editor/1", "/site/blog", "/site/blog/451",
          "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
-         "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/modelo", "/como-usar",
+         "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/whatsapp", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
 
 
@@ -175,7 +175,7 @@ def servidor(tmp_path_factory):
                CC_COFRE_CHAVE="dGVzdGUtZTJlLWNoYXZlLWRvLWNvZnJlLTMyYnl0ZXM",  # 32 bytes de teste
                CC_GOOGLE_BASE=GOOGLE.origem, CC_GOOGLE_WEB_CREDENTIALS=GOOGLE_CRED,
                CC_GOOGLE_REDIRECT_URI=f"http://127.0.0.1:{porta}/ops/api/google/callback",
-               CC_WAIVER_TSA=TSA.url)
+               CC_WAIVER_TSA=TSA.url, CC_WA_FAKE=str(pasta / "whatsapp.jsonl"))   # #383: nada sai para o WhatsApp
     env.pop("CC_WAIVER_SEAL_DIR", None)                  # o servidor acha o selo em URACE_DIR/waivers/selo
     subprocess.run([sys.executable, os.path.join(RAIZ, "command_center", "tests", "e2e", "semear.py")],
                    env=env, check=True, cwd=RAIZ, capture_output=True)
@@ -2580,6 +2580,52 @@ def test_suits_ponte_comeca_em_simulacao_e_guarda_o_designer(servidor, navegador
     assert not pg.get_by_label("Envio automático (sem aprovação)").is_checked()
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
+    pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_suits_whatsapp_do_atelie_liga_a_arte_ao_pedido_e_aprova_o_rascunho(servidor, navegador, largura):
+    """#383 (dono, 22/10): o agente de Suits nos grupos "Macacão design Urace" e "Urace Suits - Usman". A mensagem
+    do grupo chega pela rota local do OpenClaw, cai no pedido certo e o que vai ao grupo espera o aprovar."""
+    import base64
+    import sqlite3
+    pasta = os.path.dirname(BANCO)
+    jid = "120363000000000001@g.us"
+    with open(os.path.join(pasta, "whatsapp-grupos.env"), "w") as f:
+        f.write(f"WA_GRUPOS_APLICAR=1\nWA_GRUPOS_TOKEN=segredo-e2e-0123456789\nWA_GRUPO_DESIGN_NOME=Macacão design Urace\n"
+                f"WA_GRUPO_DESIGN_JID={jid}\nWA_GRUPO_FORNECEDOR_NOME=Urace Suits - Usman\nWA_GRUPO_FORNECEDOR_JID=120363000000000002@g.us\n")
+    con = sqlite3.connect(BANCO)
+    pid = con.execute("""INSERT INTO suit_orders (title, customer_name, driver_name, status, customer_email, ia_ligada)
+                         VALUES (?, ?, 'Piloto E2E', 'design_pending', 'wa@example.com', 1)""",
+                      (f"WhatsApp E2E {largura}", f"WhatsApp E2E {largura}")).lastrowid
+    con.execute("INSERT INTO atelie_wa_saidas (order_id, papel, texto) VALUES (?, 'design', ?)",
+                (pid, f"Suits #{pid} — briefing: preto e vermelho, Piloto E2E nas costas"))
+    con.commit(); con.close()
+    corpo = json.dumps({"grupo_jid": jid, "message_id": f"e2e-{largura}", "remetente_nome": "Designer Teste",
+                        "texto": f"Arte do Suits #{pid} pronta",
+                        "midias": [{"nome": "arte.pdf", "tipo": "application/pdf", "base64": base64.b64encode(b"%PDF-1.4 e2e").decode()}]}).encode()
+    req = urllib.request.Request(servidor + "/api/atelie/whatsapp/entrada", data=corpo, method="POST",
+                                 headers={"Content-Type": "application/json", "X-Urace-Atelie-Token": "segredo-e2e-0123456789"})
+    assert json.loads(urllib.request.urlopen(req, timeout=10).read())["pedido"] == pid
+    pg = entrar(navegador, servidor, largura=largura, altura=900)
+    abrir(pg, servidor, f"/suits/{pid}")
+    pg.get_by_role("heading", name="WhatsApp do ateliê", level=2).wait_for()
+    pg.locator(".wa-msg", has_text=f"Arte do Suits #{pid} pronta").wait_for()
+    pg.locator(".wa-msg").get_by_role("link", name=re.compile("arte.pdf")).wait_for()
+    caixa = pg.locator(".wa-rascunho textarea")
+    caixa.fill(f"Suits #{pid} — briefing: preto e vermelho, Piloto E2E nas costas, bandeira do Brasil")
+    pg.locator(".wa-rascunho").get_by_role("button", name="Aprovar e enviar").click()
+    pg.get_by_text("Enviado ao grupo.").wait_for()
+    enviados = [json.loads(x) for x in open(os.path.join(pasta, "whatsapp.jsonl")).read().splitlines()]
+    assert enviados[-1]["target"] == jid and "bandeira do Brasil" in enviados[-1]["message"]
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    abrir(pg, servidor, "/suits/whatsapp")
+    pg.get_by_role("heading", name="Sem pedido", level=2).wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
 

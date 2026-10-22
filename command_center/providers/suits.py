@@ -77,7 +77,8 @@ OBRIGATORIAS = [m[0] for m in MEDIDAS if m[0] != "bust"]
 
 DESIGN = [("ideia", "Ideia / mockup de referência"), ("cores", "Cores (Pantone, se tiver)"), ("logos", "Logos"),
           ("posicao_logos", "Onde vai cada logo"), ("nome", "Nome a aplicar"), ("bandeira", "Bandeira"),
-          ("observacoes", "Observações do cliente")]
+          ("observacoes", "Observações do cliente"),
+          ("instrucoes", "Instruções extras ao fornecedor")]   # #383: as que vierem com o PDF de medidas
 
 
 class Invalido(ValueError):
@@ -184,6 +185,8 @@ def email_fornecedor(con, pedido, fornecedor, quem):
     linhas_design = []
     if des.get("cores"):
         linhas_design.append(f"Colors: {des['cores']}")
+    if des.get("instrucoes"):
+        linhas_design.append(f"Additional instructions: {des['instrucoes']}")
     if (pedido.get("quantity") or 1) > 1:
         linhas_design.append(f"Quantity: {pedido['quantity']} suits")
     design = ("\n".join(linhas_design) + "\nThe final mockup is attached.\n\n") if linhas_design else "The final mockup is attached.\n\n"

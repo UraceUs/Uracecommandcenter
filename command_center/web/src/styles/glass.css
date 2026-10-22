@@ -871,6 +871,11 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .suit-med.falta b{color:var(--muted);font-weight:500}
 .suit-pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12.5px;line-height:1.5;background:var(--surface);border:1px solid var(--glass-line);border-radius:10px;padding:10px 12px;max-height:420px;overflow:auto;margin:8px 0}
 .suit-tempo{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+/* #383: WhatsApp do ateliê no pedido de Suits */
+.wa-rascunho,.wa-msg{list-style:none;padding:10px 12px;border-radius:12px;border:1px solid var(--glass-line);background:var(--surface);min-width:0;overflow-wrap:anywhere}
+.wa-rascunho{border-color:var(--warn)}
+.wa-msg.nossa{border-style:dashed}
+.wa-citada{border-left:3px solid var(--glass-line-2);padding-left:8px;margin:4px 0}
 .suit-tempo li{border-left:2px solid var(--glass-line-2);padding:2px 0 2px 12px;min-width:0}
 .suit-tempo li.k-ia{border-left-color:var(--accent)}.suit-tempo li.k-email{border-left-color:var(--info, var(--accent))}.suit-tempo li.k-etapa{border-left-color:var(--brand)}
 .suit-texto{white-space:pre-wrap;overflow-wrap:anywhere}

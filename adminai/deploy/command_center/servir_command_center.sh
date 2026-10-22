@@ -182,6 +182,11 @@ for _ in $(seq 1 30); do
 done
 [ -n "$pronto" ] || { echo "!! /ops/ready não respondeu em 60 s"; journalctl -u "$UNIT" -n 20 --no-pager; exit 1; }
 echo "-- serviço no ar em 127.0.0.1:$PORTA"
+# #383: os grupos do ateliê no WhatsApp (OpenClaw só como transporte). Só com o env; simulação até
+# WA_GRUPOS_APLICAR=1. Falhar aqui não derruba o deploy do painel.
+if [ -f "$URACE_DIR/whatsapp-grupos.env" ]; then
+    bash "$REPO/adminai/deploy/whatsapp_grupos/configurar_whatsapp_grupos.sh" || echo "!! grupos do WhatsApp: veja a mensagem acima (o painel subiu)"
+fi
 # 09/09: a triagem do Gmail passou para o Command Center (07/13/21h). O timer antigo
 # das 07:00 rodaria um segundo agente ao mesmo tempo — e o VPS não aguenta dois.
 if systemctl is-enabled --quiet urace-triagem-email.timer 2>/dev/null; then

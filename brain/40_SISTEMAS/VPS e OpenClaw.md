@@ -13,6 +13,21 @@ status: ativo
 
 > **22/10/2026 (#383):** o canal de WhatsApp do OpenClaw serve **só** para a VPS acessar os grupos
 > internos da URACE; nunca o número de cliente. Ver [[D-2026-10-22 - OpenClaw so para os grupos internos]].
+>
+> **Como está montado (#383, parte 2):** número interno da URACE logado por QR
+> (`openclaw channels login --channel whatsapp`), `dmPolicy: "disabled"`, `groupPolicy: "allowlist"` com
+> `groupAllowFrom: ["*"]` e `groups` **só** com os JIDs de "Macacão design Urace" e "Urace Suits - Usman"
+> (`requireMention: false`), `pluginHooks.messageReceived: true`, `reactionLevel: "off"`,
+> `sendReadReceipts: false`. O plugin nosso **`urace-atelie`** (`adminai/openclaw/urace-atelie/`, instalado
+> com `plugins install --link`) faz duas coisas: `before_dispatch` → `{handled: true}` em **todo** chat de
+> WhatsApp (o agente do OpenClaw nunca roda nem responde lá) e `message_received` → POST da mensagem e da
+> mídia (base64) para `127.0.0.1:8790/ops/api/atelie/whatsapp/entrada`, com o segredo `WA_GRUPOS_TOKEN`; se
+> o painel não responde, a mensagem fica em `~/.urace/atelie/fila/` e entra no ciclo seguinte. A saída é o
+> Command Center chamando `openclaw message send --channel whatsapp --target <jid> --message … [--media …]`.
+> Tudo em `~/.urace/whatsapp-grupos.env` (600): número, nomes e JIDs dos grupos, segredo e
+> `WA_GRUPOS_APLICAR` (0 = simulação). Instalação: `adminai/deploy/whatsapp_grupos/configurar_whatsapp_grupos.sh`
+> (idempotente; acha o JID pelo nome com `openclaw directory groups list --channel whatsapp --json`), chamado
+> pelo deploy quando o env existe. Fluxo do lado de Suits: [[Pedido de macacão]].
 
 > **08/10/2026 (#152):** o **AI Command** e a **triagem de e-mail** do Command Center saíram do
 > OpenClaw e rodam no **Claude Agent SDK** (o motor das sessões do Claude Code): **Opus 5.5** nos

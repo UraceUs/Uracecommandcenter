@@ -92,6 +92,8 @@ def _autosync():
                 auditar(con, "portal.notices.round", "system", detail=r_conta)
             from command_center.providers import suits_ponte   # #153: a ponte de e-mail dos macacões, em segundo plano
             suits_ponte.rodar_em_segundo_plano()
+            from command_center.providers import atelie_whatsapp   # #383: os grupos do ateliê no WhatsApp (OpenClaw)
+            atelie_whatsapp.rodar_em_segundo_plano()
             from command_center.providers import agenda_asana   # dono, 01/10 (#67): todo agendamento vira tarefa
             r_asana = agenda_asana.rodar(con)
             if r_asana["criadas"] or r_asana["avisadas"]:
@@ -309,6 +311,8 @@ app.include_router(api_compras.r)
 from command_center.api import suits as api_suits  # noqa: E402
 from command_center.api import cofre as api_cofre  # noqa: E402
 app.include_router(api_suits.r)             # #153: Suits / Alpha Line
+from command_center.api import atelie as api_atelie  # noqa: E402
+app.include_router(api_atelie.r)            # #383: WhatsApp dos grupos do ateliê (entrada local do OpenClaw)
 app.include_router(api_cofre.r)             # #162: cofre de logins e senhas (só acesso livre)
 from command_center.api import guia as api_guia  # noqa: E402
 app.include_router(api_guia.r)              # #223: Como usar — os guias e o MD para a IA

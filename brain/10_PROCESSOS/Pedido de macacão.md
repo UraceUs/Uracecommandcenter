@@ -18,6 +18,27 @@ status: ativo
 O macacão é **100% personalizado**: medidas, design, cores, logos e a
 posição de cada logo são feitos para aquele cliente. Nada é padrão.
 
+## 💬 Desde 22/10/2026: os grupos do ateliê no WhatsApp (#383)
+
+O OpenClaw da VPS, logado num número interno da URACE (login por QR, feito pelo dono), dá acesso a
+**dois grupos** — "Macacão design Urace" (o designer) e "Urace Suits - Usman" ([[Usman]], o fornecedor) —
+e mais nenhum: DM desligada, outro grupo ignorado. O OpenClaw é **só transporte**: o plugin `urace-atelie`
+cala o agente dele no WhatsApp e entrega a mensagem (com a mídia) ao Command Center; o agente que age é o
+de Suits (o mesmo da ponte de e-mail). A saída é o Command Center chamando `openclaw message send`.
+
+- **Design:** o briefing (e os ajustes) vão ao designer pelo grupo, só com o design e "Suits #id". A arte
+  que volta cai no pedido certo e vai ao cliente **por e-mail** para aprovação.
+- **Fornecedor:** o pedido de produção continua por **e-mail**. No grupo: cobrar, conferir o suit (fotos),
+  e — **depois de a equipe aprovar o suit no pedido** — o endereço de envio e o pedido do rastreio, que a
+  IA grava no pedido para a equipe passar ao cliente.
+- **Medidas em PDF e instruções extras:** a IA lê e grava (medidas e "Instruções extras ao fornecedor");
+  o e-mail ao fornecedor sai com elas.
+- **Vínculo só com evidência** (resposta à nossa mensagem, "#número", nome do piloto/design de um pedido
+  só). Ambíguo → "Precisa de alguém da equipe". Nunca o arquivo de um cliente no pedido de outro.
+- **Mesma chave da ponte:** envio automático desligado = rascunho com "aprovar" de um clique; ligado = sai
+  sozinho. Cobrança: no máximo uma por pedido, por grupo e por dia. "IA neste pedido" desligada vale aqui.
+- Configuração em `~/.urace/whatsapp-grupos.env` (fora do repositório); simulação até `WA_GRUPOS_APLICAR=1`.
+
 ## 🔁 Desde 08/10/2026: a aba Suits e a ponte de e-mail (#153)
 
 O pedido de macacão vive na aba **Suits · Alpha Line** do Command Center (não mais no

@@ -1,0 +1,13 @@
+{
+  "id": "urace-atelie",
+  "name": "URACE ateliê (WhatsApp → Command Center)",
+  "description": "Grupos do ateliê no WhatsApp: entrada para o Command Center; o agente do OpenClaw não responde no WhatsApp.",
+  "activation": { "onStartup": true },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "envFile": { "type": "string", "description": "caminho do whatsapp-grupos.env (padrão ~/.urace/whatsapp-grupos.env)" }
+    }
+  }
+}
