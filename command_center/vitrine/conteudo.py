@@ -53,7 +53,7 @@ ANTIGO = "https://urace.us"
 # página própria) e o "Home" (o logo já leva à home) ficam de fora do topo.
 # #394 (dono, 22/10, o menu da KartSport): quatro grupos que abrem (⌄). O título leva à página do grupo e os
 # subitens ficam na caixa. "Our Services" saiu do topo e segue no rodapé e nas páginas. Na Store, os subitens são
-# categorias da loja (slug, rótulo) e só aparecem as que têm produto (`paginas._grupos_do_menu`).
+# categorias da loja (slug, rótulo) e só aparecem as que têm produto (`paginas.grupos_do_menu`).
 SIM2GRID = "/sim2grid-racing-simulator/"          # #392: a página própria do SIM2GRID
 MENU = (
     {"titulo": "URACE Academy", "link": "/academy/",
