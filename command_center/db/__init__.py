@@ -259,6 +259,23 @@ MIGRACOES = [
     ("suit_orders", "discarded_by", "INTEGER REFERENCES users(id)"),
     # 13/10 — dono (#198): "um switch para poder ligar e desligar IA naquele pedido". 1 = a IA age no pedido.
     ("suit_orders", "ia_ligada", "INTEGER NOT NULL DEFAULT 1"),
+    # 22/10 — dono (#382): as travas do fluxo dos Suits. A arte final marcada (json com os nomes dos arquivos), o estado
+    # de cada medida (preenchida | conferida | suspeita, com o motivo), o e-mail de aprovação final que o cliente viu,
+    # a entrega direta (conferido e endereço passado ao fornecedor) e a saúde da ponte neste pedido.
+    ("suit_orders", "final_art", "TEXT"),
+    ("suit_orders", "measurement_status", "TEXT"),
+    ("suit_orders", "final_request", "TEXT"),
+    ("suit_orders", "welcome_sent_at", "TEXT"),
+    ("suit_orders", "checked_at", "TEXT"),
+    ("suit_orders", "checked_by", "INTEGER REFERENCES users(id)"),
+    ("suit_orders", "address_sent_at", "TEXT"),
+    ("suit_orders", "bridge_last_try_at", "TEXT"),
+    ("suit_orders", "bridge_last_ok_at", "TEXT"),
+    ("suit_orders", "bridge_last_error", "TEXT"),
+    ("suit_orders", "bridge_last_error_at", "TEXT"),
+    ("suit_orders", "bridge_last_mode", "TEXT"),          # simulacao | real
+    # #382 (Mio): pedido de TESTE — nunca manda e-mail real (vira nota de simulação), não entra nas contagens nem na Atenção
+    ("suit_orders", "is_test", "INTEGER NOT NULL DEFAULT 0"),
     # 13/10 — dono (#206): "Escaneou, selecionou o cliente, já finaliza. Não tem essa de ter que confirmar
     # depois". A leitura do celular vai direto para a OS; só o que não pode ir fica pendente, com o motivo.
     ("counter_pending", "motivo", "TEXT"),
@@ -520,6 +537,56 @@ def _travar_waivers(con):
             raise
 
 
+ETAPAS_SUITS = ("'standby','awaiting_measurements','design_pending','design_review','approved',"
+                "'sent_to_supplier','supplier_accepted','in_production','photos_received','checked',"
+                "'address_sent','in_transit','delivered','canceled'")
+
+
+def _etapas_da_entrega_direta(con):
+    """#382 (dono, 22/10: *"o envio sera direto ao cliente sem precisar enviar para a urace ... o fornecedor nos envia
+    fotos dos suit no whats app conferimos e passamos o endereço para o envio"*). As etapas novas (aceito pelo
+    fornecedor, fotos recebidas, conferido, endereço enviado) não cabem no CHECK antigo de `suit_orders.status`, e o
+    SQLite não altera um CHECK: a tabela é refeita UMA vez, copiando todas as linhas e colunas como estão.
+
+    Nenhuma etapa antiga some: as dez continuam valendo com o mesmo código, então nenhum pedido muda de etapa
+    (quem está em produção continua em produção). A cópia confere a contagem antes de trocar; não bateu, desfaz tudo.
+    As tabelas que apontam para `suit_orders` (notas, leads, e-mails lidos, aprovações) continuam apontando: o nome
+    é o mesmo e os ids são os mesmos."""
+    linha = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='suit_orders'").fetchone()
+    if not linha or "photos_received" in linha[0]:
+        return
+    import re
+    sql_antigo = linha[0]
+    novo, n = re.subn(r"CHECK\s*\(\s*status\s+IN\s*\([^)]*\)\s*\)", f"CHECK (status IN ({ETAPAS_SUITS}))", sql_antigo, count=1)
+    if n != 1:
+        raise RuntimeError("suit_orders: não achei o CHECK das etapas para migrar")
+    novo = re.sub(r"^CREATE TABLE\s+(IF NOT EXISTS\s+)?\"?suit_orders\"?", "CREATE TABLE suit_orders_382", novo, count=1)
+    indices = [r[0] for r in con.execute("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='suit_orders' "
+                                         "AND sql IS NOT NULL").fetchall()]
+    con.execute("PRAGMA foreign_keys = OFF")        # fora de transação: é o único jeito de o PRAGMA valer
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        try:
+            antes = con.execute("SELECT COUNT(*) FROM suit_orders").fetchone()[0]
+            quebradas = len(con.execute("PRAGMA foreign_key_check").fetchall())   # o que já estivesse quebrado não é desta
+            con.execute(novo)
+            con.execute("INSERT INTO suit_orders_382 SELECT * FROM suit_orders")
+            if con.execute("SELECT COUNT(*) FROM suit_orders_382").fetchone()[0] != antes:
+                raise RuntimeError("suit_orders: a cópia não bateu a contagem")
+            con.execute("DROP TABLE suit_orders")
+            con.execute("ALTER TABLE suit_orders_382 RENAME TO suit_orders")
+            for sql in indices:
+                con.execute(sql)
+            if len(con.execute("PRAGMA foreign_key_check").fetchall()) > quebradas:
+                raise RuntimeError("suit_orders: chave estrangeira quebrada depois da migração")
+            con.execute("COMMIT")
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+    finally:
+        con.execute("PRAGMA foreign_keys = ON")
+
+
 def _versionar_modelos(con):
     """#116: o modelo da waiver nativa importado antes das versões entra como a versão dele, uma vez, e o
     ponteiro passa a apontar para ela. Nada é reescrito: a versão é a cópia do que já estava no ponteiro."""
@@ -541,6 +608,7 @@ def aplicar_schema(con):
             con.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {tipo}")
     for sql in INDICES_EXTRA:        # índices de colunas que só existem depois da migração
         con.execute(sql)
+    _etapas_da_entrega_direta(con)   # #382: o CHECK das etapas dos Suits ganha as da entrega direta
     _travar_waivers(con)             # #109: depois das migrações, porque as colunas de prova vêm delas
     _versionar_modelos(con)          # #116: o modelo importado antes das versões vira a versão dele
     _migrar_papeis(con)             # o papel CLOSER foi desfeito: quem tiver vira OPERATOR

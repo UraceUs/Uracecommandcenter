@@ -17,8 +17,8 @@ from command_center.db import aplicar_schema, conectar, todos, um
 from command_center.providers import suits_ponte as sp
 
 VENDA = {"message_id": "m-venda", "de": "Urace <urace@urace.us>", "data": "Sun, 27 Sep 2026", "assunto": "[Urace]: You've got a new order: #4738",
-         "corpo": "You've received a new order from Ryan Capner: Order #4738 Fully Custom Kart Suit ×1 $420.75 "
-                  "capnerracingdevelopment@example.com (916) 555-0148", "anexos": [], "message_id_header": "<v@x>"}
+         "corpo": "You've received a new order from Rui Inventado: Order #4738 Fully Custom Kart Suit ×1 $420.75 "
+                  "rui.inventado@example.com (916) 555-0148", "anexos": [], "message_id_header": "<v@x>"}
 VENDA_CAMISETA = dict(VENDA, message_id="m-camiseta", assunto="[Urace]: You've got a new order: #3700",
                       corpo="New order: Urace T-shirts - 3XS ×1 $19.95")
 
@@ -86,11 +86,11 @@ def test_venda_de_macacao_no_site_abre_o_pedido_e_chama_a_ia_uma_vez(con):
 
 
 def test_resposta_do_cliente_baixa_os_anexos_e_ignora_o_que_nos_mandamos(con):
-    pid = con.execute("INSERT INTO suit_orders (title, customer_email, gmail_thread_cliente) VALUES ('Ryan','ryan@example.com','t-cli')").lastrowid
+    pid = con.execute("INSERT INTO suit_orders (title, customer_email, gmail_thread_cliente) VALUES ('Rui','rui@example.com','t-cli')").lastrowid
     gm, chamadas = Gmail(), []
     gm.threads = {"t-cli": [
-        {"message_id": "m1", "de": "URACE <urace@urace.us>", "assunto": "Order - Suit", "corpo": "Hi Ryan, thank you…", "anexos": []},
-        {"message_id": "m2", "de": "Ryan <ryan@example.com>", "assunto": "Re: Order - Suit", "corpo": "Black and red, logo attached. Head 59 cm",
+        {"message_id": "m1", "de": "URACE <urace@urace.us>", "assunto": "Order - Suit", "corpo": "Hi Rui, thank you…", "anexos": []},
+        {"message_id": "m2", "de": "Rui <rui@example.com>", "assunto": "Re: Order - Suit", "corpo": "Black and red, logo attached. Head 59 cm",
          "anexos": [{"nome": "logo.png", "mime": "image/png", "attachment_id": "a-png", "bytes": 10},
                     {"nome": "sizing.pdf", "mime": "application/pdf", "attachment_id": "a-pdf", "bytes": 10}]}]}
     r = sp.rodar(con, gm, _executor(chamadas))
@@ -170,7 +170,7 @@ def test_ponte_desligada_ou_sem_o_motor_novo_nao_roda(con, monkeypatch):
 
 # ------------------------------------------------------------------ o envio
 def _pedido(con, **kw):
-    campos = {"title": "Ryan Capner", "customer_name": "Ryan Capner", "customer_email": "ryan@example.com",
+    campos = {"title": "Rui Inventado", "customer_name": "Rui Inventado", "customer_email": "rui@example.com",
               "customer_phone": "(916) 555-0148", "ship_address": "1200 Oak Street\nSan Diego CA", **kw}
     cols = ", ".join(campos)
     return con.execute(f"INSERT INTO suit_orders ({cols}) VALUES ({', '.join('?' * len(campos))})", tuple(campos.values())).lastrowid
@@ -180,10 +180,10 @@ def test_em_simulacao_nada_sai_e_o_email_fica_na_linha_do_tempo(con, tmp_path):
     pid = _pedido(con)
     with open(sp.manual_pdf(), "wb") as f:
         f.write(b"%PDF-1.4")
-    r = sp.enviar(con, pid, "cliente", "Your custom suit", "Hi Ryan, thank you!", ["manual_medidas"])
+    r = sp.enviar(con, pid, "cliente", "Your custom suit", "Hi Rui, thank you!", ["manual_medidas"])
     assert r["simulado"] is True and _enviados(tmp_path) == []
     n = um(con, "SELECT kind, text FROM suit_notes WHERE id=?", (r["nota"],))
-    assert n["kind"] == "email" and n["text"].startswith("SIMULAÇÃO") and "ryan@example.com" in n["text"] and "GUIDE TO FILLING" in n["text"]
+    assert n["kind"] == "email" and n["text"].startswith("SIMULAÇÃO") and "rui@example.com" in n["text"] and "GUIDE TO FILLING" in n["text"]
 
 
 def test_com_envio_automatico_sai_para_o_cliente_com_o_manual_e_guarda_a_conversa(con, tmp_path):
@@ -191,10 +191,10 @@ def test_com_envio_automatico_sai_para_o_cliente_com_o_manual_e_guarda_a_convers
     pid = _pedido(con)
     with open(sp.manual_pdf(), "wb") as f:
         f.write(b"%PDF-1.4")
-    r = sp.enviar(con, pid, "cliente", "Your custom suit", "Hi Ryan, thank you!", ["manual_medidas"])
+    r = sp.enviar(con, pid, "cliente", "Your custom suit", "Hi Rui, thank you!", ["manual_medidas"])
     assert r["simulado"] is False
     e = _enviados(tmp_path)[0]
-    assert e["to"] == "ryan@example.com" and e["anexos"] == ["GUIDE TO FILLING IN SIZING - URACE FORM.pdf"]
+    assert e["to"] == "rui@example.com" and e["anexos"] == ["GUIDE TO FILLING IN SIZING - URACE FORM.pdf"]
     th = um(con, "SELECT gmail_thread_cliente FROM suit_orders WHERE id=?", (pid,))["gmail_thread_cliente"]
     assert th and um(con, "SELECT 1 AS x FROM suit_email_seen WHERE message_id=?", (r["id"],))     # o nosso não volta como evento
     # a simulação forçada vale mesmo com o envio automático ligado
@@ -209,15 +209,24 @@ def test_com_envio_automatico_sai_para_o_cliente_com_o_manual_e_guarda_a_convers
 def test_designer_nao_recebe_dado_do_cliente_e_cliente_nao_ve_o_designer(con, tmp_path):
     sp.salvar_config(con, {"envio_automatico": "1", "designer_email": "designer@example.com", "designer_nome": "Matheus"})
     pid = _pedido(con)
-    for corpo in ("Customer email ryan@example.com", "Call him at 916-555-0148", "Ship to 1200 Oak Street", "Client: Ryan Capner"):
+    for corpo in ("Customer email rui@example.com", "Call him at 916-555-0148", "Ship to 1200 Oak Street", "Client: Rui Inventado"):
         with pytest.raises(sp.Recusado):
             sp.enviar(con, pid, "designer", f"Suits #{pid}", corpo)
     with pytest.raises(sp.Recusado):
         sp.enviar(con, pid, "cliente", "Your mockup", "Matheus made this for you")
     with pytest.raises(sp.Recusado):
         sp.enviar(con, pid, "cliente", "Your mockup", "Questions? designer@example.com")
-    r = sp.enviar(con, pid, "designer", f"Suits #{pid} — new design", "Black and red, number 27, logo attached. Driver: Ryan.")
-    assert r["para"] == "designer@example.com" and _enviados(tmp_path)[-1]["to"] == "designer@example.com"
+    # #382 (C): ao designer nada sai direto, mesmo com o envio automático: vira item preparado, e a pessoa envia
+    antes = len(_enviados(tmp_path))
+    r = sp.enviar(con, pid, "designer", f"Suits #{pid} — new design", "Black and red, number 27, logo attached. Driver: Rui.")
+    assert r["preparado"] is True and len(_enviados(tmp_path)) == antes
+    item = sp.preparados(con, pid)[0]
+    assert item["status"] == "preparado" and item["subject"].startswith(f"Suits #{pid}")
+    sp.enviar_preparado(con, item["id"], 1)
+    assert _enviados(tmp_path)[-1]["to"] == "designer@example.com" and sp.preparados(con, pid)[0]["status"] == "enviado"
+    assert um(con, "SELECT 1 AS x FROM audit_logs WHERE event='suit.designer.sent'")
+    with pytest.raises(sp.Recusado):
+        sp.enviar_preparado(con, item["id"], 1)                                    # não sai duas vezes
 
 
 def test_sem_destinatario_ou_sem_anexo_nao_sai(con):
@@ -239,7 +248,7 @@ def test_a_ferramenta_da_ia_devolve_a_recusa_para_ela_corrigir(con):
     f = {nome: fn for nome, _, _, _, fn in api_suits.ferramentas_ia()}
     pid = _pedido(con)
     sp.salvar_config(con, {"designer_email": "designer@example.com"})
-    r = f["suits_email"](con, None, pid, "designer", "brief", "Client email: ryan@example.com")
+    r = f["suits_email"](con, None, pid, "designer", "brief", "Client email: rui@example.com")
     assert "recusado" in r and "designer não pode receber" in r["recusado"]
     assert f["suits_precisa_humano"](con, None, pid, "cliente pediu reembolso")["ok"]
     f["suits_precisa_humano"](con, None, pid, "de novo")
@@ -252,7 +261,7 @@ def test_simular_um_pedido_le_as_conversas_e_nada_sai(con, tmp_path):
     sp.salvar_config(con, {"envio_automatico": "1"})
     pid = _pedido(con, gmail_thread_cliente="t-cli")
     gm, chamadas = Gmail(), []
-    gm.threads = {"t-cli": [{"message_id": "m2", "de": "Ryan <ryan@example.com>", "assunto": "Re: Order", "corpo": "design attached", "anexos": []}]}
+    gm.threads = {"t-cli": [{"message_id": "m2", "de": "Rui <rui@example.com>", "assunto": "Re: Order", "corpo": "design attached", "anexos": []}]}
     sp.simular_pedido(con, pid, gm, _executor(chamadas))
     assert chamadas[0]["simular"] is True and "SIMULAÇÃO NESTE PEDIDO" in chamadas[0]["prompt"] and "design attached" in chamadas[0]["prompt"]
     assert _enviados(tmp_path) == []
@@ -286,7 +295,7 @@ def test_api_da_ponte(tmp_path, monkeypatch):
         assert cli.post("/ops/api/suits/ponte/manual", headers=h, files={"arquivo": ("m.pdf", b"%PDF-1.4 ok", "application/pdf")}).status_code == 200
         assert cli.get("/ops/api/suits/ponte").json()["manual"] is True
         assert cli.get("/ops/api/suits/ponte/manual").content.startswith(b"%PDF")
-        pid = cli.post("/ops/api/suits", headers=h, json={"customer_name": "Ryan",
+        pid = cli.post("/ops/api/suits", headers=h, json={"customer_name": "Rui",
                        "gmail_thread_cliente": "https://mail.google.com/mail/?authuser=urace@urace.us#all/thread-f:1877504265922336989"}).json()["id"]
         assert cli.get(f"/ops/api/suits/{pid}").json()["gmail_thread_cliente"] == "1a0e3c2eb294d8dd"   # o link vira o id da thread
         os.makedirs(sp.pasta(pid), exist_ok=True)
@@ -320,7 +329,7 @@ def test_padroes_do_mio_designer_assinatura_e_politica(con):
 def test_o_prompt_leva_a_politica_e_nao_repete_as_boas_vindas(con):
     _pedido(con, gmail_thread_cliente="t-cli")
     gm, chamadas = Gmail(), []
-    gm.threads = {"t-cli": [{"message_id": "r1", "de": "Ryan <ryan@example.com>", "assunto": "Re: Order - Suit", "corpo": "Ideas attached", "anexos": []}]}
+    gm.threads = {"t-cli": [{"message_id": "r1", "de": "Rui <rui@example.com>", "assunto": "Re: Order - Suit", "corpo": "Ideas attached", "anexos": []}]}
     sp.rodar(con, gm, _executor(chamadas))
     pr = chamadas[0]["prompt"]
     assert "POLÍTICA DOS MACACÕES" in pr and "Três rodadas" in pr
@@ -365,7 +374,7 @@ def test_arquivo_que_nao_da_para_limpar_e_carrega_o_designer_nao_sai(con):
     sp.salvar_config(con, {"envio_automatico": "1"})
     pid = _pedido(con)
     sp.guardar_anexo(pid, "arte.ai", b"%!PS-Adobe Creator: carvalhovisual1@gmail.com")
-    with pytest.raises(sp.Recusado, match="designer"):
+    with pytest.raises(sp.Recusado, match="não sai"):                         # #382: tipo que não se limpa não sai
         sp.enviar(con, pid, "cliente", "Your art", "Attached.", ["arte.ai"])
     # o manual de medidas é nosso: passa como está
     with open(sp.manual_pdf(), "wb") as f:

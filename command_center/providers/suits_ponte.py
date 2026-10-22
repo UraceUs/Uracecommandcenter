@@ -25,6 +25,7 @@ mandaria fica na linha do tempo do pedido, para a equipe conferir. Ligou, sai se
 (era o gargalo). Teste nunca manda: `CC_EMAIL_FAKE=<arquivo>` grava em vez de enviar.
 """
 import contextvars
+import hashlib
 import json
 import mimetypes
 import os
@@ -39,6 +40,10 @@ ANEXO_MAX = 15 * 1024 * 1024
 ENVIO_MAX = 20 * 1024 * 1024          # o Gmail aceita 25 MB somados
 POR_CICLO = int(os.environ.get("CC_SUITS_POR_CICLO", "5"))
 SIMULAR = contextvars.ContextVar("suits_simular", default=False)
+# #382 (C): durante um evento da ponte, o pedido daquele evento. As ferramentas `suits_*` só leem e mexem nele, e o
+# agente não recebe as ferramentas gerais do painel (clientes, Atenção, QuickBooks, Gmail). Sem evento: None.
+ESCOPO = contextvars.ContextVar("suits_escopo", default=None)
+LIMITE_TENTATIVAS = int(os.environ.get("CC_SUITS_TENTATIVAS", "3"))
 
 BOAS_VINDAS = """Hi {first name}, thank you for your order! We're excited to build your custom suit.
 
@@ -147,24 +152,43 @@ def _digitos(s):
     return re.sub(r"\D", "", s or "")
 
 
+RX_DINHEIRO = re.compile(r"(?:US)?\$\s?\d|\b\d+(?:[.,]\d{2})?\s?(?:USD|dollars?|d[óo]lares|reais)\b", re.I)
+
+
+def _sem_acento(t):
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFKD", t or "") if not unicodedata.combining(c))
+
+
+def _marcas_do_cliente(pedido):
+    """O que identifica o cliente: e-mail, telefone, endereço e nome completo (só o que existe no pedido)."""
+    texto, digitos = [], []
+    email = (pedido.get("customer_email") or "").strip().lower()
+    if email:
+        texto.append(("o e-mail do cliente", email))
+    tel = _digitos(pedido.get("customer_phone"))
+    if len(tel) >= 7:
+        digitos.append(("o telefone do cliente", tel[-10:] if len(tel) >= 10 else tel))
+    for linha in (pedido.get("ship_address") or "").splitlines():
+        if len(linha.strip()) >= 8:
+            texto.append(("o endereço do cliente", re.sub(r"\s+", " ", linha.strip().lower())))
+    nome = re.sub(r"\s+", " ", (pedido.get("customer_name") or "").strip().lower())
+    if len(nome.split()) >= 2:
+        texto.append(("o nome completo do cliente", nome))
+    return texto, digitos
+
+
 def _guardas(pedido, papel, texto, cfg):
-    """O designer não vê dado do cliente; o cliente não vê o designer."""
-    t = (texto or "").lower()
+    """O designer não vê dado do cliente (nem pagamento); o cliente não vê o designer."""
+    t = re.sub(r"\s+", " ", (texto or "").lower())
     if papel == "designer":
-        problemas = []
-        if pedido.get("customer_email") and pedido["customer_email"].lower() in t:
-            problemas.append("o e-mail do cliente")
-        tel = _digitos(pedido.get("customer_phone"))
-        if len(tel) >= 7 and tel[-7:] in _digitos(texto):
-            problemas.append("o telefone do cliente")
-        end = (pedido.get("ship_address") or "").strip().splitlines()
-        if end and len(end[0]) >= 8 and end[0].lower() in t:
-            problemas.append("o endereço do cliente")
-        nome = (pedido.get("customer_name") or "").strip()
-        if len(nome.split()) >= 2 and nome.lower() in t:
-            problemas.append("o nome completo do cliente")
+        marcas, digitos = _marcas_do_cliente(pedido)
+        problemas = [rot for rot, m in marcas if m in t]
+        problemas += [rot for rot, d in digitos if d[-7:] in _digitos(texto)]
+        if RX_DINHEIRO.search(texto or ""):
+            problemas.append("valor ou pagamento")
         if problemas:
-            raise Recusado("O designer não pode receber " + ", ".join(problemas) + ". Reescreva só com o design "
+            raise Recusado("O designer não pode receber " + ", ".join(dict.fromkeys(problemas)) + ". Reescreva só com o design "
                            f"e o número do pedido (Suits #{pedido['id']}).")
     if papel == "cliente":
         for dado in (cfg.get("designer_email"), cfg.get("designer_nome")):
@@ -215,24 +239,35 @@ def _marcas_do_designer(cfg):
     return [x for x in m if len(x) >= 3]
 
 
+LIMPAVEIS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
+
+
 def _sem_metadados(nome, dados, mime):
-    """Imagem e PDF saem sem autor, EXIF, comentário ou XMP. O resto passa como está (e é conferido)."""
+    """Imagem (PNG, JPG, WEBP) e PDF saem sem autor, EXIF, comentário ou XMP. Revisão do Mio (#382): o que não
+    dá para limpar NÃO sai — tipo não suportado ou limpeza que falhou viram recusa, nunca "manda o original"."""
     import io
     ext = os.path.splitext(nome)[1].lower()
-    try:
-        if mime in ("image/jpeg", "image/png", "image/webp"):
+    if mime in LIMPAVEIS:
+        try:
             from PIL import Image
             im = Image.open(io.BytesIO(dados))
             im.load()
             im.info = {}
-            fmt = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}[mime]
+            fmt = LIMPAVEIS[mime]
             if fmt == "JPEG" and im.mode not in ("RGB", "L", "CMYK"):
                 im = im.convert("RGB")
+            limpa = Image.frombytes(im.mode, im.size, im.tobytes())   # só os pixels: nada do arquivo original vem junto
+            if im.mode == "P" and im.getpalette():
+                limpa.putpalette(im.getpalette())
             saida = io.BytesIO()
             extra = {"quality": 95} if fmt in ("JPEG", "WEBP") else {"optimize": True}
-            im.save(saida, fmt, **extra)
+            limpa.save(saida, fmt, **extra)
             return saida.getvalue()
-        if mime == "application/pdf" or ext == ".pdf":
+        except Exception as e:
+            raise Recusado(f"não deu para limpar {nome} ({type(e).__name__}): o arquivo não sai. Peça o arquivo exportado "
+                           "de novo em PNG, JPG ou PDF.")
+    if mime == "application/pdf" or ext == ".pdf":
+        try:
             from pypdf import PdfReader, PdfWriter
             r, w = PdfReader(io.BytesIO(dados)), PdfWriter()
             for pg in r.pages:
@@ -241,9 +276,10 @@ def _sem_metadados(nome, dados, mime):
             saida = io.BytesIO()
             w.write(saida)
             return saida.getvalue()
-    except Exception:
-        return dados                    # não deu para limpar: a conferência abaixo decide
-    return dados
+        except Exception as e:
+            raise Recusado(f"não deu para limpar {nome} ({type(e).__name__}): o arquivo não sai. Peça o PDF exportado de novo.")
+    raise Recusado(f"{nome}: este tipo de arquivo não é limpo pelo painel, então não sai (só PNG, JPG, WEBP ou PDF). "
+                   "Peça o arquivo exportado num desses formatos.")
 
 
 def limpar_para_cliente(arquivos, cfg):
@@ -266,6 +302,46 @@ def limpar_para_cliente(arquivos, cfg):
     return saida
 
 
+VETORES = {".ai": "application/postscript", ".eps": "application/postscript", ".svg": "image/svg+xml"}
+
+
+def _vetor_sem_metadados(nome, dados):
+    """Dono, 22/10 (#382): AI, EPS e SVG (logo do cliente, arte do designer) entram pelo e-mail e vão ao designer;
+    ao cliente continua só PNG, JPG, WEBP ou PDF. Do SVG saem <metadata>, <title>, <desc> e comentários; do AI e
+    do EPS saem as linhas %%For, %%Creator, %%Title e %%Author do cabeçalho. O resto do arquivo vai como está e
+    passa pela mesma busca de e-mail, telefone, endereço e nome do cliente."""
+    ext = os.path.splitext(nome)[1].lower()
+    if ext == ".svg":
+        t = dados.decode("utf-8", "replace")
+        t = re.sub(r"<!--.*?-->", "", t, flags=re.S)
+        t = re.sub(r"<(metadata|title|desc)\b[^>]*>.*?</\1\s*>|<(metadata|title|desc)\b[^>]*/>", "", t, flags=re.S | re.I)
+        return t.encode("utf-8")
+    return re.sub(rb"(?m)^%%(?:For|Creator|Title|Author|CreationDate):[^\r\n]*[\r\n]*", b"", dados)
+
+
+def limpar_para_designer(arquivos, pedido):
+    """#382 (C): o que vai ao designer sai sem metadados, e o arquivo que ainda contenha o e-mail, o telefone, o
+    endereço ou o nome completo do cliente não sai. O nome do arquivo com o nome ou o e-mail do cliente é trocado."""
+    marcas, digitos = _marcas_do_cliente(pedido)
+    saida = []
+    for i, (nome, dados, mime) in enumerate(arquivos, 1):
+        if os.path.splitext(nome)[1].lower() in VETORES:
+            dados = _vetor_sem_metadados(nome, dados)
+        else:
+            dados = _sem_metadados(nome, dados, mime)
+        nome_baixo = _sem_acento(re.sub(r"[_\-.]+", " ", nome.lower()))
+        if any(_sem_acento(m) in nome_baixo or m in nome.lower() for _, m in marcas):
+            nome = f"Suits-{pedido['id']}-ref-{i}{os.path.splitext(nome)[1].lower()}"
+        baixo = dados.lower()
+        achou = [rot for rot, m in marcas if m.encode() in baixo]
+        achou += [rot for rot, d in digitos if d.encode() in dados]
+        if achou:
+            raise Recusado(f"o arquivo {nome} contém {', '.join(dict.fromkeys(achou))}: não vai ao designer. Use um arquivo "
+                           "só com o design.")
+        saida.append((nome, dados, mime))
+    return saida
+
+
 def _envio_real(para, assunto, corpo, anexos, thread_id, em_resposta_a):
     falso = os.environ.get("CC_EMAIL_FAKE")
     if falso:
@@ -278,8 +354,175 @@ def _envio_real(para, assunto, corpo, anexos, thread_id, em_resposta_a):
     return modulo("gmail").enviar_sistema(CONTA, para, assunto, corpo, anexos, thread_id, em_resposta_a)
 
 
-def enviar(con, pid, papel, assunto, corpo, anexos=None, responder=True, user_id=None):
-    """O único caminho de e-mail da ponte. Simulação (padrão ou forçada): vira nota e não sai."""
+def _chave_envio(pid, papel, assunto, corpo, arquivos):
+    """Pedido + papel + hash de assunto, corpo e anexos: o mesmo e-mail tem sempre a mesma chave."""
+    h = hashlib.sha256(f"{int(pid)}|{papel}|{assunto.strip()}|{corpo.strip()}".encode())
+    for nome, dados, _ in arquivos:
+        h.update(nome.encode() + b"\0" + hashlib.sha256(dados).digest())
+    return h.hexdigest()
+
+
+def _sem_re(a):
+    return re.sub(r"^(re|fwd?):\s*", "", (a or "").strip(), flags=re.I).lower()
+
+
+def _ja_saiu(linha, gm=None):
+    """O "enviando" que ficou para trás: a mensagem saiu mesmo? Confere na thread do Gmail (ou nos enviados).
+    Devolve o id da mensagem, ou None (aí pode reenviar)."""
+    falso = os.environ.get("CC_EMAIL_FAKE")
+    if falso and gm is None:
+        if os.path.exists(falso):
+            for n, x in enumerate(open(falso, encoding="utf-8").read().splitlines()):
+                e = json.loads(x)
+                if e.get("to") == linha["para"] and _sem_re(e.get("subject")) == _sem_re(linha["assunto"]):
+                    return f"fake-conferido-{n}"
+        return None
+    if gm is None:
+        from command_center.providers import modulo
+        gm = modulo("gmail")
+    try:
+        if linha.get("thread_id"):
+            msgs = gm.mensagens_da_thread(CONTA, linha["thread_id"], limite=200)["mensagens"]
+        else:
+            ths = gm.gmail_buscar(CONTA, f'in:sent to:{linha["para"]} newer_than:3d', so_inbox=False, maximo=10).get("threads") or []
+            msgs = [m for t in ths for m in gm.mensagens_da_thread(CONTA, t["thread_id"], limite=200)["mensagens"]]
+    except Exception:
+        return None
+    for m in msgs:
+        if _nosso(m.get("de")) and _sem_re(m.get("assunto")) == _sem_re(linha["assunto"]):
+            return m.get("message_id")
+    return None
+
+
+def _mandar(con, pedido, papel, para, assunto, corpo, arquivos, responder, user_id, ator, gm=None):
+    """O envio de verdade, sem repetição: grava "enviando" com a chave única ANTES de mandar; já enviado não sai de
+    novo; "enviando" pendente é conferido no Gmail antes de reenviar."""
+    from command_center.providers import suits
+    pid = pedido["id"]
+    if pedido.get("is_test"):
+        raise Recusado("pedido de TESTE: nenhum e-mail real sai dele")
+    thread = pedido.get(f"gmail_thread_{papel}") if responder else None
+    chave = _chave_envio(pid, papel, assunto, corpo, arquivos)
+    linha = um(con, "SELECT * FROM suit_sends WHERE chave=?", (chave,))
+    lista = ", ".join(a[0] for a in arquivos)
+    resumo = f"para {papel} ({para}) — {assunto}" + (f" · anexos: {lista}" if lista else "") + f"\n\n{corpo}"
+    if linha and linha["status"] == "enviado":
+        return {"simulado": False, "repetido": True, "para": para, "id": linha["message_id"],
+                "nota": "este e-mail já foi enviado: não mandei de novo"}
+    if linha:
+        mid = _ja_saiu(linha, gm)
+        if mid:
+            con.execute("UPDATE suit_sends SET status='enviado', message_id=?, sent_at=? WHERE chave=?", (mid, agora(), chave))
+            suits.anotar(con, pid, "E-mail conferido no Gmail (tinha saído antes de o painel registrar) " + resumo, "email",
+                         pedido["status"], user_id=user_id)
+            return {"simulado": False, "repetido": True, "para": para, "id": mid}
+    else:
+        inserir(con, "suit_sends", chave=chave, order_id=pid, papel=papel, para=para, assunto=assunto, thread_id=thread)
+    em_resposta_a = None
+    if thread:
+        try:
+            from command_center.providers import modulo
+            msgs = (gm or modulo("gmail")).mensagens_da_thread(CONTA, thread, limite=200)["mensagens"]
+            em_resposta_a = msgs[-1].get("message_id_header") if msgs else None
+        except Exception:
+            em_resposta_a = None
+        if not assunto.lower().startswith("re:"):
+            assunto = "Re: " + assunto
+    r = _envio_real(para, assunto, corpo, arquivos, thread, em_resposta_a)
+    con.execute("UPDATE suit_sends SET status='enviado', message_id=?, sent_at=?, thread_id=coalesce(thread_id, ?) WHERE chave=?",
+                (r.get("id"), agora(), r.get("thread_id"), chave))
+    if r.get("id"):                                   # o que nós mandamos não volta como evento
+        con.execute("INSERT OR IGNORE INTO suit_email_seen (message_id, order_id, thread_id, papel) VALUES (?,?,?,?)",
+                    (r["id"], pid, r.get("thread_id"), papel))
+    if r.get("thread_id") and not pedido.get(f"gmail_thread_{papel}"):
+        con.execute(f"UPDATE suit_orders SET gmail_thread_{papel}=? WHERE id=?", (r["thread_id"], pid))
+    suits.anotar(con, pid, "E-mail enviado " + resumo, "email", pedido["status"], user_id=user_id)
+    auditar(con, "suit.email.sent", ator, user_id=user_id, entity_type="suit_order", entity_id=pid,
+            detail={"papel": papel, "para": para, "assunto": assunto, "anexos": [a[0] for a in arquivos]})
+    return {"simulado": False, "para": para, "id": r.get("id"), "thread_id": r.get("thread_id")}
+
+
+RX_BOAS_VINDAS = re.compile(r"thank you for (?:your|the) (?:order|purchase)|obrigad[oa] pel[ao] (?:sua )?(?:compra|pedido)"
+                            r"|gracias por (?:tu|su) (?:compra|pedido)|sizing form|manual de medidas", re.I)
+
+
+def _pasta_preparados(pid, oid):
+    caminho = os.path.join(raiz(), "preparados", str(int(pid)), str(int(oid)))
+    os.makedirs(caminho, exist_ok=True)
+    return caminho
+
+
+def preparar_designer(con, pedido, assunto, corpo, arquivos, responder=True, user_id=None):
+    """#382 (C): o e-mail ao designer NÃO sai daqui. Vira um item "preparado" no pedido, com o assunto, o corpo e os
+    anexos já limpos; alguém da equipe (OPERATOR ou acima) confere e clica "Enviar ao designer"."""
+    from command_center.providers import suits
+    oid = inserir(con, "suit_outbox", order_id=pedido["id"], papel="designer", subject=assunto, body=corpo,
+                  attachments=json.dumps([a[0] for a in arquivos], ensure_ascii=False), reply=1 if responder else 0,
+                  created_by=user_id)
+    destino = _pasta_preparados(pedido["id"], oid)
+    for nome, dados, _ in arquivos:
+        with open(os.path.join(destino, os.path.basename(nome)), "wb") as f:
+            f.write(dados)
+    suits.anotar(con, pedido["id"], f"E-mail ao designer PREPARADO (item #{oid}): {assunto}. Alguém da equipe confere e envia.",
+                 "email", pedido["status"], user_id=user_id)
+    return {"preparado": True, "item": oid, "nota": "o e-mail ao designer ficou preparado: uma pessoa da equipe confere e envia"}
+
+
+def enviar_preparado(con, oid, user_id, gm=None):
+    """O clique "Enviar ao designer": confere de novo (guardas e limpeza) e manda de verdade, com a auditoria.
+    Vale mesmo com a ponte em simulação: o clique da pessoa é a autorização."""
+    item = um(con, "SELECT * FROM suit_outbox WHERE id=?", (int(oid),))
+    if not item:
+        raise LookupError("Item não encontrado.")
+    if item["status"] != "preparado":
+        raise Recusado(f"este item já está {item['status']}")
+    pedido = dict(um(con, "SELECT * FROM suit_orders WHERE id=?", (item["order_id"],)))
+    if pedido.get("discarded_at"):
+        raise Recusado("pedido descartado (não é pedido de macacão): nada sai por ele")
+    cfg = config(con)
+    para = destinatario(con, pedido, "designer", cfg)
+    if not para:
+        raise Recusado("o e-mail do designer não está configurado (aba Suits › Ponte de e-mail)")
+    _guardas(pedido, "designer", item["subject"] + "\n" + item["body"], cfg)
+    pasta_item = _pasta_preparados(pedido["id"], item["id"])
+    arquivos = []
+    for nome in json.loads(item["attachments"] or "[]"):
+        caminho = os.path.join(pasta_item, os.path.basename(nome))
+        if not os.path.isfile(caminho):
+            raise Recusado(f"anexo preparado não encontrado: {nome}")
+        with open(caminho, "rb") as f:
+            arquivos.append((nome, f.read(), mimetypes.guess_type(nome)[0] or "application/octet-stream"))
+    arquivos = limpar_para_designer(arquivos, pedido)
+    r = _mandar(con, pedido, "designer", para, item["subject"], item["body"], arquivos, bool(item["reply"]), user_id,
+                f"user:{user_id}", gm)
+    con.execute("UPDATE suit_outbox SET status='enviado', decided_by=?, decided_at=?, message_id=?, thread_id=? WHERE id=?",
+                (user_id, agora(), r.get("id"), r.get("thread_id"), item["id"]))
+    auditar(con, "suit.designer.sent", f"user:{user_id}", user_id=user_id, entity_type="suit_order", entity_id=pedido["id"],
+            detail={"item": item["id"], "para": para, "assunto": item["subject"], "anexos": [a[0] for a in arquivos]})
+    return dict(r, item=item["id"])
+
+
+def descartar_preparado(con, oid, user_id):
+    from command_center.providers import suits
+    item = um(con, "SELECT * FROM suit_outbox WHERE id=?", (int(oid),))
+    if not item:
+        raise LookupError("Item não encontrado.")
+    if item["status"] != "preparado":
+        raise Recusado(f"este item já está {item['status']}")
+    con.execute("UPDATE suit_outbox SET status='descartado', decided_by=?, decided_at=? WHERE id=?", (user_id, agora(), item["id"]))
+    st = um(con, "SELECT status FROM suit_orders WHERE id=?", (item["order_id"],))["status"]
+    suits.anotar(con, item["order_id"], f"E-mail preparado ao designer (item #{item['id']}) descartado.", "email", st, user_id=user_id)
+    return True
+
+
+def preparados(con, pid):
+    return [dict(x, attachments=json.loads(x["attachments"] or "[]"))
+            for x in todos(con, "SELECT * FROM suit_outbox WHERE order_id=? ORDER BY id DESC LIMIT 20", (int(pid),))]
+
+
+def enviar(con, pid, papel, assunto, corpo, anexos=None, responder=True, user_id=None, tipo=None, gm=None):
+    """O único caminho de e-mail da ponte. Simulação (padrão ou forçada): vira nota e não sai.
+    Ao designer, nunca sai daqui: vira item preparado (#382). Boas-vindas sem o manual de medidas não saem."""
     from command_center.providers import suits
     pedido = dict(um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,)) or {})
     if not pedido:
@@ -288,6 +531,8 @@ def enviar(con, pid, papel, assunto, corpo, anexos=None, responder=True, user_id
         raise Recusado("pedido descartado (não é pedido de macacão): nada sai por ele")
     if not pedido.get("ia_ligada", 1):
         raise Recusado("a IA está desligada neste pedido (#198): quem responde é a equipe")
+    if papel not in ("cliente", "designer", "fornecedor"):
+        raise Recusado("para quem? cliente, designer ou fornecedor")
     cfg = config(con)
     para = destinatario(con, pedido, papel, cfg)
     if not para:
@@ -297,49 +542,89 @@ def enviar(con, pid, papel, assunto, corpo, anexos=None, responder=True, user_id
     assunto, corpo = (assunto or "").strip(), (corpo or "").strip()
     if not assunto or not corpo:
         raise Recusado("assunto e corpo são obrigatórios")
+    anexos = list(anexos or [])
+    boas_vindas = papel == "cliente" and (tipo == "boas_vindas" or "manual_medidas" in anexos
+                                          or bool(RX_BOAS_VINDAS.search(assunto + "\n" + corpo)))
+    if boas_vindas:
+        if not os.path.isfile(manual_pdf()):
+            raise Recusado("As boas-vindas não saem sem o manual de medidas (o PDF): a equipe sobe o arquivo em "
+                           "Suits › Ponte de e-mail › Manual de medidas. Use suits_precisa_humano.")
+        if "manual_medidas" not in anexos:
+            anexos.append("manual_medidas")
     _guardas(pedido, papel, assunto + "\n" + corpo, cfg)
     arquivos = _arquivos(pid, anexos)
     if papel == "cliente":
         arquivos = limpar_para_cliente(arquivos, cfg)
-    thread = pedido.get(f"gmail_thread_{papel}") if responder else None
-    simulado = SIMULAR.get() or cfg["envio_automatico"] != "1"
+    elif papel == "designer":
+        arquivos = limpar_para_designer(arquivos, pedido)
+    teste = bool(pedido.get("is_test"))               # #382: pedido de teste nunca manda e-mail real, em papel nenhum
+    if papel == "designer" and not SIMULAR.get() and not teste:
+        return preparar_designer(con, pedido, assunto, corpo, arquivos, responder, user_id)
+    simulado = teste or SIMULAR.get() or cfg["envio_automatico"] != "1"
     lista = ", ".join(a[0] for a in arquivos)
     resumo = f"para {papel} ({para}) — {assunto}" + (f" · anexos: {lista}" if lista else "") + f"\n\n{corpo}"
     if simulado:
-        nid = suits.anotar(con, pid, "SIMULAÇÃO — a IA mandaria este e-mail " + resumo, "email", pedido["status"], user_id=user_id)
+        if teste:
+            resumo = "(pedido de TESTE: nunca sai) " + resumo
+        quem = "a IA prepararia este e-mail ao designer (uma pessoa enviaria)" if papel == "designer" else "a IA mandaria este e-mail"
+        nid = suits.anotar(con, pid, f"SIMULAÇÃO — {quem} " + resumo, "email", pedido["status"], user_id=user_id)
         return {"simulado": True, "nota": nid, "para": para}
-    em_resposta_a = None
-    if thread:
-        try:
-            from command_center.providers import modulo
-            msgs = modulo("gmail").mensagens_da_thread(CONTA, thread, limite=200)["mensagens"]
-            em_resposta_a = msgs[-1].get("message_id_header") if msgs else None
-        except Exception:
-            em_resposta_a = None
-        if not assunto.lower().startswith("re:"):
-            assunto = "Re: " + assunto
-    r = _envio_real(para, assunto, corpo, arquivos, thread, em_resposta_a)
-    if r.get("id"):                                   # o que nós mandamos não volta como evento
-        con.execute("INSERT OR IGNORE INTO suit_email_seen (message_id, order_id, thread_id, papel) VALUES (?,?,?,?)",
-                    (r["id"], pid, r.get("thread_id"), papel))
-    if r.get("thread_id") and not pedido.get(f"gmail_thread_{papel}"):
-        con.execute(f"UPDATE suit_orders SET gmail_thread_{papel}=? WHERE id=?", (r["thread_id"], pid))
-    suits.anotar(con, pid, "E-mail enviado " + resumo, "email", pedido["status"], user_id=user_id)
-    auditar(con, "suit.email.sent", "ai:suits_ponte", user_id=user_id, entity_type="suit_order", entity_id=pid,
-            detail={"papel": papel, "para": para, "assunto": assunto, "anexos": [a[0] for a in arquivos]})
-    return {"simulado": False, "para": para, "id": r.get("id"), "thread_id": r.get("thread_id")}
+    r = _mandar(con, pedido, papel, para, assunto, corpo, arquivos, responder, user_id, "ai:suits_ponte", gm)
+    if boas_vindas and not r.get("repetido"):
+        con.execute("UPDATE suit_orders SET welcome_sent_at=coalesce(welcome_sent_at, ?) WHERE id=?", (agora(), pid))
+    return r
+
+
+def pedir_aprovacao_final(con, pid, introducao=None, user_id=None):
+    """#382 (A): o e-mail de aprovação final, montado pelo painel (não pela IA): a versão exata, os arquivos da arte
+    final anexados, as medidas e a política (não retornável, não reembolsável). Fica gravado o que o cliente viu."""
+    from command_center.providers import suits
+    p = um(con, "SELECT * FROM suit_orders WHERE id=?", (int(pid),))
+    if not p:
+        raise Recusado("pedido não encontrado")
+    e = suits.estado_aprovacao(con, pid)
+    if e["bloqueios"]:
+        raise Recusado("A aprovação final ainda não pode ir ao cliente: falta " + "; ".join(e["bloqueios"])
+                       + ". Medida a conferir é da equipe: use suits_precisa_humano.")
+    cfg = config(con)
+    assunto, corpo = suits.texto_aprovacao_final(dict(p), e, introducao, cfg.get("assinatura") or "")
+    r = enviar(con, pid, "cliente", assunto, corpo, e["arte_final"], True, user_id, tipo="aprovacao_final")
+    registro = {"arte": e["hash_arte"], "medidas": e["hash_medidas"], "versao": e["versao"], "arquivos": e["arte_final"],
+                "em": agora(), "simulado": bool(r.get("simulado")), "message_id": r.get("id"), "nota": r.get("nota")}
+    con.execute("UPDATE suit_orders SET final_request=? WHERE id=?", (json.dumps(registro, ensure_ascii=False), int(pid)))
+    return dict(r, versao=e["versao"])
 
 
 def precisa_humano(con, pid, motivo, user_id=None):
     from command_center.providers import suits
-    p = um(con, "SELECT title, status FROM suit_orders WHERE id=?", (pid,))
+    p = um(con, "SELECT title, status, is_test FROM suit_orders WHERE id=?", (pid,))
     if not p:
         raise Recusado("pedido não encontrado")
     suits.anotar(con, pid, f"Precisa de alguém da equipe: {motivo}", "ia", p["status"], user_id=user_id)
+    if p.get("is_test"):                               # #382: pedido de teste não avisa na Atenção
+        return {"ok": True, "teste": True}
     if not um(con, "SELECT id FROM ai_events WHERE kind='suit.humano' AND entity_id=? AND status='NEW'", (pid,)):
         inserir(con, "ai_events", kind="suit.humano", entity_type="suit_order", entity_id=pid,
                 summary=f"Suits #{pid} ({p['title']}): {motivo}"[:300], status="NEW")
     return {"ok": True}
+
+
+def precisa_humano_sem_pedido(con, motivo):
+    """E-mail que não dá para ligar a um pedido só (casou com mais de um, ou a ponte desistiu): vai para a equipe
+    em Precisa de atenção, sem ligar a pedido nenhum."""
+    resumo = f"Suits: {motivo}"[:300]
+    if not um(con, "SELECT id FROM ai_events WHERE kind='suit.humano' AND entity_id IS NULL AND summary=? AND status='NEW'", (resumo,)):
+        inserir(con, "ai_events", kind="suit.humano", entity_type="suit_order", entity_id=None, summary=resumo, status="NEW")
+    return {"ok": True}
+
+
+def _ambiguo(con, msgs, thread, pids, quem):
+    """Revisão do Mio (#382): casou com mais de um pedido → não liga a nenhum; a equipe decide."""
+    _marcar(con, msgs, None, thread, "ambiguo")
+    lista = ", ".join(f"#{x}" for x in sorted(pids))
+    precisa_humano_sem_pedido(con, f"{quem} (thread {thread}) casa com mais de um pedido aberto ({lista}): não liguei a "
+                                   "nenhum. Ligue a conversa ao pedido certo em Ponte de e-mail › Ligar conversas.")
+    return {"thread_id": thread, "pedidos": sorted(pids)}
 
 
 # ------------------------------------------------------------------ os eventos
@@ -411,12 +696,29 @@ def novas_vendas(con, gm):
 def respostas(con, gm):
     """Mensagem nova nas conversas de um pedido aberto, de quem não é a URACE."""
     eventos = []
-    for p in todos(con, """SELECT id, gmail_thread_cliente, gmail_thread_designer, gmail_thread_fornecedor
+    abertos = todos(con, """SELECT id, gmail_thread_cliente, gmail_thread_designer, gmail_thread_fornecedor
                            FROM suit_orders WHERE closed=0 AND discarded_at IS NULL AND (gmail_thread_cliente IS NOT NULL
-                           OR gmail_thread_designer IS NOT NULL OR gmail_thread_fornecedor IS NOT NULL)"""):
+                           OR gmail_thread_designer IS NOT NULL OR gmail_thread_fornecedor IS NOT NULL)""")
+    donos = {}
+    for p in abertos:
+        for papel in ("cliente", "designer", "fornecedor"):
+            if p[f"gmail_thread_{papel}"]:
+                donos.setdefault(p[f"gmail_thread_{papel}"], set()).add(p["id"])
+    ja_ambiguas = set()
+    for p in abertos:
         for papel in ("cliente", "designer", "fornecedor"):
             th = p[f"gmail_thread_{papel}"]
             if not th:
+                continue
+            if len(donos[th]) > 1:                     # #382: a mesma conversa em dois pedidos não é de nenhum
+                if th not in ja_ambiguas:
+                    ja_ambiguas.add(th)
+                    try:
+                        msgs = [m for m in gm.mensagens_da_thread(CONTA, th)["mensagens"] if not _visto(con, m["message_id"])]
+                    except Exception:
+                        msgs = []
+                    if msgs:
+                        _ambiguo(con, msgs, th, donos[th], "uma conversa ligada")
                 continue
             try:
                 msgs = gm.mensagens_da_thread(CONTA, th)["mensagens"]
@@ -443,14 +745,21 @@ def _nome_de(de):
     return n if n and "@" not in n else ""
 
 
-def _pedido_do_fornecedor(con, assunto):
-    """'SUIT - Bennie Shifter (…)' → o pedido aberto cujo título ou piloto aparece no assunto."""
+def _pedidos_do_fornecedor(con, assunto):
+    """'SUIT - Bennie Shifter (…)' → os pedidos abertos cujo título ou piloto aparece no assunto. Revisão do Mio
+    (#382): sem adivinhar — quem chama só liga quando é exatamente um."""
     a = (assunto or "").lower()
+    achados = set()
     for p in todos(con, "SELECT id, title, driver_name FROM suit_orders WHERE closed=0 AND discarded_at IS NULL ORDER BY id DESC"):
         for nome in (p["title"], p["driver_name"]):
             if nome and len(nome) >= 4 and nome.lower() in a:
-                return p["id"]
-    return None
+                achados.add(p["id"])
+    return achados
+
+
+def _pedido_do_fornecedor(con, assunto):
+    achados = _pedidos_do_fornecedor(con, assunto)
+    return next(iter(achados)) if len(achados) == 1 else None
 
 
 def conversas_novas(con, gm, ignoradas=None):
@@ -464,10 +773,11 @@ def conversas_novas(con, gm, ignoradas=None):
                                               UNION SELECT gmail_thread_designer FROM suit_orders WHERE gmail_thread_designer IS NOT NULL
                                               UNION SELECT gmail_thread_fornecedor FROM suit_orders WHERE gmail_thread_fornecedor IS NOT NULL""")}
     fornecedores = {r["email"].lower() for r in todos(con, "SELECT email FROM suit_suppliers WHERE email IS NOT NULL")}
-    clientes = {r["e"].lower(): r["id"] for r in todos(con, """SELECT lower(customer_email) AS e, MAX(id) AS id FROM suit_orders
-                                                              WHERE closed=0 AND discarded_at IS NULL AND customer_email IS NOT NULL
-                                                              GROUP BY lower(customer_email)""")
-                if not _nosso(r["e"]) and not robo(_email_de(r["e"]))}   # #195: a URACE e robô nunca são "o cliente"
+    clientes = {}
+    for r in todos(con, """SELECT lower(customer_email) AS e, id FROM suit_orders
+                           WHERE closed=0 AND discarded_at IS NULL AND customer_email IS NOT NULL"""):
+        if not _nosso(r["e"]) and not robo(_email_de(r["e"])):      # #195: a URACE e robô nunca são "o cliente"
+            clientes.setdefault(r["e"], set()).add(r["id"])
     consultas = ["label:Suits newer_than:3d"]
     if cfg.get("designer_email"):
         consultas.append(f"from:{cfg['designer_email']} newer_than:3d")
@@ -488,19 +798,28 @@ def conversas_novas(con, gm, ignoradas=None):
                 continue
             de, assunto = _email_de(novas[-1].get("de")), novas[0].get("assunto") or ""
             if de in fornecedores:
-                pid = _pedido_do_fornecedor(con, assunto)
+                achados = _pedidos_do_fornecedor(con, assunto)
+                if len(achados) > 1:
+                    _ambiguo(con, novas, th, achados, f"e-mail do fornecedor ({assunto[:80]})")
+                    continue
+                pid = next(iter(achados)) if achados else None
                 if pid and not um(con, "SELECT gmail_thread_fornecedor FROM suit_orders WHERE id=?", (pid,))["gmail_thread_fornecedor"]:
                     con.execute("UPDATE suit_orders SET gmail_thread_fornecedor=? WHERE id=?", (th, pid))
                 eventos.append({"tipo": "fornecedor", "pedido_id": pid, "thread_id": th, "mensagens": novas})
             elif cfg.get("designer_email") and de == cfg["designer_email"].lower():
-                m = re.search(r"#\s?(\d+)", assunto + " " + (novas[-1].get("corpo") or "")[:500])
-                pid = int(m.group(1)) if m and um(con, "SELECT 1 AS x FROM suit_orders WHERE id=? AND discarded_at IS NULL",
-                                                   (int(m.group(1)),)) else None
+                ids = {int(x) for x in re.findall(r"#\s?(\d+)", assunto + " " + (novas[-1].get("corpo") or "")[:500])}
+                ids = {x for x in ids if um(con, "SELECT 1 AS x FROM suit_orders WHERE id=? AND discarded_at IS NULL", (x,))}
+                if len(ids) > 1:
+                    _ambiguo(con, novas, th, ids, "e-mail do designer")
+                    continue
+                pid = next(iter(ids)) if ids else None
                 if pid:
                     con.execute("UPDATE suit_orders SET gmail_thread_designer=coalesce(gmail_thread_designer, ?) WHERE id=?", (th, pid))
                 eventos.append({"tipo": "designer", "pedido_id": pid, "thread_id": th, "mensagens": novas})
+            elif de in clientes and len(clientes[de]) > 1:
+                _ambiguo(con, novas, th, clientes[de], f"e-mail de um cliente com mais de um pedido aberto ({de})")
             elif de in clientes:
-                pid = clientes[de]
+                pid = next(iter(clientes[de]))
                 con.execute("UPDATE suit_orders SET gmail_thread_cliente=coalesce(gmail_thread_cliente, ?) WHERE id=?", (th, pid))
                 eventos.append({"tipo": "cliente", "pedido_id": pid, "thread_id": th, "mensagens": novas, "historico": msgs})
             elif robo(de) or not fala_de_suit(msgs):
@@ -537,29 +856,43 @@ QUE_FAZER = {
     "venda": ("VENDA NOVA NO SITE. Preencha o pedido com os dados da venda (suits_atualizar_pedido: title = nome do cliente, "
               "customer_name, customer_email, customer_phone, ship_address, driver_name se houver, product, quantity, "
               "paid_at se pago, language pelo país e pelo idioma do cliente). Depois mande ao cliente (suits_email "
-              "para=\"cliente\", anexos=[\"manual_medidas\"]) as boas-vindas no idioma dele, a partir do MODELO DE "
-              "BOAS-VINDAS, e mova para awaiting_measurements."),
+              "para=\"cliente\", tipo=\"boas_vindas\", anexos=[\"manual_medidas\"]) as boas-vindas no idioma dele, a partir do "
+              "MODELO DE BOAS-VINDAS, e mova para awaiting_measurements. As boas-vindas NUNCA saem sem o manual de medidas: "
+              "se a ferramenta recusar por falta do PDF, suits_precisa_humano."),
     "cliente": ("O CLIENTE RESPONDEU. Leia tudo, inclusive as imagens e PDFs baixados. Grave as medidas que vierem "
                 "(suits_atualizar_pedido medidas, na unidade que ele usou), o design (ideia, cores, logos, posicao_logos, nome, "
-                "bandeira, observacoes) e o nome do piloto. Se faltar algo, responda pedindo SÓ o que falta. Quando houver "
-                "design suficiente para começar, mande ao designer (para=\"designer\") um briefing claro, com os anexos de "
-                "inspiração e logos e a referência \"Suits #{id}\" — sem nome completo, e-mail, telefone, endereço ou "
-                "pagamento do cliente — e mova para design_pending. Aprovou o design: mova para approved e agradeça. Pediu "
-                "ajuste: leve o ajuste ao designer."),
+                "bandeira, observacoes) e o nome do piloto. Medida que parecer errada ou fora do comum: suits_medida_suspeita "
+                "com o motivo, e pergunte ao cliente. Se faltar algo, responda pedindo SÓ o que falta. Quando houver "
+                "design suficiente para começar, prepare ao designer (para=\"designer\") um briefing claro, com os anexos de "
+                "inspiração e logos e a referência \"Suits #{id}\" — sem nome completo, e-mail, telefone, endereço, valor ou "
+                "pagamento do cliente; o e-mail fica PREPARADO e uma pessoa da equipe envia — e mova para design_pending. "
+                "Pediu ajuste: leve o ajuste ao designer.\n"
+                "APROVAÇÃO FINAL (dono, 22/10: vale por e-mail). Só registre (suits_registrar_aprovacao, com o message_id da "
+                "mensagem dele e o trecho EXATO em que aprova) quando o cliente aprovar EXPRESSAMENTE a versão final mostrada "
+                "no e-mail de aprovação final (o que saiu por suits_pedir_aprovacao_final, com a versão, as medidas e a "
+                "política). \"Gostei\", \"ficou legal\", \"perfeito\" sobre um mockup, ou aprovação de uma versão anterior, NÃO "
+                "contam: nesse caso, se a arte final e as medidas conferidas estiverem prontas, mande o e-mail de aprovação "
+                "final (suits_pedir_aprovacao_final) e peça que ele aprove por escrito aquela versão. A aprovação só vale "
+                "para a arte e as medidas daquele momento; mudou algo, é preciso aprovar de novo."),
     "designer": ("O DESIGNER RESPONDEU. Pergunta: leve ao cliente com as suas palavras, como a URACE (sem nome nem contato do "
-                 "designer). Arte entregue (anexo): mande a arte ao cliente (anexos com os arquivos baixados) pedindo aprovação "
-                 "ou ajustes, e mova para design_review."),
-    "fornecedor": ("O FORNECEDOR ESCREVEU. Anote o que ele disse (suits_anotar); se avisou produção ou envio, mova a etapa "
-                   "(in_production / in_transit, com o rastreio). Se pedir decisão ou houver problema (medida errada, cor), "
-                   "suits_precisa_humano."),
+                 "designer). Arte entregue (anexo): marque o arquivo da versão a aprovar como arte final "
+                 "(suits_marcar_arte_final), mande a arte ao cliente (anexos com os arquivos baixados) pedindo aprovação ou "
+                 "ajustes, e mova para design_review. Quando o cliente gostar e as medidas estiverem conferidas pela equipe, "
+                 "a aprovação final vai por suits_pedir_aprovacao_final."),
+    "fornecedor": ("O FORNECEDOR ESCREVEU. Anote o que ele disse (suits_anotar); se confirmou o pedido, mova para "
+                   "supplier_accepted; se avisou produção, in_production; se despachou, in_transit COM o rastreio (tracking). "
+                   "O fornecedor manda as fotos do macacão pelo WhatsApp: fotos recebidas, conferido e endereço enviado são da "
+                   "equipe, nunca seus. O endereço do cliente só vai ao fornecedor depois do OK da equipe, e nunca ao designer. "
+                   "Se pedir decisão ou houver problema (medida errada, cor), suits_precisa_humano."),
     "marcador": ("E-MAIL COM O MARCADOR SUITS DE QUEM NÃO TEM PEDIDO ABERTO. NENHUM PEDIDO FOI CRIADO: classifique antes "
                  "(dono, 09/10: \"quando for um pedido de suit, ele adiciona lá\"). Leia a conversa inteira.\n"
                  "1) É PEDIDO DE MACACÃO só quando a pessoa (cliente, não a equipe nem fornecedor) quer comprar um macacão "
                  "novo: pede orçamento ou preço para fazer o dela, manda medidas ou design para encomendar, confirma que quer "
-                 "fazer, ou pagou. Aí: veja em suits_pedidos se ela já tem pedido aberto (mesmo e-mail ou nome); se tem, "
+                 "fazer, ou pagou. Aí: veja em suits_pedidos se ela já tem pedido aberto (mesmo e-mail); se tem, "
                  "suits_atualizar_pedido nele com gmail_thread_cliente=\"{thread}\" e siga do ponto em que está; se não tem, "
                  "suits_criar_pedido com title e customer_name (o nome dela), customer_email, gmail_thread_cliente=\"{thread}\" "
-                 "e o que ela já mandou, e responda com as boas-vindas (anexos=[\"manual_medidas\"]) ou com o próximo passo.\n"
+                 "e o que ela já mandou, e responda com as boas-vindas (tipo=\"boas_vindas\", anexos=[\"manual_medidas\"]) ou "
+                 "com o próximo passo.\n"
                  "2) NÃO É PEDIDO (e não crie nada): fornecedor ou fábrica, homologação/FIA, nota fiscal, frete, propaganda, "
                  "newsletter, conversa interna da equipe, dúvida geral sem intenção de comprar, agradecimento, assunto de outro "
                  "serviço, ou qualquer dúvida sobre ser pedido. Na dúvida, NÃO crie: responda só \"não é pedido: <motivo>\" "
@@ -568,22 +901,29 @@ QUE_FAZER = {
                   "passo do processo como se fosse de verdade."),
 }
 
+ISOLAMENTO = ("ISOLAMENTO (#382): neste evento você só enxerga e só mexe {alvo}. É PROIBIDO buscar, ler, citar ou trazer "
+              "para este pedido dados de outros clientes ou de outros pedidos (nome, e-mail, telefone, endereço, medidas, "
+              "design, valores ou conversas). As ferramentas recusam qualquer outro pedido.")
+
 
 def prompt(con, ev, cfg, anexos_baixados):
     pid = ev.get("pedido_id")
     linhas = []
     for m, nomes in zip(ev["mensagens"], anexos_baixados):
-        linhas.append(f"--- de: {m.get('de')} · {m.get('data')} · assunto: {m.get('assunto')}\n{m.get('corpo') or ''}"
+        linhas.append(f"--- message_id: {m.get('message_id')} · de: {m.get('de')} · {m.get('data')} · assunto: {m.get('assunto')}\n"
+                      f"{m.get('corpo') or ''}"
                       + (f"\nAnexos baixados (leia com Read em {pasta(pid) if pid else '—'}): {', '.join(nomes)}" if nomes else ""))
     historico = ""
     if ev.get("historico"):
         historico = "\nCONVERSA ANTERIOR (contexto):\n" + "\n".join(
             f"- {m.get('de')} · {m.get('data')}: {(m.get('corpo') or '')[:800]}" for m in ev["historico"] if m not in ev["mensagens"])
     designer = cfg.get("designer_nome") or "o designer"
+    alvo = f"no pedido Suits #{pid}" if pid else "no pedido desta pessoa (o que ela já tem, pelo e-mail dela, ou o que você criar)"
     return (f"[PONTE DE E-MAIL DOS SUITS] Você é o meio de campo entre o cliente, {designer} e o fornecedor, no lugar da equipe "
             "(processo: 10_PROCESSOS/Pedido de macacão.md). "
             + (f"Pedido Suits #{pid}: leia com suits_pedido e os anexos com suits_anexos. " if pid else "")
             + f"Thread do Gmail: {ev.get('thread_id')}.\n\n"
+            + ISOLAMENTO.replace("{alvo}", alvo) + "\n\n"
             + QUE_FAZER[ev["tipo"]].replace("{id}", str(pid or "?")).replace("{thread}", str(ev.get("thread_id") or ""))
             + (f"\nRemetente: {ev['remetente'].get('nome') or '—'} <{ev['remetente'].get('email') or '—'}>." if ev.get("remetente") else "")
             + "\n\nSEMPRE: no idioma do cliente, educado e comercial (ainda é venda), respeitando o que ele pediu; não prometa "
@@ -611,8 +951,24 @@ def _executar_padrao(con, cid, texto, sk, uid, pr):
     ia._executa(cid, texto, sk, uid, pr)
 
 
+def _saude(con, pid, **campos):
+    if pid and campos:
+        con.execute(f"UPDATE suit_orders SET {', '.join(k + '=?' for k in campos)} WHERE id=?", (*campos.values(), int(pid)))
+
+
+def escopo_do_evento(ev):
+    """O que as ferramentas `suits_*` podem tocar neste evento (#382, C)."""
+    papel = ev["tipo"] if ev["tipo"] in ("cliente", "designer", "fornecedor") else ("cliente" if ev["tipo"] in ("marcador", "venda") else None)
+    return {"pedido": ev.get("pedido_id"), "tipo": ev["tipo"],
+            "email": ((ev.get("remetente") or {}).get("email") or "").lower() or None,
+            "mensagens": {m.get("message_id"): {"de": m.get("de"), "data": m.get("data"), "corpo": m.get("corpo") or "",
+                                                "papel": papel or ("cliente" if "[cliente]" in (m.get("de") or "") else None)}
+                          for m in ev["mensagens"] if m.get("message_id")}}
+
+
 def tratar(con, ev, gm=None, executar=None, simular=False):
-    """Um evento → um comando da IA (na conversa automática), com o pedido e os anexos. Bloqueia."""
+    """Um evento → um comando da IA (na conversa automática), com o pedido e os anexos. Bloqueia.
+    Devolve o id do comando; levanta se a IA falhou (o evento volta no próximo ciclo)."""
     from command_center.providers import modulo, suits
     gm = gm or modulo("gmail")
     cfg = config(con)
@@ -630,25 +986,85 @@ def tratar(con, ev, gm=None, executar=None, simular=False):
                                 "designer": "Chegou e-mail do designer: a IA está tratando.", "fornecedor": "Chegou e-mail do fornecedor.",
                                 "simulacao": "Simulação da ponte neste pedido (nada sai)."}.get(ev["tipo"], "A IA está tratando."),
                      "ia", st, command_id=cid)
+    _saude(con, pid, bridge_last_try_at=agora(),
+           bridge_last_mode="simulacao" if (simular or cfg["envio_automatico"] != "1") else "real")
     marca = SIMULAR.set(bool(simular))
+    escopo = escopo_do_evento(ev)
+    marca_escopo = ESCOPO.set(escopo)
     try:
         (executar or _executar_padrao)(con, cid, texto, f"suits-{pid or ev.get('thread_id')}", uid, pr)
+    except Exception as e:
+        _saude(con, pid or escopo.get("pedido"), bridge_last_error=f"{type(e).__name__}: {str(e)[:160]}", bridge_last_error_at=agora())
+        raise
     finally:
         SIMULAR.reset(marca)
+        ESCOPO.reset(marca_escopo)
+    pid = pid or escopo.get("pedido")              # o marcador que virou pedido
+    c = um(con, "SELECT status, error FROM ai_commands WHERE id=?", (cid,))
+    if c and c["status"] == "FAILED":
+        _saude(con, pid, bridge_last_error=(c["error"] or "a IA falhou")[:200], bridge_last_error_at=agora())
+        raise RuntimeError(f"a IA falhou: {(c['error'] or '')[:160]}")
+    _saude(con, pid, bridge_last_ok_at=agora())
     return cid
 
 
+def _tentativa(con, chave, pid, erro):
+    """Mais uma falha deste evento. Devolve quantas já foram."""
+    con.execute("""INSERT INTO suit_event_tries (chave, order_id, tries, last_error, updated_at) VALUES (?,?,1,?,?)
+                   ON CONFLICT(chave) DO UPDATE SET tries=tries+1, last_error=excluded.last_error, updated_at=excluded.updated_at""",
+                (chave, pid, erro[:300], agora()))
+    return um(con, "SELECT tries FROM suit_event_tries WHERE chave=?", (chave,))["tries"]
+
+
+def conferir_pendentes(con, gm=None):
+    """O "enviando" que ficou para trás (o processo caiu entre o envio e o registro): confere no Gmail se saiu.
+    Saiu, vira "enviado"; não saiu, fica (a próxima tentativa de mandar confere de novo antes de reenviar)."""
+    conferidos = 0
+    for linha in todos(con, "SELECT * FROM suit_sends WHERE status='enviando'"):
+        mid = _ja_saiu(linha, gm)
+        if mid:
+            con.execute("UPDATE suit_sends SET status='enviado', message_id=?, sent_at=? WHERE chave=?", (mid, agora(), linha["chave"]))
+            conferidos += 1
+    return conferidos
+
+
+def _guardar_rodada(con, res):
+    resumo = {"at": agora(), "eventos": res.get("eventos", 0), "erros": len(res.get("erros") or []),
+              "simulacao": res.get("simulacao"), "tratados": len(res.get("tratados") or []), "pulada": res.get("pulada"),
+              "ambiguos": res.get("ambiguos", 0)}
+    con.execute("""INSERT INTO suit_settings (key, value, updated_at) VALUES ('ultima_rodada', ?, ?)
+                   ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at""",
+                (json.dumps(resumo, ensure_ascii=False), agora()))
+
+
+def ultima_rodada(con):
+    r = um(con, "SELECT value FROM suit_settings WHERE key='ultima_rodada'")
+    try:
+        return json.loads(r["value"]) if r and r["value"] else None
+    except ValueError:
+        return None
+
+
 def rodar(con, gm=None, executar=None):
-    """Um ciclo da ponte. Devolve o resumo (vai para a auditoria)."""
+    """Um ciclo da ponte. Devolve o resumo (vai para a auditoria e para o topo da aba)."""
     from command_center.api import ia
     from command_center.providers import modulo, suits
     cfg = config(con)
     if cfg["ponte_ligada"] != "1":
-        return {"pulada": "ponte desligada"}
+        res = {"pulada": "ponte desligada"}
+        _guardar_rodada(con, res)
+        return res
     if executar is None and ia.motor_da_ia() != "sdk":
-        return {"pulada": "a IA não está no motor novo (falta a chave da Anthropic no serviço)"}
+        res = {"pulada": "a IA não está no motor novo (falta a chave da Anthropic no serviço)"}
+        _guardar_rodada(con, res)
+        return res
     gm = gm or modulo("gmail")
     eventos, erros, ignoradas = [], [], []
+    try:
+        conferir_pendentes(con, gm)
+    except Exception as e:
+        erros.append(f"conferir_pendentes: {type(e).__name__}: {str(e)[:160]}")
+    antes_amb = um(con, "SELECT COUNT(*) AS n FROM suit_email_seen WHERE papel='ambiguo'")["n"]
     for nome, fonte in (("novas_vendas", lambda: novas_vendas(con, gm)), ("respostas", lambda: respostas(con, gm)),
                         ("conversas_novas", lambda: conversas_novas(con, gm, ignoradas))):
         try:
@@ -657,8 +1073,8 @@ def rodar(con, gm=None, executar=None):
             erros.append(f"{nome}: {type(e).__name__}: {str(e)[:160]}")
     feitos = []
     for ev in eventos[:POR_CICLO]:
-        _marcar(con, ev["mensagens"], ev.get("pedido_id"), ev.get("thread_id"), ev["tipo"])   # antes: se a IA cair, não repete em laço
         if ev.get("pedido_id") and suits.ia_desligada(con, ev["pedido_id"]):
+            _marcar(con, ev["mensagens"], ev.get("pedido_id"), ev.get("thread_id"), ev["tipo"])
             try:
                 feitos.append({"tipo": ev["tipo"], "pedido": ev["pedido_id"], "ia_desligada": True,
                                "anexos": [n for m in ev["mensagens"] for n in baixar_anexos(gm, ev["pedido_id"], m)]})
@@ -669,13 +1085,31 @@ def rodar(con, gm=None, executar=None):
                 erros.append(f"{ev['tipo']} #{ev.get('pedido_id')}: {type(e).__name__}: {str(e)[:160]}")
             continue
         try:
-            feitos.append({"tipo": ev["tipo"], "pedido": ev.get("pedido_id"), "comando": tratar(con, ev, gm, executar)})
+            cid = tratar(con, ev, gm, executar)
+            # #382: lido só DEPOIS de tratado; o que a IA criou (marcador → pedido) fica ligado ao pedido
+            _marcar(con, ev["mensagens"], ev.get("pedido_id"), ev.get("thread_id"), ev["tipo"])
+            feitos.append({"tipo": ev["tipo"], "pedido": ev.get("pedido_id"), "comando": cid})
         except Exception as e:
-            erros.append(f"{ev['tipo']} #{ev.get('pedido_id')}: {type(e).__name__}: {str(e)[:160]}")
+            erro = f"{type(e).__name__}: {str(e)[:160]}"
+            erros.append(f"{ev['tipo']} #{ev.get('pedido_id')}: {erro}")
+            chave = ev["mensagens"][0].get("message_id") or str(ev.get("thread_id"))
+            n = _tentativa(con, chave, ev.get("pedido_id"), erro)
+            if n >= LIMITE_TENTATIVAS:              # desiste: a equipe assume, e o evento não volta mais
+                _marcar(con, ev["mensagens"], ev.get("pedido_id"), ev.get("thread_id"), ev["tipo"])
+                motivo = f"a ponte tentou {n} vezes tratar um e-mail ({ev['tipo']}) e não conseguiu ({erro[:120]})"
+                try:
+                    if ev.get("pedido_id"):
+                        precisa_humano(con, ev["pedido_id"], motivo)
+                    else:
+                        precisa_humano_sem_pedido(con, f"{motivo}; thread {ev.get('thread_id')}")
+                except Exception:
+                    pass
+    ambiguos = um(con, "SELECT COUNT(*) AS n FROM suit_email_seen WHERE papel='ambiguo'")["n"] - antes_amb
     res = {"eventos": len(eventos), "tratados": feitos, "nao_sao_de_suit": ignoradas, "ficaram_para_o_proximo": max(0, len(eventos) - POR_CICLO),
-           "simulacao": cfg["envio_automatico"] != "1", "erros": erros}
-    if eventos or erros or ignoradas:
+           "simulacao": cfg["envio_automatico"] != "1", "erros": erros, "ambiguos": ambiguos}
+    if eventos or erros or ignoradas or ambiguos:
         auditar(con, "suit.bridge.round", "system", detail=res)
+    _guardar_rodada(con, res)
     return res
 
 
