@@ -90,7 +90,8 @@ def test_subir_de_novo_nao_duplica_nem_sobrescreve_o_que_a_equipe_mudou(con):
     s = um(con, "SELECT * FROM booking_services WHERE id=?", (sid,))
     assert (s["price"], s["name"], s["active"], s["deposit"]) == (1234.0, "2-stroke da equipe", 0, 0)
     assert len(todos(con, "SELECT id FROM booking_services WHERE site_kart='2-stroke'")) == 1
-    assert len(todos(con, "SELECT id FROM booking_services")) == len(C.KARTS) + 1, "os karts e o Lead and Follow (#279)"
+    assert len(todos(con, "SELECT id FROM booking_services WHERE kind<>'sim'")) == len(C.KARTS) + 1, "os karts e o Lead and Follow (#279)"
+    assert len(todos(con, "SELECT id FROM booking_services WHERE kind='sim'")) == 2, "#392: os dois formatos do SIM2GRID, uma vez"
 
 
 def test_a_migracao_liga_o_servico_que_a_equipe_criou_em_vez_de_criar_outro(con):

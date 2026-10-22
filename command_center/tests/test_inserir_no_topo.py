@@ -64,7 +64,7 @@ def test_as_paginas_do_seletor_sao_as_que_o_site_tem():
     from command_center.api.vitrine import PAGINAS
     from command_center.providers.cartoes_site import PAGINAS as DOS_CARTOES
     pgs = sv.paginas_do_site()
-    assert [p["id"] for p in pgs] == ["arrive-and-drive", "academy", "pro-team", "for-beginners"]
+    assert [p["id"] for p in pgs] == ["arrive-and-drive", "academy", "pro-team", "for-beginners", "sim2grid"]   # #392
     assert all(p["caminho"] in PAGINAS for p in pgs), "toda página do seletor é uma página do site"
     assert {p["id"] for p in pgs if p["cartoes"]} == set(DOS_CARTOES), "os cartões entram só nas páginas que têm cartão"
     assert {p["id"]: p["caminho"] for p in pgs if p["cartoes"]} == DOS_CARTOES

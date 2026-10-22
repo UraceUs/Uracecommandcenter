@@ -55,6 +55,7 @@ PAGINAS = {
     "/services/arrive-and-drive/": paginas.arrive_and_drive,
     "/services/": ps.hub,
     "/academy/": ps.academy,
+    "/sim2grid-racing-simulator/": ps.sim2grid,          # #392: a LP do SIM2GRID, com a reserva por hora
     "/pro-team/": ps.pro_team,
     "/for-beginners/": ps.beginners,
     "/career/": ps.career,
@@ -187,6 +188,12 @@ def _do_banco(ler):
         return None
 
 
+def _sim_do_painel(con):
+    """#392: o que a página do SIM2GRID mostra do painel (os formatos ativos, as faixas ativas e as regras)."""
+    from command_center.providers import sim2grid
+    return {"formatos": sim2grid.formatos(con), "faixas": sim2grid.faixas(con, ativos=True), "regras": sim2grid.config(con)}
+
+
 def _cartoes(pagina):
     from command_center.providers import cartoes_site
     return _do_banco(lambda con: cartoes_site.da_pagina(con, pagina))
@@ -266,6 +273,8 @@ def html_da_pagina(caminho, host):
         return ps.pro_team(host, planos=_planos(), cartoes=_cartoes("pro-team"))
     if caminho == "/for-beginners/":
         return ps.beginners(host, cartoes=_cartoes("for-beginners"))
+    if caminho == ps.SG.CAMINHO:                        # #392: formatos, faixas e regras do painel; os programas são cartões
+        return ps.sim2grid(host, **(_do_banco(_sim_do_painel) or {}), cartoes=_cartoes("sim2grid"))
     if caminho in PAGINAS and caminho != "/store/":
         return PAGINAS[caminho](host)
     return None
@@ -284,7 +293,7 @@ def _pagina(request, caminho, host, q):
         feita = _do_editor(caminho, host)
         if feita:
             return _html(feita)
-    if caminho in (C.ARRIVE["caminho"], "/academy/", "/pro-team/", "/for-beginners/"):
+    if caminho in (C.ARRIVE["caminho"], "/academy/", "/pro-team/", "/for-beginners/", ps.SG.CAMINHO):
         return _html(html_da_pagina(caminho, host))
     if caminho == "/cart/":                             # #236: o carrinho (noindex, sem cache: é de cada pessoa)
         from command_center.providers import stripe_loja
@@ -347,6 +356,18 @@ def servicos_publicos(request: Request, con: sqlite3.Connection = Depends(get_db
     return {"services": servicos_site.para_cliente(con), "auto_sell": bool(ag.config(con).get("auto_sell")),
             "lead_follow": servicos_site.addon_do_site(con),           # #279: o add-on do dia de treino
             "cart": e_do_site(request) and stripe_loja.ligado()}
+
+
+@r.get("/ops/api/vitrine/sim2grid")
+def sim2grid_publico(request: Request, con: sqlite3.Connection = Depends(get_db)):
+    """#392: as horas do SIM2GRID que o site pode vender — sem login. Por dia, cada hora com as vagas que sobram (os
+    simuladores) e o preço de cada formato (null = ligar). Com a conta aberta, as seguradas dela não contam (é ela
+    voltando do Stripe). `cart`: o carrinho do site está aberto (Stripe ligado)."""
+    from command_center.api import portal as api_portal
+    from command_center.providers import sim2grid, stripe_loja
+    conta = api_portal.conta_do_cookie(request, con) if e_do_site(request) else None
+    d = sim2grid.disponibilidade(con, conta=conta)
+    return JSONResponse({**d, "cart": e_do_site(request) and stripe_loja.ligado()}, headers={"Cache-Control": "no-store"})
 
 
 # ------------------------------------------------------------------ contato e pedido (#164)
@@ -724,7 +745,9 @@ def _conta_do_carrinho(con, request, nova, itens, entrega=None):
     for x in c["linhas"]:
         if x["tipo"] != "sessao":
             continue
-        turnos = ag.PERIODOS if x["turno"] == "dia" else (x["turno"],)
+        # #392: a hora de simulador ocupa cada hora dela (não um turno do dia)
+        turnos = (tuple(f"sim{h}" for h in range(x["hora"], x["hora"] + x["horas"])) if x.get("sim")
+                  else ag.PERIODOS if x["turno"] == "dia" else (x["turno"],))
         k = quem.get(x["idx"], "um")
         if any((k, x["data"], t) in ocupado for t in turnos):
             raise ErroConta("The same driver has two sessions at the same time in this cart. Change the time or the driver."
@@ -805,7 +828,10 @@ def _no_idioma(cot, lang):
         x["erro"] = idioma.traduzir(x["erro"], lang)
         if x.get("aviso_piloto"):                       # #305: completar o piloto depois do pagamento
             x["aviso_piloto"] = idioma.traduzir(x["aviso_piloto"], lang)
-        if x["tipo"] == "sessao" and x.get("detalhe"):
+        if x.get("sim") and x.get("detalhe"):              # #392: o dia e as horas do simulador
+            from command_center.providers import sim2grid
+            x["detalhe"] = sim2grid.quando(x["data"], x["hora"], x["horas"], lang)
+        elif x["tipo"] == "sessao" and x.get("detalhe"):
             x["detalhe"] = pedido_site.quando(x["data"], x["turno"], lang)
     return cot
 

@@ -120,7 +120,10 @@ def _limitar(linhas, limites):
 def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
     """Serviço, dia, turno e piloto. O preço e o depósito são os do painel hoje (#50)."""
     sid, d, per = _int(it.get("servico")), str(it.get("data") or ""), str(it.get("turno") or "")
-    s = um(con, "SELECT * FROM booking_services WHERE id=? AND active=1 AND COALESCE(kind,'session')='session'", (sid,)) if sid else None
+    s = um(con, "SELECT * FROM booking_services WHERE id=? AND active=1 AND COALESCE(kind,'session') IN ('session','sim')",
+           (sid,)) if sid else None
+    if s and s["kind"] == "sim":                         # #392: a hora de simulador do SIM2GRID (não ocupa a agenda do kart)
+        return _linha_sim(con, s, it, conta_id, uso, pilotos, para_pagar)
     base = {"tipo": "sessao", "servico": sid, "data": d, "turno": per, "quantidade": 1, "piloto": _int(it.get("piloto")),
             "piloto_nome": None, "link": "/services/arrive-and-drive/#reservar"}
     if not s:
@@ -193,6 +196,32 @@ def _linha_sessao(con, it, conta_id, uso, pilotos, para_pagar):
         return {**linha, "erro": f"{p['name']} is already in this cart at this time."}
     for t in turnos:
         uso[(*chave, t)] = 1
+    return linha
+
+
+def _linha_sim(con, s, it, conta_id, uso, pilotos, para_pagar):
+    """#392: uma pessoa num simulador, de `hora` por `horas` horas. Preço pela faixa de cada hora e vaga por hora vêm
+    de `sim2grid`; o piloto é da conta (cada piloto no seu card, como na sessão de kart)."""
+    from command_center.providers import portal, sim2grid
+    linha = sim2grid.linha(con, s, it, conta_id, uso)
+    if linha["erro"] or not conta_id:
+        return linha
+    pid = linha["piloto"]
+    if not pid:
+        return {**linha, "erro": "Choose the driver for this session." if para_pagar else None, "falta_piloto": True}
+    p = pilotos.get(pid)
+    if not p:
+        return {**linha, "piloto": None, "erro": "Choose the driver for this session.", "falta_piloto": True}
+    linha["piloto_nome"] = p["name"]
+    conta = um(con, "SELECT * FROM portal_accounts WHERE id=?", (conta_id,))
+    if conta and portal.faltando_conta(conta):
+        return {**linha, "erro": "Please complete the account holder details (Account) before booking."}
+    fim = linha["hora"] + linha["horas"]
+    if um(con, """SELECT 1 AS x FROM sim_bookings WHERE pilot_id=? AND date=? AND status='paga'
+                   AND start_hour < ? AND start_hour + hours > ?""", (pid, linha["data"], fim, linha["hora"])):
+        return {**linha, "erro": f"{p['name']} already has a simulator session at this time."}
+    if sim2grid.mesmo_piloto(uso, pid, linha["data"], linha["hora"], linha["horas"]):
+        return {**linha, "erro": f"{p['name']} is already in this cart at this time. Each simulator needs its own driver."}
     return linha
 
 
@@ -298,11 +327,16 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
     # e mudar isso seria reconstruir uma tabela de produção (regra do dono: não sem autorização). No Stripe e no
     # recibo do QuickBooks ele continua sendo uma linha própria.
     addons = {x["idx"]: x for x in c["linhas"] if x["tipo"] == "addon"}
+    from command_center.providers import sim2grid
+    sim2grid.soltar_da_conta(con, conta_id)          # #392: a mesma pessoa voltando do Stripe não ocupa duas vezes
     for x in c["linhas"]:
         if x["tipo"] == "addon":
             continue
         a = addons.get(x["idx"]) if x["tipo"] == "sessao" else None
-        inserir(con, "store_order_items", order_id=oid, kind=x["tipo"],
+        if x.get("sim"):                             # #392: a hora do simulador no slug ("sim:<hora>:<horas>")
+            x = {**x, "produto": sim2grid.slug(x["hora"], x["horas"]),
+                 "variacao": "Monthly raffle: yes" if x.get("sorteio") else None}
+        item = inserir(con, "store_order_items", order_id=oid, kind=x["tipo"],
                 name=(_nome_stripe(x) + (f" + {a['nome']}" if a else ""))[:250], quantity=x["quantidade"],
                 unit_price=x["unitario"], deposit=x["deposito"],
                 shipping=(x["frete_envio"] if entrega == "envio" else None) if x["tipo"] == "produto" else None,
@@ -312,6 +346,8 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
                 service_name=x["nome"] if x["tipo"] in ("sessao", "addon") else None,
                 date=x.get("data") if x["tipo"] in ("sessao", "addon") else None,
                 period=x.get("turno") if x["tipo"] in ("sessao", "addon") else None, pilot_id=x.get("piloto"), pilot_name=x.get("piloto_nome"))
+        if x.get("sim"):                             # #392: "your time is held while you complete payment"
+            sim2grid.segurar(con, oid, item, conta_id, x, EXPIRA_S)
     linhas_stripe = []
     for x in c["linhas"]:
         produto = {"name": _nome_stripe(x)[:250]}
@@ -355,6 +391,7 @@ def criar_checkout(con, itens, entrega, conta_id, origem, host, http=None, lang=
         s = (http or stripe_loja._http)("POST", "/v1/checkout/sessions", campos, idem=f"urace-carrinho-{oid}")
     except stripe_loja.ErroStripe:
         atualizar(con, "store_orders", oid, status="falhou", updated_at=agora())
+        sim2grid.soltar_pedido(con, oid)
         raise
     atualizar(con, "store_orders", oid, stripe_session_id=s["id"], stripe_url=s.get("url"), updated_at=agora())
     auditar(con, "store.cart.checkout", f"portal:{conta_id}" if conta_id else "site", entity_type="store_order", entity_id=oid,
@@ -387,6 +424,9 @@ def _marcar(con, o, x):
     from command_center.providers import vinculo_site as vs
     if x["booking_id"] or x["status"]:
         return x["client_id"]
+    from command_center.providers import sim2grid
+    if sim2grid.do_slug(x["product_slug"]):
+        return _marcar_sim(con, o, x)
     if not o["account_id"] or not x["pilot_id"] or not _vaga(con, x, o["account_id"]):
         nota = ("a vaga sumiu entre o checkout e o pagamento: remarcar com o cliente ou devolver o valor"
                 if o["account_id"] and x["pilot_id"] else "sessão sem conta ou piloto: marcar à mão")
@@ -410,6 +450,38 @@ def _marcar(con, o, x):
     auditar(con, "booking.paid.cart", "stripe", entity_type="booking", entity_id=bid,
             detail={"pedido": o["id"], "card": card, "valor": x["amount"]})
     return card
+
+
+def _marcar_sim(con, o, x):
+    """#392: a hora de simulador paga vira reserva paga (`sim_bookings`) no card do PILOTO. Se a hora encheu entre o
+    checkout e o pagamento, a linha fica "sem vaga" para a equipe remarcar ou devolver; o pagamento não se perde."""
+    from command_center.providers import cobranca_agenda as cob
+    from command_center.providers import sim2grid, venda_site
+    from command_center.providers import vinculo_site as vs
+    if not o["account_id"] or not x["pilot_id"]:
+        con.execute("UPDATE store_order_items SET status='sem_vaga', note=? WHERE id=?",
+                    ("hora de simulador sem conta ou piloto: marcar à mão", x["id"]))
+        return None
+    b = sim2grid.pagar(con, o, x)
+    if not b:
+        con.execute("UPDATE store_order_items SET status='sem_vaga', note=? WHERE id=?",
+                    ("a hora do simulador encheu entre o checkout e o pagamento: remarcar com o cliente ou devolver o valor",
+                     x["id"]))
+        return None
+    try:
+        card, nota = venda_site.garantir_card(con, {"pilot_id": x["pilot_id"], "account_id": o["account_id"]})
+    except (vs.ErroVinculo, cob.ErroCobranca) as e:
+        card, nota = None, f"erro: {e}"
+    atualizar(con, "sim_bookings", b["id"], client_id=card, note=(nota or None) and nota[:300], updated_at=agora())
+    con.execute("UPDATE store_order_items SET status='marcada', client_id=? WHERE id=?", (card, x["id"]))
+    auditar(con, "sim2grid.paid.cart", "stripe", entity_type="sim_booking", entity_id=b["id"],
+            detail={"pedido": o["id"], "card": card, "valor": x["amount"]})
+    return card
+
+
+def _e_sim(x):
+    from command_center.providers import sim2grid
+    return x["kind"] == "sessao" and bool(sim2grid.do_slug(x.get("product_slug")))
 
 
 def _piloto_pendente(con, pid):
@@ -442,6 +514,8 @@ def _texto_linha(x):
         s += f"\n  Estoque: {x['stock_note']}"
     elif x["booking_id"]:
         s += f" (agendamento #{x['booking_id']})"
+    elif _e_sim(x) and x["status"] == "marcada":
+        s += " (SIM2GRID: reservado)"
     return s
 
 
@@ -526,6 +600,9 @@ def seguir_sessoes(con, oid, enviar_waiver=None):
     from command_center.providers import cobranca_agenda as cob
     feitas = []
     for x in itens(con, oid):
+        if _e_sim(x) and x["status"] == "marcada":
+            _waiver_sim(con, x, enviar_waiver)
+            continue
         if not x["booking_id"]:
             continue
         b = um(con, "SELECT * FROM bookings WHERE id=?", (x["booking_id"],))
@@ -535,6 +612,18 @@ def seguir_sessoes(con, oid, enviar_waiver=None):
             cob.verificar(con, b["id"])
             feitas.append(b["id"])
     return feitas
+
+
+def _waiver_sim(con, x, enviar_waiver=None):
+    """#392: com "waiver obrigatória" ligada no painel, o piloto da hora paga recebe a waiver (a nativa ele assina na
+    conta), pelo mesmo caminho da sessão de kart."""
+    from command_center.providers import cobranca_agenda as cob
+    from command_center.providers import sim2grid
+    b = sim2grid.do_item(con, x["id"])
+    if not b or b["status"] != "paga" or b["waiver_ref"] or not b["client_id"] or not sim2grid.config(con)["waiver_required"]:
+        return None
+    return cob.pedir_waiver(con, b, enviar_waiver, tabela="sim_bookings", card=b["client_id"],
+                            motivo=f"SIM2GRID: reserva #{b['id']} paga no site")
 
 
 def _link_sessao(bid):
@@ -561,7 +650,9 @@ def avisar(con, oid, enviar=None):
             linha += f"\n  {'Depósito de segurança reembolsável' if pt else 'Refundable security deposit'}: {_usd(x['deposit'])}"
         if x.get("shipping"):                              # #298: o frete fixo do produto
             linha += f"\n  {'Frete' if pt else 'Shipping'}: {_usd(x['shipping'])}"
-        if x["kind"] == "sessao" and x["booking_id"]:
+        if _e_sim(x) and x["status"] == "marcada":
+            linha += _texto_sim(con, lang)
+        elif x["kind"] == "sessao" and x["booking_id"]:
             linha += (f"\n  Reservada. Assine a waiver na sua conta URACE para confirmar: {_link_sessao(x['booking_id'])}" if pt else
                       f"\n  Booked. Sign the waiver in your URACE account to confirm it: {_link_sessao(x['booking_id'])}")
         elif x["kind"] == "sessao":
@@ -615,6 +706,21 @@ def avisar(con, oid, enviar=None):
     except Exception as e:                              # noqa: BLE001 — o pedido já está pago e em Vendas
         atualizar(con, "store_orders", oid, notify_error=str(e)[:300], updated_at=agora())
         return False
+
+
+def _texto_sim(con, lang):
+    """#392: a hora de simulador paga, no e-mail de confirmação: onde fica e, com a waiver ligada, o lembrete."""
+    from command_center import enderecos
+    from command_center.providers import sim2grid
+    from command_center.vitrine.conteudo_sim2grid import ENDERECO
+    onde = f"{ENDERECO[0]}, {ENDERECO[1]}"
+    w = sim2grid.config(con)["waiver_required"]
+    conta = f"https://{enderecos.CLIENTE}/ops/portal"
+    if lang == "pt":
+        return (f"\n  Reservada. SIM2GRID: {onde}, dentro do Orlando Kart Center (horário de Orlando)."
+                + (f" Assine a waiver na sua conta URACE antes da sessão: {conta}" if w else ""))
+    return (f"\n  Booked. SIM2GRID: {onde}, inside the Orlando Kart Center (Orlando time)."
+            + (f" Sign the waiver in your URACE account before your session: {conta}" if w else ""))
 
 
 def _item_deposito(con):

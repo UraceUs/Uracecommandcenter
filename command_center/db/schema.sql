@@ -1950,6 +1950,68 @@ CREATE TABLE IF NOT EXISTS site_offers (
   created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
+-- #392 (dono, 22/10): "sera um serviço um diferente das aulas de kart podendo agendar ate 5 pessoas para a mesma
+-- hora, o valor do serviço é cobrado por hora ... com todas as configurações ajustaveis". A hora de simulador do
+-- SIM2GRID: os formatos (sem coach, com coach) são `booking_services` de kind='sim' (nome, depósito, item do
+-- QuickBooks); aqui ficam as regras (uma linha), as faixas de preço por dia e horário de cada formato (preço NULL =
+-- "ligue para nós", sem venda online) e a ocupação de cada hora (5 simuladores = 5 pessoas na mesma hora).
+CREATE TABLE IF NOT EXISTS sim_config (
+  id               INTEGER PRIMARY KEY CHECK (id = 1),
+  online           INTEGER NOT NULL DEFAULT 1,           -- 1: vende pelo carrinho do site (Stripe)
+  capacity         INTEGER NOT NULL DEFAULT 5 CHECK (capacity BETWEEN 1 AND 50),
+  min_hours        INTEGER NOT NULL DEFAULT 1 CHECK (min_hours BETWEEN 1 AND 12),
+  max_hours        INTEGER NOT NULL DEFAULT 3 CHECK (max_hours BETWEEN 1 AND 12),
+  horizon_days     INTEGER NOT NULL DEFAULT 60,
+  min_notice_hours INTEGER NOT NULL DEFAULT 2,
+  open_from        TEXT,                                 -- AAAA-MM-DD: antes disto, nada abre (a inauguração)
+  closed_dates     TEXT,                                 -- datas fechadas, AAAA-MM-DD separadas por vírgula
+  min_age          INTEGER,                              -- vazio: o site não diz idade (manda ligar)
+  waiver_required  INTEGER NOT NULL DEFAULT 1,
+  notice           TEXT,                                 -- o aviso perto do botão de reservar
+  raffle_text      TEXT,                                 -- vazio: sem a caixa do sorteio do mês
+  updated_by       INTEGER REFERENCES users(id),
+  updated_at       TEXT
+);
+CREATE TABLE IF NOT EXISTS sim_rates (
+  id           INTEGER PRIMARY KEY,
+  seed_key     TEXT UNIQUE,                              -- as faixas da LP entram uma vez; as do painel têm NULL
+  service_id   INTEGER NOT NULL REFERENCES booking_services(id),
+  days         TEXT NOT NULL,                            -- dígitos dos dias, 0 = segunda ("01234" = seg a sex)
+  start_hour   INTEGER NOT NULL CHECK (start_hour BETWEEN 0 AND 23),
+  end_hour     INTEGER NOT NULL CHECK (end_hour BETWEEN 1 AND 24),  -- 24 = meia-noite
+  price        REAL CHECK (price IS NULL OR price >= 0), -- por hora; NULL = "ligue para nós"
+  active       INTEGER NOT NULL DEFAULT 1,
+  sort         INTEGER NOT NULL DEFAULT 0,
+  updated_by   INTEGER REFERENCES users(id),
+  updated_at   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+-- Uma linha por pessoa (um simulador): segura no checkout (até o Stripe vencer), paga no pagamento.
+CREATE TABLE IF NOT EXISTS sim_bookings (
+  id            INTEGER PRIMARY KEY,
+  order_id      INTEGER REFERENCES store_orders(id),
+  item_id       INTEGER REFERENCES store_order_items(id),
+  account_id    INTEGER REFERENCES portal_accounts(id),
+  pilot_id      INTEGER REFERENCES portal_pilots(id),
+  client_id     INTEGER REFERENCES clients(id),         -- o card do piloto (nunca o de outro cliente)
+  service_id    INTEGER REFERENCES booking_services(id),
+  service_name  TEXT,
+  date          TEXT NOT NULL,                           -- AAAA-MM-DD, relógio da Flórida
+  start_hour    INTEGER NOT NULL,
+  hours         INTEGER NOT NULL DEFAULT 1,
+  price         REAL NOT NULL,                           -- o total das horas, no dia da compra
+  status        TEXT NOT NULL DEFAULT 'segurada' CHECK (status IN ('segurada','paga','liberada','cancelada')),
+  hold_until    TEXT,                                    -- ISO UTC: a segurada deixa de ocupar depois disto
+  raffle        INTEGER NOT NULL DEFAULT 0,
+  waiver_ref    INTEGER,
+  waiver_error  TEXT,
+  note          TEXT,
+  created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS sim_bookings_dia ON sim_bookings(date, status);
+CREATE INDEX IF NOT EXISTS sim_bookings_item ON sim_bookings(item_id);
+
 -- #298 (dono, 16/10): os produtos da loja no banco, editados no painel. Os 70 do WooCommerce entram uma vez
 -- (de `vitrine/dados/produtos.json`, com o id de lá); o que a equipe mudar nunca é sobrescrito, e esconder não
 -- apaga. Fotos, categorias, opções e variações vão em JSON, no formato que o site já desenha.

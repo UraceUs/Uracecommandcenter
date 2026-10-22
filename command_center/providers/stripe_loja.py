@@ -289,6 +289,9 @@ def _efeito(con, eid, tipo, s):
     if novo == "pago" and era != "pago":
         ligar_e_vender(con, o["id"])
         return "pago", o["id"]
+    if novo in ("falhou", "expirado") and o["status"] == novo:      # #392: a hora do simulador segurada sai na hora
+        from command_center.providers import sim2grid
+        sim2grid.soltar_pedido(con, o["id"])
     if novo in ("aguardando", "falhou", "expirado") and o["status"] == novo:      # #245, #248: avisa sempre
         from command_center.providers import pedido_site
         pedido_site.marcar_resultado(con, o, novo)

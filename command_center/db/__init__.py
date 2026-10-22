@@ -856,6 +856,39 @@ def _academy_valor_do_mes():
         yield f"UPDATE site_offers SET body='{novo}' WHERE seed_key='{chave}' AND body='{antigo}'"
 
 
+# ------------------------------------------------------------ o SIM2GRID (#392)
+# Dono, 22/10: "monte assim como montou o arrive and drive com todas as configurações ajustaveis". Os dois formatos da
+# LP (sem coach, com coach) nascem como serviços de kind='sim', as faixas de preço da LP, as regras (5 simuladores) e
+# os 3 programas mensais como cartões da página. Tudo **uma vez**, pela chave: o que a equipe mudar no painel nunca
+# volta, e esconder (desativar) não apaga.
+def _semente_do_sim2grid():
+    from command_center.vitrine import conteudo_sim2grid as S   # só dados, sem import de volta
+
+    def q(v):
+        return "NULL" if v is None else (str(v) if isinstance(v, (int, float)) else "'" + str(v).replace("'", "''") + "'")
+    r = S.REGRAS
+    yield (f"""INSERT OR IGNORE INTO sim_config (id, online, capacity, min_hours, max_hours, horizon_days, min_notice_hours,
+                   open_from, closed_dates, min_age, waiver_required, notice, raffle_text, updated_at)
+               VALUES (1, {r['online']}, {r['capacity']}, {r['min_hours']}, {r['max_hours']}, {r['horizon_days']},
+                       {r['min_notice_hours']}, {q(r['open_from'])}, {q(r['closed_dates'])}, {q(r['min_age'])},
+                       {r['waiver_required']}, {q(r['notice'])}, {q(r['raffle_text'])}, strftime('%Y-%m-%dT%H:%M:%fZ','now'))""")
+    for chave, nome, titulo, sub, texto, preco, ordem in S.FORMATOS:
+        yield f"""INSERT INTO booking_services (name, description, price, deposit, deposit_required, kind, site_kart, site_title,
+                         site_subtitle, sort, active, created_at)
+                  SELECT {q(nome)}, {q(texto)}, {float(preco)}, 0, 0, 'sim', {q(chave)}, {q(titulo)}, {q(sub)}, {100 + ordem}, 1,
+                         strftime('%Y-%m-%dT%H:%M:%fZ','now')
+                   WHERE NOT EXISTS (SELECT 1 FROM booking_services b WHERE LOWER(COALESCE(b.site_kart,''))=LOWER({q(chave)}))"""
+    for chave, formato, dias, ini, fim, preco, ordem in S.FAIXAS:
+        yield f"""INSERT OR IGNORE INTO sim_rates (seed_key, service_id, days, start_hour, end_hour, price, sort, active)
+                  SELECT {q(chave)}, b.id, {q(dias)}, {ini}, {fim}, {q(preco)}, {ordem}, 1 FROM booking_services b
+                   WHERE b.site_kart={q(formato)} AND b.kind='sim' ORDER BY b.id LIMIT 1"""
+    for i, (n, s, t, pr, por) in enumerate(S.PLANOS):
+        link = f"/contact/?assunto=sim2grid&produto={n.replace(' ', '%20')}"
+        yield (f"""INSERT OR IGNORE INTO site_offers (seed_key, page, grp, title, subtitle, body, price, per, link, button, sort, active, created_at)
+                   VALUES ({q('sim2grid:' + str(i))}, 'sim2grid', {q(S.PLANOS_GRUPO)}, {q(n)}, {q(s)}, {q(t)}, {q(pr)}, {q(por)},
+                           {q(link)}, 'Apply for a place', {i * 10}, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'))""")
+
+
 # ------------------------------------------------------------ o Lead and Follow do site (#279)
 # Dono, 15/10: "o lead and follow é um add on que pode ser adicionado no dia de treino seja arrive and drive ou
 # no academy … somente o de 769 por dia de treino". Nasce como serviço do painel de tipo 'addon', ligado pela
@@ -962,6 +995,7 @@ POS_MIGRACAO = [
     *_cartoes_dos_karts(),
     *_cartoes_das_paginas(),
     *_academy_valor_do_mes(),     # #390: depois da semente, para o cartão recém-criado já nascer certo
+    *_semente_do_sim2grid(),      # #392: os formatos, as faixas, as regras e os programas da LP, uma vez
     # #317: a caixa "Security deposit obrigatório" nasce marcada em toda sessão que já cobra depósito (os karts do
     # site, com US$ 400). Só toca quem ainda não decidiu (NULL): o que o gerente desmarcar continua desmarcado.
     """UPDATE booking_services SET deposit_required =

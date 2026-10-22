@@ -56,7 +56,7 @@ MENU = (
     ("Our Services", "/services/"),
     ("Plan Your Career", "/career/"),
     ("For Beginners", "/for-beginners/"),
-    ("Sim 2 Grid", "/services/#sim2grid"),
+    ("Sim 2 Grid", "/sim2grid-racing-simulator/"),      # #392: a página própria (a LP)
     ("Arrive and Drive", "/services/arrive-and-drive/"),
     ("Academy", "/academy/"),
     ("Racing Team", "/pro-team/"),

@@ -15,7 +15,8 @@ import re
 
 from command_center.db import agora, atualizar, inserir, todos, um
 
-PAGINAS = {"academy": "/academy/", "pro-team": "/pro-team/", "for-beginners": "/for-beginners/"}
+PAGINAS = {"academy": "/academy/", "pro-team": "/pro-team/", "for-beginners": "/for-beginners/",
+           "sim2grid": "/sim2grid-racing-simulator/"}      # #392: os programas mensais do SIM2GRID
 CAMPOS = {"grp": 80, "title": 80, "subtitle": 120, "body": 600, "price": 40, "per": 40, "button": 40}
 MARCAS = ("{kart}", "{academy}", "{boost}")
 

@@ -280,35 +280,15 @@ HUB = {
          "kart", "/services/corporate-events/", "group-482140.webp"),
         ("Group Events", GRUPOS, "kart", "/services/group-events/", "group-482140-2.webp"),
     ),
-    "sim_titulo": "Sim 2 Grid",
-    "sim_abertura": "Opening 1 November 2026",
-    "sim": ("Most people’s idea of a racing simulator is a game. This is not that. It is a full motion cockpit — competition "
-            "seat and harness, direct-drive wheel, racing pedals, triple screen. It moves. It loads you up in the corners and "
-            "punishes the same mistakes a real car does, and our own drivers learn a circuit on it before they ever see it. No "
-            "track fee, no equipment, no weather.",
-            "That makes it the cheapest honest way to find out whether this is a hobby or a career — and it is the first rung "
-            "of the ladder that leads to Arrive and Drive, the URACE Academy and the URACE Racing Team. The rig opens on 1 "
-            "November 2026. Until then you cannot book an hour on it, but you can book a call and we will plan the first one "
-            "with you."),
-    # #207: os preços do Sim 2 Grid ainda não estão no painel; o texto sai sem os valores
-    "sim_faq": (("What it will cost", ("Launch pricing, from 1 November 2026.",
-                                       "Sim School. This is the step. Twelve coached hours a month with the same coach, a plan "
-                                       "behind them, and your data reviewed between sessions, so the programme is a third cheaper "
-                                       "than buying hours as you go. Month to month, thirty days’ notice to stop.",
-                                       "Coached Hour. One hour with a URACE coach beside you. We set the car up, watch your inputs "
-                                       "live and tell you what to change while you are still driving. You leave with one thing to "
-                                       "fix and the laps that prove it worked.",
-                                       "Sim Time. The rig, a circuit, and you. No coach, no programme. The cheapest hour in the "
-                                       "building, and the one our own drivers use to put the work in between lessons.")),
-                ("How will this work?", ("Tell us the driver’s level — never driven, drives a kart, races on weekends. It changes "
-                                         "the car, the circuit and the assists we set up. From 1 November, book your hour. Give "
-                                         "us a date and a time. Turn up. Nothing to bring: no helmet, no suit, no licence, no "
-                                         "track fee.",)),
-                ("What you are actually buying", ("The rig is not what you are buying. You are buying the first step. This is "
-                                                  "where a career will start — not a toy and not an arcade, but the bottom rung "
-                                                  "of the same ladder that runs through Arrive and Drive and the URACE Academy to "
-                                                  "the Racing Team. A kart day depends on the circuit’s hours, the forecast and a "
-                                                  "driver pass. This step depends on nothing but you showing up.",))),
+    # #392 (dono, 22/10): o SIM2GRID ganhou página própria (a LP de hoje), com a reserva por hora. Aqui fica o resumo
+    # com o link; o texto é o da LP e o preço não é escrito aqui (vem das faixas do painel, na página).
+    "sim_titulo": "SIM2GRID",
+    "sim_abertura": "Opening November 1, 2026",
+    "sim": ("Your first step into motorsport starts here. Book a one-hour racing simulator session at URACE in Orlando, "
+            "with optional coaching available — or build a regular training routine with a monthly program.",
+            "Simulator → Karting → Driver development → Racing. Start by experiencing the simulator at URACE, then get to "
+            "know the next stages: Arrive and Drive, the URACE Academy and the URACE Racing Team."),
+    "sim_cta": ("See SIM2GRID and book", "/sim2grid-racing-simulator/"),
     "sim_fotos": ("driver-kv.webp", "simulator-kv.webp"),
     "fecho": "Not sure which one is right?",
     "fecho_sub": ("Tell us who the driver is and whether they have been in a race kart before. That one answer decides "
