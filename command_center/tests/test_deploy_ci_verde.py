@@ -124,12 +124,42 @@ def test_o_ci_grava_a_tag_so_com_os_tres_jobs_verdes_no_branch_da_vps():
     import yaml
     jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
     verde = jobs["verde"]
-    assert set(verde["needs"]) == {"python", "web", "e2e"}, "só depois dos três jobs"
+    assert set(verde["needs"]) == {"arvore", "python", "web", "e2e"}, "só depois dos três jobs (ou da árvore já testada)"
     assert "github.event_name == 'push'" in verde["if"] and "refs/heads/claude/commandcenter-vps" in verde["if"]
+    for job in ("python", "web", "e2e"):
+        assert f"needs.{job}.result == 'success'" in verde["if"], job
     assert verde["permissions"] == {"contents": "write"}, "a permissão mínima, só neste job"
     corpo = verde["steps"][0]["run"]
     assert "refs/tags/ci-verde/${{ github.sha }}" in corpo and 'sha="${{ github.sha }}"' in corpo
-    assert all("permissions" not in j for k, j in jobs.items() if k != "verde"), "os outros jobs seguem só leitura"
+    escrevem = {"verde", "arvore-verde"}
+    assert all("permissions" not in j for k, j in jobs.items() if k not in escrevem), "os outros jobs seguem só leitura"
+
+
+# ------------------------------------------------------------------ #387: não repetir a bateria depois do merge
+# Dono, 22/10: *"encurte isso de agora p frente esta demorando demais"*. O PR verde grava a árvore testada; o commit
+# do merge com a mesma árvore ganha a tag ci-verde sem rodar a bateria de novo. Árvore diferente: roda tudo.
+def test_a_arvore_testada_no_pr_pula_a_bateria_so_no_push_e_so_com_a_mesma_arvore():
+    import yaml
+    jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+    decide = jobs["arvore"]["steps"][0]["run"]
+    assert 'if [ "${{ github.event_name }}" = push ]' in decide, "no PR a bateria sempre roda"
+    assert "git/commits/${{ github.sha }}\" --jq .tree.sha" in decide
+    assert "git/ref/tags/ci-arvore/$arvore" in decide
+    for job in ("python", "web", "e2e"):
+        assert "arvore" in jobs[job]["needs"] and jobs[job]["if"] == "needs.arvore.outputs.testada != 'true'", job
+    assert "needs.arvore.outputs.testada == 'true'" in jobs["verde"]["if"]
+    assert "permissions" not in jobs["arvore"], "a decisão só lê"
+
+
+def test_so_o_pr_verde_do_proprio_repositorio_grava_a_arvore():
+    import yaml
+    grava = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["arvore-verde"]
+    assert set(grava["needs"]) == {"python", "web", "e2e"}, "sem always(): qualquer parte vermelha e não grava"
+    assert "always()" not in grava["if"]
+    assert "github.event_name == 'pull_request'" in grava["if"]
+    assert "github.event.pull_request.head.repo.full_name == github.repository" in grava["if"], "fork não grava"
+    assert grava["permissions"] == {"contents": "write"}
+    assert 'ref="refs/tags/ci-arvore/$arvore" -f sha="${{ github.sha }}"' in grava["steps"][0]["run"]
 
 
 # ------------------------------------------------------------------ #344: o CI em partes paralelas
