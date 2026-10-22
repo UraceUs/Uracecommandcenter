@@ -875,6 +875,17 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .suit-tempo li.k-ia{border-left-color:var(--accent)}.suit-tempo li.k-email{border-left-color:var(--info, var(--accent))}.suit-tempo li.k-etapa{border-left-color:var(--brand)}
 .suit-texto{white-space:pre-wrap;overflow-wrap:anywhere}
 .suit-img{display:block;max-width:min(100%,360px);max-height:280px;border-radius:10px;margin-top:6px}
+/* #382: travas do fluxo dos Suits (aprovação final, preparados ao designer, estado das medidas, saúde da ponte) */
+.suit-botoes{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.suit-botoes .btn,.suit-arq .btn{min-height:40px}
+.suit-checks{display:flex;flex-direction:column;gap:2px;margin:4px 0 8px}
+.suit-arq{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.suit-arq .suit-linha{flex:1 1 220px}
+.suit-med-estado{margin-top:4px}.suit-med-estado select{width:100%;min-height:40px;border-radius:var(--r);border:1px solid var(--glass-line-2);background:var(--surface);color:var(--ink);font:inherit;font-size:14px;padding:6px 10px}
+.suit-med.suspeita{box-shadow:inset 0 0 0 1px var(--crit)}
+.suit-bloqueios{margin:6px 0;padding-left:18px;color:var(--warn)}
+.suit-prep{border-top:1px solid var(--glass-line);padding-top:10px;margin-top:10px;min-width:0}.suit-prep:first-of-type{border-top:0;margin-top:0}
+.suit-saude,.suit-proxima{margin:4px 0 10px;overflow-wrap:anywhere}
 .suit-ia-res{margin-top:6px;padding:8px 10px;border-radius:10px;background:var(--surface);display:flex;flex-direction:column;gap:6px}
 .suit-forns{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
 @media (min-width:760px){.suit-forns{grid-template-columns:repeat(2,minmax(0,1fr))}}

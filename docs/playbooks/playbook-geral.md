@@ -178,7 +178,7 @@ pedem acesso de operador.
 | Logística | **Estoque** | `/ops/estoque` | uma fileira por prateleira; contar, assinalar peça para cliente; o selo **à venda no site** na peça que a loja do site também vende (mesmo saldo, #309) | todos |
 | Logística | **Checklists** | `/ops/checklists` | os checklists do dia, do kart e os trimestrais | operador+ |
 | Pedidos e compras | **Pedidos** | `/ops/pedidos` | a lista do que a equipe **precisa** que se compre | todos |
-| Pedidos e compras | **Suits · Alpha Line** | `/ops/suits` | os pedidos de macacão sob medida, em dez etapas | operador+ |
+| Pedidos e compras | **Suits · Alpha Line** | `/ops/suits` | os pedidos de macacão sob medida, do contato à entrega direta ao cliente (aprovação final, fotos do WhatsApp, endereço ao fornecedor) | operador+ |
 | Pedidos e compras | **Compras** | `/ops/compras` | o que a URACE comprou: pedido, envio, chegada. Os e-mails de compra entram sozinhos | todos |
 | Pedidos e compras | **Planejamento** | `/ops/planejamento` | peças e corridas: o que vai faltar, e quando | todos |
 | IA e inserções manuais | **AI Command** | `/ops/ai` | a conversa com a IA, e o quadro "Falta completar" | todos (mandar comando: operador+) |
@@ -1137,6 +1137,18 @@ ponho os mesmos ids do site antigo?"*: **"sim pfvr"**. É o que mede quanto cada
   que chegar aparece como "Precisa de alguém da equipe" e quem responde é a equipe. Use quando o
   cliente pede atendimento humano ou a negociação está delicada.
 
+### Suits: as travas do fluxo (#382, 22/10)
+
+- **Produção só com a aprovação final escrita do cliente** (vale por e-mail), amarrada à arte final marcada e às
+  medidas conferidas. Mudou a arte ou uma medida, a aprovação cai e o pedido volta para revisão.
+- **Medidas** com estado: preenchida, conferida ou suspeita. Suspeita ou não conferida trava a aprovação.
+- **Designer passa por uma pessoa**: a IA prepara o e-mail; quem é operador ou acima clica **Enviar ao designer**.
+- **Entrega direta ao cliente**: aceito pelo fornecedor → em produção → **fotos recebidas** (a equipe sobe as fotos do
+  WhatsApp como nota) → **conferido** (OK da equipe, exige foto) → **endereço enviado ao fornecedor** → em trânsito
+  (com rastreio) → entregue. O endereço nunca vai ao designer nem no pedido de produção.
+- **Pedido de teste** e **IA desligada desde o início**: duas caixas no Registrar novo pedido.
+- O topo da aba mostra a **saúde da ponte** (última rodada, erros, simulação); cada pedido, a próxima ação esperada.
+
 Detalhe e rotinas no [guia de Suits](../suits-guia-do-lucas.md).
 
 ---
@@ -1518,6 +1530,8 @@ Todas com prefixo `/ops/api`. Papel mínimo entre parênteses ("logado" = qualqu
 | blog: publicar / tirar do ar | `POST /site/blog/{id}/publicar` com `{"visto": "<updated_at do artigo que você leu>"}` (null nos 7 que nunca mudaram; mudou depois → 409: leia de novo) · `POST /site/blog/{id}/despublicar` com `{"confirmar": true}` (só ADMIN ou acesso livre; os 7 do site antigo pedem `confirmar`) |
 | Suits: descartar / restaurar | `POST /suits/{id}/descartar` com `{"motivo": "…"}` · `POST /suits/{id}/restaurar` (operador) |
 | Suits: ligar/desligar a IA no pedido (#198) | `POST /suits/{id}/ia` com `{"ligada": false}` (operador) |
+| Suits: aprovação final, arte final e medidas (#382) | `POST /suits/{id}/aprovacao` com `{"trecho", "message_id", "data"}` · `POST /suits/{id}/arte-final` com `{"nome", "final"}` · `POST /suits/{id}/medidas/estado` com `{"chaves", "estado", "motivo"}` (operador) |
+| Suits: e-mail preparado ao designer, endereço ao fornecedor, saúde da ponte (#382) | `POST /suits/{id}/preparados/{item}/enviar` ou `/descartar` · `GET`/`POST /suits/{id}/endereco-fornecedor[/rascunho]` · `GET /suits/ponte/saude` (operador) |
 
 As rotas de vendas, do box e de Suits estão nos playbooks de cada área (links no topo).
 
