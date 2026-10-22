@@ -11,6 +11,9 @@ status: ativo
 
 [[Sistemas]] · [[Administrative AI]] · [[Etapa de conexão]]
 
+> **22/10/2026 (#383):** o canal de WhatsApp do OpenClaw serve **só** para a VPS acessar os grupos
+> internos da URACE; nunca o número de cliente. Ver [[D-2026-10-22 - OpenClaw so para os grupos internos]].
+
 > **08/10/2026 (#152):** o **AI Command** e a **triagem de e-mail** do Command Center saíram do
 > OpenClaw e rodam no **Claude Agent SDK** (o motor das sessões do Claude Code): **Opus 5.5** nos
 > pedidos e **Haiku 5.5** no e-mail, que chama o Opus quando tem dificuldade. Os dois leem este
