@@ -136,6 +136,7 @@ export function Shell() {
           <NL to="/site/disponibilidade" icon="clock">{tr("Disponibilidade")}</NL>
           <NL to="/site/servicos" icon="dollar">{tr("Serviços e preços")}</NL>
           <NL to="/site/cartoes" icon="doc">{tr("Cartões das páginas")}</NL>
+          <NL to="/site/sim2grid" icon="clock">{tr("Sim2Grid")}</NL>
           <NL to="/site/produtos" icon="box">{tr("Produtos da loja")}</NL>
           <NL to="/site/estoque" icon="list">{tr("Estoque do site")}</NL>
           <NL to="/site/editor" icon="pencil">{tr("Editor do site")}</NL>

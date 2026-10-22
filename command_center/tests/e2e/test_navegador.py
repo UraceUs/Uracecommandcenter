@@ -42,7 +42,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/quickbooks", "/crm/chat", "/crm/funil", "/sales", "/sales/agenda", "/ai", "/ai/capabilities", "/approvals",
          "/integrations", "/automation", "/activity", "/users", "/audit", "/policies", "/account", "/estoque",
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
-         "/site/produtos", "/site/produtos/235", "/site/estoque", "/site/editor", "/site/editor/1", "/site/blog", "/site/blog/451",
+         "/site/sim2grid", "/site/produtos", "/site/produtos/235", "/site/estoque", "/site/editor", "/site/editor/1", "/site/blog", "/site/blog/451",
          "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
          "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/whatsapp", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
@@ -1787,7 +1787,8 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     from command_center.vitrine import paginas_site
     post = paginas_site.dados("posts.json")["posts"][0]["slug"]
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"])["slug"]
-    for rota in ("/", "/services/arrive-and-drive/", "/services/", "/services/birthday-party/", "/academy/", "/pro-team/",
+    for rota in ("/", "/services/arrive-and-drive/", "/sim2grid-racing-simulator/", "/services/", "/services/birthday-party/",
+                 "/academy/", "/pro-team/",
                  "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/",
                  # #261: a loja com busca, filtro de preço e paginação — o formulário não pode estourar a largura
                  "/store/?s=magnesium+wheel&min_price=300&max_price=900&orderby=price", "/store/page/2/",
@@ -2423,6 +2424,90 @@ def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pag
         v.close()
     finally:
         adm.request.patch(servidor + "/api/site/agenda/config", data={"auto_sell": False}, headers=csrf)
+        adm.close()
+
+
+# ------------------------------------------------------------- SIM2GRID (#392)
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_sim2grid_escolhe_formato_dia_hora_e_pessoas_e_vai_ao_carrinho(servidor, navegador, largura):
+    """#392, dono 22/10: "podendo agendar ate 5 pessoas para a mesma hora, o valor do serviço é cobrado por hora".
+    A página da LP: formato → dia → hora de início (com os simuladores que sobram) → horas e pessoas → carrinho, com
+    uma linha por pessoa e o preço da faixa. Um h1, nada rola para o lado e o toque tem 40 px."""
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, largura=1280)
+    csrf = _csrf(adm)
+    antes = adm.request.get(servidor + "/api/site/sim2grid").json()["config"]
+    # a abertura (01/11/2026) é regra do painel: a prova não depende do dia em que roda
+    assert adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf, data={"open_from": ""}).ok
+    try:
+        v = navegador.new_page(viewport={"width": largura, "height": 900})
+        erros = []
+        v.on("pageerror", lambda e: erros.append(str(e)))
+        v.goto(site + "/sim2grid-racing-simulator/")
+        h1 = [t for n, t in _cabecalhos(v) if n == 1]
+        assert len(h1) == 1 and "Your first step into motorsport starts here".startswith(h1[0]), h1
+        v.get_by_role("radio", name=re.compile("With coaching")).check()
+        dia = v.locator(".agenda-dia.aberto:not(.ligar)").first
+        dia.wait_for()
+        dia.click()
+        hora = v.locator(".sim-hora:not([disabled])").first
+        hora.wait_for()
+        assert re.search(r"\$1[02]0 · 5 simulators left", hora.inner_text().replace("\n", " ")), hora.inner_text()
+        hora.click()
+        v.get_by_label("Simulators (people)").select_option("2")
+        botao = v.locator(".agenda-carrinho")
+        texto = botao.inner_text().strip()
+        assert re.fullmatch(r"Add to cart · \$2[04]0", texto), texto
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        if largura < 1000:
+            menor = v.evaluate("""() => [...document.querySelectorAll('.sim-agenda button, .sim-agenda select, label.sim-formato')]
+                .filter(e => e.offsetParent !== null).map(e => [e.getBoundingClientRect().height, (e.innerText || '').trim().slice(0, 20)])
+                .filter(([h]) => h < 40)""")
+            assert not menor, menor
+        botao.click()
+        v.wait_for_url(re.compile(r"/cart/"))
+        v.locator(".carrinho-linha").nth(1).wait_for()
+        linhas = v.locator(".carrinho-linha").all_inner_texts()
+        assert len(linhas) == 2 and all("SIM2GRID" in x and "(1 h)" in x for x in linhas), linhas
+        r = v.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        assert not erros, erros
+        v.evaluate("() => window.uraceCarrinho.limpar()")
+        v.close()
+    finally:
+        adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf, data={"open_from": antes["open_from"] or ""})
+        adm.close()
+
+
+def test_sim2grid_o_gerente_muda_a_faixa_no_painel_e_o_site_mostra(servidor, navegador):
+    """#392: "com todas as configurações ajustaveis". Site › Sim2Grid no celular: o gerente muda o preço de uma faixa e
+    o número de simuladores; a página do site mostra o preço novo e a regra nova, sem código."""
+    site = servidor.removesuffix("/ops")
+    adm = entrar(navegador, servidor, largura=390, altura=844)
+    csrf = _csrf(adm)
+    d = adm.request.get(servidor + "/api/site/sim2grid").json()
+    alvo = next(f for f in d["faixas"] if f["price"] == 75)
+    try:
+        abrir(adm, servidor, "/site/sim2grid")
+        adm.get_by_role("heading", name="Sim2Grid", level=1).wait_for()
+        linha = adm.locator(f'[data-faixa="{alvo["id"]}"]')
+        linha.get_by_label("US$ por hora").fill("79")
+        linha.get_by_role("button", name="Salvar").click()
+        adm.get_by_text("Faixa salva: vale para as próximas reservas.").wait_for()
+        adm.get_by_label("Simuladores (pessoas por hora)").fill("4")
+        adm.get_by_role("button", name="Salvar regras").click()
+        adm.get_by_text("Regras salvas: o site já mostra.").wait_for()
+        r = adm.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        v = navegador.new_page(viewport={"width": 390, "height": 844})
+        v.goto(site + "/sim2grid-racing-simulator/")
+        assert "$79 / hour" in v.locator(".sim-formatos").inner_text()
+        assert "Up to 4 people" in v.locator(".sim-regras").inner_text()
+        v.close()
+    finally:
+        adm.request.patch(servidor + f"/api/site/sim2grid/faixas/{alvo['id']}", headers=csrf, data={"price": alvo["price"]})
+        adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf, data={"capacity": d["config"]["capacity"]})
         adm.close()
 
 

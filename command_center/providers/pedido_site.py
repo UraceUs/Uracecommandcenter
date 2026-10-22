@@ -34,6 +34,7 @@ import re
 import secrets
 
 from command_center.db import agora, atualizar, conectar, inserir, todos, um  # noqa: F401
+from command_center.providers import sim2grid
 
 ESTADOS = ("pago", "aguardando", "falhou", "expirado", "aberto")
 CONTATO = "Questions? Call or WhatsApp +1 (407) 250 2291."
@@ -166,6 +167,10 @@ def itens_do_carrinho(con, o):
         if x["kind"] == "produto" and x["product_slug"]:
             out.append({"tipo": "produto", "produto": x["product_slug"], "variacao": x["variation"] or "",
                         "quantidade": x["quantity"]})
+        elif x["kind"] == "sessao" and x["service_id"] and sim2grid.do_slug(x["product_slug"]):
+            hora, horas = sim2grid.do_slug(x["product_slug"])          # #392: a hora de simulador
+            out.append({"tipo": "sessao", "servico": x["service_id"], "data": x["date"], "hora": hora, "horas": horas,
+                        "piloto": x["pilot_id"]})
         elif x["kind"] == "sessao" and x["service_id"]:
             out.append({"tipo": "sessao", "servico": x["service_id"], "data": x["date"], "turno": x["period"],
                         "piloto": x["pilot_id"]})
@@ -208,6 +213,9 @@ def quando(d, periodo, lang="en"):
 
 def nome_linha(x, lang="en"):
     """O nome da linha no idioma: a sessão é refeita com o dia e o turno (o nome guardado é o do Stripe)."""
+    hd = sim2grid.do_slug(x.get("product_slug")) if x["kind"] == "sessao" else None
+    if hd and x.get("service_name") and x.get("date"):                   # #392: o dia e as horas do simulador
+        return f"{x['service_name']} · {sim2grid.quando(x['date'], hd[0], hd[1], lang)}" + (f" · {x['pilot_name']}" if x.get("pilot_name") else "")
     if x["kind"] == "sessao" and x.get("service_name") and x.get("date"):
         return f"{x['service_name']} · {quando(x['date'], x['period'], lang)}" + (f" · {x['pilot_name']}" if x.get("pilot_name") else "")
     return x["name"]

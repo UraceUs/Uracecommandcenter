@@ -823,8 +823,8 @@ automática ligada.
 Dono, 15/10: *"o kart school se tornou Urace academy, e o professional coaching se tornou o arrive and
 drive"*. Na página de programas (`novo.urace.us/services/`) ficam sete: **Arrive and Drive**, **URACE
 Academy**, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events (mais
-o Sim 2 Grid, que abre em 1/11/2026). **Kart School** e **Professional Coaching** não existem mais como
-programa.
+o **SIM2GRID**, o simulador, que abre em 1/11/2026 e tem página própria, `/sim2grid-racing-simulator/`, #392).
+**Kart School** e **Professional Coaching** não existem mais como programa.
 
 | O cliente pede | Venda | Página |
 |---|---|---|
@@ -863,6 +863,32 @@ Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: nã
   carrinho avisam: *o kart tem de chegar à pista com no mínimo 2 dias de antecedência para checagem e
   manutenção*. Quem compra kart próprio pelo site: confirme a data de entrega do kart com o cliente.
 - **Convidado**: o passe varia de **$15 a $22** e é cobrado direto pela pista — não é da URACE.
+
+### SIM2GRID: a hora de simulador (#392)
+
+Dono, 22/10: *"sera um serviço um diferente das aulas de kart podendo agendar ate 5 pessoas para a mesma hora, o
+valor do serviço é cobrado por hora"*. A página é `novo.urace.us/sim2grid-racing-simulator/` (o mesmo endereço que o
+robô de vendas já manda, `urace.us/sim2grid-racing-simulator/`). O que se vende ali:
+
+| O cliente quer | Venda | Como |
+|---|---|---|
+| Experimentar o simulador | **Hora sem coach** | a pessoa reserva na página, por hora (1 a 3 horas seguidas, ajustável) |
+| Simulador com coach | **Hora com coach** | idem; o coach entra no preço da faixa |
+| Treino fixo toda semana | **Programa mensal** (3x, 2x ou 1x por semana; 10 vagas por plano, 30 no total) | o botão do cartão abre o contato: a equipe fecha à mão |
+| Vir com amigos | até **5 pessoas na mesma hora** (um simulador cada; ajustável) | cada pessoa é uma linha do carrinho, com o seu piloto e o seu card |
+
+Preço, sempre das **faixas do painel** (Site › Sim2Grid), em horário de Orlando. Hoje (a LP de 22/10): sem coach
+**$50/h** seg–sex 7h–17h e **$75/h** seg–sex 18h–24h; **fim de semana sem coach = ligar** (sem preço online); com
+coach **$100/h** seg–sex 7h–17h e **$120/h** seg–sex 18h–24h e sáb–dom 8h–24h. Programas: 3x **$1,800**, 2x
+**$1,500** e 1x **$900** por mês, horário fixo, falta não repõe, sessão com coach de 2 h (1h40 no simulador + setup e
+debrief), renova todo mês até cancelar.
+
+- O pagamento é o do carrinho do site (Stripe), com conta do site; o horário fica segurado enquanto o Stripe vale.
+- Pago: a reserva entra paga no **card do piloto**, a venda **GANHO** em Vendas e a waiver do piloto (se a regra
+  estiver ligada). A lista fica em **Site › Sim2Grid › Reservas do simulador**.
+- Criança: a página pede para **ligar antes** (idade, altura e requisitos); a idade mínima só aparece se o gerente
+  preencher em Site › Sim2Grid.
+- O **robô de vendas** continua sem dizer preço do SIM2GRID: manda a página (regra do dono, sem mudança).
 
 ### 5.1 Carrinho do site e pagamento no Stripe (#236)
 

@@ -417,8 +417,9 @@ def pedir_waiver(con, b, enviar=None, tabela="bookings", card=None, motivo=None)
                            VALUES ('waiver', ?, 'docusign', ?, ?)""",
                         (wid, env, f"https://apps.docusign.com/send/documents/details/{env}"))
         atualizar(con, tabela, b["id"], waiver_ref=wid, waiver_error=None, updated_at=agora())
-        auditar(con, "booking.waiver" if tabela == "bookings" else "plan.waiver", "system",
-                entity_type="booking" if tabela == "bookings" else "plan_order", entity_id=b["id"],
+        evento, entidade = {"bookings": ("booking.waiver", "booking"),            # #392: a hora do SIM2GRID também
+                            "sim_bookings": ("sim2grid.waiver", "sim_booking")}.get(tabela, ("plan.waiver", "plan_order"))
+        auditar(con, evento, "system", entity_type=entidade, entity_id=b["id"],
                 detail={"waiver": wid, "envelope": env, "template": template, "email": email.lower()})
         return "enviada"
     except Exception as e:                                         # noqa: BLE001 — trava do DocuSign ou dado faltando

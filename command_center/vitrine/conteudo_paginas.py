@@ -300,7 +300,7 @@ CAREER = {
     "degraus_titulo": "The ladder ends on our grid",
     "degraus_intro": ("Sim 2 Grid. Arrive and Drive. URACE Academy. URACE Racing Team. Four steps, one team. Nobody skips to "
                       "the top and nobody buys their way in — your coach tells you when you are ready, and not before."),
-    "degraus": (("Sim 2 Grid", "Opening 1 November 2026. A full motion cockpit — competition seat and harness, direct-drive wheel, racing pedals, triple screen.", "/services/#sim2grid"),
+    "degraus": (("Sim 2 Grid", "Opening 1 November 2026. A full motion cockpit — competition seat and harness, direct-drive wheel, racing pedals, triple screen.", "/sim2grid-racing-simulator/"),
                 ("Arrive and Drive", "Experience karting for one day. Your first opportunity to experience real karting with professional guidance and URACE support.", "/services/arrive-and-drive/"),
                 ("URACE Academy", "Start your development as a racing driver. Four coached sessions a month.", "/academy/"),
                 ("Racing Team", "Already competing? Pursue the next level.", "/pro-team/")),
@@ -431,7 +431,7 @@ CONTACT = {
     "h1": "Talk to URACE",
     "sub": "New lead, question, or planning a group / corporate event? Fill out the form below and our team will get back to you.",
     # #254: não existe mais o programa "Professional Coaching"; o coaching na pista é o Lead and Follow
-    "assuntos": (("arrive-and-drive", "Arrive and Drive"), ("academy", "URACE Academy"), ("coaching", "Lead and Follow coaching"),
+    "assuntos": (("arrive-and-drive", "Arrive and Drive"), ("sim2grid", "SIM2GRID racing simulator"), ("academy", "URACE Academy"), ("coaching", "Lead and Follow coaching"),
                  ("camp", "Intensive Training Camp"), ("team", "Racing Team"), ("event", "Birthday, corporate or group event"),
                  ("store", "Store: parts, suits and apparel"), ("other", "Something else")),
     "local_titulo": "Location",
