@@ -97,6 +97,9 @@
     if (busca) busca.focus({ preventScroll: true })
   }
 
+  // ------------------------------------------------------------- o destaque leve do "Book now"
+  if (!calmo) document.querySelectorAll('.btn-reservar').forEach(function (b) { b.classList.add('pulsa') })
+
   // ------------------------------------------------------------- seções que surgem ao rolar
   if (!calmo && 'IntersectionObserver' in window) {
     var olho = new IntersectionObserver(function (vistos) {

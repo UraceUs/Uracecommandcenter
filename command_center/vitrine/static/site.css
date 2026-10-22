@@ -112,7 +112,9 @@ html:has(.menu-cel[open]) { overflow: hidden }
 /* o "Book now": um anel que pulsa de leve, três vezes, e para */
 .btn-reservar { position: relative }
 .btn-reservar::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid var(--vermelho-2); opacity: 0;
-  pointer-events: none; animation: reservar-pulso var(--dur-pulso) var(--curva) 1s 3 }
+  pointer-events: none }
+/* o `site.js` liga o pulso (na prévia do editor, sem ele, o botão fica parado) */
+.btn-reservar.pulsa::after { animation: reservar-pulso var(--dur-pulso) var(--curva) 1s 3 }
 @keyframes reservar-pulso { 0% { opacity: .7; transform: scale(1) } 70%, 100% { opacity: 0; transform: scale(1.18, 1.35) } }
 @media (min-width: 1000px) {
   .menu { display: block; flex: 1 }
@@ -302,8 +304,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .servico-card img, .post-card img, .produto-card img, .produto-card .sem-foto { border-radius: var(--raio) var(--raio) 0 0 }
 /* a seção surge ao rolar, uma vez: o `site.js` só marca `.surge` na seção que está abaixo da tela e tem
    IntersectionObserver; sem JS (ou com reduced-motion) nada é escondido */
-.surge { opacity: 0; transform: translateY(24px); transition: opacity var(--dur-surge) var(--curva), transform var(--dur-surge) var(--curva) }
-.surge.visto { opacity: 1; transform: none }
+.surge { opacity: 0; transform: translateY(24px) }
+.surge.visto { opacity: 1; transform: none; transition: opacity var(--dur-surge) var(--curva), transform var(--dur-surge) var(--curva) }
 /* o carrossel dos campeões: no celular, uma fileira que se arrasta (scroll-snap) com setas; no computador, os quatro lado a lado */
 .carrossel-setas { display: none; gap: 8px; justify-content: flex-end }
 .carrossel-seta { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--linha); border-radius: 999px;

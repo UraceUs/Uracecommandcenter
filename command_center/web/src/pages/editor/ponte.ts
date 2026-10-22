@@ -664,7 +664,12 @@ export class Ponte {
         return { d: { tipo: 'col', sid, c: Number(ci), i }, marca: filhos[i], como: 'antes' }
       }
     }
-    if (filhos.length) return { d: { tipo: 'col', sid, c: Number(ci), i: filhos.length }, marca: filhos[filhos.length - 1], como: 'depois' }
+    // o fim da coluna também escondido pelo cabeçalho preso (a linha de baixo da última peça fica embaixo dele, #394:
+    // o cabeçalho de uma linha só deixa o resto da seção à vista): o alvo é o começo da seção seguinte, que se vê
+    const ultimo = filhos[filhos.length - 1]
+    if (ultimo && preso && ultimo.getBoundingClientRect().bottom < preso && idx + 1 < lista.length)
+      return this.destinoEm(x, Math.max(lista[idx + 1].getBoundingClientRect().top, preso) + 1, modo, ignorar)
+    if (filhos.length) return { d: { tipo: 'col', sid, c: Number(ci), i: filhos.length }, marca: ultimo, como: 'depois' }
     return { d: { tipo: 'col', sid, c: Number(ci), i: 0 }, marca: col, como: 'dentro' }
   }
   private mostrarSolta(a: Alvo | null) {

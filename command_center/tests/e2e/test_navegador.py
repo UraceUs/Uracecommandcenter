@@ -5052,7 +5052,8 @@ def test_editor_canva_arrastar_por_cima_do_cabecalho_preso_cai_no_que_se_ve(serv
     onde = [(sc["id"], k, i) for sc in _rascunho(g, servidor, pid)["itens"] for k, col in enumerate(sc["itens"])
             for i, w in enumerate(col) if w["tipo"] == "botao"]
     assert len(onde) == 1 and onde[0][0] == marca["sec"], (onde, marca)
-    # Computador (reduzido): o cabeçalho tem duas linhas e é a borda de cima; parado em cima dele, a prévia sobe
+    # Computador (reduzido): o cabeçalho é a borda de cima; parado em cima dele, a prévia sobe. #394: o menu em grupos
+    # cabe numa linha só (60 px; antes eram duas, 11 links soltos)
     g.get_by_role("button", name="Computador").click()
     g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentWindow.innerWidth === 1280")
     g.wait_for_timeout(300)
@@ -5062,7 +5063,7 @@ def test_editor_canva_arrastar_por_cima_do_cabecalho_preso_cai_no_que_se_ve(serv
     quadro = _caixa(g.locator("iframe.ed-iframe"))
     escala = quadro["width"] / 1280
     topo = g.evaluate("document.querySelector('iframe.ed-iframe').contentDocument.querySelector('header.topo').getBoundingClientRect().bottom")
-    assert topo > 80, f"o cabeçalho do computador passa da faixa de 64 px da borda: {topo}"
+    assert topo >= 56, f"o cabeçalho do computador está preso em cima: {topo}"
     sy = "document.querySelector('iframe.ed-iframe').contentWindow.scrollY"
     antes = g.evaluate(sy)
     pal = _caixa(g.locator(".ed-peca", has_text="Botão"))
