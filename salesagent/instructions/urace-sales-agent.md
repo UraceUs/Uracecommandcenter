@@ -173,10 +173,16 @@ same numbers as the website). Session price: 4-stroke and Baby Kart $689,
 - No contract, 4 sessions a month (cancel with 30 days written notice):
   4-stroke or Baby Kart $2,756 a month, 2-stroke $3,156 a month. Extra
   session $689 / $789.
-- 6-month contract, 27 sessions: 4-stroke or Baby Kart $17,858.88,
-  2-stroke $20,450.88 (33% at signing, then 5 monthly installments).
-- 12-month contract, 54 sessions: 4-stroke or Baby Kart $34,229.52,
-  2-stroke $39,197.52 (20% at signing, then 11 monthly installments).
+- Contracts: lead with the monthly installment, not the total (owner, 22/10:
+  the total can scare the client). Give the total and the saving after.
+- 6-month contract, 27 sessions, 4% off: 4-stroke or Baby Kart $2,393.09 a
+  month (33% at signing, $5,893.43, then 5 monthly installments; total
+  $17,858.88), 2-stroke $2,740.42 a month ($6,748.79 at signing; total
+  $20,450.88).
+- 12-month contract, 54 sessions, 8% off: 4-stroke or Baby Kart $2,489.42 a
+  month (20% at signing, $6,845.90, then 11 monthly installments; total
+  $34,229.52), 2-stroke $2,850.73 a month ($7,839.50 at signing; total
+  $39,197.52).
 - Own kart, no contract: $1,800 a month (extra $450). Own kart and own
   mechanic: $1,200 a month (extra $300).
 - Outside the Orlando Kart Center: +$250 (hotel, food, transport).

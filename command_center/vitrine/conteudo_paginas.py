@@ -51,6 +51,9 @@ ACADEMY = {
     # Kart) e para 2 stroke — "veja que tem academy para 4t e 2t". As contas batem com 4 × sessão,
     # 27 × sessão × 0,96 e 54 × sessão × 0,92, com entrada de 33% / 20% (test_vitrine trava). Saíram
     # 3 Months, 6 Months a 5% e o URACE Boost: não estão na planilha.
+    # #390 (dono, 22/10: *"o texto maior seja sempre o valor do mes nao o total pois o total pode assustar"*): no
+    # contrato, o preço grande é a parcela do mês; embaixo dele, o total e quanto economiza (dono: "o texto abaixo do
+    # valor explicando o total a quantidade de desconto"); a entrada fica no texto.
     # grupo: (título, [(nome, sub, texto, preço, por)])
     "planos_grupos": (
         ("4-stroke and Baby Kart · $689 per session", (
@@ -58,21 +61,25 @@ ACADEMY = {
              "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
              "time with thirty days written notice. Additional sessions $689 each.", "$2,756", "per month"),
             ("6-month contract", "27 sessions · 4% off",
-             "Regular value $18,603.00. $5,893.43 at signing (33%), then 5 monthly installments of $2,393.09. "
-             "Recurring billing.", "$17,858.88", "contract total"),
+             "$5,893.43 at signing (33%), then 5 monthly installments of $2,393.09. Contract total $17,858.88 "
+             "(regular value $18,603.00). Recurring billing.", "$2,393.09",
+             "per month · contract total $17,858.88 · you save $744.12 (4% off)"),
             ("12-month contract", "54 sessions · 8% off",
-             "Regular value $37,206.00. $6,845.90 at signing (20%), then 11 monthly installments of $2,489.42. "
-             "Recurring billing.", "$34,229.52", "contract total"))),
+             "$6,845.90 at signing (20%), then 11 monthly installments of $2,489.42. Contract total $34,229.52 "
+             "(regular value $37,206.00). Recurring billing.", "$2,489.42",
+             "per month · contract total $34,229.52 · you save $2,976.48 (8% off)"))),
         ("2-stroke · $789 per session", (
             ("No contract", "4 sessions a month",
              "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
              "time with thirty days written notice. Additional sessions $789 each.", "$3,156", "per month"),
             ("6-month contract", "27 sessions · 4% off",
-             "Regular value $21,303.00. $6,748.79 at signing (33%), then 5 monthly installments of $2,740.42. "
-             "Recurring billing.", "$20,450.88", "contract total"),
+             "$6,748.79 at signing (33%), then 5 monthly installments of $2,740.42. Contract total $20,450.88 "
+             "(regular value $21,303.00). Recurring billing.", "$2,740.42",
+             "per month · contract total $20,450.88 · you save $852.12 (4% off)"),
             ("12-month contract", "54 sessions · 8% off",
-             "Regular value $42,606.00. $7,839.50 at signing (20%), then 11 monthly installments of $2,850.73. "
-             "Recurring billing.", "$39,197.52", "contract total"))),
+             "$7,839.50 at signing (20%), then 11 monthly installments of $2,850.73. Contract total $39,197.52 "
+             "(regular value $42,606.00). Recurring billing.", "$2,850.73",
+             "per month · contract total $39,197.52 · you save $3,408.48 (8% off)"))),
         ("Your own kart · no contract", (
             ("Your kart", "4 sessions a month",
              "You bring the kart; we bring the coaching, the track day and the support. Additional sessions $450 each.",
