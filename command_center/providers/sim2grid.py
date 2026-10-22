@@ -7,7 +7,7 @@ O modelo:
 - **formatos** são os serviços do painel de `kind='sim'` (hoje: sem coach e com coach). Nome, texto, depósito,
   "depósito obrigatório" e o item do QuickBooks são os de Site › Serviços e preços, como no Arrive and Drive;
 - **faixas** (`sim_rates`) dizem, para cada formato, em que dias e horas ele abre e quanto custa cada hora. Preço vazio
-  é "ligue para nós": o horário aparece, mas não se vende online (o fim de semana sem coach, na LP);
+  é "ligue para nós": o horário aparece, mas não se vende online (nenhuma faixa nasce assim desde os preços do dono de 22/10);
 - **regras** (`sim_config`): vender online ou não, quantos simuladores (vagas por hora, 5), horas mínimas e máximas
   seguidas, horizonte, antecedência, a abertura, datas fechadas, idade mínima, waiver, o aviso e o sorteio do mês;
 - **vaga**: cada pessoa é um simulador. A hora está cheia quando as reservas pagas e as seguradas (checkout aberto no
@@ -203,9 +203,12 @@ def mudar_faixa(con, por, fid, d):
 
 
 def tarifa(fs, sid, dia_semana, hora):
-    """A faixa ativa do formato que cobre esta hora (a primeira na ordem do painel), ou None (fechado)."""
+    """A faixa ativa do formato para uma sessão que COMEÇA nesta hora (a primeira na ordem do painel), ou None (fechado).
+    Dono, 22/10: *"vale o horário de início: uma sessão às 17h usa a tarifa diurna"* — a hora final da faixa também
+    serve de início (7h–17h aceita começar às 17h), menos a meia-noite."""
     for f in fs:
-        if f["service_id"] == sid and f["active"] and str(dia_semana) in f["days"] and f["start_hour"] <= hora < f["end_hour"]:
+        if (f["service_id"] == sid and f["active"] and str(dia_semana) in f["days"]
+                and (f["start_hour"] <= hora < f["end_hour"] or hora == f["end_hour"] < 24)):
             return f
     return None
 
@@ -340,8 +343,8 @@ def desde(con):
 
 # ------------------------------------------------------------------ a linha do carrinho
 def linha(con, s, it, conta_id, uso, visao="cliente"):
-    """A linha de simulador do carrinho (o serviço `s` é de kind='sim'). Preço = soma das horas pela faixa de cada
-    uma; cada hora precisa de preço online e de vaga (contando o que já está no carrinho, em `uso`)."""
+    """A linha de simulador do carrinho (o serviço `s` é de kind='sim'). Preço = horas × a tarifa da faixa em que a
+    sessão começa; cada hora precisa de vaga (contando o que já está no carrinho, em `uso`)."""
     cfg = config(con)
     d = str(it.get("data") or "")
     try:
@@ -373,16 +376,13 @@ def linha(con, s, it, conta_id, uso, visao="cliente"):
     if visao == "cliente" and (dia < de or dia > ate or dia.isoformat() in fechadas(cfg)
                                or inicio < agora_ + timedelta(hours=cfg["min_notice_hours"])):
         return {**base, "erro": "This time is no longer available. Please pick another one."}
-    fs = faixas(con, ativos=True)
-    total = 0.0
-    for h in range(hora, hora + horas):
-        t = tarifa(fs, s["id"], dia.weekday(), h)
-        if not t:
-            return {**base, "erro": "This time is no longer available. Please pick another one."}
-        if t["price"] is None:
-            return {**base, "erro": "This time is booked by phone. Call us and we book it for you."}
-        total += float(t["price"])
-    base["unitario"] = round(total, 2)
+    # vale o horário de início (dono, 22/10): todas as horas da sessão pela faixa em que ela começa
+    t = tarifa(faixas(con, ativos=True), s["id"], dia.weekday(), hora)
+    if not t:
+        return {**base, "erro": "This time is no longer available. Please pick another one."}
+    if t["price"] is None:
+        return {**base, "erro": "This time is booked by phone. Call us and we book it for you."}
+    base["unitario"] = round(float(t["price"]) * horas, 2)
     ocup = ocupacao(con, d, d, sem_conta=conta_id)
     if any(ocup.get((d, h), 0) + uso.get(("sim", d, h), 0) >= cfg["capacity"] for h in range(hora, hora + horas)):
         return {**base, "erro": "This time is full. Please pick another one."}

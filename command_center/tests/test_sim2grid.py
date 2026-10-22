@@ -71,8 +71,9 @@ def test_a_semente_da_lp_entra_uma_vez_e_o_que_a_equipe_muda_fica(sim):
     forms = todos(con, "SELECT * FROM booking_services WHERE kind='sim' ORDER BY sort")
     assert [(f["site_kart"], f["deposit"], f["active"]) for f in forms] == [("sim2grid-solo", 0, 1), ("sim2grid-coach", 0, 1)]
     fs = {(f["service_id"], f["days"], f["start_hour"], f["end_hour"]): f["price"] for f in sim2grid.faixas(con)}
-    assert fs == {(solo, "01234", 7, 17): 50, (solo, "01234", 18, 24): 75, (solo, "56", 8, 24): None,
-                  (coach, "01234", 7, 17): 100, (coach, "01234", 18, 24): 120, (coach, "56", 8, 24): 120}
+    # os preços aprovados pelo dono em 22/10 (#392)
+    assert fs == {(solo, "01234", 7, 17): 50, (solo, "01234", 18, 24): 75, (solo, "56", 8, 24): 90,
+                  (coach, "01234", 7, 17): 125, (coach, "01234", 18, 24): 150, (coach, "56", 8, 24): 150}
     cfg = sim2grid.config(con)
     assert (cfg["capacity"], cfg["min_hours"], cfg["online"], cfg["waiver_required"], cfg["min_age"]) == (5, 1, 1, 1, None)
     planos = todos(con, "SELECT title, price, per FROM site_offers WHERE page='sim2grid' ORDER BY sort")
@@ -92,18 +93,17 @@ def test_a_semente_da_lp_entra_uma_vez_e_o_que_a_equipe_muda_fica(sim):
 
 
 # ------------------------------------------------------------------ o preço
-def test_o_preco_segue_a_faixa_e_o_coach_e_soma_as_horas(sim):
+def test_o_preco_segue_a_faixa_do_inicio_e_o_coach(sim):
     cli, con, st, qbo, tmp, solo, coach = sim
     terca, sabado = dia(1), dia(5)
     d = _cotar(cli, [_item(solo, terca, 9), _item(solo, terca, 18, 2), _item(coach, terca, 9), _item(coach, terca, 20, 3),
                      _item(coach, sabado, 10), _item(solo, terca, 16, 2), _item(solo, sabado, 10), _item(solo, terca, 17),
                      _item(solo, terca, 9, preco=1, unitario=1)])
     ls = d["linhas"]
-    assert [x["unitario"] for x in ls[:5]] == [50, 150, 100, 360, 120], "sem coach 50/75, com coach 100/120, por hora"
-    assert all(x["erro"] is None for x in ls[:5])
-    assert "no longer available" in ls[5]["erro"], "16h + 17h: às 17h a faixa fecha (17h–18h não abre)"
-    assert "booked by phone" in ls[6]["erro"], "fim de semana sem coach: ligar"
-    assert "no longer available" in ls[7]["erro"]
+    assert [x["unitario"] for x in ls[:8]] == [50, 150, 125, 450, 150, 100, 90, 50], "sem coach 50/75/90, com coach 125/150/150"
+    assert all(x["erro"] is None for x in ls[:8])
+    # dono, 22/10: vale o horário de início — 16h por 2 h é diurna inteira, e começar às 17h usa a tarifa diurna
+    assert ls[5]["detalhe"].endswith("4 PM–6 PM (2 h)") and ls[7]["detalhe"].endswith("5 PM–6 PM (1 h)")
     assert ls[8]["unitario"] == 50, "o preço do navegador não vale"
     assert ls[1]["detalhe"].endswith("6 PM–8 PM (2 h)")
     # o painel muda a faixa e o carrinho segue na hora
@@ -146,10 +146,11 @@ def test_o_calendario_mostra_as_vagas_que_sobram_por_hora(sim):
     cli, con, st, qbo, tmp, solo, coach = sim
     terca = dia(1)
     h = _hora(cli, terca, 18)
-    assert h == {"h": 18, "spots": 5, "prices": {str(solo): 75, str(coach): 120}}
-    assert _hora(cli, terca, 17) is None, "17h–18h não abre"
+    assert h == {"h": 18, "spots": 5, "prices": {str(solo): 75, str(coach): 150}}
+    assert _hora(cli, terca, 17)["prices"] == {str(solo): 50, str(coach): 125}, "começar às 17h: tarifa diurna"
+    assert _hora(cli, terca, 6) is None, "antes das 7h não abre"
     sab = _hora(cli, dia(5), 10)
-    assert sab["prices"] == {str(solo): None, str(coach): 120}, "sem coach no fim de semana: ligar (null)"
+    assert sab["prices"] == {str(solo): 90, str(coach): 150}
     # duas pagas e uma segurada no Stripe ocupam; a segurada que venceu não ocupa
     agora = datetime.utcnow()
     for st_, ate in (("paga", None), ("paga", None), ("segurada", agora + timedelta(minutes=20)), ("segurada", agora - timedelta(minutes=1)),
@@ -260,13 +261,13 @@ def test_pagina_da_lp_com_seo_e_os_precos_do_painel(sim):
     assert '<link rel="canonical" href="https://novo.urace.us/sim2grid-racing-simulator/">' in r.text
     assert f"<title>{SG.PAGINA['titulo']}</title>" in r.text
     for trecho in ("Make time for your ambition.", "You can see the driver. Now see the path.", "Next lap: yours.",
-                   "10724 Cosmonaut Blvd, Box 3", "Fixed schedule. Consistent training.", "Starting at $50",
+                   "10724 Cosmonaut Blvd, Box 3", "Regular coaching. Consistent training.", "Starting at $50",
                    "I play racing games. Is SIM2GRID a good next step?", "Monday–Friday · 6 PM–midnight", "$75 / hour",
-                   "Call our team for options", "3 sessions per week", "$1,800", 'data-online="1"', "sim2grid.js"):
+                   "Saturday–Sunday · 8 AM–midnight", "$90 / hour", "$150 / hour", "3 sessions per week", "$1,800", 'data-online="1"', "sim2grid.js"):
         assert trecho in r.text, trecho
     servico = next(x for x in p.ld if x.get("@type") == "Service")
     precos = {o["priceSpecification"]["price"] for o in servico["offers"] if "priceSpecification" in o}
-    assert precos == {"50.00", "75.00", "100.00", "120.00"} and all(
+    assert precos == {"50.00", "75.00", "90.00", "125.00", "150.00"} and all(
         o["priceSpecification"]["unitCode"] == "HUR" for o in servico["offers"] if "priceSpecification" in o)
     assert any(x.get("@type") == "FAQPage" for x in p.ld)
     faq = next(x for x in p.ld if x.get("@type") == "FAQPage")
@@ -278,7 +279,7 @@ def test_pagina_da_lp_com_seo_e_os_precos_do_painel(sim):
     con.execute("UPDATE booking_services SET active=0 WHERE id=?", (coach,))
     con.commit()
     html = cli.get(CAMINHO).text
-    assert "Starting at $45" in html and "$120 / hour" not in html and "Hourly · With coaching" not in html
+    assert "Starting at $45" in html and "$125 / hour" not in html and "Hourly · With coaching" not in html
 
 
 def test_links_do_site_apontam_para_a_pagina_e_ela_esta_no_sitemap(sim):
@@ -338,9 +339,9 @@ def test_painel_edita_regras_e_faixas_e_o_operador_so_ve(sim, painel):
                                                            "price": "65"}).status_code == 400
     html = cli.get(CAMINHO).text
     assert "Drivers must be 12 or older." in html and "Arrive 10 minutes early." in html and "Up to 3 people" in html
-    # a faixa nova vem antes da "ligar" do fim de semana? Não: vale a primeira da ordem (a da LP, "ligar")
+    # a faixa nova vem antes da do fim de semana (US$ 90)? Não: vale a primeira da ordem
     sab = dia(5)
-    assert "booked by phone" in _cotar(cli, [_item(solo, sab, 9)])["linhas"][0]["erro"]
+    assert _cotar(cli, [_item(solo, sab, 9)])["linhas"][0]["unitario"] == 90
     assert eq.patch(f"/ops/api/site/sim2grid/faixas/{fid}", json={"sort": 0}).status_code == 200
     assert _cotar(cli, [_item(solo, sab, 9)])["linhas"][0]["unitario"] == 65
     # e a auditoria registra quem mudou

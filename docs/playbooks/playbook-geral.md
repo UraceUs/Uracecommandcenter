@@ -836,8 +836,10 @@ como montou o arrive and drive com todas as configurações ajustaveis"*.
   "obrigatório") e o **item do QuickBooks**; desativar tira o formato da página. **Adicionar serviço → SIM2GRID →
   Formato da hora de simulador** cria um formato novo (as faixas dele vêm depois, em Site › Sim2Grid).
 - **Faixas de preço** (Site › Sim2Grid): para cada formato, os **dias**, **de / até** (hora cheia; 24 = meia-noite) e o
-  **US$ por hora**. Preço **vazio** = *"Call our team for options"*: o horário aparece, mas não se vende online (o fim de
-  semana sem coach, como na LP). Vale a primeira faixa da lista que cobre o horário. Desativar não apaga.
+  **US$ por hora**. Preço **vazio** = *"Call our team for options"*: o horário aparece, mas não se vende online. Vale a
+  primeira faixa da lista que cobre o horário. **Vale o horário de início** (dono, 22/10): a hora final da faixa também
+  serve de início (7h–17h aceita começar às 17h, pela tarifa diurna) e a sessão inteira sai pela tarifa do início.
+  Desativar não apaga.
 - **Regras**: **Simuladores** (pessoas na mesma hora, 5), **horas mínimas e máximas seguidas**, **mostra até** (dias),
   **antecedência**, **abre a partir de** (a inauguração, 01/11/2026), **datas fechadas**, **idade mínima** (vazio: o site
   não diz e pede para ligar antes de reservar para criança), **waiver obrigatória**, o **aviso** perto do botão e o texto
@@ -1408,7 +1410,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | Chave de API: "Esta chave é só de leitura" | a chave está como só leitura | o administrador, em Usuários › Chaves de API, toca em **Liberar para operar** (a chave continua a mesma; #209) |
 | "O kart 2-stroke já é vendido por "…": dois serviços ativos com o mesmo kart tiram o kart do site. Desative aquele antes ou escolha outro kart." (ou "O add-on … já é vendido por …") | criar, trocar o kart ou reativar um serviço deixaria dois ativos com a mesma chave (#312) | Site › Serviços e preços: desative o serviço de hoje daquele kart e depois crie, troque ou reative o novo; ou escolha outro kart (ou **Novo kart…**) |
 | No site/reserva: "… is not open for online booking right now", ou um kart que desapareceu da página | nenhum serviço ativo com aquele **Kart do site**, ou dois com o mesmo (ambíguo) | Site › Serviços e preços: ative o serviço daquele kart e confira o seletor **Kart do site** — um serviço por kart (#263). O serviço ambíguo mostra, em vermelho, **fora do site: a chave … também está em …** (#312): desative um dos dois |
-| No SIM2GRID: "This time is booked by phone" / um dia em laranja que só mostra "Call us" | a faixa daquele formato e horário está **sem preço** (ligar), como o fim de semana sem coach | é de propósito; para vender online, ponha o preço da faixa em Site › Sim2Grid |
+| No SIM2GRID: "This time is booked by phone" / um dia em laranja que só mostra "Call us" | a faixa daquele formato e horário está **sem preço** (ligar), que alguém deixou sem preço | é de propósito; para vender online, ponha o preço da faixa em Site › Sim2Grid |
 | No SIM2GRID: "This time is full" ou "0 simulators left" | as reservas pagas e as que estão no pagamento já somam os simuladores daquela hora | outra hora, ou mais simuladores em Site › Sim2Grid › Regras (se houver simulador de verdade) |
 | No SIM2GRID: "Online booking is not open right now" | **Vender online** desligado, nenhum formato ativo, ou o Stripe fora | ligue em Site › Sim2Grid, ative um formato em Serviços e preços, ou confira o Stripe |
 | No site/reserva: "Online booking is closed right now" | **nenhum** serviço ativo em Serviços e preços: não há o que vender online | ative um serviço; enquanto isso o site manda a pessoa falar com a gente, e nenhuma vaga é prometida |

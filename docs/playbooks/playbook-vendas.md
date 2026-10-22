@@ -874,14 +874,14 @@ robô de vendas já manda, `urace.us/sim2grid-racing-simulator/`). O que se vend
 |---|---|---|
 | Experimentar o simulador | **Hora sem coach** | a pessoa reserva na página, por hora (1 a 3 horas seguidas, ajustável) |
 | Simulador com coach | **Hora com coach** | idem; o coach entra no preço da faixa |
-| Treino fixo toda semana | **Programa mensal** (3x, 2x ou 1x por semana; 10 vagas por plano, 30 no total) | o botão do cartão abre o contato: a equipe fecha à mão |
+| Treino toda semana | **Programa mensal** (3x, 2x ou 1x por semana; 10 vagas por plano, 30 no total) | o botão do cartão abre o contato: a equipe fecha à mão |
 | Vir com amigos | até **5 pessoas na mesma hora** (um simulador cada; ajustável) | cada pessoa é uma linha do carrinho, com o seu piloto e o seu card |
 
-Preço, sempre das **faixas do painel** (Site › Sim2Grid), em horário de Orlando. Hoje (a LP de 22/10): sem coach
-**$50/h** seg–sex 7h–17h e **$75/h** seg–sex 18h–24h; **fim de semana sem coach = ligar** (sem preço online); com
-coach **$100/h** seg–sex 7h–17h e **$120/h** seg–sex 18h–24h e sáb–dom 8h–24h. Programas: 3x **$1,800**, 2x
-**$1,500** e 1x **$900** por mês, horário fixo, falta não repõe, sessão com coach de 2 h (1h40 no simulador + setup e
-debrief), renova todo mês até cancelar.
+Preço, sempre das **faixas do painel** (Site › Sim2Grid), em horário de Orlando. Hoje (aprovados pelo dono em 22/10):
+sem coach **$50/h** seg–sex 7h–17h, **$75/h** seg–sex 18h–24h e **$90/h** sáb–dom 8h–24h; com coach **$125/h** seg–sex
+7h–17h, **$150/h** seg–sex 18h–24h e **$150/h** sáb–dom 8h–24h. **Vale o horário de início**: a sessão que começa às 17h
+é diurna, e todas as horas dela saem pela tarifa do início. Programas com coaching: 3x **$1,800**, 2x **$1,500** e 1x
+**$900** por mês, sessões de 2 h agendadas conforme a disponibilidade, renova todo mês até cancelar.
 
 - O pagamento é o do carrinho do site (Stripe), com conta do site; o horário fica segurado enquanto o Stripe vale.
 - Pago: a reserva entra paga no **card do piloto**, a venda **GANHO** em Vendas e a waiver do piloto (se a regra

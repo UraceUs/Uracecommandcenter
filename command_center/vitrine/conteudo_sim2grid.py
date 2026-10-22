@@ -6,7 +6,9 @@ o arrive and drive com todas as configurações ajustaveis"*.
 
 Aqui mora só o texto e os valores **de fábrica** (a semente do banco, que entra uma vez). O que a página mostra de preço,
 horário, vaga, depósito, waiver, idade e aviso vem do painel (Site › Sim2Grid e Site › Serviços e preços); estes valores
-só valem com o banco fora. Os preços e horários são os da LP; idade mínima a LP não diz (manda ligar), então nasce vazia.
+só valem com o banco fora. Os preços são os que o dono aprovou em 22/10 (#392, no lugar dos da LP: com coach 125/150/150,
+sem coach 50/75/90 no fim de semana, vale o horário de início; programa mensal com sessões de 2 h conforme a
+disponibilidade); idade mínima a LP não diz (manda ligar), então nasce vazia.
 """
 
 from command_center.vitrine.conteudo import SITE
@@ -24,16 +26,16 @@ FORMATOS = (
     ("sim2grid-solo", "SIM2GRID · Simulator hour", "Hourly · Without coaching", "Simulator / without coaching",
      "Your time. Your practice. Book simulator time without a coach.", 50, 10),
     ("sim2grid-coach", "SIM2GRID · Simulator hour with coaching", "Hourly · With coaching", "Simulator + coaching",
-     "One session. Your next step. Work with a coach without enrolling in a monthly program.", 100, 20),
+     "One session. Your next step. Work with a coach without enrolling in a monthly program.", 125, 20),
 )
 # (chave da faixa, formato, dias [0 = segunda], início, fim [24 = meia-noite], preço por hora [None = ligar], ordem)
 FAIXAS = (
     ("solo:semana:dia", "sim2grid-solo", "01234", 7, 17, 50, 10),
     ("solo:semana:noite", "sim2grid-solo", "01234", 18, 24, 75, 20),
-    ("solo:fds", "sim2grid-solo", "56", 8, 24, None, 30),
-    ("coach:semana:dia", "sim2grid-coach", "01234", 7, 17, 100, 10),
-    ("coach:semana:noite", "sim2grid-coach", "01234", 18, 24, 120, 20),
-    ("coach:fds", "sim2grid-coach", "56", 8, 24, 120, 30),
+    ("solo:fds", "sim2grid-solo", "56", 8, 24, 90, 30),
+    ("coach:semana:dia", "sim2grid-coach", "01234", 7, 17, 125, 10),
+    ("coach:semana:noite", "sim2grid-coach", "01234", 18, 24, 150, 20),
+    ("coach:fds", "sim2grid-coach", "56", 8, 24, 150, 30),
 )
 REGRAS = {
     "online": 1,                    # vende pelo site (o mesmo carrinho e Stripe do Arrive and Drive)
@@ -54,9 +56,9 @@ REGRAS = {
 # Os programas mensais: cartões da página (site_offers, page='sim2grid'), editáveis em Site › Cartões das páginas.
 PLANOS_GRUPO = "Monthly programs · 30 students total · 10 places per plan"
 PLANOS = (
-    ("3 sessions per week", "Initial allocation: 10 students", "Fixed weekly days and times. Each coached session lasts 2 hours: 1h40 in the simulator plus setup and debrief.", "$1,800", "/ month"),
-    ("2 sessions per week", "Initial allocation: 10 students", "Fixed weekly days and times. Each coached session lasts 2 hours: 1h40 in the simulator plus setup and debrief.", "$1,500", "/ month"),
-    ("1 session per week", "Initial allocation: 10 students", "Fixed weekly days and times. Each coached session lasts 2 hours: 1h40 in the simulator plus setup and debrief.", "$900", "/ month"),
+    ("3 sessions per week", "Initial allocation: 10 students", "Coaching included. Each session lasts 2 hours, scheduled according to availability.", "$1,800", "/ month"),
+    ("2 sessions per week", "Initial allocation: 10 students", "Coaching included. Each session lasts 2 hours, scheduled according to availability.", "$1,500", "/ month"),
+    ("1 session per week", "Initial allocation: 10 students", "Coaching included. Each session lasts 2 hours, scheduled according to availability.", "$900", "/ month"),
 )
 
 # ------------------------------------------------------------------ o texto da página (da LP)
@@ -81,10 +83,9 @@ PAGINA = {
     "nota": ("Payment is processed securely at checkout. Your booking is confirmed once payment is complete. Next: the "
              "session goes to your cart. Sign in or create your URACE account, then pay with Stripe — card, Apple Pay or "
              "Google Pay."),
-    "planos_titulo": "Fixed schedule. Consistent training.",
-    "planos_sub": ("Your weekly days and times are fixed once booked. Missed sessions cannot be made up. Each coached "
-                   "session lasts 2 hours: 1h40 in the simulator plus setup and debrief. Billed monthly until you cancel. "
-                   "Places are limited."),
+    "planos_titulo": "Regular coaching. Consistent training.",
+    "planos_sub": ("Monthly programs with coaching. Each session lasts 2 hours and is scheduled according to availability. "
+                   "Billed monthly until you cancel. Places are limited."),
     "planos_capacidade": "Initial program capacity: 30 students total · 10 places per plan",
     "caminho_eyebrow": "From racing games to racing ambitions",
     "caminho_titulo": "You can see the driver. Now see the path.",
@@ -157,8 +158,9 @@ PAGINA = {
         ("How long is a session, and where do I go?",
          (f"Hourly sessions are booked by the hour at URACE, {SITE['endereco']['rua']}, Orlando, FL {SITE['endereco']['cep']}, "
           "inside the Orlando Kart Center. The announced opening date is November 1, 2026. All booking times are local to Orlando. "
-          "Monthly program sessions use a different format: two hours, including 1h40 in the simulator plus setup and "
-          "debrief.",)),
+          "Monthly program sessions use a different format: two hours with coaching, scheduled according to "
+          "availability. The rate of an hourly session is set by its start time: a session that starts at 5 PM on a "
+          "weekday uses the daytime rate.",)),
         ("Can I bring friends at the same time?",
          ("Yes. Up to {capacidade} people can drive at the same time, one simulator each. Each driver books and pays their "
           "own hour.",)),
@@ -167,8 +169,7 @@ PAGINA = {
           "format is suitable. Our team can help you choose an appropriate starting point before you pay.",)),
         ("What if I need to change my booking?",
          ("For an hourly session, confirm the cancellation and rescheduling terms with URACE before payment. Monthly "
-          "programs follow fixed weekly days and times, and missed sessions cannot be made up. If your schedule changes "
-          "often, consider an individual session first.",)),
+          "program sessions are scheduled with the team according to availability.",)),
         ("Can this lead to real karting or racing?",
          ("It can be your introduction to URACE and a conversation about your next step. The team also offers one-day "
           "karting experiences, Academy development, and Racing Team support. Those programs are booked separately; your "

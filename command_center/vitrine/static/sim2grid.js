@@ -58,12 +58,14 @@
   function preco(x, f) { return x && f ? x.prices[String(f.id)] : undefined }
   /** Dá para começar aqui? Preço online e pelo menos uma vaga. */
   function vende(x, f) { var p = preco(x, f); return typeof p === 'number' && x.spots > 0 }
-  /** Quantas horas seguidas cabem a partir de `h`, com `pessoas` simuladores livres em cada uma. */
+  /** Quantas horas seguidas cabem a partir de `h`, com `pessoas` simuladores livres em cada uma. Só a hora de início
+   *  precisa de preço: vale a tarifa de quando a sessão começa (dono, 22/10, #392). */
   function seguidas(iso, h, f, pessoas) {
     var n = 0
+    if (typeof preco(daHora(iso, h), f) !== 'number') return 0
     while (n < cfg.max_hours) {
       var x = daHora(iso, h + n)
-      if (!x || typeof preco(x, f) !== 'number' || x.spots < pessoas) break
+      if (!x || x.spots < pessoas) break
       n++
     }
     return n
@@ -86,8 +88,10 @@
   function total() {
     var f = formato()
     if (!f || !dia || hora == null) return null
-    var horas = Number(selHoras.value) || 1, pessoas = Number(selPessoas.value) || 1, soma = 0
-    for (var i = 0; i < horas; i++) { var p = preco(daHora(dia, hora + i), f); if (typeof p !== 'number') return null; soma += p }
+    var horas = Number(selHoras.value) || 1, pessoas = Number(selPessoas.value) || 1
+    var p = preco(daHora(dia, hora), f)                      // a tarifa do início vale para todas as horas
+    if (typeof p !== 'number') return null
+    var soma = p * horas
     return { horas: horas, pessoas: pessoas, valor: soma * pessoas, porPessoa: soma, deposito: (Number(f.deposit) || 0) * pessoas }
   }
 

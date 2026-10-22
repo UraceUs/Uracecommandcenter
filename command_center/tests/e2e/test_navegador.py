@@ -2452,12 +2452,12 @@ def test_sim2grid_escolhe_formato_dia_hora_e_pessoas_e_vai_ao_carrinho(servidor,
         dia.click()
         hora = v.locator(".sim-hora:not([disabled])").first
         hora.wait_for()
-        assert re.search(r"\$1[02]0 · 5 simulators left", hora.inner_text().replace("\n", " ")), hora.inner_text()
+        assert re.search(r"\$1(25|50) · 5 simulators left", hora.inner_text().replace("\n", " ")), hora.inner_text()
         hora.click()
         v.get_by_label("Simulators (people)").select_option("2")
         botao = v.locator(".agenda-carrinho")
         texto = botao.inner_text().strip()
-        assert re.fullmatch(r"Add to cart · \$2[04]0", texto), texto
+        assert re.fullmatch(r"Add to cart · \$(250|300)", texto), texto
         r = v.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         if largura < 1000:
