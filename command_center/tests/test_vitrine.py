@@ -318,12 +318,13 @@ def test_texto_do_urace_us_de_hoje_no_menu_na_home_e_no_blog(cli):
 
 
 def test_decisoes_do_dono_continuam_valendo_em_todo_o_site(cli):
-    """O texto novo não traz de volta o que o dono já decidiu: Box 3, remarcação com 24 h e o nome URACE."""
+    """O texto novo não traz de volta o que o dono já decidiu: Box 3 (o SIM2GRID no Box 5), remarcação com 24 h e o nome URACE."""
     for c in PAGINAS:
         if c.startswith("/store/"):
             continue                                   # nome e descrição do produto são os da loja
         texto = re.sub(r"<[^>]+>", " ", re.sub(r"<script.*?</script>", "", cli.get(c).text, flags=re.S))
-        assert "Box 5" not in texto and not re.search(r"\b48 ?h", texto), c
+        # o SIM2GRID fica no Box 5 (dono, 22/10, #392); o resto do site no Box 3 (01/10)
+        assert ("Box 5" not in texto or c == "/sim2grid-racing-simulator/") and not re.search(r"\b48 ?h", texto), c
         assert not re.search(r"\bU(race|Race|Rrace)\b", texto), c
 
 

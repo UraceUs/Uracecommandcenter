@@ -15,9 +15,9 @@ from command_center.vitrine.conteudo import SITE
 
 CAMINHO = "/sim2grid-racing-simulator/"
 TELEFONE = "+1 (407) 250-2291"
-# A LP de hoje escreve "Box 5"; o endereço do site é o da decisão do dono de 01/10 (Box 3), o mesmo de todas as páginas
-# (test_vitrine trava). Se o simulador fica mesmo em outro box, muda aqui e no SITE junto, com o dono.
-ENDERECO = (SITE["endereco"]["rua"], "Orlando, Florida", SITE["endereco"]["onde"])
+# Dono, 22/10 (#392): o SIM2GRID fica no Box 5, como na LP ("lp antiga"); o resto do site segue no Box 3 (01/10).
+RUA = "10724 Cosmonaut Blvd, Box 5"
+ENDERECO = (RUA, "Orlando, Florida", SITE["endereco"]["onde"])
 
 # ------------------------------------------------------------------ a semente do painel (entra uma vez)
 # (chave, nome no painel, nome no site, linha de baixo, texto, preço "a partir de", ordem). `kind='sim'` em
@@ -156,7 +156,7 @@ PAGINA = {
          ("Yes. Book one hourly session, with or without coaching. An individual session does not enroll you in a monthly "
           "subscription. If you decide you want regular training later, you can explore the monthly programs separately.",)),
         ("How long is a session, and where do I go?",
-         (f"Hourly sessions are booked by the hour at URACE, {SITE['endereco']['rua']}, Orlando, FL {SITE['endereco']['cep']}, "
+         (f"Hourly sessions are booked by the hour at URACE, {RUA}, Orlando, FL {SITE['endereco']['cep']}, "
           "inside the Orlando Kart Center. The announced opening date is November 1, 2026. All booking times are local to Orlando. "
           "Monthly program sessions use a different format: two hours with coaching, scheduled according to "
           "availability. The rate of an hourly session is set by its start time: a session that starts at 5 PM on a "

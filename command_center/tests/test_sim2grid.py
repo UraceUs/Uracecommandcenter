@@ -212,7 +212,7 @@ def test_reserva_segura_no_checkout_e_o_pago_vira_reserva_no_card_do_piloto(sim)
     (opp,) = todos(con, "SELECT * FROM opportunities")
     assert (opp["stage"], opp["client_id"], opp["amount"]) == ("GANHO", card, 150)
     conf = next(m for m in _emails(tmp) if m["to"] == "lia@example.com")
-    assert "SIM2GRID" in conf["text"] and "Box 3" in conf["text"] and "6 PM–8 PM" in conf["text"]
+    assert "SIM2GRID" in conf["text"] and "Box 5" in conf["text"] and "6 PM–8 PM" in conf["text"]
     # a waiver do piloto, pelo mesmo caminho da sessão de kart
     enviados = []
     carrinho.seguir_sessoes(con, x["order_id"], enviar_waiver=lambda *a: enviados.append(a) or {"envelopeId": "env-fict-1"})
@@ -261,7 +261,7 @@ def test_pagina_da_lp_com_seo_e_os_precos_do_painel(sim):
     assert '<link rel="canonical" href="https://novo.urace.us/sim2grid-racing-simulator/">' in r.text
     assert f"<title>{SG.PAGINA['titulo']}</title>" in r.text
     for trecho in ("Make time for your ambition.", "You can see the driver. Now see the path.", "Next lap: yours.",
-                   "10724 Cosmonaut Blvd, Box 3", "Regular coaching. Consistent training.", "Starting at $50",
+                   "10724 Cosmonaut Blvd, Box 5", "Regular coaching. Consistent training.", "Starting at $50",
                    "I play racing games. Is SIM2GRID a good next step?", "Monday–Friday · 6 PM–midnight", "$75 / hour",
                    "Saturday–Sunday · 8 AM–midnight", "$90 / hour", "$150 / hour", "3 sessions per week", "$1,800", 'data-online="1"', "sim2grid.js"):
         assert trecho in r.text, trecho
