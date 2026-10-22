@@ -101,7 +101,9 @@ def _preparar(adm, base):
 
 def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
     """O caminho de venda inteiro, com conta fictícia, fotografando passo a passo."""
-    v = br.new_page(viewport={"width": largura, "height": altura},
+    # #394: reduced-motion na foto — a página inteira sai na foto sem esperar a rolagem (as seções que surgem ao rolar
+    # já vêm à mostra) e sem o pulso do "Book now" no meio
+    v = br.new_page(viewport={"width": largura, "height": altura}, reduced_motion="reduce",
                     extra_http_headers={"X-Forwarded-For": quem["ip"]})
     erros = []
     v.on("pageerror", lambda e: erros.append(str(e)))

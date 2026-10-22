@@ -24,7 +24,10 @@
   --texto: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --raio: 10px;
   --dur: 180ms;
+  --dur-surge: 560ms;        /* #394: a seção que surge ao rolar */
+  --dur-pulso: 2400ms;       /* #394: o destaque do "Book now" */
   --curva: cubic-bezier(.2, .8, .2, 1);
+  --condensada: "Roboto Condensed", "Arial Narrow", "Helvetica Neue", var(--texto);   /* #394: os rótulos do menu */
   --largura: 1180px;
   color-scheme: light;
 }
@@ -53,7 +56,8 @@ p { margin: 0 }
   background: var(--vermelho); color: #fff; border: 2px solid var(--vermelho); border-radius: 8px;
   font: 700 .98rem/1.2 var(--texto); text-decoration: none; cursor: pointer;
   transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
-.btn:hover { opacity: .92 }
+/* #394 (as animações do urace.us): o botão sobe 2 px no hover */
+@media (hover: hover) { .btn:hover { transform: translateY(-2px); opacity: .94 } }
 .btn:active { transform: scale(.98) }
 .btn-sm { min-height: 40px; padding: 8px 14px; font-size: .88rem }
 .btn-linha { background: transparent; border-color: rgba(255,255,255,.55) }
@@ -65,30 +69,76 @@ p { margin: 0 }
 .seta::after { content: "→"; margin-left: 8px; transition: transform var(--dur) var(--curva) }
 .seta:hover::after { transform: translateX(3px) }
 
-/* --------------------------------------------------------------- topo */
-.topo { position: sticky; top: 0; z-index: 5; background: #000; color: #fff }
-.topo-in { max-width: var(--largura); margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 12px; min-height: 60px }
-.logo { display: inline-flex; min-height: 40px; align-items: center }
+/* --------------------------------------------------------------- topo (#394: o menu em dropdown da KartSport) */
+/* O fundo escuro é uma camada (::before) que some só por opacidade: sobre a foto do topo a barra fica
+   transparente, e ao rolar ganha o fundo de volta (o `site.js` põe e tira `.sobre-foto`). Sem JS, fundo escuro. */
+.topo { position: sticky; top: 0; z-index: 5; color: #fff; isolation: isolate }
+.topo::before { content: ""; position: absolute; inset: 0; z-index: -1; background: #000; transition: opacity var(--dur) var(--curva) }
+body:has(> main > .hero:first-child) .topo { position: fixed; left: 0; right: 0; background: linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,0)) }
+body:has(> main > .hero:first-child) main > .hero:first-child .hero-in { padding-top: 104px }
+.topo.sobre-foto::before { opacity: 0 }
+.topo:has(.menu-cel[open])::before, .topo:has(.grupo.aberto)::before { opacity: 1 }
+.topo-in { max-width: var(--largura); margin: 0 auto; padding: 8px 16px; display: flex; align-items: center; gap: 8px; min-height: 60px }
+.logo { display: inline-flex; min-height: 40px; align-items: center; margin-right: auto }
 .logo img { width: 104px }
 .menu { display: none }
 .menu ul, .menu-cel ul { list-style: none; margin: 0; padding: 0 }
-.conta { display: none }
-.topo .btn-sm { margin-left: auto }
+.icones { display: flex; align-items: center; gap: 2px }
+.icone { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
+  color: #fff; text-decoration: none; border-radius: 8px; transition: transform var(--dur) var(--curva) }
+@media (hover: hover) { .icone:hover { transform: translateY(-2px) } }
+.icone.conta, .icone.busca { display: none }
 .menu-cel { order: 3 }
-.menu-cel summary { list-style: none; width: 44px; height: 44px; display: grid; place-content: center; gap: 5px; cursor: pointer }
+.menu-cel > summary { list-style: none; width: 44px; height: 44px; display: grid; place-content: center; gap: 5px; cursor: pointer }
 .menu-cel summary::-webkit-details-marker { display: none }
-.menu-cel summary span { width: 22px; height: 2px; background: #fff; display: block }
-.menu-cel[open] nav { position: absolute; left: 0; right: 0; top: 100%; background: #000; border-top: 1px solid var(--linha); padding: 8px 16px 16px }
-.menu-cel nav a { display: flex; align-items: center; min-height: 48px; color: #fff; text-decoration: none; border-bottom: 1px solid var(--linha) }
+.menu-cel > summary span { width: 22px; height: 2px; background: #fff; display: block; transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
+.menu-cel[open] > summary span:nth-child(1) { transform: translateY(7px) rotate(45deg) }
+.menu-cel[open] > summary span:nth-child(2) { opacity: 0 }
+.menu-cel[open] > summary span:nth-child(3) { transform: translateY(-7px) rotate(-45deg) }
+/* celular: o menu em tela cheia, um grupo por linha, cada um abre e fecha no toque */
+.menu-cel[open] .menu-cel-painel { position: fixed; left: 0; right: 0; top: 60px; bottom: 0; overflow-y: auto; overscroll-behavior: contain;
+  background: #000; border-top: 1px solid var(--linha); padding: 8px 16px 32px; animation: menu-desce var(--dur) var(--curva) }
+html:has(.menu-cel[open]) { overflow: hidden }
+.grupo-cel > summary { display: flex; align-items: center; justify-content: space-between; min-height: 56px; cursor: pointer; list-style: none;
+  border-bottom: 1px solid var(--linha); font: 800 1.15rem/1.1 var(--condensada); font-stretch: condensed; text-transform: uppercase; letter-spacing: .02em }
+.grupo-cel > summary svg { transition: transform var(--dur) var(--curva) }
+.grupo-cel[open] > summary svg { transform: rotate(180deg) }
+.grupo-cel ul { padding: 4px 0 8px 12px; animation: menu-desce var(--dur) var(--curva) }
+.menu-cel-painel a { display: flex; align-items: center; min-height: 48px; color: #fff; text-decoration: none; border-bottom: 1px solid var(--linha) }
+.grupo-cel a { color: #cfd0dc; border-bottom: 0 }
+.menu-cel-painel a[aria-current="page"] { color: #fff; box-shadow: inset 3px 0 0 var(--vermelho); padding-left: 10px }
+.menu-cel-link { font-weight: 700 }
+@keyframes menu-desce { from { opacity: 0; transform: translateY(-6px) } to { opacity: 1; transform: none } }
+/* o "Book now": um anel que pulsa de leve, três vezes, e para */
+.btn-reservar { position: relative }
+.btn-reservar::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid var(--vermelho-2); opacity: 0;
+  pointer-events: none }
+/* o `site.js` liga o pulso (na prévia do editor, sem ele, o botão fica parado) */
+.btn-reservar.pulsa::after { animation: reservar-pulso var(--dur-pulso) var(--curva) 1s 3 }
+@keyframes reservar-pulso { 0% { opacity: .7; transform: scale(1) } 70%, 100% { opacity: 0; transform: scale(1.18, 1.35) } }
 @media (min-width: 1000px) {
   .menu { display: block; flex: 1 }
-  .menu ul { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap }
-  .menu a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 10px; color: #cfd0dc; text-decoration: none; font-size: .9rem }
-  .menu a:hover, .menu a[aria-current="page"] { color: #fff }
-  .menu a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--vermelho) }
+  .logo { margin-right: 0 }
+  .menu-grupos { display: flex; gap: 6px; justify-content: center }
+  .grupo { position: relative; display: flex; align-items: center }
+  .grupo-t { display: inline-flex; align-items: center; min-height: 40px; padding: 0 0 0 10px; color: #fff; text-decoration: none;
+    font: 800 .95rem/1 var(--condensada); font-stretch: condensed; text-transform: uppercase; letter-spacing: .02em; white-space: nowrap }
+  .grupo.atual > .grupo-t { box-shadow: inset 0 -2px 0 var(--vermelho) }
+  .grupo-abre { display: inline-grid; place-items: center; width: 30px; min-height: 40px; padding: 0; margin: 0; border: 0; border-radius: 6px;
+    background: none; color: #fff; cursor: pointer }
+  .grupo-abre svg { transition: transform var(--dur) var(--curva) }
+  .grupo.aberto > .grupo-abre svg { transform: rotate(180deg) }
+  /* a caixa branca simples, subitens pequenos e escuros; abre com um fade curto de cima para baixo */
+  .menu .grupo-itens { display: none; position: absolute; top: 100%; left: 0; min-width: 230px; padding: 8px 0; background: #fff;
+    border-radius: 4px; box-shadow: 0 14px 32px rgba(0,0,0,.24) }
+  .grupo.aberto > .grupo-itens { display: block; animation: menu-desce var(--dur) var(--curva) }
+  .menu:not(.menu-js) .grupo:hover > .grupo-itens, .menu:not(.menu-js) .grupo:focus-within > .grupo-itens { display: block }
+  .grupo-itens a { display: flex; align-items: center; min-height: 40px; padding: 0 18px; color: var(--tinta); text-decoration: none;
+    font-size: .9rem; font-weight: 600; white-space: nowrap }
+  .grupo-itens a:hover, .grupo-itens a:focus-visible { background: var(--papel); color: var(--vermelho) }
+  .grupo-itens a[aria-current="page"] { color: var(--vermelho) }
   .menu-cel { display: none }
-  .conta { display: inline-flex; align-items: center; min-height: 40px; color: #fff; text-decoration: none; font-size: .9rem }
-  .topo .btn-sm { margin-left: 0 }
+  .icone.conta, .icone.busca { display: inline-flex }
 }
 
 /* --------------------------------------------------------------- hero */
@@ -240,6 +290,42 @@ address { font-style: normal }
 }
 html { scroll-behavior: smooth; scroll-padding-top: 72px }
 
+/* --------------------------------------------------------------- animações do urace.us (#394) */
+/* Só transform e opacity, com os tokens de duração. A sombra do cartão é uma camada (::after) que acende por
+   opacidade; ela fica por cima do cartão, mas uma sombra de fora não pinta dentro da caixa, então nada some. */
+.card-servico, .cartao, .servico-card, .post-card a, .produto-card a { position: relative; transition: transform var(--dur) var(--curva) }
+.card-servico::after, .cartao::after, .servico-card::after, .post-card a::after, .produto-card a::after { content: ""; position: absolute;
+  inset: 0; border-radius: inherit; box-shadow: 0 16px 34px rgba(0,0,0,.2); opacity: 0; pointer-events: none;
+  transition: opacity var(--dur) var(--curva) }
+@media (hover: hover) {
+  .card-servico:hover, .cartao:hover, .servico-card:hover, .post-card a:hover, .produto-card a:hover { transform: translateY(-4px) }
+  .card-servico:hover::after, .cartao:hover::after, .servico-card:hover::after, .post-card a:hover::after, .produto-card a:hover::after { opacity: 1 }
+}
+.servico-card img, .post-card img, .produto-card img, .produto-card .sem-foto { border-radius: var(--raio) var(--raio) 0 0 }
+/* a seção surge ao rolar, uma vez: o `site.js` só marca `.surge` na seção que está abaixo da tela e tem
+   IntersectionObserver; sem JS (ou com reduced-motion) nada é escondido */
+.surge { opacity: 0; transform: translateY(24px) }
+.surge.visto { opacity: 1; transform: none; transition: opacity var(--dur-surge) var(--curva), transform var(--dur-surge) var(--curva) }
+/* o carrossel dos campeões: no celular, uma fileira que se arrasta (scroll-snap) com setas; no computador, os quatro lado a lado */
+.carrossel-setas { display: none; gap: 8px; justify-content: flex-end }
+.carrossel-seta { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--linha); border-radius: 999px;
+  background: var(--preto-2); color: #fff; font-size: 1.2rem; cursor: pointer; transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
+.carrossel-seta:disabled { opacity: .35; cursor: default }
+@media (hover: hover) { .carrossel-seta:not(:disabled):hover { transform: translateY(-2px) } }
+@media (max-width: 859px) {
+  .campeoes { min-width: 0; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 78%; overflow-x: auto; scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain; scrollbar-width: none; -webkit-overflow-scrolling: touch }
+  .campeoes::-webkit-scrollbar { display: none }
+  .campeoes figure { scroll-snap-align: start }
+  .carrossel-setas.pronto { display: flex }
+}
+@media (prefers-reduced-motion: reduce) {
+  .surge { opacity: 1; transform: none }
+  .btn:hover, .icone:hover, .carrossel-seta:hover, .card-servico:hover, .cartao:hover, .servico-card:hover, .post-card a:hover,
+  .produto-card a:hover { transform: none }
+  .btn-reservar::after { display: none }
+}
+
 /* --------------------------------------------------------------- o resto do site (#164) */
 .muted { color: var(--cinza) }
 .escura .muted, .vermelha .muted { color: #e6e6ee }
@@ -295,9 +381,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 
 /* hub de serviços, dias do camp, etapas e degraus */
 .servicos-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px }
-.servico-card { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); overflow: hidden; text-decoration: none; color: inherit;
+.servico-card { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); text-decoration: none; color: inherit;
   transition: transform var(--dur) var(--curva) }
-.servico-card:hover { transform: translateY(-2px) }
 .servico-card img { width: 100%; aspect-ratio: 640 / 400; object-fit: cover }
 .servico-txt { display: grid; gap: 6px; padding: 16px; align-content: start }
 .servico-txt strong { font: 800 1.05rem/1.2 var(--titulo); font-stretch: 125% }
@@ -334,10 +419,9 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 
 /* blog */
 .posts-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px }
-.post-card a { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); overflow: hidden; text-decoration: none; color: inherit; height: 100%;
+.post-card a { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); text-decoration: none; color: inherit; height: 100%;
   transition: transform var(--dur) var(--curva) }
 .escura .post-card a { background: var(--preto-2); border: 1px solid var(--linha) }
-.post-card a:hover { transform: translateY(-2px) }
 .post-card img { width: 100%; aspect-ratio: 640 / 400; object-fit: cover }
 .post-txt { display: grid; gap: 6px; padding: 16px; align-content: start }
 .post-txt small { color: var(--cinza); font-weight: 600 }
@@ -361,9 +445,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 /* loja */
 .produtos-grade { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
 @media (min-width: 700px) { .produtos-grade { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) } }
-.produto-card a { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); overflow: hidden; text-decoration: none; color: inherit; height: 100%;
+.produto-card a { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); text-decoration: none; color: inherit; height: 100%;
   transition: transform var(--dur) var(--curva) }
-.produto-card a:hover { transform: translateY(-2px) }
 .produto-card img, .sem-foto { width: 100%; aspect-ratio: 1; object-fit: contain; background: #fff }
 .sem-foto { display: grid; place-content: center; color: #d6d6de; font: 800 1.2rem var(--titulo); font-stretch: 125% }
 .produto-txt { display: grid; gap: 4px; padding: 12px; align-content: start }
@@ -430,12 +513,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .contato-lado p { margin: 0 }
 
 /* --------------------------------------------------------------- carrinho (#236) */
-.carrinho-topo { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px;
-  margin-left: auto; color: #fff; text-decoration: none; border-radius: 8px }
-.carrinho-topo + .btn-sm { margin-left: 0 }
 .carrinho-n { position: absolute; top: 2px; right: 0; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
   background: var(--vermelho); color: #fff; font: 700 .72rem/20px var(--texto); text-align: center }
-@media (min-width: 1000px) { .carrinho-topo { margin-left: 0 } }
 .comprar-acoes { display: flex; flex-wrap: wrap; gap: 10px }
 .carrinho-ok:empty { display: none }
 .carrinho-ok { font-weight: 600; color: var(--ok) }
