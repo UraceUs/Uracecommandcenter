@@ -1,9 +1,8 @@
 """WhatsApp dos grupos do ateliê (#383) — as rotas. As regras moram em `providers/atelie_whatsapp.py`.
 
 - `POST /whatsapp/entrada`: só o plugin `urace-atelie` do OpenClaw, na mesma máquina. Vale com as três
-  coisas juntas: pedido de 127.0.0.1 (o uvicorn troca pelo IP real quando vem pelo Caddy), sem cabeçalho de
-  proxy (X-Forwarded-For) e com o segredo `WA_GRUPOS_TOKEN` de ~/.urace/whatsapp-grupos.env. Nada do corpo
-  vai para o log.
+  coisas juntas: o IP real (`auth._ip`, #120) é a própria máquina — pelo Caddy, ele é o de quem pediu lá fora —,
+  e o segredo `WA_GRUPOS_TOKEN` de ~/.urace/whatsapp-grupos.env confere. Nada do corpo vai para o log.
 - O resto é a tela: ver, aprovar/descartar rascunho, ligar mensagem ao pedido, foto do suit, endereço e rastreio
   (OPERATOR, como o resto da aba Suits).
 """
@@ -33,8 +32,7 @@ def _aud(con, request, u, evento, eid, detalhe=None, tipo="suit_order"):
 # ------------------------------------------------------------------ entrada (o plugin do OpenClaw)
 @r.post("/whatsapp/entrada")
 async def entrada(request: Request, con: sqlite3.Connection = Depends(get_db)):
-    host = request.client.host if request.client else ""
-    if host not in LOCAIS or request.headers.get("x-forwarded-for") or request.headers.get("x-real-ip") or request.headers.get("forwarded"):
+    if auth._ip(request) not in LOCAIS:                # vindo pelo Caddy, é o IP de fora: recusa
         raise HTTPException(403, "só da própria máquina")
     cfg = wa.config()
     chave = request.headers.get("x-urace-atelie-token", "")
