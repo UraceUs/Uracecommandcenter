@@ -830,6 +830,32 @@ def _cartoes_das_paginas():
                            strftime('%Y-%m-%dT%H:%M:%fZ','now'))""")
 
 
+# #390 (dono, 22/10: *"o texto maior seja sempre o valor do mes nao o total pois o total pode assustar os
+# clientes"*): os cartões de contrato da Academy já gravados com o total passam à parcela do mês. Só o cartão que
+# ainda tem o valor de fábrica: preço, "por" e texto mudam cada um só se ainda forem os originais.
+ACADEMY_TOTAL_PARA_MES = (
+    # (seed_key, total antigo, valor de entrada, %, parcelas, parcela, valor cheio)
+    ("academy:0:1", "$17,858.88", "$5,893.43", "33%", 5, "$2,393.09", "$18,603.00"),
+    ("academy:0:2", "$34,229.52", "$6,845.90", "20%", 11, "$2,489.42", "$37,206.00"),
+    ("academy:1:1", "$20,450.88", "$6,748.79", "33%", 5, "$2,740.42", "$21,303.00"),
+    ("academy:1:2", "$39,197.52", "$7,839.50", "20%", 11, "$2,850.73", "$42,606.00"),
+)
+
+
+def _academy_valor_do_mes():
+    for chave, total, sinal, pct, n, parcela, cheio in ACADEMY_TOTAL_PARA_MES:
+        antigo = (f"Regular value {cheio}. {sinal} at signing ({pct}), then {n} monthly installments of {parcela}. "
+                  "Recurring billing.")
+        novo = (f"{sinal} at signing ({pct}), then {n} monthly installments of {parcela}. Contract total {total} "
+                f"(regular value {cheio}). Recurring billing.")
+        economia = float(cheio.strip("$").replace(",", "")) - float(total.strip("$").replace(",", ""))
+        desconto = "4%" if n == 5 else "8%"
+        por = f"per month · contract total {total} · you save ${economia:,.2f} ({desconto} off)"
+        yield (f"UPDATE site_offers SET price='{parcela}', per='{por}' "
+               f"WHERE seed_key='{chave}' AND price='{total}' AND COALESCE(per,'')='contract total'")
+        yield f"UPDATE site_offers SET body='{novo}' WHERE seed_key='{chave}' AND body='{antigo}'"
+
+
 # ------------------------------------------------------------ o Lead and Follow do site (#279)
 # Dono, 15/10: "o lead and follow é um add on que pode ser adicionado no dia de treino seja arrive and drive ou
 # no academy … somente o de 769 por dia de treino". Nasce como serviço do painel de tipo 'addon', ligado pela
@@ -935,6 +961,7 @@ POS_MIGRACAO = [
     *_servico_do_lead_and_follow(),
     *_cartoes_dos_karts(),
     *_cartoes_das_paginas(),
+    *_academy_valor_do_mes(),     # #390: depois da semente, para o cartão recém-criado já nascer certo
     # #317: a caixa "Security deposit obrigatório" nasce marcada em toda sessão que já cobra depósito (os karts do
     # site, com US$ 400). Só toca quem ainda não decidiu (NULL): o que o gerente desmarcar continua desmarcado.
     """UPDATE booking_services SET deposit_required =

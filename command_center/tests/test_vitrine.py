@@ -427,8 +427,32 @@ def test_planos_da_academy_batem_com_a_conta_da_planilha():
             sinal = round(total * entrada, 2)
             parcela = round((total - sinal) / parcelas, 2)
             texto, preco = cards[nome]
-            assert preco == usd(total), (titulo, nome)
-            assert usd(n * sessao) in texto and usd(sinal) in texto and usd(parcela) in texto, (titulo, nome, texto)
+            # #390: o número grande é a parcela do mês; o total fica no texto
+            assert preco == usd(parcela), (titulo, nome)
+            assert usd(n * sessao) in texto and usd(sinal) in texto and usd(total) in texto, (titulo, nome, texto)
+            por = next(p for nm, _, _, _, p in grupos[titulo] if nm == nome)
+            assert por == f"per month · contract total {usd(total)} · you save {usd(n * sessao - total)} ({round(desc * 100)}% off)"
+    for _, cards in grupos.items():
+        assert all(por.startswith("per month") for *_, por in cards), "todo cartão da Academy mostra o valor do mês"
+
+
+def test_cartao_de_contrato_ja_gravado_passa_ao_valor_do_mes_sem_mexer_no_editado(tmp_path, monkeypatch):
+    """#390: o banco que já tinha os cartões com o total troca para a parcela; o que alguém editou fica."""
+    from command_center.db import aplicar_schema, conectar
+    monkeypatch.setenv("CC_DB_PATH", str(tmp_path / "cc.sqlite"))
+    monkeypatch.setenv("URACE_DIR", str(tmp_path / "urace"))
+    con = conectar()
+    aplicar_schema(con)
+    antigo = "Regular value $18,603.00. $5,893.43 at signing (33%), then 5 monthly installments of $2,393.09. Recurring billing."
+    con.execute("UPDATE site_offers SET price='$17,858.88', per='contract total', body=? WHERE seed_key='academy:0:1'", (antigo,))
+    con.execute("UPDATE site_offers SET price='$9,999', per='contract total' WHERE seed_key='academy:0:2'")   # editado
+    con.commit()
+    aplicar_schema(con)
+    a = con.execute("SELECT price, per, body FROM site_offers WHERE seed_key='academy:0:1'").fetchone()
+    assert (a["price"], a["per"]) == ("$2,393.09", "per month · contract total $17,858.88 · you save $744.12 (4% off)")
+    assert "Contract total $17,858.88" in a["body"] and "$5,893.43 at signing" in a["body"]
+    b = con.execute("SELECT price, per FROM site_offers WHERE seed_key='academy:0:2'").fetchone()
+    assert (b["price"], b["per"]) == ("$9,999", "contract total"), "o que foi editado no painel não muda"
 
 
 def _enderecos_do_urace_us():
