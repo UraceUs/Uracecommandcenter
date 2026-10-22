@@ -32,22 +32,22 @@ Antes de enviar: a política de privacidade com a seção de SMS (seção 8 de
 > Consumers start the conversation by texting our business number, which is published on our website urace.us.
 > Their first message is their consent to
 > receive replies about that conversation; we only reply to people who texted us first. Message frequency varies with
-> the conversation. Message and data rates may apply. Reply STOP to opt out, HELP for help. Privacy policy (section 8,
+> the conversation. Message and data rates may apply. Reply STOP to opt out, UNSTOP to opt back in, HELP for help. Privacy policy (section 8,
 > Text messages): https://ops.urace.us/legal/privacy.html
 
 **Mensagens de exemplo**
 
-1. `Hi! This is Chase from URACE, the karting school in Orlando. Is the racing for you or for someone else, and how old is the driver?`
+1. `Hi! This is Chase from URACE, the karting school in Orlando. Is the racing for you or for someone else, and how old is the driver? Reply STOP to opt out.`
 2. `Our Academy is a coached program at Orlando Kart Center. Want the schedule for this week? Reply STOP to opt out.`
 3. `Got it! A team member will call you today to set up the first session.`
 
-**Palavras-chave e respostas** (o Dialpad trata sozinho; conferir se o texto bate)
+**Palavras-chave e respostas** (o Dialpad trata STOP, UNSTOP e HELP sozinho; START não existe no Dialpad)
 
 | Palavra | Resposta |
 |---|---|
-| STOP | `URACE: you're unsubscribed and won't receive more texts. Reply START to resubscribe.` |
+| STOP | `URACE: you're unsubscribed and won't receive more texts. Reply UNSTOP to resubscribe.` |
 | HELP | `URACE: for help call (407) 250-2291 or email support@urace.us. Msg & data rates may apply. Reply STOP to opt out.` |
-| START | `URACE: you're subscribed to replies from URACE. Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out.` |
+| UNSTOP | `URACE: you're subscribed to replies from URACE. Msg frequency varies. Msg & data rates may apply. Reply HELP for help, STOP to opt out.` |
 
 ## Prompt para a extensão logada no Dialpad
 
@@ -62,7 +62,7 @@ NÃO mexa em usuários, números, roteamento ou outras configurações. NÃO cop
    tipo, status e se o Dialpad deixa editar a campanha ou criar outra.
 2. Se der para criar/editar: use a marca existente, caso de uso "Customer Care" (ou "Mixed" se for o único que
    aceita IA/resposta automática), marque que há resposta automática/IA, e preencha descrição, message flow,
-   exemplos e respostas de STOP/HELP/START exatamente com os textos do arquivo
+   exemplos e respostas de STOP/HELP/UNSTOP exatamente com os textos do arquivo
    salesagent/docs/dialpad-10dlc-campanha.md (colados abaixo). Associe só o número (407) 250-2291.
 3. Antes de enviar, abra https://ops.urace.us/legal/privacy.html e confirme que existe a seção "8. Text messages (SMS)".
    Se não existir, PARE e avise.
@@ -74,5 +74,6 @@ NÃO mexa em usuários, números, roteamento ou outras configurações. NÃO cop
 "Palavras-chave e respostas"]
 ```
 
-Depois da aprovação: a campanha antiga sai do número quando a nova estiver ativa (o Dialpad faz a troca; não apagar
-antes).
+Caminho escolhido (22/10): campanha **nova**, sem editar a CKO11QL. Depois da aprovação (cerca de 3 semanas), pedir ao
+suporte do Dialpad para mover só o (407) 250-2291 para ela; os outros dois números ficam na CKO11QL. Trocar a campanha
+de um número só o suporte faz. O número está no site: rodapé e páginas de urace.us (`command_center/vitrine/conteudo.py`).
