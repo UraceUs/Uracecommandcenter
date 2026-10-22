@@ -80,9 +80,10 @@ cancelado. A mudança fora da tabela é recusada com o motivo, venha da tela, da
 - O designer nunca recebe nome completo, e-mail, telefone, endereço, valor ou pagamento do
   cliente; arquivo que contenha qualquer um deles não sai.
 
-**Limpeza que não deixa passar** (revisão do Mio). Só PNG, JPG, WEBP e PDF saem, sem metadados.
-Tipo que o painel não limpa (AI, EPS, SVG, HEIC…) ou limpeza que falha: o arquivo **não sai**,
-nos dois sentidos (cliente e designer). Peça o arquivo exportado.
+**Limpeza que não deixa passar** (revisão do Mio). Ao cliente só saem PNG, JPG, WEBP e PDF, sem metadados.
+**AI, EPS e SVG** (dono, 22/10: *"deixa entrar pelo email tb"*) entram pelo e-mail e vão ao designer, sem os
+metadados (comentários, título e autor) e sem e-mail, telefone, endereço ou nome do cliente; ao cliente, não.
+Outro tipo (HEIC…) ou limpeza que falha: o arquivo **não sai**. Peça o arquivo exportado.
 
 **E-mail ligado sem adivinhar** (revisão do Mio). Um e-mail só entra num pedido quando a conversa
 é dele, ou quando o remetente bate com **um único** pedido aberto. Casou com mais de um (o cliente

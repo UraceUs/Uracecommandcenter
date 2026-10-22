@@ -302,13 +302,33 @@ def limpar_para_cliente(arquivos, cfg):
     return saida
 
 
+VETORES = {".ai": "application/postscript", ".eps": "application/postscript", ".svg": "image/svg+xml"}
+
+
+def _vetor_sem_metadados(nome, dados):
+    """Dono, 22/10 (#382): AI, EPS e SVG (logo do cliente, arte do designer) entram pelo e-mail e vão ao designer;
+    ao cliente continua só PNG, JPG, WEBP ou PDF. Do SVG saem <metadata>, <title>, <desc> e comentários; do AI e
+    do EPS saem as linhas %%For, %%Creator, %%Title e %%Author do cabeçalho. O resto do arquivo vai como está e
+    passa pela mesma busca de e-mail, telefone, endereço e nome do cliente."""
+    ext = os.path.splitext(nome)[1].lower()
+    if ext == ".svg":
+        t = dados.decode("utf-8", "replace")
+        t = re.sub(r"<!--.*?-->", "", t, flags=re.S)
+        t = re.sub(r"<(metadata|title|desc)\b[^>]*>.*?</\1\s*>|<(metadata|title|desc)\b[^>]*/>", "", t, flags=re.S | re.I)
+        return t.encode("utf-8")
+    return re.sub(rb"(?m)^%%(?:For|Creator|Title|Author|CreationDate):[^\r\n]*[\r\n]*", b"", dados)
+
+
 def limpar_para_designer(arquivos, pedido):
     """#382 (C): o que vai ao designer sai sem metadados, e o arquivo que ainda contenha o e-mail, o telefone, o
     endereço ou o nome completo do cliente não sai. O nome do arquivo com o nome ou o e-mail do cliente é trocado."""
     marcas, digitos = _marcas_do_cliente(pedido)
     saida = []
     for i, (nome, dados, mime) in enumerate(arquivos, 1):
-        dados = _sem_metadados(nome, dados, mime)
+        if os.path.splitext(nome)[1].lower() in VETORES:
+            dados = _vetor_sem_metadados(nome, dados)
+        else:
+            dados = _sem_metadados(nome, dados, mime)
         nome_baixo = _sem_acento(re.sub(r"[_\-.]+", " ", nome.lower()))
         if any(_sem_acento(m) in nome_baixo or m in nome.lower() for _, m in marcas):
             nome = f"Suits-{pedido['id']}-ref-{i}{os.path.splitext(nome)[1].lower()}"

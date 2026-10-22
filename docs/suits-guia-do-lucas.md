@@ -234,8 +234,9 @@ ou o fornecedor **daquele** pedido.
   designer"), com o texto e os anexos já limpos. OPERATOR ou acima confere e clica **Enviar ao designer**. Vale mesmo
   com o envio automático ligado.
 - **Boas-vindas só com o manual.** Sem o PDF do manual de medidas carregado, as boas-vindas não saem.
-- **Arquivo que não se limpa não sai.** Só PNG, JPG, WEBP e PDF, sem metadados. AI, EPS, SVG ou limpeza que falha:
-  bloqueia e avisa, para o cliente e para o designer.
+- **Arquivo que não se limpa não sai.** Ao cliente, só PNG, JPG, WEBP e PDF, sem metadados. AI, EPS e SVG entram
+  pelo e-mail e vão ao designer (dono, 22/10), sem os metadados e sem dado do cliente; ao cliente, não. Limpeza que
+  falha ou outro tipo (HEIC…): bloqueia e avisa.
 - **Sem adivinhar o pedido.** E-mail que casa com mais de um pedido aberto (o mesmo cliente com dois pedidos, o
   assunto do fornecedor que serve para dois) não entra em nenhum: vira "Precisa de alguém da equipe".
 - **Sem repetir.** O mesmo e-mail (mesmo pedido, papel, assunto, corpo e anexos) não sai duas vezes; se o servidor

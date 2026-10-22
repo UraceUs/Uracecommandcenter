@@ -317,8 +317,24 @@ def test_limpar_para_designer_tira_metadados_e_recusa_dado_do_cliente(con):
     w = io.BytesIO(); pw.write(w)
     with pytest.raises(sp.Recusado, match="e-mail do cliente"):
         sp.limpar_para_designer([("ficha.pdf", w.getvalue(), "application/pdf")], p)
-    with pytest.raises(sp.Recusado, match="não sai"):
+    with pytest.raises(sp.Recusado, match="e-mail do cliente"):
         sp.limpar_para_designer([("logo.ai", b"%!PS dario@example.com", "application/postscript")], p)
+
+
+def test_vetor_ai_eps_svg_vai_ao_designer_sem_metadados(con):
+    """Dono, 22/10: AI, EPS e SVG entram pelo e-mail e vão ao designer; ao cliente, não."""
+    pid = _pedido(con)
+    p = dict(um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,)))
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg"><!-- feito por Dario Fictício --><title>Dario Fictício</title>'
+           '<metadata>dario@example.com</metadata><rect width="10" height="10"/></svg>').encode()
+    (nome, dados, _), = sp.limpar_para_designer([("logo.svg", svg, "image/svg+xml")], p)
+    assert nome == "logo.svg" and b"<rect" in dados
+    assert "Fictício".encode() not in dados and b"dario@" not in dados
+    eps = b"%!PS-Adobe-3.0 EPSF-3.0\n%%For: dario@example.com\n%%Creator: Dario Fict\xc3\xadcio\nnewpath 0 0 moveto\n"
+    (_, dados, _), = sp.limpar_para_designer([("logo.eps", eps, "application/postscript")], p)
+    assert dados.startswith(b"%!PS") and b"moveto" in dados and b"dario@" not in dados
+    (_, dados, _), = sp.limpar_para_designer([("logo.ai", eps, "application/postscript")], p)
+    assert b"dario@" not in dados
 
 
 def test_guardas_do_designer_recusam_valor_e_endereco_em_qualquer_linha(con):
