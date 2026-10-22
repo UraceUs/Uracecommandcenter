@@ -47,8 +47,9 @@ _TZ = zoneinfo.ZoneInfo(BUSINESS_TZ)
 # Ofertas de cadência por trilha, em segundos a partir do envio anterior.
 # Cadência do SDR (dono, 14/10): o lead parou de responder ->
 #   1º toque em ~1h30: sugerir a call de 15 min com o nosso time (link);
-#   2º toque 23 h depois da nossa mensagem: reativar ("seguimos à disposição,
-#   ficou alguma dúvida?"). Os dois cabem na janela de 24 h da Meta.
+#   2º toque 23 h depois da nossa mensagem: reativar com um dado útil e a saída fácil ("se não fizer mais
+#   sentido, me fala que eu paro"), sem repetir a pergunta ignorada (comercial, 22/10). Os dois cabem na
+#   janela de 24 h da Meta.
 # Depois disso a janela fecha: vira tarefa para uma pessoa, sem fechar o card.
 PRIMEIRO_TOQUE_S = 90 * 60
 SEGUNDO_TOQUE_APOS_S = 23 * 3600

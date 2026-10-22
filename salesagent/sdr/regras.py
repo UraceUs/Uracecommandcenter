@@ -482,7 +482,7 @@ NUNCA_DIZER = [
 
 # ---------------------------------------------------------------- cadência
 # Cadência do robô (14/10, o dono): ~1h30 sem resposta -> call com o time;
-# 23 h depois -> reativação; e para (janela de 24 h da Meta). Quem executa é o
+# 23 h depois -> reativação útil com a saída fácil (22/10); e para (janela de 24 h da Meta). Quem executa é o
 # scheduler da ponte (TRACKS); isto aqui é a referência em minutos.
 ADIAR_RETOMADA_DIAS = 7   # a tarefa para a pessoa retomar quem disse "agora não"
 FOLLOW_UP_MINUTOS = [90, 1290]
