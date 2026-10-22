@@ -150,6 +150,28 @@ def test_envio_automatico_ligado_sai_sozinho_mas_nao_com_a_ia_desligada(con, tmp
         wa.propor(con, pid, "design", "outra")
 
 
+def test_anexo_ao_designer_passa_pela_limpeza_da_ponte(con, tmp_path, monkeypatch):
+    """#382: o que vai ao designer pelo grupo usa a mesma `limpar_para_designer` do e-mail."""
+    _env(tmp_path, aplicar=1)
+    pid = _pedido(con)
+    sp.guardar_anexo(pid, "logo.svg", b"<svg><metadata>autor</metadata></svg>")
+    chamadas = []
+
+    def limpar(arquivos, pedido):
+        chamadas.append((pedido["id"], [a[0] for a in arquivos]))
+        if pedido.get("customer_email"):
+            raise sp.Recusado("o arquivo logo.svg contém o e-mail do cliente")
+        return arquivos
+    monkeypatch.setattr(sp, "limpar_para_designer", limpar, raising=False)
+    sid = wa.propor(con, pid, "design", "logo em anexo", ["logo.svg"])["rascunho"]
+    with pytest.raises(wa.Recusado, match="e-mail do cliente"):
+        wa.aprovar(con, sid, 1)
+    assert chamadas == [(pid, ["logo.svg"])] and _enviados(tmp_path) == []
+    con.execute("UPDATE suit_orders SET customer_email=NULL WHERE id=?", (pid,))
+    wa.aprovar(con, sid, 1)
+    assert _enviados(tmp_path)[-1]["media"] == ["logo.svg"]
+
+
 def test_simulacao_da_ponte_vira_nota(con, tmp_path):
     pid = _pedido(con)
     marca = sp.SIMULAR.set(True)

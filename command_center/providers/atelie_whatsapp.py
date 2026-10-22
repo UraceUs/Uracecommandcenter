@@ -346,22 +346,34 @@ def enviar_cli(jid, texto, caminhos=(), conta=None):
     return _message_id(dados)
 
 
-def _arquivos(pid, nomes):
-    """Os anexos saem da pasta do pedido, sem metadados (EXIF, autor) — cópia temporária para o envio."""
+def _arquivos(pedido, papel, nomes):
+    """Os anexos saem da pasta do pedido por uma cópia temporária, limpos pela MESMA regra do e-mail: ao designer,
+    `limpar_para_designer` da ponte (#382: sem metadados, AI/EPS/SVG pelo `_vetor_sem_metadados`, e o arquivo com
+    dado do cliente não sai); ao fornecedor, sem metadados (`_sem_metadados`)."""
+    import mimetypes
     sp = _ponte()
-    tmp = os.path.join(_urace_dir(), "atelie", "envio", f"{pid}-{datetime.now().strftime('%H%M%S%f')}")
-    caminhos = []
+    pid = pedido["id"]
+    arquivos = []
     for nome in nomes or []:
         nome = os.path.basename(nome)
         origem = os.path.join(sp.pasta(pid), nome)
         if not os.path.isfile(origem):
             raise Recusado(f"anexo não encontrado no pedido: {nome}")
         with open(origem, "rb") as f:
-            dados = f.read()
-        import mimetypes
-        dados = sp._sem_metadados(nome, dados, mimetypes.guess_type(nome)[0] or "application/octet-stream")
+            arquivos.append((nome, f.read(), mimetypes.guess_type(nome)[0] or "application/octet-stream"))
+    limpar = getattr(sp, "limpar_para_designer", None)
+    try:
+        if papel == "design" and limpar:
+            arquivos = limpar(arquivos, pedido)
+        else:
+            arquivos = [(n, sp._sem_metadados(n, d, m), m) for n, d, m in arquivos]
+    except sp.Recusado as e:
+        raise Recusado(str(e))
+    tmp = os.path.join(_urace_dir(), "atelie", "envio", f"{pid}-{datetime.now().strftime('%H%M%S%f')}")
+    caminhos = []
+    for nome, dados, _ in arquivos:
         os.makedirs(tmp, exist_ok=True)
-        destino = os.path.join(tmp, nome)
+        destino = os.path.join(tmp, os.path.basename(nome))
         with open(destino, "wb") as f:
             f.write(dados)
         caminhos.append(destino)
@@ -446,7 +458,7 @@ def aprovar(con, sid, user_id=None, texto=None):
         raise Recusado(f"o {PAPEIS.get(s['papel'], s['papel'])} não está configurado")
     if not cfg["aplicar"]:
         raise Recusado("o WhatsApp dos grupos ainda está em simulação (WA_GRUPOS_APLICAR=1 no ~/.urace/whatsapp-grupos.env)")
-    tmp, caminhos = _arquivos(pedido["id"], json.loads(s["anexos"] or "[]"))
+    tmp, caminhos = _arquivos(pedido, s["papel"], json.loads(s["anexos"] or "[]"))
     try:
         msg_id = enviar_cli(g["jid"], corpo, caminhos, cfg["conta"])
     except Recusado as e:
