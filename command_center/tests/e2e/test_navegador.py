@@ -1872,6 +1872,100 @@ def test_site_novo_404_com_saida_no_celular(servidor, navegador, largura):
     pg.close()
 
 
+_ALVOS_DO_TOPO = """(sel) => [...document.querySelectorAll(sel)]
+    .filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' })
+    .map(e => [Math.round(e.getBoundingClientRect().height), (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 24)])
+    .filter(([h]) => h < 40)"""
+
+
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_site_menu_em_dropdown_abre_e_fecha_no_celular_e_no_computador(servidor, navegador, largura):
+    """#394: o menu da KartSport. No computador, o ⌄ abre no clique, no teclado e no hover; Esc e o clique fora
+    fecham; sobre a foto do topo a barra é transparente e ao rolar ganha o fundo. No celular, o menu de tela cheia
+    abre os grupos no toque. Sem rolagem lateral e com alvo de toque ≥ 40 px nas três larguras."""
+    site = servidor.removesuffix("/ops")
+    toque = largura < 1000
+    ctx = navegador.new_context(viewport={"width": largura, "height": 800}, has_touch=toque, is_mobile=toque)
+    pg = ctx.new_page()
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.goto(site + "/"); pg.wait_for_load_state("networkidle")
+    topo = pg.locator("header.topo")
+    assert "sobre-foto" in topo.get_attribute("class"), "sobre a foto do topo, a barra é transparente"
+    if not toque:
+        botao = pg.get_by_role("button", name="Store: more links")
+        caixa = pg.locator("#menu-store")
+        assert botao.get_attribute("aria-expanded") == "false" and not caixa.is_visible()
+        botao.click()
+        caixa.get_by_role("link", name="Engines").wait_for()
+        assert botao.get_attribute("aria-expanded") == "true"
+        pg.keyboard.press("Escape")
+        caixa.wait_for(state="hidden")
+        assert botao.get_attribute("aria-expanded") == "false"
+        assert pg.evaluate("document.activeElement.getAttribute('aria-label')") == "Store: more links", "Esc devolve o foco"
+        pg.keyboard.press("Enter")                                   # teclado: Enter no botão abre
+        caixa.wait_for()
+        pg.keyboard.press("Space")                                   # e Espaço fecha
+        caixa.wait_for(state="hidden")
+        pg.locator(".grupo-t", has_text="About").hover()             # hover abre (com o atraso curto)
+        pg.locator("#menu-about").get_by_role("link", name="Contact us").wait_for()
+        pg.locator("#menu-about").get_by_role("link", name="Blog").hover()        # a caixa fica aberta no caminho
+        assert pg.locator("#menu-about").is_visible()
+        pg.mouse.move(640, 600)
+        pg.mouse.click(8, 600)                                       # clique fora fecha
+        pg.locator("#menu-about").wait_for(state="hidden")
+        assert pg.locator(".menu-cel").is_hidden()
+        problemas = pg.evaluate(_ALVOS_DO_TOPO, "header.topo a, header.topo button")
+    else:
+        assert pg.locator("nav.menu").is_hidden()
+        pg.locator(".menu-cel > summary").click()
+        painel = pg.locator(".menu-cel-painel")
+        painel.wait_for()
+        caixa = painel.locator("details.grupo-cel", has_text="Store")
+        caixa.locator("summary").click()
+        caixa.get_by_role("link", name="Engines").wait_for()
+        r = pg.evaluate(_VAZA)
+        assert not r["rola"] and not r["culpados"], r
+        problemas = pg.evaluate(_ALVOS_DO_TOPO, "header.topo a, header.topo summary")
+        caixa.locator("summary").click()
+        caixa.get_by_role("link", name="Engines").wait_for(state="hidden")
+        pg.keyboard.press("Escape")                                  # Esc fecha o menu de tela cheia
+        painel.wait_for(state="hidden")
+    assert not problemas, f"alvo de toque < 40 px: {problemas}"
+    pg.mouse.wheel(0, 900)
+    pg.wait_for_function("() => !document.querySelector('header.topo').classList.contains('sobre-foto')")
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    ctx.close()
+    assert not erros, erros
+
+
+def test_site_animacoes_surgem_ao_rolar_e_reduced_motion_desliga(servidor, navegador):
+    """#394: a seção abaixo da tela surge ao rolar (uma vez); com prefers-reduced-motion nada fica escondido e
+    nada pulsa. O carrossel dos campeões no celular tem setas e anda."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": 390, "height": 800})
+    pg.goto(site + "/"); pg.wait_for_load_state("networkidle")
+    sec = pg.locator("section[aria-labelledby='h-campeoes']")
+    assert "surge" in sec.get_attribute("class") and "visto" not in sec.get_attribute("class")
+    assert "surge" not in pg.locator("main > section").first.get_attribute("class"), "o topo nunca espera"
+    sec.scroll_into_view_if_needed()
+    pg.wait_for_function("() => document.querySelector(\"section[aria-labelledby='h-campeoes']\").classList.contains('visto')")
+    fila = pg.locator(".campeoes").first
+    antes = fila.evaluate("f => f.scrollLeft")
+    pg.get_by_role("button", name="Next").click()
+    pg.wait_for_function("(a) => document.querySelector('.campeoes').scrollLeft > a", arg=antes)
+    assert pg.get_by_role("button", name="Next").bounding_box()["height"] >= 40
+    pg.close()
+    calmo = navegador.new_page(viewport={"width": 1280, "height": 800}, reduced_motion="reduce")
+    calmo.goto(site + "/"); calmo.wait_for_load_state("networkidle")
+    assert calmo.evaluate("document.querySelectorAll('.surge').length") == 0
+    r = calmo.evaluate("""() => ({ op: [...document.querySelectorAll('main > section')].map(s => getComputedStyle(s).opacity),
+        pulso: getComputedStyle(document.querySelector('.btn-reservar'), '::after').display })""")
+    assert set(r["op"]) == {"1"} and r["pulso"] == "none", r
+    calmo.close()
+
+
 def test_esqueci_a_senha_no_celular_do_link_do_email_ate_entrar(servidor, navegador):
     """#168: quem esqueceu a senha pede o link na tela de entrar, abre o link do e-mail, escolhe a
     senha nova e já entra na conta — tudo no celular."""
@@ -5043,7 +5137,8 @@ def test_editor_canva_arrastar_por_cima_do_cabecalho_preso_cai_no_que_se_ve(serv
     onde = [(sc["id"], k, i) for sc in _rascunho(g, servidor, pid)["itens"] for k, col in enumerate(sc["itens"])
             for i, w in enumerate(col) if w["tipo"] == "botao"]
     assert len(onde) == 1 and onde[0][0] == marca["sec"], (onde, marca)
-    # Computador (reduzido): o cabeçalho tem duas linhas e é a borda de cima; parado em cima dele, a prévia sobe
+    # Computador (reduzido): o cabeçalho é a borda de cima; parado em cima dele, a prévia sobe. #394: o menu em grupos
+    # cabe numa linha só (60 px; antes eram duas, 11 links soltos)
     g.get_by_role("button", name="Computador").click()
     g.wait_for_function("() => document.querySelector('iframe.ed-iframe').contentWindow.innerWidth === 1280")
     g.wait_for_timeout(300)
@@ -5053,7 +5148,7 @@ def test_editor_canva_arrastar_por_cima_do_cabecalho_preso_cai_no_que_se_ve(serv
     quadro = _caixa(g.locator("iframe.ed-iframe"))
     escala = quadro["width"] / 1280
     topo = g.evaluate("document.querySelector('iframe.ed-iframe').contentDocument.querySelector('header.topo').getBoundingClientRect().bottom")
-    assert topo > 80, f"o cabeçalho do computador passa da faixa de 64 px da borda: {topo}"
+    assert topo >= 56, f"o cabeçalho do computador está preso em cima: {topo}"
     sy = "document.querySelector('iframe.ed-iframe').contentWindow.scrollY"
     antes = g.evaluate(sy)
     pal = _caixa(g.locator(".ed-peca", has_text="Botão"))

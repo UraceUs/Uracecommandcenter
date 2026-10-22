@@ -171,7 +171,8 @@ no macacão), `bandeira`, `observacoes`.
 
 1. **Venda no site.** Chega o e-mail "[Urace]: You've got a new order" com um macacão. A ponte
    abre o pedido sozinha (origem `site`, com o número do pedido do site) e a IA manda as
-   boas-vindas.
+   boas-vindas. No site, o cliente chega aos macacões pelo menu **Store ⌄ › Suits** (#394), que
+   abre a categoria *Custom kart suits* da loja.
 2. **E-mail de cliente.** Um e-mail com o marcador **Suits** do Gmail **só vira candidato** quando
    o assunto ou o texto **falam de macacão** (suit, race suit, macacão, mono de karting,
    combinaison…) e o remetente **não é robô** (noreply, cobrança, recibo, newsletter, aviso).

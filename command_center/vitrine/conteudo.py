@@ -51,19 +51,23 @@ SITE = {
 ANTIGO = "https://urace.us"
 # #207: os rótulos do menu do urace.us de 13/10, nos caminhos do site novo. "Events" (um submenu sem
 # página própria) e o "Home" (o logo já leva à home) ficam de fora do topo.
+# #394 (dono, 22/10, o menu da KartSport): quatro grupos que abrem (⌄). O título leva à página do grupo e os
+# subitens ficam na caixa. "Our Services" saiu do topo e segue no rodapé e nas páginas. Na Store, os subitens são
+# categorias da loja (slug, rótulo) e só aparecem as que têm produto (`paginas.grupos_do_menu`).
+SIM2GRID = "/sim2grid-racing-simulator/"          # #392: a página própria do SIM2GRID
 MENU = (
-    ("About URACE", "/about/"),
-    ("Our Services", "/services/"),
-    ("Plan Your Career", "/career/"),
-    ("For Beginners", "/for-beginners/"),
-    ("Sim 2 Grid", "/sim2grid-racing-simulator/"),      # #392: a página própria (a LP)
-    ("Arrive and Drive", "/services/arrive-and-drive/"),
-    ("Academy", "/academy/"),
-    ("Racing Team", "/pro-team/"),
-    ("Store", "/store/"),
-    ("Blog", "/blog/"),
-    ("Contact us", "/contact/"),
+    {"titulo": "URACE Academy", "link": "/academy/",
+     "itens": (("Academy", "/academy/"), ("Racing Team", "/pro-team/"), ("Arrive and Drive", "/services/arrive-and-drive/"))},
+    {"titulo": "For Beginners", "link": "/for-beginners/",
+     "itens": (("Sim 2 Grid", SIM2GRID), ("Plan Your Career", "/career/"))},
+    {"titulo": "Store", "link": "/store/",
+     "loja": (("engines", "Engines"), ("chassis", "Chassis"), ("tires", "Tires"), ("parts", "Parts"),
+              ("official-urace-products", "Apparel"), ("custom-kart-suits", "Suits"))},
+    {"titulo": "About", "link": "/about/",
+     "itens": (("About URACE", "/about/"), ("Blog", "/blog/"), ("Contact us", "/contact/"))},
 )
+# O botão vermelho do topo: a reserva do Arrive and Drive (a mesma dos botões "Book" do site)
+RESERVAR = "/services/arrive-and-drive/#reservar"
 # O rodapé do urace.us de 13/10 ("Navigation"); "Sponsors" não tem página no site novo.
 RODAPE = (
     ("Home", "/"),

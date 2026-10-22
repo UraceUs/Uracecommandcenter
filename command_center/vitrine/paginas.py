@@ -120,27 +120,78 @@ def _ld(dados):
             + "</script>")
 
 
-def _link(rot, href, atual):
+def _link(rot, href, atual, classe=""):
     marca = ' aria-current="page"' if href == atual else ""
-    return f'<a href="{e(href)}"{marca}>{e(rot)}</a>'
+    cls = f' class="{classe}"' if classe else ""
+    return f'<a{cls} href="{e(href)}"{marca}>{e(rot)}</a>'
+
+
+def _categorias_com_produto():
+    """#394: os slugs das categorias da loja que têm produto agora (as mesmas de `/store/<categoria>/`).
+    Categoria vazia não entra no menu: o link levaria a uma página sem nada."""
+    from command_center.vitrine.paginas_site import _categoria, produtos     # paginas_site importa este módulo
+    return {_categoria(p)["slug"] for p in produtos()}
+
+
+def grupos_do_menu():
+    """Os grupos do topo (`C.MENU`) com os subitens prontos: [(título, link, ((rótulo, link), …)), …]."""
+    tem, out = None, []
+    for g in C.MENU:
+        itens = g.get("itens", ())
+        if "loja" in g:
+            tem = _categorias_com_produto() if tem is None else tem
+            itens = tuple((rot, f"/store/{slug}/") for slug, rot in g["loja"] if slug in tem)
+        out.append((g["titulo"], g["link"], tuple(itens)))
+    return out
+
+
+_SVG = '<svg aria-hidden="true" viewBox="0 0 24 24" width="{t}" height="{t}" fill="none" stroke="currentColor" stroke-width="{s}" stroke-linecap="round" stroke-linejoin="round">'
+_CHEVRON = _SVG.format(t=16, s=2.6) + '<path d="m6 9 6 6 6-6"/></svg>'
+_ICONE_CONTA = _SVG.format(t=22, s=2) + '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4.3-6 8-6s6.8 2 8 6"/></svg>'
+_ICONE_BUSCA = _SVG.format(t=22, s=2) + '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>'
+_ICONE_CARRINHO = (_SVG.format(t=22, s=2) + '<path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2"/>'
+                   '<circle cx="9" cy="19" r="1.6" fill="currentColor"/><circle cx="17" cy="19" r="1.6" fill="currentColor"/></svg>')
+BUSCA_LOJA = "/store/#loja-s"                     # o campo de busca que a loja já tem
 
 
 def _cabecalho(atual):
-    itens = "".join(f"<li>{_link(r, h, atual)}</li>" for r, h in C.MENU)
-    return f"""<header class="topo">
+    """#394: o menu em dropdown (o da KartSport que o dono aprovou). No computador, cada grupo tem o título (link
+    para a página do grupo) e o botão ⌄ (`aria-expanded`) que abre a caixa; o `site.js` abre no hover (com um
+    pequeno atraso), no clique e no teclado, e fecha no Esc e no clique fora. Sem JavaScript, a caixa abre no
+    hover e no foco (CSS). No celular, o menu de tela cheia é um `<details>` com um `<details>` por grupo: abre e
+    fecha sem script nenhum."""
+    desk, cel = [], []
+    for tit, link, itens in grupos_do_menu():
+        gid = "menu-" + "-".join(tit.lower().split())
+        no_grupo = atual == link or any(h == atual for _, h in itens)
+        subs = "".join(f"<li>{_link(r, h, atual)}</li>" for r, h in itens)
+        desk.append(f'<li class="grupo{" atual" if no_grupo else ""}" data-grupo>{_link(tit, link, atual, "grupo-t")}'
+                    f'<button type="button" class="grupo-abre" aria-expanded="false" aria-controls="{gid}" '
+                    f'aria-label="{e(tit)}: more links">{_CHEVRON}</button>'
+                    f'<ul class="grupo-itens" id="{gid}">{subs}</ul></li>')
+        # no celular, o título vira o primeiro link do grupo (se não repete um subitem)
+        primeiro = "" if any(h == link for _, h in itens) else f"<li>{_link(tit, link, atual)}</li>"
+        cel.append(f'<li><details class="grupo-cel"{" open" if no_grupo else ""}><summary>{e(tit)}{_CHEVRON}</summary>'
+                   f"<ul>{primeiro}{subs}</ul></details></li>")
+    return f"""<header class="topo" data-topo>
   <a class="pular" href="#conteudo">Skip to content</a>
   <div class="topo-in">
     <a class="logo" href="/" aria-label="URACE home"><img src="{estatico('img/logo.svg')}" alt="URACE" width="120" height="20"></a>
-    <nav class="menu" aria-label="Main">
-      <ul>{itens}</ul>
+    <nav class="menu" aria-label="Main" data-menu>
+      <ul class="menu-grupos">{''.join(desk)}</ul>
     </nav>
     <details class="menu-cel">
       <summary aria-label="Open menu"><span></span><span></span><span></span></summary>
-      <nav aria-label="Main (mobile)"><ul>{itens}<li><a href="{PORTAL}">My account</a></li></ul></nav>
+      <nav class="menu-cel-painel" aria-label="Main (mobile)"><ul>{''.join(cel)}
+        <li><a class="menu-cel-link" href="{PORTAL}">My account</a></li>
+        <li><a class="menu-cel-link" href="{BUSCA_LOJA}">Search the store</a></li></ul></nav>
     </details>
-    <a class="conta" href="{PORTAL}">My account</a>
-    <a class="carrinho-topo" href="/cart/" aria-label="Cart"><svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22"><path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.9a1 1 0 0 0 1-.8L20 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="19" r="1.6" fill="currentColor"/><circle cx="17" cy="19" r="1.6" fill="currentColor"/></svg><span class="carrinho-n" data-carrinho-n hidden></span></a>
-    <a class="btn btn-sm" href="/services/arrive-and-drive/#reservar">Book now</a>
+    <div class="icones">
+      <a class="icone conta" href="{PORTAL}" aria-label="My account">{_ICONE_CONTA}</a>
+      <a class="icone busca" href="{BUSCA_LOJA}" aria-label="Search the store">{_ICONE_BUSCA}</a>
+      <a class="icone carrinho-topo" href="/cart/" aria-label="Cart">{_ICONE_CARRINHO}<span class="carrinho-n" data-carrinho-n hidden></span></a>
+    </div>
+    <a class="btn btn-sm btn-reservar" href="{C.RESERVAR}">Book now</a>
   </div>
 </header>"""
 
@@ -184,10 +235,12 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
     # #236: carrinho.js em toda página (o contador do topo); vem antes, a agenda e a loja usam o que ele expõe
     # #260: medicao.js primeiro (o dataLayer existe antes de todo mundo) e só quando há id no ambiente;
     # campanha.js em toda página, sempre: ele é nosso e não fala com ninguém de fora
-    med = "" if editando else medicao.cabeca(caminho, medicao_eventos)
+    # #394: site.js (o menu em dropdown e as animações) em toda página do site; na prévia do editor não (lá a página
+    # fica parada, sem seção escondida esperando a rolagem; o menu abre pelo CSS)
+    med ="" if editando else medicao.cabeca(caminho, medicao_eventos)
     css_editor = f'<link rel="stylesheet" href="{estatico("editor-previa.css")}">' if editando else ""
     js = "".join(f'<script src="{estatico(s)}" defer></script>'
-                 for s in ((medicao.SCRIPT,) if med else ()) + ("campanha.js", "carrinho.js", *scripts))
+                 for s in ((medicao.SCRIPT,) if med else ()) + ("campanha.js", "carrinho.js", *(() if editando else ("site.js",)), *scripts))
     return f"""<!doctype html>
 <html lang="{"pt-BR" if lang == "pt" else "en"}">
 <head>
