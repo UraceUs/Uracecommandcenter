@@ -4,8 +4,8 @@ area: SUITS
 fonte: humano
 ditado_por: Italo Silveira
 data: 2026-08-28
+atualizado: 2026-10-22
 asana_projeto: "1205661933760052"
-modelo_de_tarefa: "1217959088745716"
 tipo_info: PROCESS
 responsavel: Italo Silveira
 status: ativo
@@ -13,10 +13,14 @@ status: ativo
 
 # Processo — pedido de macacão (SUITS)
 
-[[URACE]] · [[Asana]] · [[Gmail]] · fornecedor atual: [[Usman]] · valores em [[PARAMETROS]]
+[[URACE]] · [[Gmail]] · fornecedor atual: [[Usman]] · valores em [[PARAMETROS]]
 
 O macacão é **100% personalizado**: medidas, design, cores, logos e a
 posição de cada logo são feitos para aquele cliente. Nada é padrão.
+
+O pedido vive na aba **Suits · Alpha Line** do Command Center (desde 08/10, #153). O quadro
+SUITS do Asana foi importado para lá e **não é mais usado** (ver "Histórico", no fim).
+Guia para operar Suits pelo Claude: `docs/suits-guia-do-lucas.md`.
 
 ## 💬 Desde 22/10/2026: os grupos do ateliê no WhatsApp (#383)
 
@@ -29,70 +33,136 @@ de Suits (o mesmo da ponte de e-mail). A saída é o Command Center chamando `op
 - **Design:** o briefing (e os ajustes) vão ao designer pelo grupo, só com o design e "Suits #id". A arte
   que volta cai no pedido certo e vai ao cliente **por e-mail** para aprovação.
 - **Fornecedor:** o pedido de produção continua por **e-mail**. No grupo: cobrar, conferir o suit (fotos),
-  e — **depois de a equipe aprovar o suit no pedido** — o endereço de envio e o pedido do rastreio, que a
+  e — **só com o pedido em `checked`** (a foto do grupo vira a foto de `photos_received` com um clique; a equipe confere) —
+  o endereço de envio (o pedido vai a `address_sent`) e o pedido do rastreio, que a
   IA grava no pedido para a equipe passar ao cliente.
 - **Medidas em PDF e instruções extras:** a IA lê e grava (medidas e "Instruções extras ao fornecedor");
   o e-mail ao fornecedor sai com elas.
 - **Vínculo só com evidência** (resposta à nossa mensagem, "#número", nome do piloto/design de um pedido
   só). Ambíguo → "Precisa de alguém da equipe". Nunca o arquivo de um cliente no pedido de outro.
-- **Mesma chave da ponte:** envio automático desligado = rascunho com "aprovar" de um clique; ligado = sai
+- **Ao designer, sempre rascunho** (o designer passa por uma pessoa, #382); pedido de teste nunca manda.
+- **Ao fornecedor, a mesma chave da ponte:** envio automático desligado = rascunho com "aprovar" de um clique; ligado = sai
   sozinho. Cobrança: no máximo uma por pedido, por grupo e por dia. "IA neste pedido" desligada vale aqui.
 - Configuração em `~/.urace/whatsapp-grupos.env` (fora do repositório); simulação até `WA_GRUPOS_APLICAR=1`.
 
-## 🔁 Desde 08/10/2026: a aba Suits e a ponte de e-mail (#153)
 
-O pedido de macacão vive na aba **Suits · Alpha Line** do Command Center (não mais no
-quadro SUITS do Asana, que foi importado para lá): dez etapas, nota com print em qualquer
-etapa, as 29 medidas em cm/pol, design, leads e fornecedores.
+## O caminho, do contato à entrega (como é desde 22/10, #382)
 
-A **ponte de e-mail** roda o fluxo que o Ítalo montou no ChatGPT (áudio de 08/10):
-venda de macacão no site → a IA agradece, manda o manual de medidas (PDF) e pede o design
-→ o cliente responde → a IA grava medidas e design e passa **só o design** ao designer
-(Matheus), sem nome completo, e-mail, telefone, endereço ou pagamento do cliente → o designer
-pergunta ou entrega a arte → a IA leva ao cliente **sem os dados do designer**. Também lê o
-marcador `Suits` e as respostas do fornecedor.
+Dono, 22/10: *"o envio sera direto ao cliente sem precisar enviar para a urace ... o fornecedor
+nos envia fotos dos suit no whats app conferimos e passamos o endereço para o envio"*.
+
+| # | Etapa (código) | O que acontece | Quem move |
+|---|---|---|---|
+| 1 | Standby (`standby`) | venda no site ou contato: o pedido nasce | IA ou equipe |
+| 2 | Awaiting Measurements (`awaiting_measurements`) | as boas-vindas saíram **com o manual de medidas (PDF)**; esperando as 29 medidas e o design | IA |
+| 3 | Design Pending (`design_pending`) | o designer trabalha (recebe só o design) | IA |
+| 4 | Design Under Client Review (`design_review`) | o cliente revisa; a equipe confere as medidas; a arte final é marcada | IA e equipe |
+| 5 | Approved (`approved`) | **aprovação final escrita do cliente**, válida para a arte e as medidas de agora | IA (pelo e-mail) ou equipe |
+| 6 | Order sent to supplier (`sent_to_supplier`) | pedido de produção ao fornecedor, com a arte final aprovada anexada — **sem endereço** | equipe (rascunho no Gmail) |
+| 7 | Accepted by supplier (`supplier_accepted`) | o fornecedor confirmou | IA ou equipe |
+| 8 | In Production (`in_production`) | produzindo | IA ou equipe |
+| 9 | Photos received (`photos_received`) | o fornecedor mandou as **fotos pelo WhatsApp**; a equipe sobe cada foto como nota com anexo | **só a equipe** |
+| 10 | Checked (`checked`) | a equipe conferiu as fotos e deu o OK (exige foto) | **só a equipe** (OPERATOR ou acima) |
+| 11 | Address sent to supplier (`address_sent`) | o endereço do cliente foi ao **fornecedor** (só depois do OK) | **só a equipe** |
+| 12 | In Transit (`in_transit`) | o fornecedor despachou **direto ao cliente** (exige rastreio) | IA ou equipe |
+| 13 | Delivered (`delivered`) | entregue | IA ou equipe |
+| — | Canceled (`canceled`) | cancelado (reabre em Standby) | equipe |
+
+**Transições**: o painel só aceita as mudanças da tabela `TRANSICOES` (`providers/suits.py`): de
+cada etapa, para a seguinte, para trás quando faz sentido (ex.: aprovado volta para revisão) ou
+para cancelado. Pedido novo nasce antes da aprovação (Standby a Design Under Client Review) ou
+cancelado. A mudança fora da tabela é recusada com o motivo, venha da tela, da nota ou da IA.
+
+## As travas (#382)
+
+**Aprovação final amarrada.** A aprovação escrita do cliente **vale por e-mail** (dono, 22/10).
+- Antes, a arte final é **marcada** (o arquivo da versão a aprovar) e **todas as medidas
+  conferidas** pela equipe. Medida **suspeita** ou não conferida trava a aprovação.
+- A IA manda ao cliente o **e-mail de aprovação final** montado pelo painel: a versão (código
+  curto), a arte final anexada, as medidas e a política (não retornável, não reembolsável).
+- A IA só registra quando o cliente aprova **expressamente essa versão final**, e grava o id do
+  e-mail, o trecho com o "aprovo" e a data. "Gostei" de um mockup ou o "ok" de uma versão
+  anterior **não contam**.
+- A aprovação guarda o hash da arte final e das medidas. **Mudou qualquer uma, ela fica
+  desatualizada** (não some) e o pedido em `approved` volta para revisão.
+- A equipe também registra à mão, na tela do pedido.
+
+**Anexos obrigatórios.**
+- As boas-vindas **não saem sem o manual de medidas** (PDF em Suits › Ponte de e-mail; o topo da
+  aba avisa se falta).
+- O rascunho ao fornecedor sai do **pacote aprovado**: a arte final e as medidas da aprovação,
+  conferidas pelo hash, com a arte já anexada.
+
+**Isolamento por pedido.**
+- Num evento da ponte, a IA só lê e mexe **naquele pedido**. Outro id é recusado, e é proibido
+  trazer dados de outros clientes.
+- A IA da ponte **não** recebe as ferramentas gerais do painel (clientes, Atenção, QuickBooks,
+  Gmail, web); lê só o cérebro e a pasta do pedido.
+- O e-mail **ao designer** passa por uma pessoa: a IA **prepara** (assunto, corpo e anexos já
+  limpos de metadados), e alguém da equipe confere e clica **Enviar ao designer**. Vale mesmo
+  com o envio automático ligado.
+- O designer nunca recebe nome completo, e-mail, telefone, endereço, valor ou pagamento do
+  cliente; arquivo que contenha qualquer um deles não sai.
+
+**Limpeza que não deixa passar** (revisão do Mio). Ao cliente só saem PNG, JPG, WEBP e PDF, sem metadados.
+**AI, EPS e SVG** (dono, 22/10: *"deixa entrar pelo email tb"*) entram pelo e-mail e vão ao designer, sem os
+metadados (comentários, título e autor) e sem e-mail, telefone, endereço ou nome do cliente; ao cliente, não.
+Outro tipo (HEIC…) ou limpeza que falha: o arquivo **não sai**. Peça o arquivo exportado.
+
+**E-mail ligado sem adivinhar** (revisão do Mio). Um e-mail só entra num pedido quando a conversa
+é dele, ou quando o remetente bate com **um único** pedido aberto. Casou com mais de um (o cliente
+com dois pedidos, o assunto do fornecedor que serve para dois, a mesma conversa em dois pedidos):
+não liga a nenhum e vira "Precisa de alguém da equipe".
+
+**Envio sem repetição** (revisão do Mio). Antes de mandar, a ponte grava "enviando" com uma chave
+única (pedido + papel + assunto, corpo e anexos). Já enviado não sai de novo; "enviando" que ficou
+para trás é conferido no Gmail antes de reenviar. O e-mail recebido só conta como lido **depois**
+de tratado: falhou, volta no ciclo seguinte; depois de 3 tentativas, vai para a equipe.
+
+**Pedido de teste e IA desligada desde o início.** O pedido pode nascer com a IA desligada (a
+ponte não age nem um instante) ou marcado como **teste**: o de teste nunca manda e-mail real, em
+papel nenhum (vira nota de simulação), e não entra nas contagens nem na Atenção.
+
+**Saúde da ponte.** Cada pedido mostra a última tentativa, o último sucesso, o último erro, se foi
+simulação ou envio real e a próxima ação esperada. O topo da aba mostra a última rodada (quando,
+quantos eventos, erros) e se a ponte está em simulação.
+
+## A ponte de e-mail (#153)
+
+A ponte roda o fluxo que o Ítalo montou no ChatGPT (áudio de 08/10), a cada 15 minutos:
+venda de macacão no site → a IA agradece, manda o manual de medidas e pede o design → o cliente
+responde → a IA grava medidas e design e **prepara** o briefing ao designer (só o design) → o
+designer pergunta ou entrega a arte → a IA leva ao cliente **sem os dados do designer** → a
+aprovação final, como acima. Também lê o marcador `Suits` e as respostas do fornecedor.
 
 **Marcador `Suits` não é pedido** (dono, 09/10, #182: *"quando for um pedido de suit, ele adiciona
 lá"*). Conversa com o marcador de quem não tem pedido aberto vai para a IA **sem pedido criado**:
-ela só cria (ou liga ao pedido aberto da pessoa) quando é alguém querendo comprar um macacão —
-orçamento, medidas ou design para encomendar, confirmação, pagamento. Fornecedor, homologação,
-nota, frete, propaganda, conversa da equipe (todo `@urace.us` é nosso) ou dúvida: não cria nada.
-Na dúvida, não cria.
+ela só cria (ou liga ao pedido aberto da pessoa) quando é alguém querendo comprar um macacão.
+Fornecedor, homologação, nota, frete, propaganda, conversa da equipe (todo `@urace.us` é nosso) ou
+dúvida: não cria nada. Na dúvida, não cria.
 
-**Só e-mail que fala de macacão** (dono, 13/10, #195: *"Vai estar claro na mensagem, no corpo ou no
-título do e-mail que vai ser um pedido de suit"*). Antes de chegar à IA, a ponte confere: o assunto
-ou o texto têm de falar de macacão (suit, race suit, macacão, mono de karting, combinaison…) e o
-remetente não pode ser robô (noreply, cobrança, recibo, newsletter, aviso). Sem isso, o e-mail é
-lido uma vez e esquecido. Nem a URACE (`@urace.us`) nem um robô contam como "o cliente" de um pedido.
+**Só e-mail que fala de macacão** (dono, 13/10, #195). O assunto ou o texto têm de falar de macacão
+e o remetente não pode ser robô (noreply, cobrança, recibo, newsletter). Sem isso, o e-mail é lido
+uma vez e esquecido.
 
-**Descartar, nunca apagar** (#195). Pedido que não é de macacão é **descartado**: sai de Em
-andamento e do Histórico, a ponte não lê, não responde nem anota mais nada nele, e o e-mail dele
-deixa de contar como cliente. Fica na aba **Descartados** e pode ser restaurado. Os #153 a #163
-(Stripe, OpenAI, Anthropic, newsletters, conversa da equipe), abertos pela versão antiga da ponte
-só pelo marcador, foram descartados assim. Guia para operar Suits pelo Claude:
-`docs/suits-guia-do-lucas.md`.
+**Descartar, nunca apagar** (#195). Pedido que não é de macacão é **descartado**: sai das listas, a
+ponte não lê nem responde mais nada nele, e pode ser restaurado.
 
-**A chave "IA neste pedido"** (dono, 13/10, #198: *"um switch para poder ligar e desligar IA naquele
-pedido"*). Ligada por padrão. Desligada, a IA não responde, não manda e-mail, não altera nem anota
-o pedido, e não dá para simular nem pedir à IA pela nota. O e-mail que chegar fica guardado com os
-anexos e vira "Precisa de alguém da equipe". Quem liga ou desliga fica na linha do tempo e na auditoria.
+**A chave "IA neste pedido"** (dono, 13/10, #198). Desligada, a IA não responde, não manda e-mail
+e não altera nada; o e-mail que chegar vira "Precisa de alguém da equipe".
 
-Ítalo: *"eu pedi para tudo passar por minha aprovação por isso que eu fui o gargalo"*. Por
-isso a ponte manda **sem aprovação** quando o "envio automático" está ligado. Começa em
-**simulação**: o e-mail que a IA mandaria aparece na linha do tempo do pedido para a equipe
-conferir, e só depois se liga o envio.
+**Simulação primeiro.** Com o "envio automático" desligado (o padrão), nada sai: o e-mail que a IA
+mandaria aparece na linha do tempo. O envio automático continua desligado até passar um ciclo
+completo no card de teste (#382).
 
 Quem decide o destinatário é o painel (o cliente, o designer ou o fornecedor DAQUELE pedido),
 nunca o modelo.
 
 **Do robô do Ítalo (Mio, contexto de 08/10, #156)**:
-- **Designer: Mateus** (`carvalhovisual1@gmail.com`). É designer, **não** fabricante. Não se
-  apresenta ao cliente, e o cliente nunca recebe o contato, a assinatura, o texto, a conversa ou
-  os metadados dele. A arte sai para o cliente sem o nome dele no arquivo e sem EXIF/autor.
-- **Quem assina com o cliente: George**, com a assinatura da URACE do Eduardo trocando só o nome
-  (sem inventar sobrenome, telefone ou endereço).
-- **Política dos macacões**, nas boas-vindas dos pedidos novos e sujeita aos termos da compra e
-  aos direitos do cliente:
+- **Designer: Mateus.** É designer, **não** fabricante. Não se apresenta ao cliente, e o cliente
+  nunca recebe o contato, a assinatura, o texto, a conversa ou os metadados dele.
+- **Quem assina com o cliente: George**, com a assinatura da URACE trocando só o nome.
+- **Política dos macacões**, sujeita aos termos da compra e aos direitos do cliente:
   - três rodadas de revisão do design antes da produção, sem custo;
   - personalizado não tem devolução voluntária nem reembolso;
   - erro da URACE: corrigido sem custo;
@@ -100,65 +170,20 @@ nunca o modelo.
   - erro do design fornecido pelo cliente: 33% de desconto na troca.
 
   Conflito com os termos ou os direitos do cliente sobe para a equipe.
-- **Ryan Capner, pedido #4738**: as boas-vindas (agradecimento + manual) saíram em 28/09
-  às 08h41 ET, pelo Eduardo. Não repetir nem mandar adendo de política; a próxima resposta dele
-  é com o George. O que a tabela abaixo diz sobre "continua humano" no vai e vem do design foi
-substituído por esta decisão.
+- **Pedido do site #4738**: as boas-vindas (agradecimento + manual) saíram em 28/09, à mão.
+  Não repetir nem mandar adendo de política.
 
-## O caminho, do contato à entrega
+## O e-mail ao fornecedor (o pedido de produção)
 
-1. **Contato e negociação** — cliente procura, negocia. (humano)
-2. **Pagamento confirmado.**
-3. **Formulário de tamanhos** enviado ao cliente. São **29 medidas**;
-   junto pede-se ideia de mockup, quais logos e **onde cada logo vai**.
-4. **Cliente devolve** medidas + referências de design.
-5. **Designer trabalha.** Recebe **só as informações de design** — nunca
-   dados de pedido, pagamento ou contato do cliente.
-6. **Vai e vem** designer ↔ URACE ↔ cliente até aprovar. **Continua
-   humano** por decisão do dono, para manter a qualidade do atendimento.
-   Automatizar só depois que o resto estiver rodando.
-7. **Design final aprovado** → anexo na tarefa + status `Order sent to
-   Usman` → **dispara o e-mail ao fornecedor** (ver gatilho).
-8. **1 dia depois** → status vira `In Production`.
-9. **Fornecedor avisa no WhatsApp** que despachou → `In Transit`.
-10. **Entregue** → `Delivered`.
+O modelo fica em Suits › E-mail ao fornecedor (editável pelo gerente). O formato que o fornecedor
+já sabe ler:
 
-## Os status e quem os move
-
-| Status | Significa | Quem move |
-|---|---|---|
-| `Standby` | ordem criada | IA |
-| `Awaiting Measurements` | esperando o cliente mandar as medidas | IA |
-| `Design Pending` | pagamento confirmado e o cliente já passou as informações de design | IA |
-| `Design Under Client Review` | cliente revisando o design do nosso designer | **humano** |
-| `Order sent to Usman` | design final anexado; **gatilho do e-mail** | IA |
-| `In Production` | 1 dia após o e-mail ao fornecedor | IA |
-| `In Transit` | fornecedor avisou no WhatsApp que enviou | IA (a partir do aviso humano) |
-| `Delivered` | finalizado | IA |
-| `Canceled` | — | humano |
-
-## O gatilho (a automação central)
-
-**Anexo do design final na tarefa + status `Order sent to Usman`** →
-enviar o e-mail do pedido ao fornecedor.
-
-Não é um ou outro: são **as duas condições juntas**. Anexo sem o status,
-ou status sem anexo, não dispara.
-
-### O e-mail ao fornecedor — formato exato, já em uso
-
-- **Para:** `Speedinds@gmail.com` (Usman — confirmado: respondeu de lá
-  assinando "Usman"). ⚠️ Outro fornecedor usa `whitesoldier205@gmail.com`
-  — **falta confirmar qual dos três é** (Manzoor ou WheelDeal).
-- **Assunto:** `SUIT - {Nome do Cliente}`
-- **Anexo:** **exatamente o mesmo arquivo que está anexado na tarefa do
-  pedido no Asana** — o design final. A IA não gera, não escolhe outro e
-  não remonta: pega o anexo da tarefa e manda aquele.
-  Como: `get_attachments` na tarefa → baixar pelo `download_url` →
-  anexar ao e-mail (o Gmail aceita anexo até 25 MB somados).
-  Mais de um anexo na tarefa → **não adivinhar**: perguntar qual é o
-  design final.
-- **Corpo:**
+- **Assunto:** `SUIT - {piloto}`
+- **Anexo:** a arte final **aprovada** (a mesma do hash da aprovação).
+- **Corpo:** as 29 medidas na ordem do formulário, em **dupla unidade** (cm / pés-polegadas; o
+  `6bis` só para mulheres), cores e quantidade. **Sem o endereço do cliente**: ele vai depois, só
+  após o OK das fotos, pela seção "Endereço ao fornecedor" (rascunho no Gmail ou texto para o
+  WhatsApp).
 
 ```
 Hi Usman,
@@ -166,56 +191,23 @@ Hi Usman,
 We have a new order:
 
 1 – Head circumference — 59 cm / 1'11"
-2 – Distance from forehead to neck — 42 cm / 1'5"
-... (as 29 medidas, nesta ordem, sempre em cm / pés-polegadas)
+...
 29 – Foot size — 42 EUR / 9 US
+
+The final mockup is attached.
 
 Best regards,
 {assinatura de quem envia}
 ```
 
-Cada medida vai em **dupla unidade** (métrica e imperial). O item `6bis`
-só aparece para mulheres. **Manter o formato como está** — é o que o
-fornecedor já sabe ler.
+O fornecedor atual é o marcado como **atual** em Suits › Fornecedores.
 
-## O modelo de tarefa
+## Histórico (até 08/10/2026, quando o pedido vivia no Asana) — não vale mais
 
-Antes de 28/08 **não existia** modelo de descrição para pedido de
-macacão. Criado em `📋 MODELO — New Order: <nome do cliente>`
-(gid `1217959088745716`, seção "Checklist para o pedido de macacão").
-
-Nome da tarefa: `New Order: {nome do cliente}`. A descrição tem quatro
-blocos: **CLIENTE** (nome, telefone, e-mail, datas), **MEDIDAS** (as 29,
-na ordem do e-mail do fornecedor — copiar e colar direto), **DESIGN** (o
-que vai para o designer) e **CONTROLE** (fornecedor, anexo, envio).
-
-A separação DESIGN × resto é proposital: é o bloco DESIGN, e só ele, que
-vai para o designer.
-
-## Como a IA fica sabendo de um pedido novo
-
-O dono avisa que há pedido novo. A IA então **pede os dados de contato do
-cliente** (nome, telefone, e-mail), cria a tarefa `New Order: {cliente}`
-com o modelo e, a partir do contato, **procura o cliente pedindo o
-formulário de medidas**, explicando que são necessárias porque o macacão
-é totalmente personalizado.
-
-## ✅ Exceção AUTORIZADA à regra "a IA não envia e-mail"
-
-Confirmado pelo dono em 28/08: a regra "a IA nunca envia e-mail" vale
-para **os outros e-mails** (triagem da inbox, respostas gerais). Neste
-processo a IA **envia de verdade**, em duas situações e só nelas:
-
-| ✅ Pode enviar | Para quem |
-|---|---|
-| Pedido do formulário de medidas | cliente do macacão |
-| Pedido de produção (as 29 medidas + PDF) | fornecedor atual |
-
-Qualquer outro e-mail continua sendo **só rascunho**.
-
-## Fornecedor: sempre o atual, lido dos parâmetros
-
-O destinatário **nunca é fixo na skill** — sai de
-`brain/00_SYSTEM/PARAMETROS.md`, linha "Fornecedor ATUAL" (hoje: Usman,
-`Speedinds@gmail.com`). Trocou de fornecedor, troca-se lá e a IA passa a
-mandar para o novo sem mexer em mais nada.
+Até a aba Suits, o pedido era uma tarefa `New Order: {cliente}` no projeto SUITS do Asana (modelo
+`1217959088745716`), com os status Standby, Awaiting Measurements, Design Pending, Design Under
+Client Review, `Order sent to Usman`, In Production, In Transit, Delivered e Canceled. O gatilho
+era "anexo do design final na tarefa + status `Order sent to Usman`", a IA mandava só o pedido do
+formulário de medidas e o pedido de produção, e o fornecedor despachava para a URACE. Tudo isso
+foi substituído pelo fluxo acima: a importação do Asana (`Importar do Asana`, só leitura) traz os
+pedidos antigos para a aba com a etapa equivalente, e nada mais é feito no quadro.

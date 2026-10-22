@@ -17,7 +17,9 @@ Como funciona:
   desligada (o padrão), vira rascunho com "aprovar" de um clique no pedido; ligada, sai sozinho. Sair de
   verdade é `openclaw message send` — e só com `WA_GRUPOS_APLICAR=1` no env; antes disso, tudo fica rascunho.
 - **Guardas.** O designer recebe só o design (sem nome completo, e-mail, telefone, endereço ou pagamento do
-  cliente). O endereço só vai ao fornecedor depois de a equipe aprovar o suit pronto, no pedido.
+  cliente; os anexos passam pela `limpar_para_designer` da ponte, #382). O endereço só vai ao fornecedor com o pedido
+  em Checked (o OK da equipe nas fotos, #382), e mandar o endereço move para Address sent. Pedido de teste
+  (`is_test`) nunca manda de verdade: vira nota.
 Teste nunca manda: `CC_WA_FAKE=<arquivo>` grava em vez de chamar o OpenClaw.
 """
 import base64
@@ -267,7 +269,7 @@ def _digitos(s):
 
 
 def guardas(pedido, papel, texto):
-    """O designer não vê dado nem pagamento do cliente; o endereço só vai ao fornecedor com o suit aprovado."""
+    """O designer não vê dado nem pagamento do cliente; o endereço só vai ao fornecedor em Checked (#382)."""
     t = _norm(texto)
     problemas = []
     email = (pedido.get("customer_email") or "").lower()
@@ -275,12 +277,12 @@ def guardas(pedido, papel, texto):
         problemas.append("o e-mail do cliente")
     tel = _digitos(pedido.get("customer_phone"))
     endereco = [x.strip() for x in (pedido.get("ship_address") or "").splitlines() if len(x.strip()) >= 8]
-    com_endereco = papel == "fornecedor" and pedido.get("suit_approved_at")
+    com_endereco = papel == "fornecedor" and pedido.get("checked_at")
     if not com_endereco:
         if len(tel) >= 7 and tel[-7:] in _digitos(texto):
             problemas.append("o telefone do cliente")
         if any(_norm(x) in t for x in endereco):
-            problemas.append("o endereço do cliente" + ("" if papel == "design" else " (só depois de a equipe aprovar o suit)"))
+            problemas.append("o endereço do cliente" + ("" if papel == "design" else " (só depois do OK da equipe nas fotos, Checked)"))
     if papel == "design":
         nome = (pedido.get("customer_name") or "").strip()
         try:
@@ -361,10 +363,9 @@ def _arquivos(pedido, papel, nomes):
             raise Recusado(f"anexo não encontrado no pedido: {nome}")
         with open(origem, "rb") as f:
             arquivos.append((nome, f.read(), mimetypes.guess_type(nome)[0] or "application/octet-stream"))
-    limpar = getattr(sp, "limpar_para_designer", None)
     try:
-        if papel == "design" and limpar:
-            arquivos = limpar(arquivos, pedido)
+        if papel == "design":
+            arquivos = sp.limpar_para_designer(arquivos, pedido)
         else:
             arquivos = [(n, sp._sem_metadados(n, d, m), m) for n, d, m in arquivos]
     except sp.Recusado as e:
@@ -410,8 +411,8 @@ def propor(con, pid, papel, texto, anexos=None, motivo="mensagem", criado_por="i
     texto = (texto or "").strip()
     if not texto:
         raise Recusado("a mensagem está vazia")
-    if motivo == "endereco" and not pedido.get("suit_approved_at"):
-        raise Recusado("o endereço só vai ao fornecedor depois de a equipe aprovar o suit no pedido")
+    if motivo == "endereco" and pedido.get("status") != "checked":
+        raise Recusado("o endereço só vai ao fornecedor com o pedido em Checked (o OK da equipe nas fotos)")
     texto = _com_referencia(pid, texto[:3500])
     guardas(pedido, papel, texto)
     nomes = [os.path.basename(n) for n in (anexos or [])]
@@ -419,14 +420,17 @@ def propor(con, pid, papel, texto, anexos=None, motivo="mensagem", criado_por="i
         if not os.path.isfile(os.path.join(sp.pasta(pid), n)):
             raise Recusado(f"anexo não encontrado no pedido: {n} (veja suits_anexos)")
     lista = f" · anexos: {', '.join(nomes)}" if nomes else ""
-    if sp.SIMULAR.get():
-        nid = suits.anotar(con, pid, f"SIMULAÇÃO — a IA escreveria no {PAPEIS[papel]}{lista}:\n\n{texto}", "whatsapp", pedido["status"])
+    if sp.SIMULAR.get() or pedido.get("is_test"):
+        quem = "a IA escreveria" if criado_por == "ia" else "iria"
+        nid = suits.anotar(con, pid, ("PEDIDO DE TESTE (nada sai)" if pedido.get("is_test") else "SIMULAÇÃO")
+                           + f" — {quem} no {PAPEIS[papel]}{lista}:\n\n{texto}", "whatsapp", pedido["status"])
         return {"simulado": True, "nota": nid}
     sid = inserir(con, "atelie_wa_saidas", order_id=int(pid), papel=papel, motivo=motivo, texto=texto,
                   anexos=json.dumps(nomes) if nomes else None, dia=dia, criado_por=criado_por, command_id=command_id)
     if criado_por.startswith("user:"):                     # quem escreveu na tela é a aprovação
         return aprovar(con, sid, user_id)
-    auto = sp.config(con)["envio_automatico"] == "1" and cfg["aplicar"] and pedido.get("ia_ligada", 1)
+    # o designer passa por uma pessoa (#382): ao grupo de design, sempre rascunho, mesmo com o envio automático
+    auto = papel != "design" and sp.config(con)["envio_automatico"] == "1" and cfg["aplicar"] and pedido.get("ia_ligada", 1)
     if auto:
         try:
             return aprovar(con, sid, None)
@@ -448,8 +452,17 @@ def aprovar(con, sid, user_id=None, texto=None):
     pedido = _pedido(con, s["order_id"])
     if pedido.get("discarded_at"):
         raise Recusado("pedido descartado: nada sai por ele")
-    if s["motivo"] == "endereco" and not pedido.get("suit_approved_at"):
-        raise Recusado("o endereço só vai ao fornecedor depois de a equipe aprovar o suit no pedido")
+    if pedido.get("is_test"):
+        raise Recusado("pedido de teste: nada sai para os grupos")
+    if s["motivo"] == "endereco":
+        if pedido.get("status") != "checked":
+            raise Recusado("o endereço só vai ao fornecedor com o pedido em Checked (o OK da equipe nas fotos)")
+        if not user_id:
+            raise Recusado("o endereço ao fornecedor é da equipe: aprove no pedido")
+        try:
+            suits.checar_etapa(con, pedido["id"], "address_sent")
+        except suits.Invalido as e:
+            raise Recusado(str(e))
     corpo = _com_referencia(pedido["id"], (texto or s["texto"]).strip()[:3500])
     guardas(pedido, s["papel"], corpo)
     cfg = config()
@@ -471,8 +484,8 @@ def aprovar(con, sid, user_id=None, texto=None):
     inserir(con, "atelie_wa_mensagens", grupo_jid=g["jid"], papel=s["papel"], direcao="saida", message_id=msg_id,
             texto=corpo, order_id=pedido["id"], vinculo="enviada", estado="registro",
             anexos=json.dumps([{"nome": n} for n in json.loads(s["anexos"] or "[]")]) if s["anexos"] else None, at=agora())
-    if s["motivo"] == "endereco":
-        con.execute("UPDATE suit_orders SET address_sent_at=? WHERE id=?", (agora(), pedido["id"]))
+    if s["motivo"] == "endereco":                      # #382: a etapa da equipe, pela tabela de transições
+        suits.mudar_etapa(con, pedido["id"], "address_sent", user_id, "endereço enviado no grupo do fornecedor")
     suits.anotar(con, pedido["id"], f"WhatsApp enviado ao {PAPEIS.get(s['papel'], s['papel'])}"
                  + (" (aprovado)" if user_id else " (envio automático)") + f":\n\n{corpo}", "whatsapp", pedido["status"], user_id=user_id)
     auditar(con, "atelie.whatsapp.sent", f"user:{user_id}" if user_id else "ai:atelie", user_id=user_id,
@@ -490,10 +503,8 @@ def descartar(con, sid, user_id=None):
     return True
 
 
-# ------------------------------------------------------------------ suit aprovado, endereço e rastreio
+# ------------------------------------------------------------------ fotos, endereço e rastreio (as etapas do #382)
 TEXTOS = {
-    "endereco": {"en": "The suit is approved, thank you! Please ship it to:\n\n{endereco}\n\nOnce it ships, please send us the tracking code.",
-                 "pt": "O suit está aprovado, obrigado! Por favor, envie para:\n\n{endereco}\n\nQuando despachar, mande o código de rastreio."},
     "cobranca_design": {"pt": "Bom dia! Como está a arte deste pedido? Se tiver alguma dúvida, é só falar.",
                         "en": "Hi! How is the artwork for this order going? Let us know if you have any question."},
     "cobranca_producao": {"en": "Hi! Any update on this suit? Photos of the progress are welcome.",
@@ -508,36 +519,20 @@ def _texto(chave, idioma, **kw):
     return t.format(**kw)
 
 
-def aprovar_suit(con, pid, user_id):
-    """A equipe conferiu o suit pronto (as fotos do fornecedor) e aprovou: o endereço vai ao grupo do fornecedor."""
+def mandar_endereco(con, pid, user_id):
+    """#382/#383: com o pedido em Checked (a equipe conferiu as fotos), a equipe manda o endereço ao grupo do
+    fornecedor com um clique (o texto é o `mensagem_endereco` da ponte) e o pedido vai para Address sent."""
     from command_center.providers import suits
     p = _pedido(con, pid)
     if p.get("discarded_at"):
         raise Recusado("pedido descartado")
-    if p.get("suit_approved_at"):
-        return {"ja": True}
-    con.execute("UPDATE suit_orders SET suit_approved_at=?, suit_approved_by=?, updated_at=? WHERE id=?", (agora(), user_id, agora(), p["id"]))
-    suits.anotar(con, p["id"], "Suit conferido e aprovado pela equipe: o endereço de envio pode ir ao fornecedor.", "etapa", p["status"], user_id=user_id)
-    cfg = config()
-    g = grupo(cfg, papel="fornecedor")
-    if not g:
-        return {"ok": True, "endereco": "o grupo do fornecedor não está configurado"}
-    if not (p.get("ship_address") or "").strip():
-        _ponte().precisa_humano(con, p["id"], "suit aprovado, mas o pedido não tem o endereço de entrega", user_id)
-        return {"ok": True, "endereco": "falta o endereço no pedido"}
-    destinatario = "\n".join(x for x in (p.get("customer_name"), p.get("ship_address"), p.get("customer_phone")) if x)
-    r = propor(con, p["id"], "fornecedor", _texto("endereco", g["idioma"], endereco=destinatario.strip()), motivo="endereco",
-               criado_por="sistema", user_id=user_id) if p.get("ia_ligada", 1) else \
-        _rascunho_sem_ia(con, p, g, _texto("endereco", g["idioma"], endereco=destinatario.strip()))
-    return {"ok": True, "endereco": r}
-
-
-def _rascunho_sem_ia(con, p, g, texto):
-    """IA desligada no pedido: o endereço fica como rascunho, nunca sai sozinho."""
-    texto = _com_referencia(p["id"], texto)
-    guardas(dict(p, suit_approved_at=agora()), "fornecedor", texto)
-    sid = inserir(con, "atelie_wa_saidas", order_id=p["id"], papel="fornecedor", motivo="endereco", texto=texto, criado_por="sistema")
-    return {"rascunho": sid}
+    f = um(con, "SELECT * FROM suit_suppliers WHERE id=?", (p["supplier_id"],)) if p.get("supplier_id") else \
+        um(con, "SELECT * FROM suit_suppliers WHERE is_current=1")
+    m = suits.mensagem_endereco(p, dict(f) if f else None)
+    falta = [x for x in m["faltam"] if "e-mail" not in x]
+    if falta:
+        raise Recusado("Falta " + " e ".join(falta) + " para mandar o endereço.")
+    return propor(con, pid, "fornecedor", m["whatsapp"], motivo="endereco", criado_por=f"user:{user_id}", user_id=user_id)
 
 
 RX_RASTREIO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{5,39}$")
@@ -555,9 +550,42 @@ def registrar_rastreio(con, pid, codigo, transportadora=None, user_id=None):
     valor = f"{transportadora.strip()[:40]} {codigo}" if transportadora and transportadora.strip() else codigo
     con.execute("UPDATE suit_orders SET tracking=?, updated_at=? WHERE id=?", (valor, agora(), p["id"]))
     suits.anotar(con, p["id"], f"Rastreio do fornecedor: {valor}. A equipe passa ao cliente.", "whatsapp", p["status"], user_id=user_id)
-    if p["status"] in ("approved", "sent_to_supplier", "in_production"):
+    if "in_transit" in suits.TRANSICOES.get(p["status"], ()):       # #382: só pela tabela (de Address sent)
         suits.mudar_etapa(con, p["id"], "in_transit", user_id, "o fornecedor mandou o rastreio")
     return {"ok": True, "tracking": valor}
+
+
+def foto_do_suit(con, mid, nome, user_id):
+    """A equipe usa a foto que o fornecedor mandou no grupo como a foto do suit (#382: Photos received exige foto
+    em nota). A imagem vira nota (WebP, sem EXIF) e o pedido vai para Photos received pela tabela de etapas."""
+    from command_center.api.suits import pasta_imagens
+    from command_center.providers import imagem as img
+    from command_center.providers import suits
+    m = um(con, "SELECT * FROM atelie_wa_mensagens WHERE id=?", (int(mid),))
+    if not m or not m["order_id"]:
+        raise Recusado("ligue a mensagem ao pedido antes")
+    nome = os.path.basename(nome or "")
+    if nome not in [a["nome"] for a in json.loads(m["anexos"] or "[]")]:
+        raise Recusado("este arquivo não é desta mensagem")
+    caminho = os.path.join(_ponte().pasta(m["order_id"]), nome)
+    if not os.path.isfile(caminho):
+        raise Recusado("arquivo não encontrado no pedido")
+    with open(caminho, "rb") as f:
+        try:
+            dados, ext = img.comprimir(f.read())
+        except img.ImagemInvalida:
+            raise Recusado("não é uma imagem (use PNG, JPG ou WEBP)")
+    p = _pedido(con, m["order_id"])
+    if p["status"] != "photos_received":
+        try:
+            suits.mudar_etapa(con, p["id"], "photos_received", user_id, "fotos do fornecedor no WhatsApp")
+        except suits.Invalido as e:
+            raise Recusado(str(e))
+    arq = f"pedido-{p['id']}-wa-{m['id']}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}{ext}"
+    with open(os.path.join(pasta_imagens(), arq), "wb") as f:
+        f.write(dados)
+    suits.anotar(con, p["id"], f"Foto do suit (WhatsApp, {m['remetente_nome'] or 'fornecedor'}): {nome}", "nota", "photos_received", arq, user_id)
+    return {"ok": True, "nota_imagem": arq}
 
 
 # ------------------------------------------------------------------ cobrança diária
@@ -585,7 +613,8 @@ def cobrancas(con, agora_local=None):
     dia = agora_local.date().isoformat()
     cfg = config()
     feitas = []
-    for p in todos(con, """SELECT * FROM suit_orders WHERE closed=0 AND discarded_at IS NULL AND ia_ligada=1"""):
+    for p in todos(con, """SELECT * FROM suit_orders WHERE closed=0 AND discarded_at IS NULL AND ia_ligada=1
+                           AND coalesce(is_test, 0)=0"""):
         p = dict(p)
         pedidos = []
         g = grupo(cfg, papel="design")
@@ -596,10 +625,9 @@ def cobrancas(con, agora_local=None):
         ult = _ultima(con, p["id"], "fornecedor")
         velha = (_horas_desde(ult["created_at"]) >= 20) if ult else (_horas_desde(p.get("sent_to_supplier_at")) >= 20)
         if g and velha:
-            if p.get("address_sent_at") and not p.get("tracking"):
+            if p["status"] == "address_sent" and not p.get("tracking"):
                 pedidos.append(("fornecedor", _texto("cobranca_rastreio", g["idioma"])))
-            elif p["status"] in ("sent_to_supplier", "in_production") and not p.get("suit_approved_at") and \
-                    (ult or p.get("sent_to_supplier_at")):
+            elif p["status"] in ("sent_to_supplier", "supplier_accepted", "in_production") and (ult or p.get("sent_to_supplier_at")):
                 pedidos.append(("fornecedor", _texto("cobranca_producao", g["idioma"])))
         for papel, texto in pedidos:
             if um(con, "SELECT id FROM atelie_wa_saidas WHERE order_id=? AND papel=? AND dia=? AND motivo='cobranca'", (p["id"], papel, dia)):
@@ -622,9 +650,10 @@ QUE_FAZER = {
                "designer: leve ao cliente por e-mail com as suas palavras. O cliente já pediu ajuste: devolva ao grupo "
                "(atelie_grupo_escrever grupo=\"design\"), só com o design."),
     "fornecedor": ("O FORNECEDOR ESCREVEU NO GRUPO DELE (WhatsApp). Anote o que ele disse (suits_anotar). Fotos do suit pronto: "
-                   "estão no pedido; chame a equipe para conferir (suits_precisa_humano \"conferir o suit nas fotos e aprovar no "
-                   "pedido\") — quem aprova o suit é a equipe, e o endereço vai sozinho depois disso: NUNCA escreva endereço. "
-                   "Código de rastreio: atelie_rastreio. Avisou produção: mova para in_production. Pergunta simples sobre o "
+                   "estão no pedido; chame a equipe (suits_precisa_humano \"fotos do suit no WhatsApp: usar como foto do suit "
+                   "(Photos received) e conferir (Checked)\") — fotos, conferido e endereço são da equipe: NUNCA escreva endereço. "
+                   "Código de rastreio: atelie_rastreio. Confirmou o pedido: supplier_accepted; avisou produção: in_production "
+                   "(pela tabela de etapas). Pergunta simples sobre o "
                    "pedido: responda no grupo (atelie_grupo_escrever grupo=\"fornecedor\", em inglês). Problema ou decisão "
                    "(medida errada, cor, prazo, preço): suits_precisa_humano."),
 }
@@ -675,11 +704,14 @@ def tratar_pendentes(con, executar=None):
         texto = f"EVENTO AUTOMÁTICO — Suits #{pid}: WhatsApp ({papel})"
         cid = inserir(con, "ai_commands", user_id=uid, text=texto, prompt=pr, session_key=f"suits-{pid}")
         suits.anotar(con, pid, f"Chegou mensagem no {PAPEIS.get(papel, papel)}: a IA está tratando.", "ia", p["status"], command_id=cid)
+        marca = sp.ESCOPO.set({"pedido": pid, "tipo": f"whatsapp-{papel}", "email": None, "mensagens": {}})   # #382: só este pedido
         try:
             (executar or sp._executar_padrao)(con, cid, texto, f"suits-{pid}", uid, pr)
             feitos.append({"pedido": pid, "papel": papel, "comando": cid})
         except Exception as e:
             feitos.append({"pedido": pid, "papel": papel, "erro": f"{type(e).__name__}: {str(e)[:160]}"})
+        finally:
+            sp.ESCOPO.reset(marca)
     return feitos
 
 
@@ -798,8 +830,8 @@ def ferramentas_ia():
          "de macacão, e o que já foi (ou está esperando aprovação para ir) ao grupo.", {"id": n}, ["id"], ler),
         ("atelie_grupo_escrever", "Escreve no grupo do WhatsApp do pedido: \"design\" (o designer: só o design e \"Suits #id\", "
          "nunca nome completo, e-mail, telefone, endereço ou pagamento do cliente) ou \"fornecedor\" (o Usman: cobrar, conferir, "
-         "perguntar; NUNCA endereço — ele vai sozinho quando a equipe aprova o suit). Anexos: nomes de suits_anexos. Com o envio "
-         "automático desligado vira rascunho para a equipe aprovar.",
+         "perguntar; NUNCA endereço — ele é da equipe, depois do OK nas fotos, Checked). Anexos: nomes de suits_anexos. Ao designer é "
+         "sempre rascunho; ao fornecedor, rascunho com o envio automático desligado.",
          {"id": n, "grupo": dict(s, enum=list(PAPEIS)), "texto": s, "anexos": {"type": "array", "items": s}},
          ["id", "grupo", "texto"], escrever),
         ("atelie_rastreio", "Grava no pedido o código de rastreio que o fornecedor mandou (e move para In Transit).",

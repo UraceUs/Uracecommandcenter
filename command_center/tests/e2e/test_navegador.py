@@ -2436,10 +2436,10 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     pg.get_by_role("heading", name="Suits · Alpha Line", level=1).wait_for()
     pg.get_by_role("button", name="Registrar novo pedido").click()
     dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
-    dlg.get_by_label("Cliente", exact=True).fill(f"Ryan Capner {largura}")
-    dlg.get_by_label("E-mail", exact=True).fill("ryan@example.com")
+    dlg.get_by_label("Cliente", exact=True).fill(f"Rui Inventado {largura}")
+    dlg.get_by_label("E-mail", exact=True).fill("rui@example.com")
     dlg.get_by_role("button", name="Registrar", exact=True).click()
-    pg.get_by_role("heading", name=f"Ryan Capner {largura}", level=1).wait_for()
+    pg.get_by_role("heading", name=f"Rui Inventado {largura}", level=1).wait_for()
     assert re.search(r"/suits/\d+$", pg.url), pg.url
     pg.get_by_label("Nota", exact=True).fill("Cliente mandou as medidas no print")
     pg.locator(".suit-arquivo input[type=file]").set_input_files(_png_pequeno(tmp_path / f"print{largura}.png"))
@@ -2462,7 +2462,7 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     abrir(pg, servidor, "/suits")
-    pg.get_by_role("link", name=re.compile(f"Ryan Capner {largura}")).wait_for()
+    pg.get_by_role("link", name=re.compile(f"Rui Inventado {largura}")).wait_for()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
@@ -2528,6 +2528,73 @@ def test_suits_novo_pedido_vincula_ao_cliente_e_puxa_o_cadastro(servidor, navega
     dlg.get_by_role("button", name="Registrar", exact=True).click()
     pg.get_by_role("heading", name="Carla Mendes", level=1).wait_for()
     pg.get_by_role("link", name=re.compile("Théo Mendes")).wait_for()          # o card do cliente, no pedido
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_suits_travas_aprovacao_final_medidas_e_designer_preparado(servidor, navegador, tmp_path, largura):
+    """#382 (dono, 22/10): a aprovação final escrita do cliente vale por e-mail e fica amarrada à arte final e às
+    medidas; medida não conferida trava; o e-mail ao designer espera o clique de uma pessoa."""
+    import json as _json
+    import sqlite3
+    pg = entrar(navegador, servidor, largura=largura, altura=900)
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill(f"Nina Inventada {largura}")
+    dlg.get_by_label("E-mail", exact=True).fill(f"nina{largura}@example.com")
+    dlg.get_by_label("Nascer com a IA desligada (a ponte não age)").check()
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name=f"Nina Inventada {largura}", level=1).wait_for()
+    pid = int(re.search(r"/suits/(\d+)$", pg.url).group(1))
+    assert pg.get_by_role("switch", name=re.compile("IA neste pedido")).get_attribute("aria-checked") == "false"
+    # as medidas e a arte chegaram (por e-mail): direto no banco e na pasta do pedido, como a ponte faria
+    from command_center.providers import suits as _suits
+    todas = {m[0]: 50 for m in _suits.MEDIDAS if m[3] == "comp" and m[0] != "bust"} | {"weight": 70, "foot": "42 EUR"}
+    con = sqlite3.connect(BANCO)
+    con.execute("UPDATE suit_orders SET measurements=?, status='design_review' WHERE id=?",
+                (_json.dumps(_suits.normalizar_medidas(todas)), pid))
+    con.execute("INSERT INTO suit_outbox (order_id, subject, body, attachments) VALUES (?,?,?,?)",
+                (pid, f"Suits #{pid} — briefing", "Black and red, number 7.", "[]"))
+    con.commit(); con.close()
+    pasta = os.path.join(os.path.dirname(BANCO), "suits", "anexos", str(pid))
+    os.makedirs(pasta, exist_ok=True)
+    _png_pequeno(os.path.join(pasta, "arte-final.png"))
+    abrir(pg, servidor, f"/suits/{pid}")
+    pg.get_by_role("heading", name="Aprovação final", level=2).wait_for()
+    pg.get_by_text("marcar a arte final").first.wait_for()
+    assert pg.get_by_role("button", name="Registrar aprovação à mão").is_disabled()
+    pg.get_by_role("button", name="Marcar arte final").click()
+    pg.get_by_text("Marcado como arte final.").wait_for()
+    pg.get_by_role("button", name=re.compile(r"Marcar as \d+ preenchidas como conferidas")).click()
+    pg.wait_for_function("() => ![...document.querySelectorAll('button')].some(b => /preenchidas como conferidas/.test(b.textContent))")
+    pg.get_by_role("button", name="Registrar aprovação à mão").click()
+    dlg = pg.get_by_role("dialog", name=re.compile("Registrar a aprovação final da versão"))
+    dlg.get_by_label('Trecho com o "aprovo"').fill("I approve the final version")
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_text("Aprovação final registrada.").wait_for()
+    pg.locator(".suit-etapas li.atual", has_text="Approved").wait_for()
+    pg.get_by_text("«I approve the final version»", exact=True).wait_for()
+    # o e-mail preparado ao designer: só sai pelo clique
+    enviar = pg.get_by_role("button", name="Enviar ao designer")
+    pg.get_by_role("heading", name="Para o designer", level=2).wait_for()
+    assert enviar.bounding_box()["height"] >= 40 and pg.get_by_role("button", name="Marcar arte final").count() == 0
+    for b in (pg.get_by_role("button", name="Tirar da arte final"), pg.get_by_role("button", name="Registrar aprovação à mão")):
+        assert b.bounding_box()["height"] >= 40
+    pg.get_by_role("heading", name="Saúde da ponte neste pedido", level=3).wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    enviar.click()
+    pg.get_by_text("Enviado ao designer.").wait_for()
+    assert any(f"Suits #{pid}" in (_json.loads(x).get("subject") or "") for x in open(EMAILS).read().splitlines())
+    abrir(pg, servidor, "/suits")
+    pg.get_by_text(re.compile("Ponte:")).first.wait_for()
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)

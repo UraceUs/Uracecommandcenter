@@ -2130,7 +2130,8 @@ CREATE TABLE IF NOT EXISTS suit_orders (
   supplier_id  INTEGER REFERENCES suit_suppliers(id),
   status       TEXT NOT NULL DEFAULT 'standby'
                CHECK (status IN ('standby','awaiting_measurements','design_pending','design_review','approved',
-                                 'sent_to_supplier','in_production','in_transit','delivered','canceled')),
+                                 'sent_to_supplier','supplier_accepted','in_production','photos_received','checked',
+                                 'address_sent','in_transit','delivered','canceled')),
   measurements TEXT,                      -- json {chave: {v, u}} ou {t} (tamanho do pé)
   design       TEXT,                      -- json: ideia, cores, logos, posição, nome, bandeira, obs
   order_date   TEXT,
@@ -2194,6 +2195,76 @@ CREATE TABLE IF NOT EXISTS suit_email_seen (
   thread_id    TEXT,
   papel        TEXT,                      -- venda | cliente | designer | fornecedor | marcador
   seen_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+
+-- #382 (dono, 22/10): a aprovação final escrita do cliente vale por e-mail, e fica AMARRADA à versão que ele viu.
+-- Cada linha guarda o e-mail (message_id, trecho, data) e o hash da arte final e das medidas daquele momento.
+-- Mudou a arte ou uma medida, a linha vira 'desatualizada' (nunca é apagada) e o pedido volta para revisão.
+CREATE TABLE IF NOT EXISTS suit_approvals (
+  id           INTEGER PRIMARY KEY,
+  order_id     INTEGER NOT NULL REFERENCES suit_orders(id),
+  message_id   TEXT,                      -- o e-mail do cliente (id do Gmail)
+  excerpt      TEXT NOT NULL,             -- o trecho com o "aprovo", como ele escreveu
+  approved_at  TEXT NOT NULL,             -- a data do e-mail
+  source       TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('ia','manual')),
+  art_hash     TEXT NOT NULL,
+  measures_hash TEXT NOT NULL,
+  files        TEXT,                      -- json: os arquivos da arte final aprovados
+  measures     TEXT,                      -- json: as medidas aprovadas, como estavam (o pacote do rascunho ao fornecedor)
+  status       TEXT NOT NULL DEFAULT 'valida' CHECK (status IN ('valida','desatualizada','substituida')),
+  stale_at     TEXT,
+  stale_reason TEXT,
+  user_id      INTEGER REFERENCES users(id),
+  command_id   INTEGER REFERENCES ai_commands(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS suit_approvals_pedido ON suit_approvals(order_id, id);
+
+-- #382: o e-mail ao designer passa por uma pessoa (dono, 22/10: "melhor assim por hora"). A IA PREPARA o item
+-- (assunto, corpo e anexos já limpos); quem é OPERATOR ou acima confere e clica "Enviar ao designer".
+CREATE TABLE IF NOT EXISTS suit_outbox (
+  id           INTEGER PRIMARY KEY,
+  order_id     INTEGER NOT NULL REFERENCES suit_orders(id),
+  papel        TEXT NOT NULL DEFAULT 'designer' CHECK (papel IN ('designer')),
+  subject      TEXT NOT NULL,
+  body         TEXT NOT NULL,
+  attachments  TEXT,                      -- json: os nomes dos arquivos limpos, guardados fora da pasta do pedido
+  reply        INTEGER NOT NULL DEFAULT 1, -- responder na conversa do designer que já existe
+  status       TEXT NOT NULL DEFAULT 'preparado' CHECK (status IN ('preparado','enviado','descartado')),
+  created_by   INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  decided_by   INTEGER REFERENCES users(id),
+  decided_at   TEXT,
+  message_id   TEXT,
+  thread_id    TEXT,
+  error        TEXT
+);
+CREATE INDEX IF NOT EXISTS suit_outbox_pedido ON suit_outbox(order_id, status);
+
+-- #382 (revisão do Mio): envio sem repetição. Antes de mandar, a ponte grava "enviando" com uma chave única
+-- (pedido + papel + hash de assunto, corpo e anexos). Já enviado não sai de novo; "enviando" que ficou para trás
+-- (o processo caiu entre o envio e o registro) é conferido na thread do Gmail antes de reenviar.
+CREATE TABLE IF NOT EXISTS suit_sends (
+  chave        TEXT PRIMARY KEY,
+  order_id     INTEGER NOT NULL REFERENCES suit_orders(id),
+  papel        TEXT NOT NULL,
+  para         TEXT,
+  assunto      TEXT,
+  thread_id    TEXT,
+  status       TEXT NOT NULL DEFAULT 'enviando' CHECK (status IN ('enviando','enviado')),
+  message_id   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  sent_at      TEXT
+);
+
+-- #382: o evento da ponte só é dado por lido depois de tratado. Falhou, volta no próximo ciclo; passou do limite
+-- de tentativas, vai para a equipe ("Precisa de alguém").
+CREATE TABLE IF NOT EXISTS suit_event_tries (
+  chave        TEXT PRIMARY KEY,           -- o message_id da primeira mensagem do evento
+  order_id     INTEGER REFERENCES suit_orders(id),
+  tries        INTEGER NOT NULL DEFAULT 0,
+  last_error   TEXT,
+  updated_at   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS suit_settings (

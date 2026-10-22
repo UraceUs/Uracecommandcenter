@@ -75,12 +75,12 @@ def _png():
 
 def test_registrar_avancar_anotar_com_imagem_e_pedir_a_ia(cli, monkeypatch):
     h = entra(cli, "op@urace.us")
-    r = cli.post(B, headers=h, json={"customer_name": "Ryan Capner", "customer_email": "ryan@example.com", "language": "en",
-                                     "driver_name": "Ryan Capner", "design": {"cores": "black / red, Pantone 1355 PC"},
+    r = cli.post(B, headers=h, json={"customer_name": "Rui Inventado", "customer_email": "rui@example.com", "language": "en",
+                                     "driver_name": "Rui Inventado", "design": {"cores": "black / red, Pantone 1355 PC"},
                                      "medidas": {"valores": {"head": 59}, "unidade": "cm"}})
     assert r.status_code == 201, r.text
     p = r.json()
-    assert p["status"] == "standby" and p["title"] == "Ryan Capner" and p["medidas_texto"]["head"] == "59 cm / 1'11\""
+    assert p["status"] == "standby" and p["title"] == "Rui Inventado" and p["medidas_texto"]["head"] == "59 cm / 1'11\""
     assert p["notas"][0]["kind"] == "etapa"
     pid = p["id"]
     lista = cli.get(B + "?limit=10")
@@ -107,10 +107,13 @@ def test_registrar_avancar_anotar_com_imagem_e_pedir_a_ia(cli, monkeypatch):
     con.close()
     assert "SUITS — pedido de macacão" in c["prompt"] and ".webp" in c["prompt"] and "idioma do cliente" in c["prompt"]
     assert chamadas and chamadas[0][0] == nota["command_id"]
-    # entregue fecha o pedido; a linha do tempo guarda a troca
+    # #382: de Awaiting Measurements não se pula para Delivered (a tabela de transições recusa, com o motivo)
     r = cli.patch(f"{B}/{pid}", headers=h, json={"status": "delivered"})
+    assert r.status_code == 400 and "não vai para Delivered" in r.json()["detail"]
+    # cancelado fecha o pedido; a linha do tempo guarda a troca
+    r = cli.patch(f"{B}/{pid}", headers=h, json={"status": "canceled"})
     assert r.status_code == 200 and r.json()["closed"] == 1
-    assert any(x["kind"] == "etapa" and "Delivered" in (x["text"] or "") for x in r.json()["notas"])
+    assert any(x["kind"] == "etapa" and "Canceled" in (x["text"] or "") for x in r.json()["notas"])
     assert cli.get(B + "?estado=abertos&limit=10").headers["X-Total-Count"] == "0"
     assert cli.post(f"{B}/{pid}/notas", headers=h, data={"status": "voando"}).status_code == 400
 
@@ -135,7 +138,8 @@ def test_email_do_fornecedor_pelo_modelo(cli):
     assert e["para"] == "speedinds@example.com" and e["assunto"] == "SUIT - Frankie Ignivela"
     assert e["corpo"].startswith("Hi Usman,\n\nWe have a new order:\n\n1 – Head circumference — (missing)")
     assert "Colors: Pantone 1355 PC" in e["corpo"] and "Quantity: 2 suits" in e["corpo"] and "Admin Urace\nUrace" in e["corpo"]
-    assert e["faltam"] == ["29 medida(s)"]
+    assert e["faltam"] == ["29 medida(s)", "a arte final marcada",
+                           "a aprovação final do cliente (válida para a arte e as medidas de agora)"]
     assert cli.post(f"{B}/{pid}/email-fornecedor/rascunho", headers=h).status_code == 400    # incompleto não vai
     # o modelo é editável (gerente) e precisa das medidas
     assert cli.put(f"{B}/modelo", headers=h, json={"subject": "x", "body": "sem medidas"}).status_code == 400
@@ -147,20 +151,47 @@ def test_email_do_fornecedor_pelo_modelo(cli):
     assert cli.patch(f"{B}/fornecedores/{f['id']}", headers=h2, json={"price": "$1"}).status_code == 403
 
 
-def test_rascunho_ao_fornecedor_no_gmail_com_tudo_preenchido(cli, monkeypatch):
+def test_rascunho_ao_fornecedor_sai_do_pacote_aprovado_com_a_arte_anexada(cli, monkeypatch, tmp_path):
+    """#382 (A, B e revisão do Mio): sem a aprovação final válida não há rascunho; com ela, o rascunho leva a arte final
+    aprovada anexada e as medidas aprovadas (as do hash da aprovação), sem o endereço do cliente."""
     from command_center import providers
+    from command_center.providers import suits_ponte as sp
+    monkeypatch.setenv("URACE_DIR", str(tmp_path / "urace"))
     h = entra(cli, "admin@urace.us")
     fid = cli.post(f"{B}/fornecedores", headers=h, json={"name": "Usman B", "email": "u@example.com"}).json()["id"]
     todas = {m[0]: 50 for m in suits.MEDIDAS if m[3] == "comp"} | {"weight": 70, "foot": "42 EUR"}
-    pid = cli.post(B, headers=h, json={"customer_name": "Completo", "supplier_id": fid,
+    pid = cli.post(B, headers=h, json={"customer_name": "Completo Teste", "supplier_id": fid, "ship_address": "100 Rua Inventada\nCidade FL",
                                        "medidas": {"valores": todas}}).json()["id"]
     feitos = []
     monkeypatch.setattr(providers, "chamar", lambda s, f, **kw: feitos.append((s, f, kw, os.environ.get("APLICAR"))) or {"draft_id": "d1"})
     r = cli.post(f"{B}/{pid}/email-fornecedor/rascunho", headers=h)
-    assert r.status_code == 200 and r.json()["draft_id"] == "d1"
-    assert feitos[0][:2] == ("gmail", "gmail_rascunho") and feitos[0][2]["para"] == "u@example.com" and feitos[0][3] == "1"
+    assert r.status_code == 400 and "aprovação final" in r.json()["detail"] and not feitos
+    # a aprovação também não se registra sem a arte final e sem as medidas conferidas
+    assert cli.post(f"{B}/{pid}/aprovacao", headers=h, json={"trecho": "I approve"}).status_code == 400
+    from PIL import Image
+    b = io.BytesIO(); Image.new("RGB", (40, 30), (10, 20, 30)).save(b, "PNG")
+    sp.guardar_anexo(pid, "mockup-final.png", b.getvalue())
+    assert cli.post(f"{B}/{pid}/arte-final", headers=h, json={"nome": "mockup-final.png"}).json()["arte_final"] == ["mockup-final.png"]
+    r = cli.post(f"{B}/{pid}/aprovacao", headers=h, json={"trecho": "I approve"})
+    assert r.status_code == 400 and "não conferida" in r.json()["detail"]
+    cli.post(f"{B}/{pid}/medidas/estado", headers=h, json={"chaves": list(todas), "estado": "conferida"})
+    p = cli.post(f"{B}/{pid}/aprovacao", headers=h, json={"trecho": "I approve the final version", "message_id": "m-1",
+                                                          "data": "2026-10-22"}).json()
+    assert p["aprovacao"]["estado"] == "valida" and p["status"] == "approved"
+    r = cli.post(f"{B}/{pid}/email-fornecedor/rascunho", headers=h)
+    assert r.status_code == 200 and r.json()["draft_id"] == "d1" and r.json()["anexos"] == ["mockup-final.png"]
+    s_, f_, kw, aplicar = feitos[0]
+    assert (s_, f_, kw["para"], aplicar) == ("gmail", "gmail_rascunho", "u@example.com", "1")
+    assert [a[0] for a in kw["anexos"]] == ["mockup-final.png"] and kw["anexos"][0][1][:4] == b"\x89PNG"
+    assert "50 cm" in kw["corpo"] and "Rua Inventada" not in kw["corpo"]            # o endereço não vai na produção
     assert os.environ.get("APLICAR") is None                               # volta ao que era
     assert any(n["kind"] == "email" for n in cli.get(f"{B}/{pid}").json()["notas"])
+    # mudou uma medida depois: a aprovação cai e o pedido volta para revisão; o rascunho não sai mais
+    p = cli.patch(f"{B}/{pid}", headers=h, json={"medidas": {"valores": {"head": 51}}}).json()
+    assert p["aprovacao"]["estado"] == "desatualizada" and p["status"] == "design_review"
+    assert p["estado_medidas"]["head"]["estado"] == "preenchida" and p["estado_medidas"]["neck"]["estado"] == "conferida"
+    assert cli.post(f"{B}/{pid}/email-fornecedor/rascunho", headers=h).status_code == 400
+    assert cli.patch(f"{B}/{pid}", headers=h, json={"status": "approved"}).status_code == 400
 
 
 def test_lead_vira_pedido(cli):

@@ -679,7 +679,9 @@ def gmail_rotular(conta, thread_id, adicionar=None, remover=None):
      "corpo": {"type": "string"},
      "thread_id": {"type": "string"}, "responder_message_id": {"type": "string"}},
     ["conta", "para", "assunto", "corpo"])
-def gmail_rascunho(conta, para, assunto, corpo, thread_id=None, responder_message_id=None):
+def gmail_rascunho(conta, para, assunto, corpo, thread_id=None, responder_message_id=None, anexos=None):
+    """`anexos` (#382, só para as portas do painel, não está no esquema da ferramenta): [(nome, bytes, mime)] — o
+    rascunho do pedido ao fornecedor já leva a arte final aprovada."""
     if "@" not in para:
         raise ErroFerramenta("destinatário inválido")
     msg = email.message.EmailMessage()
@@ -694,8 +696,14 @@ def gmail_rascunho(conta, para, assunto, corpo, thread_id=None, responder_messag
             refs = _cabecalho(orig, "References")
             msg["References"] = f"{refs} {mid}".strip() if refs else mid
     msg.set_content(corpo)
+    for item in anexos or []:
+        if not (isinstance(item, (list, tuple)) and len(item) == 3 and isinstance(item[1], (bytes, bytearray))):
+            raise ErroFerramenta("anexo inválido: use (nome, bytes, mime)")
+        nome, dados, mime = item
+        principal, _, sub = (mime or "application/octet-stream").partition("/")
+        msg.add_attachment(bytes(dados), maintype=principal or "application", subtype=sub or "octet-stream", filename=nome)
     raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    desc = f"rascunho ({conta}) para {para}: '{assunto}'" + (f" na thread {thread_id}" if thread_id else "")
+    desc = f"rascunho ({conta}) para {para}: '{assunto}'" + (f" com {len(anexos)} anexo(s)" if anexos else "") + (f" na thread {thread_id}" if thread_id else "")
     if not _aplicar():
         return _simulado(desc)
     corpo_api = {"message": {"raw": raw}}

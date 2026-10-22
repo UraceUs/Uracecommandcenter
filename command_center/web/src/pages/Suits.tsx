@@ -22,11 +22,11 @@ import { tr, LOCALE } from '../i18n'
 interface Etapa { codigo: string; nome: string; descricao: string }
 interface Medida { chave: string; numero: string; nome: string; tipo: 'comp' | 'peso' | 'texto' }
 interface Campo { chave: string; nome: string }
-interface Meta { etapas: Etapa[]; medidas: Medida[]; design: Campo[] }
+interface Meta { etapas: Etapa[]; medidas: Medida[]; design: Campo[]; transicoes?: Record<string, string[]>; so_da_equipe?: string[] }
 interface Linha { id: number; title: string; product: string; quantity: number; customer_name: string | null; driver_name: string | null
   status: string; closed: number; order_date: string | null; due_on: string | null; source: string; fornecedor: string | null
   notas: number; ultima_nota: string | null; updated_at: string | null; created_at: string
-  discarded_at?: string | null; discard_reason?: string | null; ia_ligada?: number; wa_rascunhos?: number }
+  discarded_at?: string | null; discard_reason?: string | null; ia_ligada?: number; is_test?: number; wa_rascunhos?: number }
 interface Nota { id: number; status: string | null; kind: string; text: string | null; tem_imagem: number; command_id: number | null
   created_at: string; autor: string | null; ia?: { status: string; output: string | null; error: string | null } | null }
 type Valor = { v: number; u: string } | { t: string }
@@ -35,7 +35,20 @@ interface PedidoApi extends Omit<Linha, 'notas'> { customer_email: string | null
   asana_gid: string | null; asana_notes: string | null; asana_status: string | null; measurements: Record<string, Valor>
   site_order: string | null; gmail_thread_cliente: string | null; gmail_thread_designer: string | null; gmail_thread_fornecedor: string | null
   medidas_texto: Record<string, string>; faltam_medidas: string[]; design: Record<string, string>; criado_por: string | null; notas: Nota[]
-  client_id: number | null; cliente_nome: string | null; cliente_piloto: string | null }
+  client_id: number | null; cliente_nome: string | null; cliente_piloto: string | null
+  estado_medidas: Record<string, EstadoMedida>; arte_final: string[]; aprovacao: EstadoAprovacao | null; proxima_acao: string
+  saude_ponte: SaudePedido; preparados: Preparado[]; checked_at: string | null; welcome_sent_at: string | null }
+/** #382: a aprovação final do cliente, amarrada à arte final e às medidas (o hash de cada uma). */
+interface Aprovacao { id: number; message_id: string | null; excerpt: string; approved_at: string; source: 'ia' | 'manual'; status: string
+  stale_reason: string | null; files: string[]; created_at: string }
+interface EstadoAprovacao { estado: 'valida' | 'desatualizada' | 'nenhuma'; aprovacao: Aprovacao | null; bloqueios: string[]; arte_final: string[]
+  versao: string; pedido_final: { versao: string; em: string; simulado: boolean; atual: boolean } | null }
+interface EstadoMedida { estado: 'preenchida' | 'conferida' | 'suspeita'; motivo: string | null }
+interface SaudePedido { ultima_tentativa: string | null; ultimo_sucesso: string | null; ultimo_erro: string | null; ultimo_erro_em: string | null; modo: string | null }
+interface Preparado { id: number; subject: string; body: string; attachments: string[]; status: 'preparado' | 'enviado' | 'descartado'; created_at: string; decided_at: string | null }
+interface SaudePonte { ultima_rodada: { at: string; eventos: number; erros: number; simulacao: boolean; pulada?: string | null; ambiguos?: number } | null
+  simulacao: boolean; ligada: boolean; manual: boolean; preparados: number; com_erro: number }
+interface Endereco { para: string | null; assunto: string; corpo: string; whatsapp: string; faltam: string[] }
 /** O que o cadastro já sabe do cliente (#158: inserção manual sempre com "vincular ao cliente"). */
 interface DadosCliente { client_id: number; customer_name: string | null; customer_email: string | null; customer_phone: string | null
   driver_name: string | null; ship_address: string | null; medidas: { valores: Record<string, number>; unidade: string; unidade_peso: string } | null
@@ -47,21 +60,23 @@ function oQuePuxou(d: DadosCliente) {
   return 'Puxado do cadastro: ' + itens.filter(Boolean).join(', ') + '.'
 }
 const cartao = (id: number, nome: string | null, piloto: string | null) => ({ id, name: nome || '', pilot_name: piloto, email: null, phone: null } as unknown as Client)
-interface Resumo { por_etapa: Record<string, number>; abertos: number; fechados: number; descartados?: number; leads: number; fornecedores: number }
+interface Resumo { por_etapa: Record<string, number>; abertos: number; fechados: number; descartados?: number; testes?: number; leads: number; fornecedores: number }
 interface Lead { id: number; name: string; email: string | null; phone: string | null; notes: string | null; status: string; order_id: number | null; created_at: string; client_id: number | null }
 interface Fornecedor { id: number; name: string; contact: string | null; email: string | null; phone: string | null; has_fia: number | null
   status: string | null; price: string | null; shipping: string | null; payment: string | null; lead_time: string | null; comments: string | null
   is_current: number; pedidos: number; asana_gid: string | null }
-interface Email { para: string | null; assunto: string; corpo: string; faltam: string[]; fornecedor: Fornecedor | null }
+interface Email { para: string | null; assunto: string; corpo: string; faltam: string[]; anexos?: string[]; fornecedor: Fornecedor | null }
 interface PonteCfg { ponte_ligada: string; envio_automatico: string; designer_nome: string; designer_email: string; assinatura: string; boas_vindas: string; politica: string }
 interface Ponte { config: PonteCfg; manual: boolean; motor: string; ultima_rodada: { at: string; detail: string } | null }
 interface Anexo { nome: string; bytes: number }
 
 const TOM: Record<string, 'neutral' | 'warn' | 'info' | 'accent' | 'ok' | 'crit'> = {
   standby: 'neutral', awaiting_measurements: 'warn', design_pending: 'info', design_review: 'warn', approved: 'accent',
-  sent_to_supplier: 'info', in_production: 'info', in_transit: 'accent', delivered: 'ok', canceled: 'neutral' }
+  sent_to_supplier: 'info', supplier_accepted: 'info', in_production: 'info', photos_received: 'warn', checked: 'accent',
+  address_sent: 'info', in_transit: 'accent', delivered: 'ok', canceled: 'neutral' }
 const IDIOMAS: [string, string][] = [['en', tr("Inglês")], ['pt', tr("Português")], ['es', tr("Espanhol")], ['it', tr("Italiano")], ['fr', tr("Francês")], ['de', tr("Alemão")]]
 const KIND: Record<string, string> = { nota: tr("nota"), etapa: tr("etapa"), ia: 'IA', email: tr("e-mail"), whatsapp: 'WhatsApp' }
+const ESTADO_MED: Record<string, string> = { preenchida: tr("preenchida"), conferida: tr("conferida"), suspeita: tr("suspeita") }
 const horaFL = (iso: string) => { const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z'); return isNaN(d.getTime()) ? iso
   : d.toLocaleString(LOCALE(), { timeZone: 'America/New_York', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '') }
 const dia = (iso: string | null) => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—'
@@ -96,10 +111,11 @@ export function Suits() {
 
   return <>
     <PageHeader title={tr("Suits · Alpha Line")} eyebrow={tr("Macacões sob medida")}
-      help={<>{tr("Cada pedido de macacão, do contato à entrega, nas dez etapas. Em qualquer etapa dá para escrever uma nota, anexar um print e pedir à IA para seguir dali. O pedido ao fornecedor sai no padrão salvo em \"E-mail ao fornecedor\".")}</>}>
+      help={<>{tr("Cada pedido de macacão, do contato à entrega direta ao cliente. Em qualquer etapa dá para escrever uma nota, anexar um print e pedir à IA para seguir dali. Produção só com a aprovação final escrita do cliente; o endereço vai ao fornecedor só depois do OK nas fotos do WhatsApp.")}</>}>
       {can('MANAGER') && <button className="btn ghost" disabled={importando} onClick={importar}>{importando ? tr("Importando…") : tr("Importar do Asana")}</button>}
       {can('OPERATOR') && <button className="btn primary" onClick={() => setNovo(true)}><Icon name="plus" size={16} /> {tr("Registrar novo pedido")}</button>}
     </PageHeader>
+    <SaudeTopo />
     <nav className="tabs" aria-label={tr("Suits")}>{ABAS.map(([path, rot]) => <NavLink key={path} to={path ? `/suits/${path}` : '/suits'} end
       className={() => (aba === path ? 'on' : '')}>{rot}{path === 'leads' && resumo.data ? <span className="count">{tr("&nbsp;")}{resumo.data.leads}</span> : null}</NavLink>)}</nav>
     {meta.error ? <div className="card"><ErrorState error={meta.error} retry={meta.reload} /></div>
@@ -141,7 +157,8 @@ function Pedidos({ meta, resumo }: { meta: Meta | null; resumo: Resumo | null })
           sub={[[p.product !== 'Suit' ? p.product : null, p.quantity > 1 ? `${p.quantity} un.` : null, p.fornecedor].filter(Boolean).join(' · '),
             p.source === 'asana' ? 'do Asana' : p.source === 'ia' ? 'pela IA' : null]}
           grande={p.order_date ? dia(p.order_date) : null} detalhe={p.order_date ? tr("pedido") : null}>
-          {((!p.discarded_at && p.ia_ligada === 0) || p.notas > 0 || !!p.wa_rascunhos) && <CdLista>
+          {((!p.discarded_at && p.ia_ligada === 0) || p.notas > 0 || p.is_test || !!p.wa_rascunhos) && <CdLista>
+            {p.is_test ? <CdItem tom="info">{tr("teste")}</CdItem> : null}
             {!p.discarded_at && p.ia_ligada === 0 && <CdItem tom="warn">{tr("IA desligada")}</CdItem>}
             {!!p.wa_rascunhos && <CdItem tom="warn" valor={p.wa_rascunhos}>{tr("WhatsApp para aprovar")}</CdItem>}
             {p.notas > 0 && <CdItem tom="info" glifo="✎" valor={p.notas}>{tr("notas")}</CdItem>}
@@ -156,6 +173,8 @@ function NovoPedido({ meta, onClose, onDone }: { meta: Meta | null; onClose: () 
   const toast = useToast()
   const forn = useGet<Fornecedor[]>('/suits/fornecedores')
   const [f, setF] = useState<Record<string, string>>({ language: 'en', product: 'Suit', quantity: '1' })
+  const [semIa, setSemIa] = useState(false)
+  const [teste, setTeste] = useState(false)
   const [design, setDesign] = useState<Record<string, string>>({})
   const [indo, setIndo] = useState(false)
   const [cli, setCli] = useState<Client | null>(null)
@@ -179,7 +198,7 @@ function NovoPedido({ meta, onClose, onDone }: { meta: Meta | null; onClose: () 
       const p = await api.post<{ id: number }>('/suits', { ...f, quantity: Number(f.quantity) || 1,
         supplier_id: f.supplier_id ? Number(f.supplier_id) : (forn.data || []).find(x => x.is_current)?.id ?? null,
         client_id: cli?.id ?? null, medidas: puxado?.medidas ?? undefined,
-        design, nota: f.nota || null })
+        design, nota: f.nota || null, ia_ligada: !semIa, is_test: teste })
       toast(tr("Pedido registrado."), 'ok'); onDone(p.id); onClose()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
@@ -203,6 +222,10 @@ function NovoPedido({ meta, onClose, onDone }: { meta: Meta | null; onClose: () 
     {meta && <details className="suit-mais"><summary>{tr("Design (opcional agora)")}</summary><div className="suit-form">
       {meta.design.map(d => <label key={d.chave} className="fld"><span>{d.nome}</span><input value={design[d.chave] || ''} onChange={e => setDesign(x => ({ ...x, [d.chave]: e.target.value }))} /></label>)}
     </div></details>}
+    <div className="suit-checks">
+      <label className="check suit-ia"><input type="checkbox" checked={semIa} onChange={e => setSemIa(e.target.checked)} /> {tr("Nascer com a IA desligada (a ponte não age)")}</label>
+      <label className="check suit-ia"><input type="checkbox" checked={teste} onChange={e => setTeste(e.target.checked)} /> {tr("Pedido de teste (nunca manda e-mail real; não conta nem avisa)")}</label>
+    </div>
     <label className="fld"><span>{tr("Nota (o que já se sabe)")}</span><textarea rows={3} value={f.nota || ''} onChange={set('nota')} placeholder={tr("pagou?, prazo, de onde veio o pedido, link da conversa")} /></label>
     <div className="modal-foot"><button className="btn ghost" onClick={onClose}>{tr("Cancelar")}</button>
       <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Registrando…") : tr("Registrar")}</button></div>
@@ -222,14 +245,19 @@ export function SuitPedido() {
       {d.discarded_at ? <Chip tone="neutral">{tr("descartado")}</Chip> : <EtapaChip meta={meta.data} s={d.status} />}
     </PageHeader>
     <Descarte pedido={d} onDone={p.reload} />
+    {d.is_test ? <p className="small" role="status" style={{ color: 'var(--info, var(--accent))' }}><b>{tr("Pedido de teste:")}</b> {tr("nenhum e-mail real sai dele, e ele não entra nas contagens nem na Atenção.")}</p> : null}
     <Etapas meta={meta.data} atual={d.status} />
+    <p className="small muted suit-proxima"><b>{tr("Próximo passo:")}</b> {d.proxima_acao}</p>
     <NovaNota meta={meta.data} pedido={d} onDone={p.reload} />
     <Cliente pedido={d} onDone={p.reload} />
     <Medidas meta={meta.data} pedido={d} onDone={p.reload} />
     <Design meta={meta.data} pedido={d} onDone={p.reload} />
+    <AprovacaoFinal pedido={d} onDone={p.reload} />
+    <Preparados pedido={d} onDone={p.reload} />
     <PonteDoPedido pedido={d} onDone={p.reload} />
     <WhatsAppDoPedido pedido={d} onDone={p.reload} />
     <EmailFornecedor pedido={d} onDone={p.reload} />
+    <EnderecoFornecedor pedido={d} onDone={p.reload} />
     <Linha_do_tempo meta={meta.data} notas={d.notas} />
     {d.asana_notes || d.asana_gid ? <Section title={tr("Como estava no Asana")}>
       {d.asana_status && <p className="small muted">{tr("Status no Asana:")} {d.asana_status}</p>}
@@ -322,10 +350,12 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
       <label className="btn ghost suit-arquivo"><Icon name="plus" size={16} /> {arquivo ? tr("Trocar print") : tr("Anexar print")}
         <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setArquivo(e.target.files?.[0] || null)} /></label>
       <label className="fld suit-etapa"><span>{tr("Etapa")}</span><select aria-label={tr("Etapa")} value={etapa} onChange={e => setEtapa(e.target.value)}>
-        {meta.etapas.map(e => <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? tr("{0} (atual)", e.nome) : tr("mover para {0}", e.nome)}</option>)}</select></label>
+        {meta.etapas.filter(e => e.codigo === pedido.status || !meta.transicoes || (meta.transicoes[pedido.status] || []).includes(e.codigo)).map(e =>
+          <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? tr("{0} (atual)", e.nome) : tr("mover para {0}", e.nome)}</option>)}</select></label>
       {pedido.ia_ligada !== 0 && <label className="check suit-ia"><input type="checkbox" checked={ia} onChange={e => setIa(e.target.checked)} /> {tr("Pedir à IA para seguir daqui")}</label>}
       <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : tr("Salvar nota")}</button>
     </div>
+    {(etapa === 'photos_received' || pedido.status === 'in_production') && <p className="small muted">{tr("Fotos do fornecedor (WhatsApp): anexe cada foto aqui com a etapa Photos received. O Checked (OK da equipe) exige pelo menos uma.")}</p>}
     {previa && <img src={previa} alt={tr("Print anexado")} className="suit-previa" />}
   </Section>
 }
@@ -397,8 +427,25 @@ function Medidas({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onDo
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   const falta = pedido.faltam_medidas.length
+  const est = pedido.estado_medidas || {}
+  const naoConf = Object.values(est).filter(e => e.estado === 'preenchida').length
+  const susp = Object.values(est).filter(e => e.estado === 'suspeita').length
+  const [suspeita, setSuspeita] = useState<string | null>(null)
+  const [motivo, setMotivo] = useState('')
+  async function marcar(chaves: string[], estado: string, mot?: string) {
+    try { await api.post(`/suits/${pedido.id}/medidas/estado`, { chaves, estado, motivo: mot || null }); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  function escolherEstado(chave: string, estado: string) {
+    if (estado === 'suspeita') { setMotivo(''); setSuspeita(chave) } else marcar([chave], estado)
+  }
   return <Section title={tr("Medidas")} count={meta.medidas.length - 1 - falta}
-    right={<>{falta > 0 && <Chip tone="warn">{tr("faltam")} {falta}</Chip>}{!editando && <button className="btn sm ghost" onClick={abrir}><Icon name="pencil" size={14} /> {tr("Preencher")}</button>}</>}>
+    right={<>{falta > 0 && <Chip tone="warn">{tr("faltam")} {falta}</Chip>}{susp > 0 && <Chip tone="crit">{tr("suspeitas")} {susp}</Chip>}
+      {naoConf > 0 && <Chip tone="warn">{tr("a conferir")} {naoConf}</Chip>}
+      {!editando && <button className="btn sm ghost" onClick={abrir}><Icon name="pencil" size={14} /> {tr("Preencher")}</button>}</>}>
+    {!editando && naoConf > 0 && <div className="suit-botoes"><button className="btn" onClick={() => marcar(Object.keys(est).filter(k => est[k].estado === 'preenchida'), 'conferida')}>
+      {tr("Marcar as {0} preenchidas como conferidas", naoConf)}</button></div>}
+    {!editando && <p className="small muted">{tr("Medida suspeita ou não conferida trava a aprovação final. Mudou o valor, volta para preenchida.")}</p>}
     {editando && <div className="row gap wrap" style={{ marginBottom: 10 }}>
       <div className="tabs" role="group" aria-label={tr("Unidade de comprimento")}><button className={unidade === 'cm' ? 'on' : ''} onClick={() => setUnidade('cm')}>{tr("cm")}</button><button className={unidade === 'in' ? 'on' : ''} onClick={() => setUnidade('in')}>{tr("polegadas")}</button></div>
       <div className="tabs" role="group" aria-label={tr("Unidade de peso")}><button className={peso === 'kg' ? 'on' : ''} onClick={() => setPeso('kg')}>{tr("kg")}</button><button className={peso === 'lb' ? 'on' : ''} onClick={() => setPeso('lb')}>{tr("lb")}</button></div>
@@ -408,7 +455,19 @@ function Medidas({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onDo
           <input inputMode={m.tipo === 'texto' ? 'text' : 'decimal'} value={v[m.chave] || ''} placeholder={m.tipo === 'texto' ? tr("42 EUR / 9 US") : m.tipo === 'peso' ? peso : unidade}
             onChange={e => setV(x => ({ ...x, [m.chave]: e.target.value }))} /></label>
       : (m.chave === 'bust' && !pedido.medidas_texto.bust) ? null
-      : <div key={m.chave} className={`suit-med${pedido.medidas_texto[m.chave] ? '' : ' falta'}`}><span className="small muted">{m.numero} – {m.nome}</span><b>{pedido.medidas_texto[m.chave] || '—'}</b></div>)}</div>
+      : <div key={m.chave} className={`suit-med${pedido.medidas_texto[m.chave] ? '' : ' falta'}${est[m.chave]?.estado === 'suspeita' ? ' suspeita' : ''}`}>
+          <span className="small muted">{m.numero} – {m.nome}</span><b>{pedido.medidas_texto[m.chave] || '—'}</b>
+          {est[m.chave] && <label className="suit-med-estado"><span className="sr-only">{tr("Estado de {0}", m.nome)}</span>
+            <select value={est[m.chave].estado} onChange={e => escolherEstado(m.chave, e.target.value)}>
+              {Object.entries(ESTADO_MED).map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select></label>}
+          {est[m.chave]?.motivo && <span className="small" style={{ color: 'var(--crit)' }}>{est[m.chave].motivo}</span>}
+        </div>)}</div>
+    {suspeita && <Scrim onMouseDown={() => setSuspeita(null)}><div className="modal" style={{ maxWidth: 440 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="suspeita-t">
+      <h3 id="suspeita-t">{tr("Por que a medida parece errada?")}</h3>
+      <label className="fld"><span>{tr("Motivo")}</span><input value={motivo} onChange={e => setMotivo(e.target.value)} maxLength={300} placeholder={tr("ex.: cintura maior que o peito")} /></label>
+      <div className="row gap"><button className="btn ghost" onClick={() => setSuspeita(null)}>{tr("Cancelar")}</button>
+        <button className="btn primary" disabled={!motivo.trim()} onClick={() => { marcar([suspeita], 'suspeita', motivo.trim()); setSuspeita(null) }}>{tr("Marcar suspeita")}</button></div>
+    </div></Scrim>}
     {editando && <div className="row gap" style={{ marginTop: 10 }}><button className="btn ghost" onClick={() => setEditando(false)}>{tr("Cancelar")}</button><button className="btn primary" onClick={salvar}>{tr("Salvar medidas")}</button></div>}
   </Section>
 }
@@ -438,10 +497,15 @@ function PonteDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () => vo
   const anexos = useGet<Anexo[]>(`/suits/${pedido.id}/anexos?v=${pedido.notas.length}`)
   const [ed, setEd] = useState<Record<string, string> | null>(null)
   const [indo, setIndo] = useState(false)
+  const sp = pedido.saude_ponte || { ultima_tentativa: null, ultimo_sucesso: null, ultimo_erro: null, ultimo_erro_em: null, modo: null }
   const papeis: [string, string][] = [['gmail_thread_cliente', tr("Conversa com o cliente")], ['gmail_thread_designer', tr("Conversa com o designer")],
     ['gmail_thread_fornecedor', tr("Conversa com o fornecedor")]]
   async function salvar() {
     try { await api.patch(`/suits/${pedido.id}`, ed); toast(tr("Conversas ligadas ao pedido."), 'ok'); setEd(null); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  async function arte(nome: string, final: boolean) {
+    try { await api.post(`/suits/${pedido.id}/arte-final`, { nome, final }); toast(final ? tr("Marcado como arte final.") : tr("Saiu da arte final."), 'ok'); onDone() }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function simular() {
@@ -457,11 +521,21 @@ function PonteDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () => vo
       : <dl className="suit-dl">{papeis.map(([k, rot]) => { const v = (pedido as unknown as Record<string, string | null>)[k]
         return <div key={k}><dt>{rot}</dt><dd>{v ? <a href={gmailLink(v)} target="_blank" rel="noreferrer">{tr("abrir no Gmail ↗")}</a> : <span className="muted">—</span>}</dd></div> })}</dl>}
     <h3 className="h3" style={{ marginTop: 12 }}>{tr("Arquivos do pedido")}</h3>
-    {anexos.data && anexos.data.length ? <ul className="suit-lista">{anexos.data.map(a => <li key={a.nome}>
-        <a className="suit-linha" href={`/ops/api/suits/${pedido.id}/anexos/${encodeURIComponent(a.nome)}`} target="_blank" rel="noreferrer">
-          <span className="grow truncate">{a.nome}</span><span className="small muted">{tamanho(a.bytes)}</span></a></li>)}</ul>
+    {anexos.data && anexos.data.length ? <ul className="suit-lista">{anexos.data.map(a => { const final = pedido.arte_final.includes(a.nome)
+      return <li key={a.nome} className="suit-arq">
+        <a className="suit-linha grow" href={`/ops/api/suits/${pedido.id}/anexos/${encodeURIComponent(a.nome)}`} target="_blank" rel="noreferrer">
+          <span className="grow truncate">{a.nome}</span>{final && <Chip tone="ok">{tr("arte final")}</Chip>}<span className="small muted">{tamanho(a.bytes)}</span></a>
+        <button className={`btn${final ? ' ghost' : ''}`} aria-pressed={final} onClick={() => arte(a.nome, !final)}>{final ? tr("Tirar da arte final") : tr("Marcar arte final")}</button></li> })}</ul>
       : <p className="small muted">{tr("Nada ainda. O que chegar por e-mail (medidas, inspiração, logos, arte) fica aqui.")}</p>}
     <div className="row gap wrap" style={{ marginTop: 10 }}><button className="btn" disabled={indo} onClick={simular}>{indo ? tr("Simulando…") : tr("Simular o próximo passo")}</button></div>
+    <h3 className="h3" style={{ marginTop: 12 }}>{tr("Saúde da ponte neste pedido")}</h3>
+    <dl className="suit-dl">
+      <div><dt>{tr("Última tentativa")}</dt><dd>{sp.ultima_tentativa ? horaFL(sp.ultima_tentativa) : <span className="muted">—</span>}
+        {sp.modo ? ` · ${sp.modo === 'real' ? tr("envio real") : tr("simulação")}` : ''}</dd></div>
+      <div><dt>{tr("Último sucesso")}</dt><dd>{sp.ultimo_sucesso ? horaFL(sp.ultimo_sucesso) : <span className="muted">—</span>}</dd></div>
+      <div><dt>{tr("Último erro")}</dt><dd>{sp.ultimo_erro ? <span style={{ color: 'var(--crit)' }}>{sp.ultimo_erro}{sp.ultimo_erro_em ? ` (${horaFL(sp.ultimo_erro_em)})` : ''}</span> : <span className="muted">—</span>}</dd></div>
+      <div><dt>{tr("Próxima ação esperada")}</dt><dd>{pedido.proxima_acao}</dd></div>
+    </dl>
   </Section>
 }
 
@@ -531,18 +605,121 @@ function EmailFornecedor({ pedido, onDone }: { pedido: PedidoApi; onDone: () => 
   const [indo, setIndo] = useState(false)
   async function rascunho() {
     setIndo(true)
-    try { const r = await api.post<{ para: string }>(`/suits/${pedido.id}/email-fornecedor/rascunho`); toast(tr("Rascunho criado no Gmail para {0}. Anexe o mockup final e envie.", r.para), 'ok'); onDone() }
+    try { const r = await api.post<{ para: string; anexos: string[] }>(`/suits/${pedido.id}/email-fornecedor/rascunho`); toast(tr("Rascunho criado no Gmail para {0}, com a arte final aprovada anexada ({1}). Confira e envie.", r.para, r.anexos.join(', ')), 'ok'); onDone() }
     catch (x) { toast((x as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   return <Section title={tr("Pedido ao fornecedor")}>
     {e.error ? <ErrorState error={e.error} retry={e.reload} /> : !e.data ? <Loading rows={2} /> : <>
       {e.data.faltam.length > 0 && <p className="small" style={{ color: 'var(--warn)' }}>{tr("Falta")} {e.data.faltam.join(' e ')} {tr("para mandar ao fornecedor.")}</p>}
-      <div className="small muted">{tr("Para:")} {e.data.para || '—'} {tr("· Assunto:")} <b>{e.data.assunto}</b></div>
+      <div className="small muted">{tr("Para:")} {e.data.para || '—'} {tr("· Assunto:")} <b>{e.data.assunto}</b>{e.data.anexos?.length ? <> {tr("· Anexos:")} {e.data.anexos.join(', ')}</> : null}</div>
+      <p className="small muted">{tr("Sai do pacote aprovado (a arte final e as medidas da aprovação), sem o endereço: ele vai depois do OK nas fotos.")}</p>
       <pre className="suit-pre">{e.data.corpo}</pre>
       <div className="row gap wrap"><button className="btn primary" disabled={indo || e.data.faltam.length > 0} onClick={rascunho}>{indo ? tr("Criando…") : tr("Criar rascunho no Gmail")}</button>
         <Link className="btn ghost" to="/suits/modelo">{tr("Editar o modelo")}</Link></div>
     </>}
   </Section>
+}
+
+/* ============================================================ #382: aprovação final, designer, endereço, saúde */
+function AprovacaoFinal({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {
+  const toast = useToast()
+  const [aberto, setAberto] = useState(false)
+  const [f, setF] = useState({ trecho: '', message_id: '', data: '' })
+  const [indo, setIndo] = useState(false)
+  const a = pedido.aprovacao
+  if (!a) return null
+  async function registrar() {
+    setIndo(true)
+    try { await api.post(`/suits/${pedido.id}/aprovacao`, { trecho: f.trecho, message_id: f.message_id || null, data: f.data || null }); toast(tr("Aprovação final registrada."), 'ok'); setAberto(false); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  const tom = a.estado === 'valida' ? 'ok' : a.estado === 'desatualizada' ? 'crit' : 'warn'
+  const rot = a.estado === 'valida' ? tr("válida") : a.estado === 'desatualizada' ? tr("desatualizada") : tr("ainda não")
+  return <Section title={tr("Aprovação final")} right={<Chip tone={tom}>{rot}</Chip>}>
+    <p className="small muted">{tr("A produção só sai com a aprovação final escrita do cliente (vale por e-mail), amarrada à arte final e às medidas de agora: mudou qualquer uma, ela cai. Versão atual:")} <b>{a.versao}</b></p>
+    {a.bloqueios.length > 0 && <ul className="small suit-bloqueios">{a.bloqueios.map(b => <li key={b}>{b}</li>)}</ul>}
+    {a.pedido_final && <p className="small">{tr("E-mail de aprovação final da versão {0} {1} em {2}.", a.pedido_final.versao, a.pedido_final.simulado ? tr("(simulação, não saiu)") : tr("enviado"), horaFL(a.pedido_final.em))}{!a.pedido_final.atual && <span style={{ color: 'var(--warn)' }}> {tr("A versão mudou depois.")}</span>}</p>}
+    {a.aprovacao && <dl className="suit-dl">
+      <div><dt>{tr("Trecho")}</dt><dd>«{a.aprovacao.excerpt}»</dd></div>
+      <div><dt>{tr("Data do e-mail")}</dt><dd>{a.aprovacao.approved_at}</dd></div>
+      <div><dt>{tr("E-mail")}</dt><dd>{a.aprovacao.message_id || <span className="muted">—</span>} · {a.aprovacao.source === 'ia' ? tr("registrada pela IA") : tr("registrada pela equipe")}</dd></div>
+      <div><dt>{tr("Arte aprovada")}</dt><dd>{a.aprovacao.files.join(', ')}{a.aprovacao.stale_reason ? <span style={{ color: 'var(--crit)' }}> · {tr("caiu:")} {a.aprovacao.stale_reason}</span> : null}</dd></div>
+    </dl>}
+    <div className="suit-botoes"><button className="btn" disabled={a.bloqueios.length > 0} onClick={() => setAberto(true)}>{tr("Registrar aprovação à mão")}</button></div>
+    {aberto && <Scrim onMouseDown={() => setAberto(false)}><div className="modal" style={{ maxWidth: 520 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="aprov-t">
+      <h3 id="aprov-t">{tr("Registrar a aprovação final da versão {0}", a.versao)}</h3>
+      <p className="small muted">{tr("Copie do e-mail do cliente o trecho em que ele aprova esta versão final. \"Gostei\" de uma versão anterior não vale.")}</p>
+      <label className="fld"><span>{tr("Trecho com o \"aprovo\"")}</span><textarea rows={3} value={f.trecho} onChange={e => setF(x => ({ ...x, trecho: e.target.value }))} /></label>
+      <div className="suit-form">
+        <label className="fld"><span>{tr("Id ou link do e-mail (opcional)")}</span><input value={f.message_id} onChange={e => setF(x => ({ ...x, message_id: e.target.value }))} /></label>
+        <label className="fld"><span>{tr("Data do e-mail")}</span><input type="date" value={f.data} onChange={e => setF(x => ({ ...x, data: e.target.value }))} /></label>
+      </div>
+      <div className="row gap"><button className="btn ghost" onClick={() => setAberto(false)}>{tr("Cancelar")}</button>
+        <button className="btn primary" disabled={indo || f.trecho.trim().length < 3} onClick={registrar}>{indo ? tr("Registrando…") : tr("Registrar")}</button></div>
+    </div></Scrim>}
+  </Section>
+}
+
+function Preparados({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {
+  const { can } = useAuth()
+  const toast = useToast()
+  const [indo, setIndo] = useState(0)
+  const lista = (pedido.preparados || []).filter(x => x.status === 'preparado')
+  if (!lista.length) return null
+  async function agir(id: number, acao: 'enviar' | 'descartar') {
+    setIndo(id)
+    try { await api.post(`/suits/${pedido.id}/preparados/${id}/${acao}`); toast(acao === 'enviar' ? tr("Enviado ao designer.") : tr("Descartado."), 'ok'); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(0) }
+  }
+  return <Section title={tr("Para o designer")} count={lista.length}>
+    <p className="small muted">{tr("A IA preparou; nada saiu ainda. Confira o texto e os anexos (já limpos, sem dado do cliente) e envie.")}</p>
+    {lista.map(x => <div key={x.id} className="suit-prep">
+      <h3 className="h3">{x.subject}</h3>
+      <pre className="suit-pre">{x.body}</pre>
+      {x.attachments.length > 0 && <p className="small muted">{tr("Anexos:")} {x.attachments.join(', ')}</p>}
+      {can('OPERATOR') && <div className="suit-botoes"><button className="btn primary" disabled={indo === x.id} onClick={() => agir(x.id, 'enviar')}>{indo === x.id ? tr("Enviando…") : tr("Enviar ao designer")}</button>
+        <button className="btn ghost" disabled={indo === x.id} onClick={() => agir(x.id, 'descartar')}>{tr("Descartar")}</button></div>}
+    </div>)}
+  </Section>
+}
+
+function EnderecoFornecedor({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {
+  const toast = useToast()
+  const mostrar = ['checked', 'address_sent', 'in_transit'].includes(pedido.status)
+  const e = useGet<Endereco>(mostrar ? `/suits/${pedido.id}/endereco-fornecedor?v=${pedido.updated_at || ''}` : null)
+  const [indo, setIndo] = useState(false)
+  if (!mostrar) return null
+  async function rascunho() {
+    setIndo(true)
+    try { const r = await api.post<{ para: string }>(`/suits/${pedido.id}/endereco-fornecedor/rascunho`); toast(tr("Rascunho com o endereço criado no Gmail para {0}.", r.para), 'ok'); onDone() }
+    catch (x) { toast((x as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
+  async function copiar() {
+    try { await navigator.clipboard.writeText(e.data?.whatsapp || ''); toast(tr("Mensagem copiada para o WhatsApp."), 'ok') } catch { toast(tr("Não deu para copiar."), 'warn') }
+  }
+  return <Section title={tr("Endereço ao fornecedor")}>
+    <p className="small muted">{tr("Só depois do OK nas fotos. O fornecedor manda direto ao cliente; o endereço nunca vai ao designer.")}</p>
+    {e.error ? <ErrorState error={e.error} retry={e.reload} /> : !e.data ? <Loading rows={2} /> : <>
+      {e.data.faltam.length > 0 && <p className="small" style={{ color: 'var(--warn)' }}>{tr("Falta")} {e.data.faltam.join(' e ')}.</p>}
+      <pre className="suit-pre">{e.data.corpo}</pre>
+      <div className="suit-botoes"><button className="btn primary" disabled={indo || e.data.faltam.length > 0} onClick={rascunho}>{indo ? tr("Criando…") : tr("Criar rascunho no Gmail")}</button>
+        <button className="btn" onClick={copiar}>{tr("Copiar para o WhatsApp")}</button></div>
+    </>}
+  </Section>
+}
+
+/** #382 (F): no topo da aba, a última rodada da ponte. */
+function SaudeTopo() {
+  const s = useGet<SaudePonte>('/suits/ponte/saude', 60000)
+  if (!s.data) return null
+  const u = s.data.ultima_rodada
+  return <p className="small suit-saude" role="status">
+    <b>{tr("Ponte:")}</b> {!s.data.ligada ? tr("desligada") : u ? tr("última rodada {0} · {1} evento(s) · {2} erro(s)", horaFL(u.at), u.eventos, u.erros) : tr("ainda não rodou")}
+    {' · '}{s.data.simulacao ? <span style={{ color: 'var(--warn)' }}>{tr("em simulação")}</span> : <span style={{ color: 'var(--ok)' }}>{tr("envio real")}</span>}
+    {s.data.preparados > 0 && <> · {tr("{0} e-mail(s) ao designer esperando envio", s.data.preparados)}</>}
+    {s.data.com_erro > 0 && <> · <span style={{ color: 'var(--crit)' }}>{tr("{0} pedido(s) com erro na ponte", s.data.com_erro)}</span></>}
+    {!s.data.manual && <> · <span style={{ color: 'var(--warn)' }}>{tr("manual de medidas não carregado")}</span></>}
+  </p>
 }
 
 function Linha_do_tempo({ meta, notas }: { meta: Meta; notas: Nota[] }) {
@@ -681,7 +858,7 @@ interface WaMsg { id: number; papel: string; direcao: string; remetente_nome: st
   anexos: string | null; vinculo?: string | null; estado?: string; candidatos?: string | null; at: string | null }
 interface WaSaida { id: number; order_id?: number; title?: string; papel: string; motivo: string; texto: string; anexos: string | null
   estado: string; erro?: string | null; created_at: string }
-interface WaPedido { mensagens: WaMsg[]; saidas: WaSaida[]; pedido: { id: number; tracking: string | null; suit_approved_at: string | null
+interface WaPedido { mensagens: WaMsg[]; saidas: WaSaida[]; pedido: { id: number; status: string; tracking: string | null; checked_at: string | null
   address_sent_at: string | null }; config: WaCfg }
 const GRUPO: Record<string, string> = { design: tr("Grupo de design"), fornecedor: tr("Grupo do fornecedor") }
 const MOTIVO: Record<string, string> = { mensagem: tr("mensagem"), cobranca: tr("cobrança do dia"), endereco: tr("endereço de envio") }
@@ -711,7 +888,9 @@ function RascunhoWa({ s, onDone }: { s: WaSaida; onDone: () => void }) {
   </li>
 }
 
-function MensagemWa({ m, pedido }: { m: WaMsg; pedido?: number }) {
+const IMAGEM = /\.(png|jpe?g|webp)$/i
+
+function MensagemWa({ m, pedido, foto }: { m: WaMsg; pedido?: number; foto?: (m: WaMsg, nome: string) => void }) {
   const anexos = anexosDe(m.anexos)
   return <li className={`wa-msg ${m.direcao === 'saida' ? 'nossa' : ''}`}>
     <div className="small muted">{GRUPO[m.papel] || m.papel} · {m.direcao === 'saida' ? tr("URACE") : (m.remetente_nome || tr("participante"))}{m.at ? ` · ${horaFL(m.at)}` : ''}</div>
@@ -721,7 +900,9 @@ function MensagemWa({ m, pedido }: { m: WaMsg; pedido?: number }) {
       {a.nao_guardado ? <span className="small muted">{a.nome} {tr("(grande demais, não guardado)")}</span>
         : <a className="suit-linha" target="_blank" rel="noreferrer"
             href={pedido ? `/ops/api/suits/${pedido}/anexos/${encodeURIComponent(a.nome)}` : `/ops/api/atelie/mensagens/${m.id}/anexos/${encodeURIComponent(a.nome)}`}>
-            <span className="grow truncate">{a.nome}</span>{a.bytes ? <span className="small muted">{tamanho(a.bytes)}</span> : null}</a>}</li>)}</ul>}
+            <span className="grow truncate">{a.nome}</span>{a.bytes ? <span className="small muted">{tamanho(a.bytes)}</span> : null}</a>}
+      {foto && pedido && m.papel === 'fornecedor' && m.direcao === 'entrada' && !a.nao_guardado && IMAGEM.test(a.nome) &&
+        <button className="btn ghost sm" onClick={() => foto(m, a.nome)}>{tr("Usar como foto do suit")}</button>}</li>)}</ul>}
   </li>
 }
 
@@ -759,10 +940,12 @@ function WhatsAppDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () =>
       <div className="row gap wrap"><button className="btn" disabled={!!indo || !texto.trim()} onClick={async () => {
         if (await fazer('escrever', `/atelie/pedidos/${pedido.id}/escrever`, { papel, texto }, tr("Enviado ao grupo."))) setTexto('') }}>{tr("Enviar ao grupo")}</button></div>
       <h3 className="h3" style={{ marginTop: 12 }}>{tr("Suit pronto e envio")}</h3>
-      {d.pedido.suit_approved_at
-        ? <p className="small">{tr("Suit aprovado pela equipe em {0}.", horaFL(d.pedido.suit_approved_at))} {d.pedido.address_sent_at ? tr("Endereço enviado ao fornecedor.") : tr("O endereço espera o aprovar acima.")}</p>
-        : <><p className="small muted">{tr("Confira as fotos do fornecedor. Aprovado, o endereço de entrega vai ao grupo dele (só depois disso).")}</p>
-          <button className="btn" disabled={!!indo} onClick={() => fazer('suit', `/atelie/pedidos/${pedido.id}/suit-aprovado`, {}, tr("Suit aprovado: o endereço foi para o grupo do fornecedor."))}>{tr("Suit conferido e aprovado")}</button></>}
+      {d.pedido.address_sent_at
+        ? <p className="small">{tr("Endereço enviado ao fornecedor.")}</p>
+        : d.pedido.status === 'checked'
+        ? <><p className="small muted">{tr("A equipe conferiu as fotos (Checked): o endereço de entrega pode ir ao grupo do fornecedor.")}</p>
+          <button className="btn" disabled={!!indo} onClick={() => fazer('endereco', `/atelie/pedidos/${pedido.id}/endereco`, {}, tr("Endereço enviado ao grupo do fornecedor."))}>{tr("Mandar o endereço ao fornecedor")}</button></>
+        : <p className="small muted">{tr("As fotos do fornecedor que chegarem no grupo viram a foto do suit (Photos received) com um clique. O endereço só vai depois do OK da equipe (Checked).")}</p>}
       <div className="suit-form" style={{ marginTop: 10 }}>
         <label className="fld"><span>{tr("Código de rastreio")}</span><input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder={pedido.tracking || ''} /></label>
         <label className="fld"><span>{tr("Transportadora (opcional)")}</span><input value={transp} onChange={e => setTransp(e.target.value)} /></label>
@@ -771,7 +954,8 @@ function WhatsAppDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () =>
         if (await fazer('rastreio', `/atelie/pedidos/${pedido.id}/rastreio`, { codigo, transportadora: transp || null }, tr("Rastreio gravado no pedido."))) { setCodigo(''); setTransp('') } }}>{tr("Gravar rastreio")}</button>
     </>}
     {d.mensagens.length > 0 && <><h3 className="h3" style={{ marginTop: 12 }}>{tr("Mensagens dos grupos")}</h3>
-      <ol className="suit-lista">{d.mensagens.map(m => <MensagemWa key={m.id} m={m} pedido={pedido.id} />)}</ol></>}
+      <ol className="suit-lista">{d.mensagens.map(m => <MensagemWa key={m.id} m={m} pedido={pedido.id}
+        foto={(x, nome) => fazer('foto', `/atelie/mensagens/${x.id}/foto-do-suit`, { nome }, tr("Foto do suit salva no pedido (Photos received)."))} />)}</ol></>}
   </Section>
 }
 
@@ -792,7 +976,7 @@ function WhatsApp() {
   }
   return <>
     <Section title={tr("WhatsApp do ateliê")}>
-      <p className="small muted">{tr("O OpenClaw na VPS lê só os grupos da lista (DM desligada) e o agente de Suits opera neles: manda o pedido de design, recebe a arte, cobra o que está em aberto uma vez por dia, manda o endereço ao fornecedor depois do suit aprovado e grava o rastreio.")}</p>
+      <p className="small muted">{tr("O OpenClaw na VPS lê só os grupos da lista (DM desligada) e o agente de Suits opera neles: manda o pedido de design, recebe a arte, cobra o que está em aberto uma vez por dia, manda o endereço ao fornecedor depois do OK da equipe nas fotos e grava o rastreio.")}</p>
       {!c.existe ? <p className="small" style={{ color: 'var(--warn)' }}>{tr("Ainda não configurado na VPS (~/.urace/whatsapp-grupos.env).")}</p> : <>
         {!c.aplicar && <p className="small" style={{ color: 'var(--warn)' }}><b>{tr("Em simulação:")}</b> {tr("nada sai para os grupos (WA_GRUPOS_APLICAR=0). As mensagens ficam como rascunho nos pedidos.")}</p>}
         {c.aplicar && !e.data.envio_automatico && <p className="small"><b>{tr("Com aprovação:")}</b> {tr("cada mensagem ao grupo espera o aprovar de um clique (envio automático da ponte desligado).")}</p>}

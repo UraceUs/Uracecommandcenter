@@ -4,7 +4,7 @@
   coisas juntas: pedido de 127.0.0.1 (o uvicorn troca pelo IP real quando vem pelo Caddy), sem cabeçalho de
   proxy (X-Forwarded-For) e com o segredo `WA_GRUPOS_TOKEN` de ~/.urace/whatsapp-grupos.env. Nada do corpo
   vai para o log.
-- O resto é a tela: ver, aprovar/descartar rascunho, ligar mensagem ao pedido, suit aprovado e rastreio
+- O resto é a tela: ver, aprovar/descartar rascunho, ligar mensagem ao pedido, foto do suit, endereço e rastreio
   (OPERATOR, como o resto da aba Suits).
 """
 import hmac
@@ -88,7 +88,7 @@ def sem_pedido(response: Response, limit: int | None = 50, offset: int = 0, con:
 
 @r.get("/pedidos/{pid}")
 def do_pedido(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    p = um(con, "SELECT id, tracking, suit_approved_at, address_sent_at FROM suit_orders WHERE id=?", (pid,))
+    p = um(con, "SELECT id, status, tracking, checked_at, address_sent_at, is_test FROM suit_orders WHERE id=?", (pid,))
     if not p:
         raise HTTPException(404, "Pedido não encontrado.")
     cfg = wa.config()
@@ -138,13 +138,29 @@ def escrever(pid: int, dados: EscreverIn, request: Request, con: sqlite3.Connect
     return res
 
 
-@r.post("/pedidos/{pid}/suit-aprovado")
-def suit_aprovado(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+@r.post("/pedidos/{pid}/endereco")
+def endereco(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Pedido em Checked: o endereço vai ao grupo do fornecedor e o pedido passa a Address sent (#382)."""
     try:
-        res = wa.aprovar_suit(con, pid, u["id"])
+        res = wa.mandar_endereco(con, pid, u["id"])
     except wa.Recusado as e:
         raise HTTPException(400, str(e))
-    _aud(con, request, u, "atelie.suit.approved", pid)
+    _aud(con, request, u, "atelie.address.sent", pid)
+    return res
+
+
+class FotoIn(BaseModel):
+    nome: str
+
+
+@r.post("/mensagens/{mid}/foto-do-suit")
+def foto_do_suit(mid: int, dados: FotoIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """A foto do fornecedor no grupo vira a foto do suit (nota da etapa Photos received)."""
+    try:
+        res = wa.foto_do_suit(con, mid, dados.nome, u["id"])
+    except wa.Recusado as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "atelie.suit.photo", mid, {"arquivo": dados.nome}, tipo="atelie_wa_mensagem")
     return res
 
 

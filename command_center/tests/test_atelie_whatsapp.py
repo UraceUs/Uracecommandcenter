@@ -140,14 +140,24 @@ def test_envio_automatico_desligado_vira_rascunho_e_nada_sai(con, tmp_path):
     assert um(con, "SELECT estado FROM atelie_wa_saidas WHERE id=?", (r["rascunho"],))["estado"] == "enviado"
 
 
-def test_envio_automatico_ligado_sai_sozinho_mas_nao_com_a_ia_desligada(con, tmp_path):
+def test_envio_automatico_ligado_sai_sozinho_menos_ao_designer_e_nunca_com_a_ia_desligada(con, tmp_path):
     _env(tmp_path, aplicar=1)
     sp.salvar_config(con, {"envio_automatico": "1"})
-    pid = _pedido(con)
-    assert wa.propor(con, pid, "design", "Briefing")["enviado"] is True and len(_enviados(tmp_path)) == 1
+    pid = _pedido(con, status="in_production")
+    assert wa.propor(con, pid, "fornecedor", "any update on this suit?")["enviado"] is True and len(_enviados(tmp_path)) == 1
+    assert wa.propor(con, pid, "design", "Briefing")["rascunho"] and len(_enviados(tmp_path)) == 1   # #382: designer passa por uma pessoa
     con.execute("UPDATE suit_orders SET ia_ligada=0 WHERE id=?", (pid,))
     with pytest.raises(wa.Recusado, match="desligada"):
-        wa.propor(con, pid, "design", "outra")
+        wa.propor(con, pid, "fornecedor", "outra")
+
+
+def test_pedido_de_teste_nunca_manda_de_verdade(con, tmp_path):
+    _env(tmp_path, aplicar=1)
+    sp.salvar_config(con, {"envio_automatico": "1"})
+    pid = _pedido(con, status="in_production", is_test=1)
+    assert wa.propor(con, pid, "fornecedor", "any update?")["simulado"] is True
+    assert wa.propor(con, pid, "design", "oi", criado_por="user:1", user_id=1)["simulado"] is True
+    assert _enviados(tmp_path) == [] and um(con, "SELECT COUNT(*) AS n FROM atelie_wa_saidas")["n"] == 0
 
 
 def test_anexo_ao_designer_passa_pela_limpeza_da_ponte(con, tmp_path, monkeypatch):
@@ -196,21 +206,34 @@ def test_designer_recebe_so_o_design(con, texto, motivo):
     wa.propor(con, pid, "design", "nome nas costas: Leo Ficticio, bandeira do Brasil")   # o nome do design pode
 
 
-def test_endereco_so_vai_ao_fornecedor_depois_do_suit_aprovado(con, tmp_path):
+def _png(cor="red"):
+    import io
+
+    from PIL import Image
+    b = io.BytesIO()
+    Image.new("RGB", (40, 30), cor).save(b, "PNG")
+    return base64.b64encode(b.getvalue()).decode()
+
+
+def test_foto_do_grupo_vira_foto_do_suit_e_o_endereco_so_vai_com_checked(con, tmp_path):
+    """#382 + #383: fotos (Photos received, com foto), conferido (Checked, da equipe) e só então o endereço,
+    que move para Address sent; o rastreio leva a In Transit pela tabela de etapas."""
+    from command_center.providers import suits
     _env(tmp_path, aplicar=1)
     pid = _pedido(con, status="in_production")
     with pytest.raises(wa.Recusado, match="endereço"):
         wa.propor(con, pid, "fornecedor", "ship to 742 Evergreen Terrace")
-    r = wa.aprovar_suit(con, pid, 1)
-    s = um(con, "SELECT * FROM atelie_wa_saidas WHERE id=?", (r["endereco"]["rascunho"],))
-    assert s["motivo"] == "endereco" and "742 Evergreen Terrace" in s["texto"] and "tracking" in s["texto"]
-    wa.aprovar(con, s["id"], 1)
-    assert um(con, "SELECT address_sent_at FROM suit_orders WHERE id=?", (pid,))["address_sent_at"]
-    assert "742 Evergreen Terrace" in _enviados(tmp_path)[-1]["message"]
-
-
-def test_rastreio_grava_no_pedido_e_move_para_in_transit(con):
-    pid = _pedido(con, status="in_production")
+    with pytest.raises(wa.Recusado, match="Checked"):
+        wa.mandar_endereco(con, pid, 1)
+    r = wa.receber(con, _msg(USMAN, f"order #{pid} ready", "f1", midias=[{"nome": "suit.png", "tipo": "image/png", "base64": _png()}]))
+    wa.foto_do_suit(con, r["id"], "suit.png", 1)
+    assert um(con, "SELECT status FROM suit_orders WHERE id=?", (pid,))["status"] == "photos_received"
+    assert suits.tem_foto_do_fornecedor(con, pid)
+    suits.mudar_etapa(con, pid, "checked", 1)                       # o OK da equipe
+    res = wa.mandar_endereco(con, pid, 1)
+    assert res["enviado"] is True and "742 Evergreen Terrace" in _enviados(tmp_path)[-1]["message"]
+    assert "bruno@example.com" not in _enviados(tmp_path)[-1]["message"]
+    assert um(con, "SELECT status FROM suit_orders WHERE id=?", (pid,))["status"] == "address_sent"
     with pytest.raises(wa.Recusado):
         wa.registrar_rastreio(con, pid, "a b")
     wa.registrar_rastreio(con, pid, "1Z999AA10123456784", "UPS")
@@ -218,10 +241,19 @@ def test_rastreio_grava_no_pedido_e_move_para_in_transit(con):
     assert p["tracking"] == "UPS 1Z999AA10123456784" and p["status"] == "in_transit"
 
 
+def test_rastreio_antes_do_endereco_grava_mas_nao_pula_etapa(con):
+    pid = _pedido(con, status="in_production")
+    wa.registrar_rastreio(con, pid, "1Z999AA10123456784")
+    p = um(con, "SELECT tracking, status FROM suit_orders WHERE id=?", (pid,))
+    assert p["tracking"] == "1Z999AA10123456784" and p["status"] == "in_production"
+
+
 # ------------------------------------------------------------------ cobrança diária
 def test_cobra_no_maximo_uma_vez_por_dia_por_grupo(con, tmp_path):
     _env(tmp_path, aplicar=1)
     pid = _pedido(con, status="sent_to_supplier", sent_to_supplier_at="2026-10-01T12:00:00Z")
+    _pedido(con, "Pedido Teste Ficticio", "Teste Piloto", status="sent_to_supplier", sent_to_supplier_at="2026-10-01T12:00:00Z",
+            is_test=1)                                                  # pedido de teste não é cobrado
     dez = datetime(2026, 10, 22, 10, 0, tzinfo=wa.FUSO)
     r = wa.cobrancas(con, dez)
     assert [(x["pedido"], x["papel"]) for x in r] == [(pid, "fornecedor")]

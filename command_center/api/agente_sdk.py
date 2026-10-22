@@ -241,8 +241,11 @@ def _negar(motivo):
 class Portao:
     """Os ganchos PreToolUse/PostToolUse de UMA execução (sabe de que comando é)."""
 
-    def __init__(self, command_id=None, ferramentas=True, user_id=None, ensaio=False):
+    def __init__(self, command_id=None, ferramentas=True, user_id=None, ensaio=False, escopo=None):
         self.command_id = command_id
+        # #382 (C): num evento da ponte dos Suits, o pedido do evento. Só as ferramentas da ponte, e o Read só alcança
+        # o cérebro e a pasta DAQUELE pedido (nada dos anexos de outros clientes, nada da web).
+        self.escopo = escopo
         self.ferramentas = ferramentas
         self.user_id = user_id
         self.aprovar = []                 # ids dos cartões criados nesta execução
@@ -257,10 +260,17 @@ class Portao:
     def decidir(self, nome_cru, args):
         """None = pode rodar; texto = motivo para não rodar (o agente lê)."""
         if nome_cru in ("Read", "Glob", "Grep"):
+            if self.escopo is not None:
+                return None if leitura_permitida(nome_cru, args, pastas_da_ponte(self.escopo)) else (
+                    "Neste evento da ponte só dá para ler o cérebro e os arquivos DESTE pedido.")
             return None if leitura_permitida(nome_cru, args) else (
                 "Só dá para ler o cérebro (brain/), as skills e os arquivos de contexto do painel.")
         if nome_cru in ("WebSearch", "WebFetch", "ToolSearch"):
+            if self.escopo is not None:
+                return f"'{nome_cru}' não está liberada nos eventos da ponte dos Suits."
             return None
+        if self.escopo is not None and not nome_cru.startswith(f"mcp__{NOME_SUITS}__"):
+            return f"'{nome_cru}' não está liberada nos eventos da ponte dos Suits: só as ferramentas suits_* do pedido."
         if not nome_cru.startswith("mcp__") or not self.ferramentas:
             return f"'{nome_cru}' não está liberada para o AI Command."
         nome = nome_da_ferramenta(nome_cru)
@@ -369,9 +379,19 @@ def ferramentas_do_painel():
     return create_sdk_mcp_server(NOME_PAINEL, "1.0.0", lista)
 
 
-def ferramentas_dos_suits(user_id=None):
+def pastas_da_ponte(escopo):
+    """#382 (C): o que a IA da ponte pode ler: o cérebro e a pasta do pedido do evento (se já houver pedido)."""
+    from command_center.providers import suits_ponte
+    pastas = [CEREBRO]
+    if escopo and escopo.get("pedido"):
+        pastas.append(suits_ponte.pasta(int(escopo["pedido"])))
+    return pastas
+
+
+def ferramentas_dos_suits(user_id=None, escopo=None):
     """A aba Suits (#153) para o agente: ler, registrar, atualizar e anotar pedidos de macacão.
-    Conexão normal (escreve): é trabalho interno, e o portão registra cada escrita como ação feita."""
+    Conexão normal (escreve): é trabalho interno, e o portão registra cada escrita como ação feita.
+    `escopo` (#382): num evento da ponte, só as ferramentas da ponte, presas ao pedido do evento."""
     from claude_agent_sdk import SdkMcpTool, create_sdk_mcp_server
 
     from command_center.api import suits
@@ -396,7 +416,9 @@ def ferramentas_dos_suits(user_id=None):
     return create_sdk_mcp_server(NOME_SUITS, "1.0.0", [
         SdkMcpTool(name=nome, description=desc, input_schema={"type": "object", "properties": props, "required": obrig},
                    handler=fabrica(fn))
-        for nome, desc, props, obrig, fn in suits.ferramentas_ia() + atelie_whatsapp.ferramentas_ia()])
+        for nome, desc, props, obrig, fn in suits.ferramentas_ia(escopo) + [
+            (n, d, p, o, f if escopo is None else suits._no_escopo(n, f, escopo))   # #382: só o pedido do evento
+            for n, d, p, o, f in atelie_whatsapp.ferramentas_ia()]])
 
 
 def ferramentas_das_pendencias(command_id=None, user_id=None):
@@ -513,16 +535,22 @@ def _guardar_sessao(session_key, sessao):
 def _opcoes(modelo, sistema, portao, limite, retomar, max_turnos):
     from claude_agent_sdk import ClaudeAgentOptions, HookMatcher
     servidores = {}
-    if portao.ferramentas:
+    embutidas = list(FERRAMENTAS_EMBUTIDAS)
+    if portao.ferramentas and portao.escopo is not None:
+        # #382 (C): evento da ponte dos Suits — o mínimo. Nada de clientes, Atenção, QuickBooks, Gmail ou web.
+        servidores = {NOME_SUITS: ferramentas_dos_suits(portao.user_id, portao.escopo)}
+        embutidas = ["Read", "Glob", "Grep"]
+    elif portao.ferramentas:
         servidores = servidores_mcp()
         servidores[NOME_PAINEL] = ferramentas_do_painel()
         servidores[NOME_SUITS] = ferramentas_dos_suits(portao.user_id)
         servidores[NOME_PENDENCIAS] = ferramentas_das_pendencias(portao.command_id, portao.user_id)
-    permitidas = list(FERRAMENTAS_EMBUTIDAS) + [f"mcp__{n}__*" for n in servidores]
+    permitidas = embutidas + [f"mcp__{n}__*" for n in servidores]
+    leitura = pastas_da_ponte(portao.escopo) if portao.escopo is not None else pastas_de_leitura()
     return ClaudeAgentOptions(
         model=modelo,
         system_prompt=sistema,
-        tools=list(FERRAMENTAS_EMBUTIDAS),
+        tools=embutidas,
         allowed_tools=permitidas,
         disallowed_tools=["Bash", "Write", "Edit", "NotebookEdit", "Agent", "Task"],
         permission_mode="dontAsk",            # o que não está liberado é recusado, nunca perguntado
@@ -530,7 +558,7 @@ def _opcoes(modelo, sistema, portao, limite, retomar, max_turnos):
         strict_mcp_config=True,
         setting_sources=[],                   # nada de configuração de disco: só o que está aqui
         cwd=CEREBRO,
-        add_dirs=[d for d in pastas_de_leitura() if os.path.isdir(d)],
+        add_dirs=[d for d in leitura if os.path.isdir(d)],
         hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[portao.antes])],
                "PostToolUse": [HookMatcher(matcher=None, hooks=[portao.depois])]},
         max_budget_usd=limite,
@@ -589,7 +617,9 @@ def rodar(prompt, session_key=None, *, modelo=None, sistema=None, command_id=Non
     `portao` pronto (o ensaio passa o dele, para ler depois o que o agente tentou)."""
     modelo = modelo or MODELO
     limite = LIMITE_USD if limite is None else limite
-    portao = portao or Portao(command_id, ferramentas, user_id)
+    if portao is None:
+        from command_center.providers import suits_ponte
+        portao = Portao(command_id, ferramentas, user_id, escopo=suits_ponte.ESCOPO.get())
     retomar = _sessao_salva(session_key)
     prompt = prompt.replace("/workspace/contexto/", _contexto_dir().rstrip("/") + "/")
     inicio = datetime.now()

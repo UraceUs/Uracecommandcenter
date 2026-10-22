@@ -6,7 +6,7 @@
 > Code. A partir daí, o Claude sabe como a aba Suits funciona, o que pode fazer sozinho e o que
 > tem de perguntar antes.
 >
-> Atualizado em 17/10/2026 (issue #313, o cartão novo das listas; antes, #195).
+> Atualizado em 22/10/2026 (issue #382, as travas do fluxo e a entrega direta ao cliente; antes, #313 e #195).
 
 ---
 
@@ -26,8 +26,8 @@ Quem trabalha em cada pedido:
 | Papel | Quem é | O que recebe |
 |---|---|---|
 | Cliente | quem comprou (às vezes o pai ou a mãe do piloto) | boas-vindas, manual de medidas, a arte para aprovar |
-| Designer | **Mateus** (`carvalhovisual1@gmail.com`) | **só o design**, com a referência "Suits #id". Nunca nome completo, e-mail, telefone, endereço ou pagamento do cliente |
-| Fornecedor | o marcado como **atual** em Fornecedores (hoje o Usman) | o pedido de produção: as 29 medidas e o mockup final |
+| Designer | **Mateus** (`carvalhovisual1@gmail.com`) | **só o design**, com a referência "Suits #id". Nunca nome completo, e-mail, telefone, endereço, valor ou pagamento do cliente. O e-mail a ele é **preparado** pela IA e **enviado por uma pessoa** |
+| Fornecedor | o marcado como **atual** em Fornecedores (hoje o Usman) | o pedido de produção (as 29 medidas e a arte final **aprovada**, sem endereço); depois do OK nas fotos, o endereço do cliente. Manda as fotos pelo WhatsApp e despacha **direto ao cliente** |
 | A URACE com o cliente | assina como **George** | — |
 
 ### Como a tela mostra cada um (#313)
@@ -35,8 +35,8 @@ Quem trabalha em cada pedido:
 As três listas usam o cartão do painel inteiro (o "padrão D", playbook geral, seção 3):
 
 - **Pedidos:** em cima, a **etapa** (Standby, Awaiting Measurements…) ou *descartado*; as iniciais do piloto, o nome do
-  pedido, o produto, a quantidade e o fornecedor; no **bloco grande, o dia do pedido**; embaixo, **IA desligada** e
-  quantas **notas** ele tem. Toque em qualquer lugar do cartão para abrir o pedido.
+  pedido, o produto, a quantidade e o fornecedor; no **bloco grande, o dia do pedido**; embaixo, **teste** (pedido de
+  teste), **IA desligada** e quantas **notas** ele tem. Toque em qualquer lugar do cartão para abrir o pedido.
 - **Leads:** a situação (*aberto*, *virou pedido*, *perdido*), o nome, o e-mail e o telefone, a nota; embaixo,
   **Virar pedido** (azul), **Perdido**, **Card do cliente** e **Ver pedido**.
 - **Fornecedores:** *atual* em verde em cima, se tem FIA, **quantos pedidos** no bloco grande, os dados (contato,
@@ -83,22 +83,33 @@ repete com `confirmar: true` depois do seu "pode mandar".
 
 ---
 
-## 3. As dez etapas
+## 3. As etapas (desde 22/10, com a entrega direta ao cliente)
 
-O código entre crases é o que vai no campo `status`.
+O código entre crases é o que vai no campo `status`. Dono, 22/10: *"o envio sera direto ao cliente sem
+precisar enviar para a urace ... o fornecedor nos envia fotos dos suit no whats app conferimos e passamos o
+endereço para o envio"*.
 
-| # | Etapa | Código | Quando |
-|---|---|---|---|
-| 1 | Standby | `standby` | pedido criado, esperando o próximo passo |
-| 2 | Awaiting Measurements | `awaiting_measurements` | boas-vindas enviadas, esperando as medidas |
-| 3 | Design Pending | `design_pending` | pago e com as ideias de design: o designer trabalha |
-| 4 | Design Under Client Review | `design_review` | o cliente está olhando a arte |
-| 5 | Approved | `approved` | cliente aprovou design e medidas: pode ir para produção |
-| 6 | Order sent to supplier | `sent_to_supplier` | pedido enviado ao fornecedor |
-| 7 | In Production | `in_production` | o fornecedor está fazendo |
-| 8 | In Transit | `in_transit` | o fornecedor despachou (com rastreio) |
-| 9 | Delivered | `delivered` | entregue: o pedido fecha e vai para o Histórico |
-| 10 | Canceled | `canceled` | cancelado: fecha e vai para o Histórico |
+| # | Etapa | Código | Quando | Trava |
+|---|---|---|---|---|
+| 1 | Standby | `standby` | pedido criado | — |
+| 2 | Awaiting Measurements | `awaiting_measurements` | boas-vindas enviadas (com o manual), esperando as medidas | — |
+| 3 | Design Pending | `design_pending` | com as ideias de design: o designer trabalha | — |
+| 4 | Design Under Client Review | `design_review` | o cliente está olhando a arte | — |
+| 5 | Approved | `approved` | aprovação final escrita do cliente | exige a **aprovação final válida** |
+| 6 | Order sent to supplier | `sent_to_supplier` | pedido de produção enviado ao fornecedor | exige a aprovação válida |
+| 7 | Accepted by supplier | `supplier_accepted` | o fornecedor confirmou | — |
+| 8 | In Production | `in_production` | o fornecedor está fazendo | — |
+| 9 | Photos received | `photos_received` | as fotos do WhatsApp foram subidas como nota | só a equipe |
+| 10 | Checked | `checked` | a equipe conferiu as fotos: OK | só a equipe; exige foto |
+| 11 | Address sent to supplier | `address_sent` | o endereço do cliente foi ao fornecedor | só a equipe; só depois de Checked |
+| 12 | In Transit | `in_transit` | o fornecedor despachou direto ao cliente | exige o rastreio |
+| 13 | Delivered | `delivered` | entregue: o pedido fecha e vai para o Histórico | — |
+| — | Canceled | `canceled` | cancelado: fecha e vai para o Histórico (reabre em Standby) | — |
+
+**Só as transições permitidas.** De cada etapa o pedido vai para a próxima, volta quando faz sentido
+(Approved volta para revisão, Checked volta para Photos received) ou é cancelado. Pular etapa é
+recusado com o motivo (`GET /ops/api/suits/etapas` devolve `transicoes`). Pedido novo nasce entre Standby
+e Design Under Client Review, ou cancelado.
 
 Cada troca de etapa fica na **linha do tempo** do pedido, com quem trocou e quando.
 
@@ -147,6 +158,10 @@ unidade dele. O painel mostra as duas unidades no e-mail do fornecedor. O tamanh
 Ao abrir um pedido, o painel devolve `faltam_medidas`: a lista do que ainda não chegou. Para
 apagar uma medida gravada errada, mande a chave com valor vazio.
 
+**O estado de cada medida** (`estado_medidas`, #382): `preenchida` (chegou), `conferida` (a equipe olhou) ou
+`suspeita` (o número parece errado, com o motivo). A IA só marca **suspeita**; conferir é da equipe. Medida
+suspeita ou não conferida **trava a aprovação final**. Mudou o valor, a medida volta para `preenchida`.
+
 **Design** (campo `design`): `ideia`, `cores`, `logos`, `posicao_logos`, `nome` (o nome que vai
 no macacão), `bandeira`, `observacoes`.
 
@@ -176,9 +191,8 @@ Nunca abra pedido, e descarte se aparecer um:
 - conversa sobre outro serviço (aula, aluguel, horário de treino);
 - dúvida geral sem intenção de comprar. **Na dúvida, não crie.**
 
-Exemplo real de 13/10: os pedidos #153 a #163 (Stripe, OpenAI, Anthropic, Points Insider,
-ConnectMiles, RaceSelect, Max from 3 Second Media, Alexa Llanteret, Daneyza Cabrestra, Eduardo
-Resende) foram abertos por engano pela versão antiga da ponte, só por causa do marcador. Foram
+Exemplo de 13/10: os pedidos #153 a #163 (faturas, newsletters, propaganda e conversa da equipe)
+foram abertos por engano pela versão antiga da ponte, só por causa do marcador. Foram
 **descartados**.
 
 ---
@@ -191,9 +205,11 @@ painel com o pedido e o e-mail (anexos baixados para a pasta do pedido):
 | Chegou | A IA faz |
 |---|---|
 | venda de macacão no site | preenche o pedido, manda as boas-vindas com o manual de medidas (PDF), move para `awaiting_measurements` |
-| resposta do cliente | grava medidas e design que vieram, pede **só o que falta**; com design suficiente, manda o briefing ao designer e move para `design_pending`; aprovou a arte, move para `approved` |
-| resposta do designer | pergunta: leva ao cliente com as palavras da URACE; arte entregue: manda ao cliente pedindo aprovação e move para `design_review` |
-| e-mail do fornecedor | anota; se avisou produção ou envio, move para `in_production` / `in_transit` com o rastreio |
+| resposta do cliente | grava medidas e design que vieram, pede **só o que falta**, marca medida estranha como suspeita; com design suficiente, **prepara** o briefing ao designer e move para `design_pending` |
+| resposta do designer | pergunta: leva ao cliente com as palavras da URACE; arte entregue: marca a **arte final**, manda ao cliente pedindo aprovação e move para `design_review` |
+| arte final marcada e medidas conferidas | manda o **e-mail de aprovação final** (versão, arte anexada, medidas e a política: não retornável, não reembolsável) |
+| o cliente aprova **por escrito essa versão final** | registra a aprovação (id do e-mail, trecho, data) e o pedido vai para `approved`. "Gostei" ou o ok de uma versão anterior **não contam** |
+| e-mail do fornecedor | anota; confirmou, `supplier_accepted`; produzindo, `in_production`; despachou, `in_transit` com o rastreio. Fotos, Checked e endereço são da equipe |
 | reclamação, reembolso, troca, cancelamento, preço, algo estranho | **não responde**: chama a equipe com a nota "Precisa de alguém da equipe: …" na linha do tempo do pedido |
 
 **A chave "IA neste pedido".** Todo pedido tem, no topo, uma chave que liga e desliga a IA só
@@ -211,6 +227,29 @@ gerente liga o envio automático, em Suits › Ponte de e-mail.
 **Quem recebe é o painel que decide**, nunca o modelo: o e-mail só vai para o cliente, o designer
 ou o fornecedor **daquele** pedido.
 
+**As travas da ponte (#382):**
+- **Um pedido por evento.** Num evento, a IA só lê e mexe no pedido dele; outro id é recusado, e ela não tem as
+  ferramentas gerais do painel (clientes, Atenção, QuickBooks, Gmail, web).
+- **Designer passa por uma pessoa.** O e-mail ao designer vira um item **preparado** no pedido (seção "Para o
+  designer"), com o texto e os anexos já limpos. OPERATOR ou acima confere e clica **Enviar ao designer**. Vale mesmo
+  com o envio automático ligado.
+- **Boas-vindas só com o manual.** Sem o PDF do manual de medidas carregado, as boas-vindas não saem.
+- **Arquivo que não se limpa não sai.** Ao cliente, só PNG, JPG, WEBP e PDF, sem metadados. AI, EPS e SVG entram
+  pelo e-mail e vão ao designer (dono, 22/10), sem os metadados e sem dado do cliente; ao cliente, não. Limpeza que
+  falha ou outro tipo (HEIC…): bloqueia e avisa.
+- **Sem adivinhar o pedido.** E-mail que casa com mais de um pedido aberto (o mesmo cliente com dois pedidos, o
+  assunto do fornecedor que serve para dois) não entra em nenhum: vira "Precisa de alguém da equipe".
+- **Sem repetir.** O mesmo e-mail (mesmo pedido, papel, assunto, corpo e anexos) não sai duas vezes; se o servidor
+  caiu no meio, a ponte confere no Gmail antes de reenviar. O e-mail recebido só conta como lido depois de tratado;
+  falhou 3 vezes, vai para a equipe.
+- **Saúde.** O topo da aba mostra a última rodada (quando, eventos, erros, simulação); cada pedido mostra a última
+  tentativa, o último sucesso, o último erro, simulação ou envio real e a **próxima ação esperada**.
+
+**Pedido de teste e IA desligada desde o início.** No **Registrar novo pedido** há duas caixas: "Nascer com a IA
+desligada" (a ponte não age nem um instante) e "Pedido de teste": o de teste **nunca manda e-mail real**, em papel
+nenhum (vira nota de simulação), e não entra nas contagens nem na Atenção. Pela API: `"ia_ligada": false`,
+`"is_test": true`.
+
 ### Os grupos do ateliê no WhatsApp (#383)
 
 Dono, 22/10: o OpenClaw da VPS fica logado num **número interno da URACE** e lê **só dois grupos**:
@@ -223,8 +262,8 @@ virão). O agente que opera nos grupos é o mesmo da ponte de e-mail.
 | **design** — pedido novo com design suficiente | a IA manda o briefing ao grupo (só o design e "Suits #id": nunca nome completo, e-mail, telefone, endereço ou pagamento do cliente) e move para `design_pending` |
 | **design** — o designer manda PDF/imagem | o arquivo vai para a pasta do pedido certo; a IA leva ao cliente **por e-mail** pedindo aprovação e move para `design_review`; o ajuste do cliente volta ao grupo |
 | **fornecedor** — o pedido de produção | continua **por e-mail** (o rascunho de sempre, em "Pedido ao fornecedor") |
-| **fornecedor** — fotos do suit pronto | ficam no pedido e a IA chama a equipe para conferir. Quem aprova é a equipe: botão **Suit conferido e aprovado** no pedido. Só então o **endereço de entrega** vai ao grupo, com o pedido do rastreio |
-| **fornecedor** — código de rastreio | a IA grava no pedido (campo Rastreio) e move para `in_transit`; a equipe passa ao cliente |
+| **fornecedor** — fotos do suit pronto | ficam no pedido e a IA chama a equipe. Na seção *WhatsApp do ateliê*, **Usar como foto do suit** vira a nota com foto e move para `photos_received`; a equipe confere e move para `checked` (#382). Só então aparece **Mandar o endereço ao fornecedor**: o endereço vai ao grupo, com o pedido do rastreio, e o pedido passa a `address_sent` |
+| **fornecedor** — código de rastreio | a IA grava no pedido (campo Rastreio) e, de `address_sent`, move para `in_transit` (pela tabela de etapas); a equipe passa ao cliente |
 | PDF de medidas ou instruções extras | a IA lê, grava as medidas e as **Instruções extras ao fornecedor** (campo novo do Design); o e-mail ao fornecedor já sai com elas |
 | o que está em aberto há mais de 20 h | o painel **cobra uma vez por dia** por pedido e por grupo (09h–18h, segunda a sábado): a arte no grupo de design; a produção e o rastreio no do fornecedor |
 
@@ -233,7 +272,10 @@ do pedido, ou o nome do piloto / do design de **um** pedido aberto. Se puder ser
 disser de qual é e tiver arquivo, vai para **Suits › WhatsApp › Sem pedido** e para "Precisa de
 atenção": alguém da equipe liga ao pedido certo. Ninguém adivinha.
 
-**O que vai ao grupo segue a mesma chave "envio automático" da ponte.** Desligada (o padrão), cada
+**Ao grupo de design, sempre com uma pessoa** (#382: o designer passa por uma pessoa): a mensagem ao designer é
+sempre rascunho, mesmo com o envio automático ligado. Pedido de teste nunca manda nada aos grupos (vira nota).
+
+**O que vai ao grupo do fornecedor segue a mesma chave "envio automático" da ponte.** Desligada (o padrão), cada
 mensagem vira um **rascunho** no pedido (seção *WhatsApp do ateliê*, e a lista em Suits › WhatsApp), com
 **Aprovar e enviar** (dá para corrigir o texto antes). Ligada, sai sozinho. E nada sai antes de o dono
 ligar `WA_GRUPOS_APLICAR=1` na VPS. A chave **IA neste pedido** vale aqui também: desligada, a IA não
@@ -258,7 +300,8 @@ Tudo sujeito aos termos da compra e aos direitos do cliente. Conflito com isso s
 WhatsApp do ateliê (#383), em `/ops/api/atelie` (Op.): `GET /pedidos/{id}` (mensagens e rascunhos do
 pedido), `POST /saidas/{id}/aprovar` (`{"texto": "…"}` opcional) e `/saidas/{id}/descartar`,
 `POST /pedidos/{id}/escrever` (`{"papel": "design|fornecedor", "texto": "…"}`),
-`POST /pedidos/{id}/suit-aprovado`, `POST /pedidos/{id}/rastreio` (`{"codigo", "transportadora"}`),
+`POST /pedidos/{id}/endereco` (só em `checked`; move para `address_sent`), `POST /mensagens/{id}/foto-do-suit` (`{"nome": "foto.jpg"}`;
+move para `photos_received`), `POST /pedidos/{id}/rastreio` (`{"codigo", "transportadora"}`),
 `GET /whatsapp/sem-pedido` e `POST /mensagens/{id}/vincular` (`{"order_id": 12}`).
 
 Todos os caminhos começam com `/ops/api/suits`. "Op." é OPERATOR, "Ger." é MANAGER.
@@ -277,6 +320,12 @@ Todos os caminhos começam com `/ops/api/suits`. "Op." é OPERATOR, "Ger." é MA
 | leads de macacão | `GET /ops/api/suits/leads` (consulta `estado` = `aberto`, `convertido`, `perdido`) | Op. |
 | fornecedores | `GET /ops/api/suits/fornecedores` | Op. |
 | a configuração da ponte | `GET /ops/api/suits/ponte` | Op. |
+| a saúde da ponte (última rodada, simulação, preparados, pedidos com erro) | `GET /ops/api/suits/ponte/saude` | Op. |
+| a mensagem com o endereço ao fornecedor (e o que falta) | `GET /ops/api/suits/{id}/endereco-fornecedor` | Op. |
+
+O pedido (`GET /ops/api/suits/{id}`) também traz `aprovacao` (estado `valida` / `desatualizada` / `nenhuma`, o que
+trava e a versão), `arte_final`, `estado_medidas`, `preparados` (e-mails ao designer), `saude_ponte` e
+`proxima_acao`.
 
 Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 
@@ -284,27 +333,32 @@ Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 
 | Para | Método e caminho | Corpo (exemplo) | Papel |
 |---|---|---|---|
-| registrar pedido | `POST /ops/api/suits` | `{"customer_name": "Ryan Capner", "customer_email": "ryan@exemplo.com", "client_id": 584, "driver_name": "Ryan Jr.", "nota": "pediu orçamento pelo WhatsApp"}` | Op. |
+| registrar pedido | `POST /ops/api/suits` | `{"customer_name": "Rui Inventado", "customer_email": "rui@exemplo.com", "client_id": 584, "driver_name": "Rui Jr.", "nota": "pediu orçamento pelo WhatsApp"}` | Op. |
 | atualizar dados | `PATCH /ops/api/suits/{id}` | `{"customer_phone": "+1 916 555 0148", "ship_address": "..."}` | Op. |
 | gravar medidas | `PATCH /ops/api/suits/{id}` | `{"medidas": {"valores": {"head": 59, "chest": 92, "weight": 54, "foot": "42 EUR"}, "unidade": "cm", "unidade_peso": "kg"}}` | Op. |
 | gravar design | `PATCH /ops/api/suits/{id}` | `{"design": {"cores": "preto e vermelho", "logos": "URACE no peito", "nome": "RYAN"}}` | Op. |
 | mudar a etapa (com o motivo) | `PATCH /ops/api/suits/{id}` | `{"status": "design_pending", "nota": "cliente mandou medidas e logos"}` | Op. |
 | anotar na linha do tempo | `PATCH /ops/api/suits/{id}` | `{"nota": "cliente pediu para trocar o azul por verde"}` | Op. |
 | ligar a conversa do Gmail ao pedido | `PATCH /ops/api/suits/{id}` | `{"gmail_thread_cliente": "<link da conversa no Gmail>"}` (também `gmail_thread_designer`, `gmail_thread_fornecedor`) | Op. |
-| rastreio | `PATCH /ops/api/suits/{id}` | `{"status": "in_transit", "tracking": "1Z999..."}` | Op. |
+| rastreio | `PATCH /ops/api/suits/{id}` | `{"status": "in_transit", "tracking": "1Z999..."}` (só depois de `address_sent`) | Op. |
+| marcar a arte final | `POST /ops/api/suits/{id}/arte-final` | `{"nome": "mockup-v3.png", "final": true}` | Op. |
+| estado das medidas | `POST /ops/api/suits/{id}/medidas/estado` | `{"chaves": ["head", "neck"], "estado": "conferida"}` ou `{"chaves": ["waist"], "estado": "suspeita", "motivo": "..."}` | Op. |
+| registrar a aprovação final à mão | `POST /ops/api/suits/{id}/aprovacao` | `{"trecho": "I approve the final version", "message_id": "<id do e-mail>", "data": "2026-10-22"}` | Op. |
+| enviar ou descartar o e-mail preparado ao designer | `POST /ops/api/suits/{id}/preparados/{item}/enviar` · `.../descartar` | — (pede confirmação) | Op. |
+| rascunho com o endereço ao fornecedor | `POST /ops/api/suits/{id}/endereco-fornecedor/rascunho` | — (só depois de `checked`; pede confirmação) | Op. |
 | **descartar** (não é pedido de macacão) | `POST /ops/api/suits/{id}/descartar` | `{"motivo": "fatura da OpenAI"}` | Op. |
 | restaurar um descartado | `POST /ops/api/suits/{id}/restaurar` | — | Op. |
 | ligar ou desligar a IA neste pedido | `POST /ops/api/suits/{id}/ia` | `{"ligada": false}` | Op. |
 | simular o próximo passo da IA (nada sai) | `POST /ops/api/suits/{id}/ponte/simular` | — | Op. |
-| rascunho do pedido ao fornecedor no Gmail | `POST /ops/api/suits/{id}/email-fornecedor/rascunho` | — (pede confirmação) | Op. |
+| rascunho do pedido ao fornecedor no Gmail (com a arte final aprovada anexada) | `POST /ops/api/suits/{id}/email-fornecedor/rascunho` | — (exige a aprovação válida; pede confirmação) | Op. |
 | guardar um lead | `POST /ops/api/suits/leads` | `{"name": "...", "email": "...", "notes": "..."}` | Op. |
 | lead vira pedido | `POST /ops/api/suits/leads/{id}/pedido` | — | Op. |
 | rodar a ponte agora | `POST /ops/api/suits/ponte/rodar` | — | Ger. |
 | ligar/desligar a ponte e o envio automático, designer, assinatura, política | `PUT /ops/api/suits/ponte` | `{"envio_automatico": false}` | Ger. |
 | fornecedores e o modelo do e-mail ao fornecedor | `POST`/`PATCH /ops/api/suits/fornecedores…`, `PUT /ops/api/suits/modelo` | — | Ger. |
 
-**Nota com print:** a nota com imagem (screenshot para a IA entender) só pelo painel, no campo
-"Nova nota" do pedido. Pelo Claude, a nota é só texto.
+**Nota com print:** a nota com imagem (screenshot para a IA entender, ou as **fotos do fornecedor** que chegaram
+pelo WhatsApp) só pelo painel, no campo "Nota" do pedido. Pelo Claude, a nota é só texto.
 
 ---
 
@@ -324,13 +378,23 @@ Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 3. Anote de onde vieram (`"nota": "medidas recebidas pelo WhatsApp em 13/10"`).
 4. Conte o que ainda falta pelo `faltam_medidas` e diga ao Lucas.
 
-### Design aprovado, mandar para produção
-1. `GET /ops/api/suits/{id}/email-fornecedor`: se a resposta tiver `faltam`, pare e diga o que
-   falta (medida, fornecedor, e-mail).
-2. Mova para `approved` com a nota de quem aprovou e quando.
-3. `POST /ops/api/suits/{id}/email-fornecedor/rascunho` (o painel pede confirmação: mostre ao
-   Lucas antes). O rascunho fica no Gmail do `urace@`.
-4. **Humano**: anexar o mockup final no rascunho e enviar. Depois, mover para `sent_to_supplier`.
+### Aprovação final e produção
+1. Abra o pedido e veja `aprovacao.bloqueios`: arte final marcada? medidas conferidas? nenhuma suspeita?
+2. Faltou conferir medida: mostre ao Lucas; com o OK dele, `POST /ops/api/suits/{id}/medidas/estado` com
+   `"estado": "conferida"`.
+3. O cliente aprovou **por escrito a versão final** (o e-mail de aprovação final mostra a versão): a ponte registra
+   sozinha. Se ele aprovou por outro caminho, registre à mão (`POST .../aprovacao`) com o trecho exato e a data.
+   "Gostei" de uma versão anterior não vale.
+4. `POST /ops/api/suits/{id}/email-fornecedor/rascunho` (o painel pede confirmação: mostre ao Lucas antes). O
+   rascunho fica no Gmail do `urace@`, **já com a arte final aprovada anexada** e sem o endereço.
+5. **Humano**: conferir e enviar o rascunho. Depois, mover para `sent_to_supplier`.
+
+### Fotos do fornecedor e endereço
+1. O fornecedor manda as fotos pelo **WhatsApp**: no painel, suba cada foto como nota com anexo, na etapa
+   **Photos received**.
+2. Conferiu e está certo: mova para **Checked** (só a equipe; exige foto).
+3. Na seção **Endereço ao fornecedor**, crie o rascunho no Gmail ou copie a mensagem para o WhatsApp do fornecedor.
+   Enviou: mova para **Address sent to supplier**. O endereço **nunca** vai ao designer.
 
 ### Fornecedor avisou que despachou
 `PATCH` com `{"status": "in_transit", "tracking": "<código>", "nota": "Usman avisou pelo WhatsApp em 13/10"}`.
@@ -354,7 +418,7 @@ etapa por conta própria. Mostre ao Lucas o que chegou e pergunte o que fazer.
 
 ### Frases que o Lucas pode usar com o Claude
 - "Como estão os Suits hoje?"
-- "O que falta no pedido do Ryan Capner?"
+- "O que falta no pedido do Rui Inventado?"
 - "O cliente do pedido 171 mandou estas medidas em polegadas: …. Grave."
 - "Move o 171 para Design Pending com a nota: cliente mandou logos."
 - "Tem algum pedido em Suits que não é de macacão?"
@@ -372,7 +436,8 @@ etapa por conta própria. Mostre ao Lucas o que chegou e pergunte o que fazer.
 4. **Na dúvida, não crie pedido e não responda o cliente**: chame a equipe.
 5. **Não prometa** preço, prazo ou desconto fora do pedido ou da política.
 6. **Nada se apaga.** O que não serve é **descartado** (reversível), nunca excluído.
-7. **E-mail que sai** (rascunho ao fornecedor, envio ao cliente) só depois do "pode mandar" do Lucas.
+7. **E-mail que sai** (rascunho ao fornecedor, envio ao cliente, envio ao designer) só depois do "pode mandar" do Lucas.
+11. **Produção só com a aprovação final escrita** da versão atual; **endereço ao fornecedor só depois do OK nas fotos**.
 8. **Senha, token ou chave nunca no chat.** O login é pelo navegador.
 9. **Horário da Flórida** (America/New_York) em tudo.
 10. Não usar Turo nem Hostaway para nada.
@@ -389,7 +454,12 @@ etapa por conta própria. Mostre ao Lucas o que chegou e pergunte o que fazer.
 | pedido aparece com nome de empresa, banco ou newsletter | não é pedido de macacão: descarte (seção 8) |
 | a IA não respondeu um cliente | abra o pedido: a nota da IA mostra o que ela fez ou o erro. Se a ponte estiver em simulação, o e-mail ficou na linha do tempo e não saiu |
 | a ponte não roda | em Suits › Ponte de e-mail: a ponte precisa estar ligada e a IA no motor novo |
-| "Falta … para montar o pedido ao fornecedor" | complete o que a mensagem diz (medida, fornecedor atual, e-mail do fornecedor) |
+| "Falta … para montar o pedido ao fornecedor" | complete o que a mensagem diz (medida, fornecedor atual, e-mail do fornecedor, arte final, aprovação final) |
+| "Sem a aprovação final escrita do cliente…" | a aprovação não existe ou ficou desatualizada (mudou a arte ou uma medida): peça ao cliente a aprovação da versão atual |
+| "De … o pedido não vai para …" | a etapa pulou: siga a ordem da seção 3 |
+| "não deu para limpar" / "este tipo de arquivo não é limpo" | peça o arquivo exportado em PNG, JPG ou PDF |
+| "casa com mais de um pedido aberto" (em Precisa de atenção) | ligue a conversa ao pedido certo em Ponte de e-mail › Ligar conversas |
+| o e-mail ao designer "não saiu" | ele está em **Para o designer**, esperando alguém clicar **Enviar ao designer** |
 
 ---
 

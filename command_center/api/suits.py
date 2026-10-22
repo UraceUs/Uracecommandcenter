@@ -53,16 +53,18 @@ def etapas(u=Depends(auth.exige("OPERATOR"))):
     """O que a tela precisa para montar o formulário: etapas, medidas e campos de design."""
     return {"etapas": [{"codigo": c, "nome": n, "descricao": d} for c, n, d in suits.ETAPAS],
             "medidas": [{"chave": k, "numero": num, "nome": nome, "tipo": t} for k, num, nome, t in suits.MEDIDAS],
-            "design": [{"chave": k, "nome": n} for k, n in suits.DESIGN]}
+            "design": [{"chave": k, "nome": n} for k, n in suits.DESIGN],
+            "transicoes": {k: list(v) for k, v in suits.TRANSICOES.items()}, "so_da_equipe": list(suits.SO_DA_EQUIPE)}
 
 
 @r.get("/resumo")
 def resumo(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
     por = {x["status"]: x["n"] for x in todos(con, """SELECT status, COUNT(*) AS n FROM suit_orders
-                                                      WHERE closed=0 AND discarded_at IS NULL GROUP BY status""")}
+                                                      WHERE closed=0 AND discarded_at IS NULL AND is_test=0 GROUP BY status""")}
     return {"por_etapa": por, "abertos": sum(por.values()),
-            "fechados": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE closed=1 AND discarded_at IS NULL")["n"],
-            "descartados": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE discarded_at IS NOT NULL")["n"],
+            "fechados": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE closed=1 AND discarded_at IS NULL AND is_test=0")["n"],
+            "descartados": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE discarded_at IS NOT NULL AND is_test=0")["n"],
+            "testes": um(con, "SELECT COUNT(*) AS n FROM suit_orders WHERE is_test=1 AND discarded_at IS NULL")["n"],
             "leads": um(con, "SELECT COUNT(*) AS n FROM suit_leads WHERE status='aberto'")["n"],
             "fornecedores": um(con, "SELECT COUNT(*) AS n FROM suit_suppliers")["n"]}
 
@@ -85,7 +87,7 @@ def listar(response: Response, estado: str = "abertos", status: str | None = Non
                      "OR lower(coalesce(o.customer_email,'')) LIKE ?)")
         p += [t, t, t, t]
     sql = f"""SELECT o.id, o.title, o.product, o.quantity, o.customer_name, o.driver_name, o.status, o.closed, o.order_date, o.due_on,
-                     o.source, o.created_at, o.updated_at, o.discarded_at, o.discard_reason, o.ia_ligada, s.name AS fornecedor,
+                     o.source, o.created_at, o.updated_at, o.discarded_at, o.discard_reason, o.ia_ligada, o.is_test, s.name AS fornecedor,
                      (SELECT COUNT(*) FROM suit_notes n WHERE n.order_id=o.id AND n.kind!='etapa') AS notas,
                      (SELECT MAX(created_at) FROM suit_notes n WHERE n.order_id=o.id) AS ultima_nota,
                      (SELECT COUNT(*) FROM atelie_wa_saidas w WHERE w.order_id=o.id
@@ -126,11 +128,13 @@ class PedidoIn(BaseModel):
     medidas: MedidasIn | None = None
     status: str | None = None
     nota: str | None = None
+    ia_ligada: bool | None = None       # #382: pode nascer com a IA desligada (a ponte não age nem um instante)
+    is_test: bool | None = None         # #382: pedido de TESTE — nunca manda e-mail real e não conta nem avisa
 
 
 CAMPOS = ("title", "product", "quantity", "customer_name", "customer_email", "customer_phone", "ship_address",
           "driver_name", "language", "client_id", "supplier_id", "order_date", "due_on", "paid_at", "tracking",
-          "site_order", "gmail_thread_cliente", "gmail_thread_designer", "gmail_thread_fornecedor")
+          "site_order", "gmail_thread_cliente", "gmail_thread_designer", "gmail_thread_fornecedor", "ia_ligada", "is_test")
 
 
 def _limpo(v):
@@ -149,8 +153,27 @@ def thread_do_link(v):
 
 
 def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
-    """Cria (pid None) ou atualiza um pedido. `dados` no formato de PedidoIn. Devolve o id."""
+    """Cria (pid None) ou atualiza um pedido. `dados` no formato de PedidoIn. Devolve o id.
+    Tudo ou nada (#382): se a etapa pedida for recusada, nada do resto fica gravado."""
+    con.execute("SAVEPOINT gravar")
+    try:
+        pid = _gravar(con, dados, u_id, pid, fonte)
+    except BaseException:
+        con.execute("ROLLBACK TO gravar")
+        con.execute("RELEASE gravar")
+        raise
+    con.execute("RELEASE gravar")
+    return pid
+
+
+def _gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
     campos = {k: _limpo(dados[k]) for k in CAMPOS if k in dados and dados[k] is not None}
+    for k in ("ia_ligada", "is_test"):
+        if k in campos:
+            campos[k] = 1 if campos[k] in (True, 1, "1", "true") else 0
+    if fonte == "ia" and pid:
+        campos.pop("is_test", None)                    # #382: a IA não tira a marca de teste de um pedido
+    ia_depois = campos.pop("ia_ligada", None) if pid else None    # no pedido que já existe, a chave deixa o rastro (#198)
     if fonte == "ia" and not pid and campos.get("customer_email"):
         from command_center.providers import suits_ponte
         e = suits_ponte._email_de(campos["customer_email"])
@@ -178,11 +201,15 @@ def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
         m = dados["medidas"]
         novas = suits.normalizar_medidas(m.get("valores"), m.get("unidade", "cm"), m.get("unidade_peso", "kg"))
         antes = json.loads(atual["measurements"] or "{}") if atual else {}
+        depois = dict(antes)
         apagar = [k for k, v in (m.get("valores") or {}).items() if v is None or str(v).strip() == ""]
-        antes.update(novas)
+        depois.update(novas)
         for k in apagar:
-            antes.pop(k, None)
-        campos["measurements"] = json.dumps(antes, ensure_ascii=False)
+            depois.pop(k, None)
+        campos["measurements"] = json.dumps(depois, ensure_ascii=False)
+        if atual:                                   # #382 (E): mudou o valor, a medida volta a "preenchida"
+            sit = suits.situacao_depois_de_mudar(antes, depois, suits._json(atual["measurement_status"], {}))
+            campos["measurement_status"] = json.dumps(sit, ensure_ascii=False)
     if not pid:
         titulo = campos.get("title") or campos.get("customer_name") or campos.get("driver_name")
         if not titulo:
@@ -190,6 +217,9 @@ def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
         campos.setdefault("title", titulo)
         if dados.get("status"):
             campos["status"] = suits.etapa_valida(dados["status"])
+            if campos["status"] not in suits.INICIAIS:      # #382: aprovado em diante só pelas travas, nunca ao nascer
+                raise suits.Invalido("Um pedido novo nasce antes da aprovação (Standby até Design Under Client Review) ou "
+                                     "cancelado: as etapas seguintes passam pelas travas (aprovação final, fotos, rastreio).")
             campos["closed"] = 1 if campos["status"] in suits.FECHADAS else 0
         campos.setdefault("order_date", datetime.now(ZoneInfo("America/New_York")).date().isoformat())
         pid = inserir(con, "suit_orders", source=fonte, created_by=u_id, updated_at=agora(), **campos)
@@ -198,8 +228,12 @@ def gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
     else:
         if campos:
             atualizar(con, "suit_orders", pid, updated_at=agora(), **campos)
+        if "measurements" in campos:
+            suits.conferir_aprovacao(con, pid, u_id)
         if dados.get("status"):
-            suits.mudar_etapa(con, pid, dados["status"], u_id)
+            suits.mudar_etapa(con, pid, dados["status"], u_id, por_ia=(fonte == "ia"))
+    if ia_depois is not None:
+        suits.ligar_ia(con, pid, bool(ia_depois), u_id)
     if dados.get("nota"):
         p = um(con, "SELECT status FROM suit_orders WHERE id=?", (pid,))
         suits.anotar(con, pid, dados["nota"], "nota", p["status"], user_id=u_id)
@@ -401,6 +435,20 @@ class PonteIn(BaseModel):
     politica: str | None = None
 
 
+@r.get("/ponte/saude")
+def saude_da_ponte(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """#382 (F): o topo da aba — a última rodada da ponte (quando, quantos eventos, erros) e se está em simulação."""
+    sp = _ponte()
+    cfg = sp.config(con)
+    return {"ultima_rodada": sp.ultima_rodada(con), "simulacao": cfg["envio_automatico"] != "1",
+            "ligada": cfg["ponte_ligada"] == "1", "manual": os.path.isfile(sp.manual_pdf()),
+            "preparados": um(con, """SELECT COUNT(*) AS n FROM suit_outbox x JOIN suit_orders o ON o.id=x.order_id
+                                     WHERE x.status='preparado' AND o.discarded_at IS NULL""")["n"],
+            "com_erro": um(con, """SELECT COUNT(*) AS n FROM suit_orders WHERE closed=0 AND discarded_at IS NULL AND is_test=0
+                                   AND bridge_last_error_at IS NOT NULL
+                                   AND (bridge_last_ok_at IS NULL OR bridge_last_error_at > bridge_last_ok_at)""")["n"]}
+
+
 @r.put("/ponte")
 def salvar_ponte(dados: PonteIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
     sp = _ponte()
@@ -500,6 +548,7 @@ def ver(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
         if n.get("command_id"):
             c = um(con, "SELECT status, output, error FROM ai_commands WHERE id=?", (n["command_id"],))
             n["ia"] = dict(c) if c else None
+    p["preparados"] = _ponte().preparados(con, pid)          # #382: e-mails ao designer esperando o clique
     return p
 
 
@@ -592,6 +641,12 @@ async def nova_nota(pid: int, request: Request, texto: str = Form(""), status: s
         raise HTTPException(404, "Pedido não encontrado.")
     texto = (texto or "").strip()
     nome_img = None
+    if status and status != p["status"]:              # #382: a etapa recusada não deixa foto solta para trás
+        try:
+            suits.etapa_valida(status)
+            suits.checar_etapa(con, pid, status)
+        except suits.Invalido as e:
+            raise _invalido(e)
     if imagem is not None and (imagem.filename or imagem.size):
         if (imagem.content_type or "").lower() not in TIPOS_IMAGEM:
             raise HTTPException(400, "Use PNG, JPG ou WEBP.")
@@ -676,17 +731,14 @@ def email_fornecedor(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depe
     return dict(suits.email_fornecedor(con, dict(p), dict(f) if f else None, u), fornecedor=dict(f) if f else None)
 
 
-@r.post("/{pid}/email-fornecedor/rascunho")
-def rascunho_fornecedor(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    """O pedido de produção vira um RASCUNHO no Gmail do urace@: anexar o mockup final e enviar é humano."""
-    e = email_fornecedor(pid, con, u)
-    if e["faltam"]:
-        raise HTTPException(400, "Falta " + " e ".join(e["faltam"]) + " para montar o pedido ao fornecedor.")
+def _gmail_rascunho(para, assunto, corpo, anexos=None):
+    """Rascunho no Gmail do urace@: o clique da pessoa é a autorização (APLICAR=1 só nesta chamada)."""
     from command_center.providers import NaoConectado, chamar
     anterior = os.environ.get("APLICAR")
-    os.environ["APLICAR"] = "1"                   # o clique da pessoa é a autorização, só nesta chamada
+    os.environ["APLICAR"] = "1"
     try:
-        res = chamar("gmail", "gmail_rascunho", conta="urace", para=e["para"], assunto=e["assunto"], corpo=e["corpo"])
+        extra = {"anexos": anexos} if anexos else {}
+        return chamar("gmail", "gmail_rascunho", conta="urace", para=para, assunto=assunto, corpo=corpo, **extra)
     except NaoConectado as ex:
         raise HTTPException(503, f"Gmail não conectado: {ex}")
     finally:
@@ -694,17 +746,202 @@ def rascunho_fornecedor(pid: int, request: Request, con: sqlite3.Connection = De
             os.environ.pop("APLICAR", None)
         else:
             os.environ["APLICAR"] = anterior
+
+
+def _fornecedor_do(con, p):
+    f = um(con, "SELECT * FROM suit_suppliers WHERE id=?", (p["supplier_id"],)) if p["supplier_id"] else \
+        um(con, "SELECT * FROM suit_suppliers WHERE is_current=1")
+    return dict(f) if f else None
+
+
+def pacote_aprovado(con, pid):
+    """Revisão do Mio (#382): o que vai ao fornecedor é o PACOTE APROVADO — a arte final e as medidas que estão na
+    aprovação válida, conferidas pelo mesmo hash. Devolve (aprovação, medidas, [(nome, bytes, mime)])."""
+    import mimetypes
+    sp = _ponte()
+    e = suits.estado_aprovacao(con, pid)
+    if not e or e["estado"] != "valida":
+        raise HTTPException(400, "Sem a aprovação final do cliente válida para a arte e as medidas de agora, o pedido não vai "
+                                 "ao fornecedor.")
+    ap = e["aprovacao"]
+    medidas = suits._json(ap.get("measures"), None)
+    if medidas is None or suits.hash_medidas(medidas) != ap["measures_hash"]:
+        raise HTTPException(409, "As medidas guardadas na aprovação não batem com o hash dela: registre a aprovação de novo.")
+    nomes = ap.get("files") or []
+    if not nomes or suits.hash_arte(pid, nomes) != ap["art_hash"]:
+        raise HTTPException(409, "A arte final aprovada não está mais igual na pasta do pedido: registre a aprovação de novo.")
+    anexos = []
+    for nome in nomes:
+        with open(os.path.join(sp.pasta(pid), os.path.basename(nome)), "rb") as f:
+            dados = f.read()
+        mime = mimetypes.guess_type(nome)[0] or "application/octet-stream"
+        try:
+            dados = sp._sem_metadados(nome, dados, mime)
+        except sp.Recusado as ex:
+            raise HTTPException(400, str(ex))
+        anexos.append((nome, dados, mime))
+    return ap, medidas, anexos
+
+
+@r.post("/{pid}/email-fornecedor/rascunho")
+def rascunho_fornecedor(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """O pedido de produção vira um RASCUNHO no Gmail do urace@, já com a arte final aprovada anexada e as medidas
+    aprovadas no corpo (o pacote da aprovação). Enviar continua sendo humano. Sem endereço: ele vai depois do OK das fotos."""
+    p = um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,))
+    if not p:
+        raise HTTPException(404, "Pedido não encontrado.")
+    f = _fornecedor_do(con, p)
+    ap, medidas, anexos = pacote_aprovado(con, pid)
+    e = suits.email_fornecedor(con, dict(p, measurements=json.dumps(medidas), final_art=json.dumps(ap.get("files") or [])), f, u)
+    if e["faltam"]:
+        raise HTTPException(400, "Falta " + " e ".join(e["faltam"]) + " para montar o pedido ao fornecedor.")
+    res = _gmail_rascunho(e["para"], e["assunto"], e["corpo"], anexos)
+    suits.anotar(con, pid, f"Rascunho do pedido ao fornecedor criado no Gmail (para {e['para']}), com a arte final aprovada "
+                 f"anexada ({', '.join(a[0] for a in anexos)}): confira e envie.", "email", p["status"], user_id=u["id"])
+    _aud(con, request, u, "suit.supplier.draft", pid, {"para": e["para"], "draft": res.get("draft_id"), "aprovacao": ap["id"],
+                                                     "anexos": [a[0] for a in anexos]})
+    return {"ok": True, "draft_id": res.get("draft_id"), "para": e["para"], "anexos": [a[0] for a in anexos]}
+
+
+# ------------------------------------------------------- aprovação final (#382, A)
+class AprovacaoIn(BaseModel):
+    trecho: str
+    message_id: str | None = None
+    data: str | None = None
+
+
+@r.post("/{pid}/aprovacao")
+def registrar_aprovacao(pid: int, dados: AprovacaoIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                        u=Depends(auth.exige("OPERATOR"))):
+    """A equipe registra à mão a aprovação final escrita do cliente (o trecho do e-mail, o id e a data)."""
+    try:
+        ap = suits.registrar_aprovacao(con, pid, dados.trecho, dados.message_id, dados.data, "manual", u["id"])
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    except suits.Invalido as e:
+        raise _invalido(e)
+    _aud(con, request, u, "suit.approval", pid, {"aprovacao": ap["id"], "versao": ap["versao"], "message_id": dados.message_id})
+    return ver(pid, con, u)
+
+
+class ArteIn(BaseModel):
+    nome: str
+    final: bool = True
+
+
+@r.post("/{pid}/arte-final")
+def arte_final(pid: int, dados: ArteIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    try:
+        suits.marcar_arte_final(con, pid, dados.nome, dados.final, u["id"])
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    except suits.Invalido as e:
+        raise _invalido(e)
+    _aud(con, request, u, "suit.final_art", pid, {"nome": os.path.basename(dados.nome), "final": dados.final})
+    return ver(pid, con, u)
+
+
+class EstadoMedidaIn(BaseModel):
+    chaves: list[str]
+    estado: str
+    motivo: str | None = None
+
+
+@r.post("/{pid}/medidas/estado")
+def estado_medidas(pid: int, dados: EstadoMedidaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                   u=Depends(auth.exige("OPERATOR"))):
+    """#382 (E): preenchida, conferida ou suspeita (com o motivo). Suspeita ou não conferida trava a aprovação final."""
+    try:
+        suits.marcar_medidas(con, pid, dados.chaves, dados.estado, dados.motivo, u["id"])
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    except suits.Invalido as e:
+        raise _invalido(e)
+    _aud(con, request, u, "suit.measures.state", pid, {"chaves": dados.chaves[:40], "estado": dados.estado})
+    return ver(pid, con, u)
+
+
+# ------------------------------------------------ endereço ao fornecedor (#382, D)
+@r.get("/{pid}/endereco-fornecedor")
+def endereco_fornecedor(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    p = um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,))
+    if not p:
+        raise HTTPException(404, "Pedido não encontrado.")
+    return suits.mensagem_endereco(dict(p), _fornecedor_do(con, p), u)
+
+
+@r.post("/{pid}/endereco-fornecedor/rascunho")
+def rascunho_endereco(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Só depois do OK das fotos (Checked): o endereço do cliente vai ao FORNECEDOR, como rascunho no Gmail."""
+    e = endereco_fornecedor(pid, con, u)
+    if e["faltam"]:
+        raise HTTPException(400, "Falta " + " e ".join(e["faltam"]) + " para passar o endereço ao fornecedor.")
+    res = _gmail_rascunho(e["para"], e["assunto"], e["corpo"])
     st = um(con, "SELECT status FROM suit_orders WHERE id=?", (pid,))["status"]
-    suits.anotar(con, pid, f"Rascunho do pedido ao fornecedor criado no Gmail (para {e['para']}): anexe o mockup final e envie.",
-                 "email", st, user_id=u["id"])
-    _aud(con, request, u, "suit.supplier.draft", pid, {"para": e["para"], "draft": res.get("draft_id")})
+    suits.anotar(con, pid, f"Rascunho com o endereço de entrega criado no Gmail (para o fornecedor, {e['para']}): confira e envie; "
+                 "depois mude a etapa para Address sent to supplier.", "email", st, user_id=u["id"])
+    _aud(con, request, u, "suit.supplier.address_draft", pid, {"para": e["para"], "draft": res.get("draft_id")})
     return {"ok": True, "draft_id": res.get("draft_id"), "para": e["para"]}
 
 
+# ------------------------------------------------ e-mail preparado ao designer (#382, C)
+@r.post("/{pid}/preparados/{oid}/enviar")
+def enviar_preparado(pid: int, oid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """O clique "Enviar ao designer" (OPERATOR ou acima): envia de verdade, com a auditoria."""
+    sp = _ponte()
+    item = um(con, "SELECT order_id FROM suit_outbox WHERE id=?", (oid,))
+    if not item or item["order_id"] != pid:
+        raise HTTPException(404, "Item não encontrado.")
+    try:
+        res = sp.enviar_preparado(con, oid, u["id"])
+    except sp.Recusado as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "suit.designer.send_click", pid, {"item": oid, "repetido": bool(res.get("repetido"))})
+    return ver(pid, con, u)
+
+
+@r.post("/{pid}/preparados/{oid}/descartar")
+def descartar_preparado(pid: int, oid: int, request: Request, con: sqlite3.Connection = Depends(get_db),
+                        u=Depends(auth.exige("OPERATOR"))):
+    sp = _ponte()
+    item = um(con, "SELECT order_id FROM suit_outbox WHERE id=?", (oid,))
+    if not item or item["order_id"] != pid:
+        raise HTTPException(404, "Item não encontrado.")
+    try:
+        sp.descartar_preparado(con, oid, u["id"])
+    except sp.Recusado as e:
+        raise HTTPException(400, str(e))
+    _aud(con, request, u, "suit.designer.discard", pid, {"item": oid})
+    return ver(pid, con, u)
+
+
 # ------------------------------------------------------------- para a IA (#152)
-def ferramentas_ia():
+# As ferramentas que a IA da PONTE recebe num evento (#382, C): o mínimo dos Suits. Leads (dados de outros clientes)
+# e fornecedores ficam de fora; o painel geral (clientes, Atenção, QuickBooks, Gmail) também (agente_sdk._opcoes).
+DA_PONTE = ("suits_pedidos", "suits_pedido", "suits_criar_pedido", "suits_atualizar_pedido", "suits_anotar", "suits_email",
+            "suits_anexos", "suits_precisa_humano", "suits_registrar_aprovacao", "suits_pedir_aprovacao_final",
+            "suits_marcar_arte_final", "suits_medida_suspeita")
+
+
+def _permitidos(con, escopo):
+    """Os pedidos que este evento pode tocar: o dele; no marcador sem pedido, os abertos com o e-mail de quem escreveu
+    (até a IA escolher ou criar um, que passa a ser o único)."""
+    if escopo.get("pedido"):
+        return {int(escopo["pedido"])}
+    if not escopo.get("email"):
+        return set()
+    return {r["id"] for r in todos(con, """SELECT id FROM suit_orders WHERE discarded_at IS NULL AND closed=0
+                                            AND lower(customer_email)=?""", (escopo["email"],))}
+
+
+def _normal(t):
+    return re.sub(r"\s+", " ", (t or "")).strip().lower()
+
+
+def ferramentas_ia(escopo=None):
     """As ferramentas da aba Suits para o agente do AI Command: (nome, descrição, propriedades,
-    obrigatórios, função(con, user_id, **args)). Ler e trabalho interno — nada sai da empresa."""
+    obrigatórios, função(con, user_id, **args)). Ler e trabalho interno — nada sai da empresa.
+    `escopo` (um evento da ponte, #382): só as da ponte, e cada uma só alcança o pedido do evento."""
     def pedidos(con, uid, busca=None, estado="abertos", **_):
         where, p = ["discarded_at IS NULL"], []          # #195: descartado não é pedido
         if estado in ("abertos", "fechados"):
@@ -729,12 +966,21 @@ def ferramentas_ia():
     def criar(con, uid, **args):
         return {"id": gravar(con, args, uid, fonte="ia")}
 
-    def atualizar_pedido(con, uid, id, **args):
+    def _pode_mexer(con, id):
         if (um(con, "SELECT discarded_at FROM suit_orders WHERE id=?", (int(id),)) or {}).get("discarded_at"):
             return {"erro": "pedido descartado (não é pedido de macacão): não mexa nele"}
         if suits.ia_desligada(con, id):
             return {"erro": "a IA está desligada neste pedido (a chave no pedido): não mexa nele, a equipe cuida"}
-        gravar(con, args, uid, int(id))
+        return None
+
+    def atualizar_pedido(con, uid, id, **args):
+        erro = _pode_mexer(con, id)
+        if erro:
+            return erro
+        try:
+            gravar(con, args, uid, int(id), fonte="ia")
+        except suits.Invalido as e:
+            return {"recusado": str(e)}
         return {"ok": True, "id": int(id)}
 
     def anotar_(con, uid, id, texto, **_):
@@ -747,17 +993,18 @@ def ferramentas_ia():
             return {"erro": "a IA está desligada neste pedido (a chave no pedido): a equipe cuida"}
         return {"id": suits.anotar(con, int(id), texto, "ia", st["status"], user_id=uid)}
 
-    def email_(con, uid, id, para, assunto, corpo, anexos=None, responder=True, **_):
+    def email_(con, uid, id, para, assunto, corpo, anexos=None, responder=True, tipo=None, **_):
         from command_center.providers import suits_ponte
         try:
-            return suits_ponte.enviar(con, int(id), para, assunto, corpo, anexos or [], bool(responder), uid)
+            return suits_ponte.enviar(con, int(id), para, assunto, corpo, anexos or [], bool(responder), uid, tipo=tipo)
         except suits_ponte.Recusado as e:
             return {"recusado": str(e)}
 
     def anexos_(con, uid, id, **_):
         from command_center.providers import suits_ponte
+        p = um(con, "SELECT final_art FROM suit_orders WHERE id=?", (int(id),)) or {}
         return {"pasta": suits_ponte.pasta(int(id)), "arquivos": suits_ponte.anexos_do_pedido(int(id)),
-                "manual_medidas": os.path.isfile(suits_ponte.manual_pdf())}
+                "arte_final": suits.arte_final(p), "manual_medidas": os.path.isfile(suits_ponte.manual_pdf())}
 
     def humano_(con, uid, id, motivo, **_):
         from command_center.providers import suits_ponte
@@ -770,6 +1017,67 @@ def ferramentas_ia():
     def fornecedores_(con, uid, **_):
         return todos(con, "SELECT * FROM suit_suppliers ORDER BY is_current DESC, name")
 
+    def aprovacao_(con, uid, id, message_id, trecho, **_):
+        """Só num evento da ponte, com o e-mail do cliente que está NESTE evento e o trecho exato dele."""
+        from command_center.providers import suits_ponte
+        esc = escopo or suits_ponte.ESCOPO.get()
+        if not esc:
+            return {"recusado": "a aprovação final por e-mail só é registrada pela ponte, com o e-mail do cliente; "
+                                "fora dela, a equipe registra à mão na tela do pedido"}
+        m = (esc.get("mensagens") or {}).get(message_id)
+        if not m or m.get("papel") != "cliente":
+            return {"recusado": "o message_id não é de um e-mail do cliente neste evento: use o id que veio em MENSAGENS NOVAS"}
+        if not _normal(trecho) or _normal(trecho) not in _normal(m.get("corpo")):
+            return {"recusado": "o trecho tem de ser copiado exatamente do e-mail do cliente"}
+        p = um(con, "SELECT final_request FROM suit_orders WHERE id=?", (int(id),)) or {}
+        pf = suits._json(p.get("final_request"), None)
+        e = suits.estado_aprovacao(con, int(id)) or {}
+        if not pf or pf.get("arte") != e.get("hash_arte") or pf.get("medidas") != e.get("hash_medidas"):
+            return {"recusado": "o cliente ainda não recebeu o e-mail de aprovação final DESTA versão (a arte ou as medidas "
+                                "mudaram, ou ele não saiu): mande com suits_pedir_aprovacao_final e espere ele aprovar por escrito"}
+        if pf.get("simulado") and not suits_ponte.SIMULAR.get():
+            return {"recusado": "o e-mail de aprovação final desta versão não saiu (a ponte está em simulação): a equipe "
+                                "confere e registra à mão. Use suits_precisa_humano."}
+        if suits_ponte.SIMULAR.get():
+            st = um(con, "SELECT status FROM suit_orders WHERE id=?", (int(id),))["status"]
+            suits.anotar(con, int(id), f"SIMULAÇÃO — a IA registraria a aprovação final da versão {e.get('versao')}: «{trecho[:300]}»",
+                         "ia", st)
+            return {"simulado": True, "versao": e.get("versao")}
+        try:
+            ap = suits.registrar_aprovacao(con, int(id), trecho, message_id, m.get("data"), "ia")
+        except suits.Invalido as ex:
+            return {"recusado": str(ex)}
+        return {"ok": True, "aprovacao": ap["id"], "versao": ap["versao"]}
+
+    def pedir_final_(con, uid, id, introducao=None, **_):
+        from command_center.providers import suits_ponte
+        erro = _pode_mexer(con, id)
+        if erro:
+            return erro
+        try:
+            return suits_ponte.pedir_aprovacao_final(con, int(id), introducao, uid)
+        except suits_ponte.Recusado as e:
+            return {"recusado": str(e)}
+
+    def arte_(con, uid, id, nome, final=True, **_):
+        erro = _pode_mexer(con, id)
+        if erro:
+            return erro
+        try:
+            return {"arte_final": suits.marcar_arte_final(con, int(id), nome, bool(final), uid, por_ia=True)}
+        except suits.Invalido as e:
+            return {"recusado": str(e)}
+
+    def suspeita_(con, uid, id, chave, motivo, **_):
+        erro = _pode_mexer(con, id)
+        if erro:
+            return erro
+        try:
+            suits.marcar_medidas(con, int(id), [chave], "suspeita", motivo, uid, por_ia=True)
+        except suits.Invalido as e:
+            return {"recusado": str(e)}
+        return {"ok": True}
+
     s, n, o = {"type": "string"}, {"type": "integer"}, {"type": "object"}
     campos_pedido = {"title": s, "product": s, "quantity": n, "customer_name": s, "customer_email": s, "customer_phone": s,
                      "ship_address": s, "driver_name": s, "language": dict(s, description="idioma do cliente: en, pt, es…"),
@@ -778,30 +1086,80 @@ def ferramentas_ia():
                      "medidas": dict(o, description='{"valores": {"head": 59, "foot": "42 EUR"}, "unidade": "cm|in", "unidade_peso": "kg|lb"}'),
                      "client_id": dict(n, description="o card do cliente no painel (urace_clientes), quando já existe"),
                      "status": dict(s, enum=suits.CODIGOS), "nota": s, "site_order": s,
+                     "ia_ligada": dict({"type": "boolean"}, description="false: o pedido nasce com a IA desligada"),
+                     "is_test": dict({"type": "boolean"}, description="pedido de teste: nunca manda e-mail real"),
                      "gmail_thread_cliente": s, "gmail_thread_designer": s, "gmail_thread_fornecedor": s}
-    return [
+    lista = [
         ("suits_pedidos", "Pedidos de macacão (aba Suits), mais recentes primeiro. Filtra por nome ou e-mail.",
          {"busca": s, "estado": dict(s, enum=["abertos", "fechados", "todos"])}, [], pedidos),
-        ("suits_pedido", "Um pedido de macacão inteiro: cliente, etapa, as 29 medidas, design, notas e o e-mail ao "
-         "fornecedor já montado pelo modelo.", {"id": n}, ["id"], pedido),
+        ("suits_pedido", "Um pedido de macacão inteiro: cliente, etapa, as 29 medidas (com o estado de cada uma), design, arte "
+         "final, aprovação, notas e o e-mail ao fornecedor já montado pelo modelo.", {"id": n}, ["id"], pedido),
         ("suits_criar_pedido", "Registra um pedido de macacão novo na aba Suits (etapa standby se não disser outra). "
          "Nunca invente medida ou dado do cliente.", campos_pedido, [], criar),
-        ("suits_atualizar_pedido", "Atualiza um pedido de macacão: dados, design, medidas (só as que vierem) e etapa.",
-         dict(campos_pedido, id=n), ["id"], atualizar_pedido),
+        ("suits_atualizar_pedido", "Atualiza um pedido de macacão: dados, design, medidas (só as que vierem) e etapa. "
+         "As travas valem: approved e sent_to_supplier pedem a aprovação final válida; in_transit pede o rastreio; fotos "
+         "recebidas, conferido e endereço enviado são da equipe.", dict(campos_pedido, id=n), ["id"], atualizar_pedido),
         ("suits_anotar", "Escreve na linha do tempo do pedido o que a IA fez ou descobriu.", {"id": n, "texto": s},
          ["id", "texto"], anotar_),
-        ("suits_email", "Manda e-mail sobre o pedido para o CLIENTE, o DESIGNER ou o FORNECEDOR daquele pedido (o endereço "
-         "vem do pedido, não de você), respondendo na conversa que já existe. Anexos: nomes de suits_anexos, ou "
-         "\"manual_medidas\" (o PDF do manual de medidas). Para o designer, só o design e \"Suits #id\": nunca nome "
-         "completo, e-mail, telefone, endereço ou pagamento do cliente. Para o cliente, nunca o nome ou o contato do "
-         "designer. Se a ponte estiver em simulação, o e-mail vira nota no pedido e não sai.",
+        ("suits_email", "Manda e-mail sobre o pedido para o CLIENTE ou o FORNECEDOR daquele pedido (o endereço vem do pedido, "
+         "não de você), respondendo na conversa que já existe; ao DESIGNER, o e-mail fica PREPARADO e uma pessoa da equipe "
+         "envia. Anexos: nomes de suits_anexos, ou \"manual_medidas\" (o PDF do manual de medidas, obrigatório nas "
+         "boas-vindas: tipo=\"boas_vindas\"). Para o designer, só o design e \"Suits #id\": nunca nome completo, e-mail, "
+         "telefone, endereço, valor ou pagamento do cliente. Para o cliente, nunca o nome ou o contato do designer. Se a "
+         "ponte estiver em simulação, o e-mail vira nota no pedido e não sai.",
          {"id": n, "para": dict(s, enum=["cliente", "designer", "fornecedor"]), "assunto": s, "corpo": s,
-          "anexos": {"type": "array", "items": s}, "responder": {"type": "boolean"}},
+          "anexos": {"type": "array", "items": s}, "responder": {"type": "boolean"},
+          "tipo": dict(s, enum=["boas_vindas", "outro"])},
          ["id", "para", "assunto", "corpo"], email_),
-        ("suits_anexos", "Os arquivos do pedido (o que chegou por e-mail: medidas, inspiração, logos, arte) e onde lê-los.",
-         {"id": n}, ["id"], anexos_),
+        ("suits_anexos", "Os arquivos do pedido (o que chegou por e-mail: medidas, inspiração, logos, arte), qual é a arte "
+         "final e onde lê-los.", {"id": n}, ["id"], anexos_),
         ("suits_precisa_humano", "Para e chama a equipe: aparece em Precisa de atenção e na linha do tempo do pedido.",
          {"id": n, "motivo": s}, ["id", "motivo"], humano_),
+        ("suits_pedir_aprovacao_final", "Manda ao cliente o e-mail de APROVAÇÃO FINAL montado pelo painel: a versão exata, a "
+         "arte final anexada, as medidas e a política (não retornável, não reembolsável). Só quando a arte final estiver "
+         "marcada e TODAS as medidas conferidas pela equipe. `introducao`: uma ou duas frases suas, no idioma do cliente.",
+         {"id": n, "introducao": s}, ["id"], pedir_final_),
+        ("suits_registrar_aprovacao", "Registra a aprovação final escrita do cliente. SÓ quando ele aprovar expressamente a "
+         "versão final mostrada no e-mail de aprovação final; \"gostei\" ou aprovação de versão anterior não contam. "
+         "`message_id`: o id da mensagem dele em MENSAGENS NOVAS; `trecho`: copiado exatamente dela.",
+         {"id": n, "message_id": s, "trecho": s}, ["id", "message_id", "trecho"], aprovacao_),
+        ("suits_marcar_arte_final", "Marca (ou desmarca, final=false) um arquivo do pedido como ARTE FINAL: a versão que o "
+         "cliente aprova e que vai ao fornecedor. Mudar a arte final derruba a aprovação.",
+         {"id": n, "nome": s, "final": {"type": "boolean"}}, ["id", "nome"], arte_),
+        ("suits_medida_suspeita", "Marca uma medida como SUSPEITA (o número parece errado), com o motivo. Trava a aprovação "
+         "final até a equipe conferir. Conferir é só da equipe.",
+         {"id": n, "chave": dict(s, enum=sorted(suits.CHAVES)), "motivo": s}, ["id", "chave", "motivo"], suspeita_),
         ("suits_leads", "Leads de macacão (oportunidades guardadas para vender de novo).", {"busca": s}, [], leads_),
         ("suits_fornecedores", "Fornecedores de macacão com contato, FIA, preço e qual é o atual.", {}, [], fornecedores_),
     ]
+    if escopo is None:
+        return lista
+    return [(nome, desc, props, obrig, _no_escopo(nome, fn, escopo)) for nome, desc, props, obrig, fn in lista if nome in DA_PONTE]
+
+
+def _no_escopo(nome, fn, escopo):
+    """Cada ferramenta só alcança o pedido do evento (#382, C). Outro id é recusado."""
+    def recusa(id_):
+        return {"recusado": f"Neste evento da ponte só dá para ler e mexer no pedido dele; o pedido #{id_} é outro. É "
+                            "proibido trazer dados de outros clientes."}
+
+    def envolta(con, uid, **args):
+        if nome == "suits_pedidos":
+            ok = _permitidos(con, escopo)
+            return [p for p in fn(con, uid, estado="todos") if p["id"] in ok]
+        if nome == "suits_criar_pedido":
+            if escopo.get("pedido") or _permitidos(con, escopo):
+                return {"recusado": "esta pessoa já tem pedido neste evento: atualize o dela (suits_atualizar_pedido) em vez de criar"}
+            res = fn(con, uid, **args)
+            escopo["pedido"] = res["id"]               # daqui em diante, o evento é deste pedido
+            return res
+        id_ = args.get("id")
+        try:
+            id_ = int(id_)
+        except (TypeError, ValueError):
+            return {"recusado": "diga o id do pedido deste evento"}
+        if id_ not in _permitidos(con, escopo):
+            return recusa(id_)
+        escopo["pedido"] = id_                         # o marcador escolheu o pedido dela: só ele, daqui em diante
+        return fn(con, uid, **args)
+    return envolta
