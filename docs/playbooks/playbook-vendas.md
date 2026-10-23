@@ -875,7 +875,7 @@ robô de vendas já manda, `urace.us/sim2grid-racing-simulator/`). O que se vend
 | Experimentar o simulador | **Hora sem coach** | a pessoa reserva na página, por hora (1 a 3 horas seguidas, ajustável) |
 | Simulador com coach | **Hora com coach** | idem; o coach entra no preço da faixa |
 | Treino toda semana | **Programa mensal** (3x, 2x ou 1x por semana; 10 vagas por plano, 30 no total) | o botão do cartão abre o contato: a equipe fecha à mão |
-| Vir com amigos | até **5 pessoas na mesma hora** (um simulador cada; ajustável) | cada pessoa é uma linha do carrinho, com o seu piloto e o seu card |
+| Vir com amigos | até **5 pessoas na mesma hora** (um simulador cada; ajustável) | na página, **Bring friends** já põe o máximo de pessoas; cada pessoa é uma linha do carrinho, com o seu piloto e o seu card |
 
 Preço, sempre das **faixas do painel** (Site › Sim2Grid), em horário de Orlando. Hoje (aprovados pelo dono em 22/10):
 sem coach **$50/h** seg–sex 7h–17h, **$75/h** seg–sex 18h–24h e **$90/h** sáb–dom 8h–24h; com coach **$125/h** seg–sex
@@ -889,6 +889,14 @@ sem coach **$50/h** seg–sex 7h–17h, **$75/h** seg–sex 18h–24h e **$90/h*
 - Criança: a página pede para **ligar antes** (idade, altura e requisitos); a idade mínima só aparece se o gerente
   preencher em Site › Sim2Grid.
 - O **robô de vendas** continua sem dizer preço do SIM2GRID: manda a página (regra do dono, sem mudança).
+- **A página no celular** (#396, dono 23/10: *"90% usa mobile · imagina vc indo ao cinema"*): é um app de cinema. A
+  pessoa abre, vê a foto e a reserva na mesma tela, toca no **dia**, na **hora** (o preço e os lugares livres estão no
+  botão) e em **Book** na barra de baixo: 3 toques até o carrinho. **With coach** é um interruptor. Para mandar a um
+  grupo: "abra a página e toque em **Bring friends**". As dúvidas de criança, cancelamento e o que inclui estão nas
+  perguntas no fim da página.
+- **Dia de piloto × dia de diversão**: o calendário pode mostrar o selo do dia (ex.: **🏁 Pilot day**, **🎮 Fun night**)
+  que a equipe define em Site › Sim2Grid › Etiqueta do dia. Use o selo na conversa: para quem treina, ofereça o dia de
+  piloto; para quem quer se divertir com amigos, a noite de diversão. Enquanto ninguém definir, não há selo.
 
 ### 5.1 Carrinho do site e pagamento no Stripe (#236)
 
