@@ -8,7 +8,7 @@ Se nada sobrar, devolve texto vazio e a ponte usa a mensagem de espera.
 
 E a regra de um do playbook de 13/10 (D-2026-10-13), em `um_ativo`:
   - primeira resposta a um lead sai sem link (preview de link lê como anúncio);
-  - depois, no máximo um link por mensagem;
+  - depois, no máximo um link por mensagem (a agenda da call e o link de reserva, juntos, contam como um);
   - no máximo uma pergunta por mensagem (fica a primeira: a ordem de
     qualificação põe a mais importante, a idade, na frente).
 """
@@ -72,12 +72,24 @@ _URL_COM_CHAMADA = re.compile(r"(?:[^.!?\n:]*:\s*)?https?://\S+")
 _FRASE_FIM = re.compile(r"(?<=[.!?])\s+")
 
 
-def _tirar_links(texto, manter):
+# Dono, 23/10: a oferta de call leva também o link de reserva ("pode enviar quando sugerir a call"). Junto do
+# link da agenda, o de reserva não conta como segundo ativo: os dois são o mesmo próximo passo.
+_AGENDA = "calendar.app.google/"
+_RESERVA = "urace.us/book-online"
+
+
+def _par_da_call(links):
+    return any(_AGENDA in u for u in links) and any(_RESERVA in u for u in links)
+
+
+def _tirar_links(texto, manter, par=False):
     """Remove os links a partir do (manter+1)-ésimo, com a chamada de cada um."""
     vistos = 0
 
     def _troca(m):
         nonlocal vistos
+        if par and _RESERVA in m.group(0):
+            return m.group(0)
         vistos += 1
         return m.group(0) if vistos <= manter else ""
 
@@ -93,8 +105,11 @@ def um_ativo(texto, primeira_resposta):
     limpo = texto
     links = _URL.findall(limpo)
     manter = 0 if primeira_resposta else 1
+    par = not primeira_resposta and _par_da_call(links)
+    if par:
+        links = [u for u in links if _RESERVA not in u]
     if len(links) > manter:
-        limpo = _tirar_links(limpo, manter)
+        limpo = _tirar_links(limpo, manter, par)
         violacoes.append("link_na_primeira_resposta" if primeira_resposta else "mais_de_um_link")
 
     linhas = []
