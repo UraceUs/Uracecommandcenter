@@ -1602,6 +1602,10 @@ def test_calendario_em_cards_a_corrida_traz_um_card_por_cliente(servidor, navega
     assert corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Sapata").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
+    # o mês seguinte (a corrida caiu lá): volta para hoje, senão a semana abre no mês seguinte e não tem "hoje"
+    voltar = pg.get_by_role("button", name="Hoje", exact=True)
+    if voltar.count():
+        voltar.first.click()
     pg.get_by_role("button", name="Semana", exact=True).click()
     pg.locator(".md-semana-d.hoje .md-card.servico", has_text="David Pedalo").wait_for()
     corrida = pg.locator(".md-semana-d .md-card.corrida", has_text="ROK")
