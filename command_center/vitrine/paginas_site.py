@@ -541,16 +541,12 @@ def sim2grid(host, formatos=None, faixas=None, regras=None, cartoes=None):
       <div class="sim-cabeca"><h2 id="h-booking">{e(d['reserva_titulo'])}</h2>{escolha}</div>
       <div class="sim-dias" role="group" aria-label="Day" hidden></div>
       <p class="sim-dia-topo" aria-live="polite" hidden></p>
-      <div class="sim-horas" role="group" aria-label="Start time" hidden></div>
+      <div class="sim-horas" role="group" aria-label="Times (tap one or more)" hidden></div>
       <div class="sim-quantos" hidden>
         <div class="sim-passo" data-passo="pessoas"><span class="sim-passo-rot" id="rot-pessoas">Drivers</span>
           <button type="button" class="sim-menos" aria-label="Fewer drivers">−</button>
           <output class="sim-n" aria-labelledby="rot-pessoas" aria-live="polite">1</output>
           <button type="button" class="sim-mais" aria-label="More drivers">+</button></div>
-        <div class="sim-passo" data-passo="horas"><span class="sim-passo-rot" id="rot-horas">Hours</span>
-          <button type="button" class="sim-menos" aria-label="Fewer hours">−</button>
-          <output class="sim-n" aria-labelledby="rot-horas" aria-live="polite">1</output>
-          <button type="button" class="sim-mais" aria-label="More hours">+</button></div>
         <button type="button" class="sim-amigos">{e(d['amigos'])} <small>up to {capacidade}</small></button>
       </div>
       <p class="agenda-aviso" role="status">{'Loading the open days…' if vende else 'Online booking is not open right now.'}</p>

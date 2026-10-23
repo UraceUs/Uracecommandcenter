@@ -872,7 +872,7 @@ robô de vendas já manda, `urace.us/sim2grid-racing-simulator/`). O que se vend
 
 | O cliente quer | Venda | Como |
 |---|---|---|
-| Experimentar o simulador | **Hora sem coach** | a pessoa reserva na página, por hora (1 a 3 horas seguidas, ajustável) |
+| Experimentar o simulador | **Hora sem coach** | a pessoa toca nos horários que quer na página (pode tocar em vários: seguidos viram uma sessão de até 3 h, ajustável; soltos, sessões separadas) |
 | Simulador com coach | **Hora com coach** | idem; o coach entra no preço da faixa |
 | Treino toda semana | **Programa mensal** (3x, 2x ou 1x por semana; 10 vagas por plano, 30 no total) | o botão do cartão abre o contato: a equipe fecha à mão |
 | Vir com amigos | até **5 pessoas na mesma hora** (um simulador cada; ajustável) | na página, **Bring friends** já põe o máximo de pessoas; cada pessoa é uma linha do carrinho, com o seu piloto e o seu card |

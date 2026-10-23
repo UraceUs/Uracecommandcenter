@@ -853,12 +853,17 @@ como montou o arrive and drive com todas as configurações ajustaveis"*.
   `novo.urace.us/sim2grid-racing-simulator/` (o mesmo endereço do urace.us de hoje), feita para o celular como um app de
   cinema. A **1ª tela** é a foto do cockpit, uma frase e o botão; logo embaixo, a **reserva**: a faixa dos **dias** (rola
   para o lado, com a etiqueta do dia), os **horários** (a hora, o preço e uma bolinha verde por simulador livre), **Drivers
-  − 1 +** e **Hours − 1 +**, o atalho **Bring friends** (já com o máximo de pessoas) e o interruptor **With coach** (troca
+  − 1 +**, o atalho **Bring friends** (já com o máximo de pessoas) e o interruptor **With coach** (troca
   o formato sem coach ↔ com coach). A **barra preta fixa embaixo** mostra o dia, a hora, as pessoas, o total e **Book**: o
   dia aberto mais próximo já vem escolhido, então do topo são 3 toques até o carrinho (o dia, a hora, Book). O balão do
   chat e o banner de cookies sobem acima da barra. Depois da reserva, curto: os **programas mensais** num cartão, o
   caminho **Simulator → Arrive & Drive → Academy → Racing Team** numa linha e **5 perguntas** fechadas (o que inclui,
   preço, amigos, criança, cancelamento), com o endereço. No celular a página inteira cabe em ~4 telas (antes eram 13).
+  **Vários horários de uma vez** (dono, 23/10: *"precisa permitir a multi seleção de horas"*): cada toque num horário
+  põe ou tira aquela hora; horas **seguidas** viram uma sessão só, cobrada pela tarifa da hora de início (3 PM + 4 PM =
+  uma sessão de 2 h), e horas **soltas** viram sessões separadas, cada uma com a sua tarifa. Não há mais o − / + de
+  horas: as horas são os horários tocados, até o máximo de horas seguidas das Regras. No carrinho, uma linha por sessão e
+  por pessoa.
   O menu (**Sim 2 Grid**), a página de programas (`/services/`) e a Career levam para ela.
 - **Etiqueta do dia: dia de piloto × dia de diversão** (#396; Site › Sim2Grid, "Etiqueta do dia"): o selo que aparece no
   dia da faixa do calendário e no topo do dia escolhido, ex.: **🏁 Pilot day** (dia de treino) ou **🎮 Fun night** (noite
