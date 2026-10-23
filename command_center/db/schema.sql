@@ -2011,6 +2011,25 @@ CREATE TABLE IF NOT EXISTS sim_bookings (
 );
 CREATE INDEX IF NOT EXISTS sim_bookings_dia ON sim_bookings(date, status);
 CREATE INDEX IF NOT EXISTS sim_bookings_item ON sim_bookings(item_id);
+-- #396 (dono, 23/10): "alguns dias frequentados por pilotos · outros dias por pessoas que vao levar como entretenimento".
+-- A etiqueta do dia no calendário do SIM2GRID ("🏁 Pilot day", "🎮 Fun night"), por dia da semana ou por data, o dia
+-- inteiro ou uma faixa de horas. Nasce vazia (a equipe define em Site › Sim2Grid); desativar não apaga.
+CREATE TABLE IF NOT EXISTS sim_day_tags (
+  id           INTEGER PRIMARY KEY,
+  label        TEXT NOT NULL,                            -- curto, em inglês: "Pilot day"
+  icon         TEXT,                                     -- um emoji ou dois: "🏁"
+  note         TEXT,                                     -- o texto curto do dia (opcional)
+  days         TEXT,                                     -- dígitos dos dias, 0 = segunda; NULL quando é por data
+  date         TEXT,                                     -- AAAA-MM-DD: só aquele dia (vale antes da do dia da semana)
+  start_hour   INTEGER CHECK (start_hour IS NULL OR start_hour BETWEEN 0 AND 23),   -- NULL = o dia inteiro
+  end_hour     INTEGER CHECK (end_hour IS NULL OR end_hour BETWEEN 1 AND 24),
+  active       INTEGER NOT NULL DEFAULT 1,
+  sort         INTEGER NOT NULL DEFAULT 0,
+  updated_by   INTEGER REFERENCES users(id),
+  updated_at   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  CHECK (days IS NOT NULL OR date IS NOT NULL)
+);
 
 -- #298 (dono, 16/10): os produtos da loja no banco, editados no painel. Os 70 do WooCommerce entram uma vez
 -- (de `vitrine/dados/produtos.json`, com o id de lá); o que a equipe mudar nunca é sobrescrito, e esconder não

@@ -213,6 +213,107 @@ def tarifa(fs, sid, dia_semana, hora):
     return None
 
 
+# ------------------------------------------------------------------ a etiqueta do dia (#396)
+# Dono, 23/10: *"tem que virar um point · alguns dias frequentados por pilotos · outros dias por pessoas que vao levar
+# como entretenimento"*. O selo do dia no calendário ("🏁 Pilot day", "🎮 Fun night"), por dia da semana ou por data,
+# o dia inteiro ou uma faixa de horas. Nasce vazia: a equipe define. Desativar não apaga.
+LIMITE_ROTULO, LIMITE_ICONE, LIMITE_NOTA = 24, 8, 120
+
+
+def etiquetas(con, ativos=False):
+    return [dict(r) for r in todos(con, "SELECT * FROM sim_day_tags" + (" WHERE active=1" if ativos else "")
+                                   + " ORDER BY (date IS NULL), date, sort, id")]
+
+
+def _hora_ou_nada(v, mi, ma):
+    if v is None or (isinstance(v, str) and not v.strip()):
+        return None
+    try:
+        v = int(v)
+    except (TypeError, ValueError):
+        raise ErroSim("horário: use a hora cheia (0 a 24)")
+    if not mi <= v <= ma:
+        raise ErroSim(f"horário fora do limite ({mi}–{ma})")
+    return v
+
+
+def _etiqueta(d, parcial, atual=None):
+    f = {}
+    if not parcial or "label" in d:
+        rot = _texto(d.get("label"), LIMITE_ROTULO + 1)
+        if not rot:
+            raise ErroSim("escreva o rótulo (ex.: Pilot day)")
+        if len(rot) > LIMITE_ROTULO:
+            raise ErroSim(f"rótulo curto: até {LIMITE_ROTULO} letras")
+        f["label"] = rot
+    if not parcial or "icon" in d:
+        ic = _texto(d.get("icon"), LIMITE_ICONE + 1)
+        if ic and len(ic) > LIMITE_ICONE:
+            raise ErroSim(f"ícone curto: um emoji (até {LIMITE_ICONE} caracteres)")
+        f["icon"] = ic
+    if not parcial or "note" in d:
+        f["note"] = _texto(d.get("note"), LIMITE_NOTA)
+    if not parcial or "date" in d:
+        t = str(d.get("date") or "").strip()
+        if t:
+            try:
+                t = date.fromisoformat(t).isoformat()
+            except ValueError:
+                raise ErroSim("data: use AAAA-MM-DD")
+        f["date"] = t or None
+    if not parcial or "days" in d:
+        v = d.get("days")
+        f["days"] = _dias(v) if v not in (None, "", []) else None
+    for k, (mi, ma) in (("start_hour", (0, 23)), ("end_hour", (1, 24))):
+        if not parcial or k in d:
+            f[k] = _hora_ou_nada(d.get(k), mi, ma)
+    if "active" in d and d["active"] is not None:
+        f["active"] = 1 if d["active"] else 0
+    if "sort" in d and d["sort"] is not None:
+        f["sort"] = int(d["sort"])
+    novo = {**(atual or {}), **f}
+    if novo.get("date"):
+        novo["days"] = f["days"] = None                         # por data: o dia da semana não vale
+    if not novo.get("date") and not novo.get("days"):
+        raise ErroSim("escolha os dias da semana ou uma data")
+    ini, fim = novo.get("start_hour"), novo.get("end_hour")
+    if (ini is None) != (fim is None):
+        raise ErroSim("faixa de horas: preencha o início e o fim (ou deixe os dois vazios para o dia inteiro)")
+    if ini is not None and ini >= fim:
+        raise ErroSim("a faixa tem de terminar depois de começar")
+    return f
+
+
+def criar_etiqueta(con, por, d):
+    f = _etiqueta(d, parcial=False)
+    if "sort" not in f:
+        ult = um(con, "SELECT COALESCE(MAX(sort), 0) AS s FROM sim_day_tags")
+        f["sort"] = (ult["s"] or 0) + 10
+    return inserir(con, "sim_day_tags", **f, updated_by=por, updated_at=agora())
+
+
+def mudar_etiqueta(con, por, tid, d):
+    atual = um(con, "SELECT * FROM sim_day_tags WHERE id=?", (tid,))
+    if not atual:
+        raise ErroSim("etiqueta não existe")
+    f = _etiqueta(d, parcial=True, atual=dict(atual))
+    mud = {k: (atual[k], v) for k, v in f.items() if atual[k] != v}
+    if mud:
+        atualizar(con, "sim_day_tags", tid, **{k: v for k, (_, v) in mud.items()}, updated_by=por, updated_at=agora())
+    return mud
+
+
+def etiquetas_do_dia(ts, dia):
+    """As etiquetas ativas de um dia (`date`): as da data primeiro, depois as do dia da semana, na ordem do painel.
+    Cada uma com a faixa de horas (None = o dia inteiro) — o que o site mostra no calendário e no topo do dia."""
+    iso, sem = dia.isoformat(), str(dia.weekday())
+    da_data = [t for t in ts if t["active"] and t["date"] == iso]
+    da_semana = [t for t in ts if t["active"] and not t["date"] and sem in (t["days"] or "")]
+    return [{"label": t["label"], "icon": t["icon"] or "", "note": t["note"] or "", "start": t["start_hour"],
+             "end": t["end_hour"]} for t in sorted(da_data, key=lambda t: (t["sort"], t["id"]))
+            + sorted(da_semana, key=lambda t: (t["sort"], t["id"]))]
+
+
 # ------------------------------------------------------------------ texto
 def hora_txt(h):
     h = int(h) % 24
@@ -303,6 +404,7 @@ def disponibilidade(con, conta=None):
     de, ate = _janela(cfg, agora_.date())
     uso = ocupacao(con, de.isoformat(), ate.isoformat(), sem_conta=conta)
     fora = fechadas(cfg)
+    ts = etiquetas(con, ativos=True)
     limite = agora_ + timedelta(hours=cfg["min_notice_hours"])
     dias = []
     d = de
@@ -322,7 +424,7 @@ def disponibilidade(con, conta=None):
                 if precos:
                     horas.append({"h": h, "spots": max(0, cfg["capacity"] - uso.get((iso, h), 0)), "prices": precos})
         if horas:
-            dias.append({"date": iso, "hours": horas})
+            dias.append({"date": iso, "hours": horas, "tags": etiquetas_do_dia(ts, d)})
         d += timedelta(days=1)
     return {"config": publica(cfg), "formatos": [{k: f[k] for k in ("id", "name", "titulo", "linha", "texto", "deposit")}
                                                  for f in forms], "dias": dias}
@@ -482,4 +584,4 @@ def reservas(con, de=None, ate=None, limit=50, offset=0):
 
 def painel(con):
     cfg = config(con)
-    return {"config": cfg, "formatos": formatos(con, ativos=False), "faixas": faixas(con)}
+    return {"config": cfg, "formatos": formatos(con, ativos=False), "faixas": faixas(con), "etiquetas": etiquetas(con)}

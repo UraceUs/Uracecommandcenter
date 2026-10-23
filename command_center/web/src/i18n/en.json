@@ -4948,5 +4948,18 @@
 "vazio = ligar": "empty = call",
 "vazio = o site não diz": "empty = the site doesn't say",
 "vazio = sem a caixa": "empty = no checkbox",
-"waiver com erro": "waiver error"
+"waiver com erro": "waiver error",
+"Rótulo": "Label",
+"curto, em inglês": "short, in English",
+"Dias da semana": "Days of the week",
+"Uma data": "One date",
+"Texto curto do dia": "Short text for the day",
+"Etiqueta salva: o calendário do site já mostra.": "Label saved: the site calendar shows it now.",
+"Etiqueta criada: o calendário do site já mostra.": "Label created: the site calendar shows it now.",
+"Etiqueta do dia: piloto ou diversão": "Day label: drivers or fun",
+"O selo que aparece no dia do calendário do site e no topo do dia escolhido (ex.: 🏁 Pilot day, 🎮 Fun night). Por dia da semana ou por data; sem horário, vale o dia inteiro. A data vem antes do dia da semana.": "The badge shown on the day in the site calendar and at the top of the chosen day (e.g. 🏁 Pilot day, 🎮 Fun night). By day of the week or by date; with no hours, it covers the whole day. A date wins over a day of the week.",
+"Nenhuma etiqueta: o calendário sai sem selo": "No labels: the calendar shows no badge",
+"Dias da etiqueta": "Label days",
+"Dias da etiqueta nova": "New label days",
+"Adicionar etiqueta": "Add label"
 }

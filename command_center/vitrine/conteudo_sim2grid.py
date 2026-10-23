@@ -61,123 +61,50 @@ PLANOS = (
     ("1 session per week", "Initial allocation: 10 students", "Coaching included. Each session lasts 2 hours, scheduled according to availability.", "$900", "/ month"),
 )
 
-# ------------------------------------------------------------------ o texto da página (da LP)
+# ------------------------------------------------------------------ o texto da página
+# #396 (dono, 23/10): *"muita informacao · pensa no usuario de mobile ... imagina vc indo ao cinema na hora de construir
+# ... tipo lan house era ... tem que virar um point"*. A página virou um app de cinema: a foto, uma frase e a reserva
+# (dia → horário com os lugares → quantos → Book). O texto longo da LP saiu; ficou o essencial, curto: o que inclui,
+# preço, amigos, criança e cancelamento no FAQ (o FAQPage do Google lê o mesmo).
 PAGINA = {
     "caminho": CAMINHO,
     "titulo": "SIM2GRID Racing Simulator in Orlando | URACE",
-    "descricao": ("Book your first one-hour racing simulator session at URACE in Orlando, with or without coaching. "
-                  "SIM2GRID opens November 1, 2026, inside the Orlando Kart Center."),
-    "eyebrow": "For gamers with racing ambitions",
-    "h1": "Your first step into motorsport starts here",
-    "sub": "Book your first one-hour racing simulator session at URACE in Orlando. {desde}, with optional coaching available.",
-    "selo": "SIM2GRID · Opening November 1 · Book now",
-    "trilha": "Simulator → Karting → Driver development → Racing.",
-    "reserva_eyebrow": "SIM2GRID / Your starting line",
-    "reserva_titulo": "Make time for your ambition.",
-    "reserva_sub": ("Build a regular training routine or start with an hourly session. Choose your format and continue to "
-                    "payment to book your place."),
-    "passo1": "01 · Choose your format",
-    "passo2": "02 · Choose your session",
-    "passo2_sub": "Choose a date and a session start time. Your time is held while you complete payment.",
-    "fuso": "All times are Orlando local time.",
-    "nota": ("Payment is processed securely at checkout. Your booking is confirmed once payment is complete. Next: the "
-             "session goes to your cart. Sign in or create your URACE account, then pay with Stripe — card, Apple Pay or "
-             "Google Pay."),
-    "planos_titulo": "Regular coaching. Consistent training.",
-    "planos_sub": ("Monthly programs with coaching. Each session lasts 2 hours and is scheduled according to availability. "
-                   "Billed monthly until you cancel. Places are limited."),
-    "planos_capacidade": "Initial program capacity: 30 students total · 10 places per plan",
-    "caminho_eyebrow": "From racing games to racing ambitions",
-    "caminho_titulo": "You can see the driver. Now see the path.",
-    "caminho_texto": (
-        "Maybe it started with a racing game. Maybe it’s the dream of lining up on a real grid — in karting, Formula 4, or "
-        "one day even Formula 1. That ambition deserves more than another “what if.”",
-        "Start by experiencing the simulator at URACE. Then get to know the next stages available: your first karting "
-        "experience, structured training, and support for competitive racing. Your goals, experience, and readiness help "
-        "shape the next step.",
-        "You don’t need your whole racing future mapped out to take the first step."),
-    "paixao_eyebrow": "A first experience with a bigger purpose",
-    "paixao_titulo": "Bring the passion. Discover the possibilities.",
-    "paixao": (
-        ("01 / Get behind the wheel", "Put your ambition in motion.", "Your racing interest has a place here.",
-         "Step into the SIM2GRID cockpit at URACE. Experience the challenge of braking, steering, and putting a consistent "
-         "lap together.", ("Start my racing journey", "#booking")),
-        ("02 / Meet your next step", "Look toward the track.", "See how you could take it further.",
-         "Discover Arrive & Drive: a separate, one-day karting experience with professional guidance. It’s an opportunity "
-         "to explore driving beyond the simulator.", ("Explore the pathway", "/services/arrive-and-drive/")),
-        ("03 / Think like a driver", "Give your dream direction.", "Turn “what’s next?” into a conversation.",
-         "Get to know URACE Academy and Racing Team. Talk with the team about your goals, the commitment involved, and "
-         "which program could fit your stage.", ("See what comes next", "/academy/")),
-    ),
-    "degraus_eyebrow": "The URACE driver pathway",
-    "degraus_titulo": "One passion. A world of possibilities.",
-    "degraus_sub": ("Your racing story can begin in the simulator. See how that first experience connects to karting, "
-                    "structured development, and competition. Explore the stages. Picture your future. Start with the step "
-                    "that’s right in front of you."),
-    "degraus": (
-        ("01", "Experience the simulator", "SIM2GRID", "Your first experience",
-         "Get behind the wheel at URACE. Experience the challenge of putting a lap together and discover where your racing "
-         "ambition could take you.", "#booking"),
-        ("02", "Take it to the track", "Arrive & Drive", "Your first time on a kart",
-         "A separate, one-day karting experience with professional guidance. It’s an opportunity to explore driving beyond "
-         "the simulator.", "/services/arrive-and-drive/"),
-        ("03", "Develop as a driver", "URACE Academy", "Structured driver development",
-         "Structured training to keep developing as a driver. Talk with the team about your goals and the commitment "
-         "involved.", "/academy/"),
-        ("04", "Prepare for competition", "URACE Racing Team", "Competitive racing support",
-         "Support for drivers getting ready for competitive racing. Talk with the team about which program could fit your "
-         "stage.", "/pro-team/"),
-    ),
-    "faq_eyebrow": "Before you book",
-    "faq_titulo": "A clear start. No guesswork.",
-    "faq_sub": ("Your first visit should feel straightforward. Get answers about experience, coaching, pricing, and what "
-                "comes next. Still unsure? Talk to our Orlando team."),
-    # {solo} e {coach}: as faixas de preço do painel, escritas por extenso (o texto nunca diz um preço que o painel não tem)
+    "descricao": ("Book a racing simulator by the hour at URACE in Orlando: train with a coach or race your friends side "
+                  "by side. SIM2GRID opens November 1, 2026, inside the Orlando Kart Center."),
+    "selo": "SIM2GRID · Opening November 1",
+    "h1": "Racing simulators in Orlando",
+    # {capacidade}: os simuladores do painel; {desde}: a menor faixa com preço ("Starting at $50")
+    "sub": "Train like a driver or race your friends. {capacidade} cockpits, by the hour · {desde}",
+    "reserva_titulo": "Book your seat",
+    "fuso": "Orlando time. The rate is set by the start time.",
+    "nota": "Next: your cart. Pick each driver and pay with Stripe — card, Apple Pay or Google Pay.",
+    "amigos": "Bring friends",
+    "planos_titulo": "Monthly programs",
+    "planos_sub": "Coaching included · 2-hour sessions, scheduled with the team · billed monthly until you cancel.",
+    # o caminho até o Racing Team, numa linha (dono: "caminho até o Racing Team em 1 linha com link")
+    "trilha": (("Simulator", "#booking"), ("Arrive & Drive", "/services/arrive-and-drive/"), ("Academy", "/academy/"),
+               ("Racing Team", "/pro-team/")),
+    "trilha_rotulo": "Your path",
+    "faq_titulo": "Before you book",
+    # {solo}, {coach} e {capacidade}: o painel, por extenso (o texto nunca diz um preço que o painel não tem)
     "faq": (
-        ("I play racing games. Is SIM2GRID a good next step?",
-         ("SIM2GRID gives you a place to explore that interest in person at URACE, using a racing simulator with a seat, "
-          "steering wheel, and pedals. Start with a single session to experience the setup. You don’t have to commit to a "
-          "racing career or a monthly program.",)),
-        ("What makes this different from playing at home?",
-         ("You’ll visit URACE in Orlando and drive on its simulator setup. You can book time without coaching, add a coached "
-          "session, or explore regular training. It’s also an opportunity to meet the team and learn about URACE’s separate "
-          "karting and driver development programs.",)),
-        ("Do I need to be an experienced driver?",
-         ("SIM2GRID is positioned as a starting point for exploring motorsport, not just a program for competitive drivers. "
-          "If you’re new to simulators and want guidance, consider a coached session. Unsure which format fits your "
-          "experience? Call our team before booking.",)),
-        ("What does a simulator hour cost?",
-         ("Simulator time without coaching: {solo}. Coaching, karting, and monthly programs are separate options. Choose "
-          "your date and time to see the session rate.",)),
-        ("Do I have to pay for coaching?",
-         ("No. Choose “Without coaching” to book simulator time without a coach. If you want to work with a coach, select "
-          "“With coaching”: {coach}.",)),
-        ("Can I try it once without signing up for a membership?",
-         ("Yes. Book one hourly session, with or without coaching. An individual session does not enroll you in a monthly "
-          "subscription. If you decide you want regular training later, you can explore the monthly programs separately.",)),
-        ("How long is a session, and where do I go?",
-         (f"Hourly sessions are booked by the hour at URACE, {RUA}, Orlando, FL {SITE['endereco']['cep']}, "
-          "inside the Orlando Kart Center. The announced opening date is November 1, 2026. All booking times are local to Orlando. "
-          "Monthly program sessions use a different format: two hours with coaching, scheduled according to "
-          "availability. The rate of an hourly session is set by its start time: a session that starts at 5 PM on a "
-          "weekday uses the daytime rate.",)),
+        ("What’s included in a simulator hour?",
+         ("One cockpit per driver — competition seat, steering wheel and pedals — for the hours you book. Choose “with "
+          "coach” and a coach works with you during the session. Karting and the monthly programs are separate: a "
+          f"simulator session doesn’t include track time. Find us at {RUA}, Orlando, inside the Orlando Kart Center.",)),
+        ("How much does it cost?",
+         ("Without coaching: {solo}. With coaching: {coach}. The rate is set by the start time.",)),
         ("Can I bring friends at the same time?",
-         ("Yes. Up to {capacidade} people can drive at the same time, one simulator each. Each driver books and pays their "
-          "own hour.",)),
+         ("Yes. Up to {capacidade} people can drive at the same time, one simulator each. Pick the hour, set how many "
+          "drivers, and each one gets their own seat in the cart.",)),
         ("Can I book this for my child?",
          ("Before booking for a child, call URACE to confirm age, height, and participation requirements and which session "
           "format is suitable. Our team can help you choose an appropriate starting point before you pay.",)),
-        ("What if I need to change my booking?",
+        ("What if I need to change or cancel my booking?",
          ("For an hourly session, confirm the cancellation and rescheduling terms with URACE before payment. Monthly "
           "program sessions are scheduled with the team according to availability.",)),
-        ("Can this lead to real karting or racing?",
-         ("It can be your introduction to URACE and a conversation about your next step. The team also offers one-day "
-          "karting experiences, Academy development, and Racing Team support. Those programs are booked separately; your "
-          "simulator session doesn’t include track time or guarantee progression into competition.",)),
     ),
-    "fecho_eyebrow": "SIM2GRID by URACE",
-    "fecho": "Next lap: yours.",
-    "fecho_sub": "You can already picture the grid. Start exploring your way there with SIM2GRID.",
     "foto": "simulator-kv.webp",
+    "foto_topo": "simulator-cockpit.webp",       # #396: o cockpit recortado do cartaz (sem o texto da arte)
     "fotos": ("driver-kv.webp", "simulator-kv.webp"),
 }
