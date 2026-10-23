@@ -2619,6 +2619,24 @@ def test_sim2grid_como_cinema_reserva_em_tres_toques(servidor, navegador, largur
         linhas = v.locator(".carrinho-linha").all_inner_texts()
         assert len(linhas) == 1 and "SIM2GRID" in linhas[0] and "(1 h)" in linhas[0], linhas
         v.evaluate("() => window.uraceCarrinho.limpar()")
+        # vários horários (dono, 23/10: "precisa permitir a multi seleção de horas"): dois seguidos viram uma sessão de
+        # 2 h e um solto vira outra sessão; tocar de novo tira a hora
+        v.goto(site + "/sim2grid-racing-simulator/")
+        v.locator(".sim-hora:not([disabled])").first.wait_for()
+        todas = v.locator(".sim-hora")
+        i = next(k for k in range(todas.count()) if todas.nth(k).is_enabled())
+        for k in (i, i + 1, i + 3, i + 4):
+            todas.nth(k).click()
+        todas.nth(i + 4).click()
+        assert [todas.nth(k).get_attribute("aria-pressed") for k in range(i, i + 5)] == ["true", "true", "false", "true", "false"]
+        resumo = v.locator(".sim-barra .agenda-resumo").inner_text()
+        assert re.search(r"· [^·]+–[^·,]+, [^·]+–[^·]+ \(3 h\) ·", resumo), resumo
+        v.locator(".sim-barra .agenda-carrinho").click()
+        v.wait_for_url(re.compile(r"/cart/"))
+        v.locator(".carrinho-linha").nth(1).wait_for()
+        linhas = v.locator(".carrinho-linha").all_inner_texts()
+        assert len(linhas) == 2 and sorted("(2 h)" in x for x in linhas) == [False, True], linhas
+        v.evaluate("() => window.uraceCarrinho.limpar()")
         # "Bring friends": o atalho já leva os 5 simuladores — 3 toques até o carrinho com 5 lugares
         v.goto(site + "/sim2grid-racing-simulator/")
         v.locator(".sim-hora:not([disabled])").first.wait_for()

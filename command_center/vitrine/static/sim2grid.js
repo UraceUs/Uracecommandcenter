@@ -5,10 +5,12 @@
  * produto eh mais ou menos isso. tipo lan house era".
  *
  * Como um app de cinema: a faixa dos dias (rola para o lado, com a etiqueta do dia que o painel define), os horários
- * com os lugares livres (uma bolinha por simulador) e o preço, − / + pessoas e horas, "With coach" num interruptor e a
+ * com os lugares livres (uma bolinha por simulador) e o preço, − / + pessoas, "With coach" num interruptor e a
  * barra fixa embaixo com o total e "Book". O dia aberto mais próximo já vem escolhido: do topo, são três toques até o
  * carrinho (o dia, a hora, Book). Cada pessoa é um simulador e vira uma linha do carrinho (o piloto de cada uma é
- * escolhido lá). Preço, vaga e depósito, quem diz é o servidor: aqui só se mostra o que /ops/api/vitrine/sim2grid
+ * escolhido lá). Dono, 23/10: "precisa permitir a multi seleção de horas" — toca-se em quantos horários quiser: os
+ * seguidos viram uma sessão (cobrada pela tarifa da hora de início), os soltos, sessões separadas. Preço, vaga e
+ * depósito, quem diz é o servidor: aqui só se mostra o que /ops/api/vitrine/sim2grid
  * mandou e se guarda a escolha. */
 (function () {
   'use strict'
@@ -21,7 +23,6 @@
   var horasBox = raiz.querySelector('.sim-horas')
   var quantos = raiz.querySelector('.sim-quantos')
   var passoPessoas = raiz.querySelector('[data-passo="pessoas"]')
-  var passoHoras = raiz.querySelector('[data-passo="horas"]')
   var amigos = raiz.querySelector('.sim-amigos')
   var chave = raiz.querySelector('.sim-coach-input')
   var aviso = raiz.querySelector('.agenda-aviso')
@@ -39,8 +40,8 @@
   var CAMPANHA = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'fbclid', 'ref']
   var daUrl = new URLSearchParams(window.location.search)
   var online = raiz.getAttribute('data-online') === '1'
-  var dias = {}, ordem = [], dia = null, hora = null, cfg = null, formatos = [], comCarrinho = false, carregou = false
-  var pessoas = 1, horas = 1
+  var dias = {}, ordem = [], dia = null, sel = [], cfg = null, formatos = [], comCarrinho = false, carregou = false
+  var pessoas = 1
   var capacidadeHtml = Number(raiz.getAttribute('data-capacidade')) || 5
 
   // ---------------------------------------------------------------- a barra fixa: o chat e os cookies sobem acima dela
@@ -101,45 +102,62 @@
   function faixaTxt(t) { return t.start == null ? '' : hh(t.start) + '–' + hh(t.end) }
   function rotulo(t) { return (t.icon ? t.icon + ' ' : '') + t.label }
 
+  /** As horas escolhidas em sessões: cada sequência de horas seguidas é uma sessão {hora, horas}. */
+  function blocos() {
+    var b = []
+    sel.forEach(function (h) {
+      var u = b[b.length - 1]
+      if (u && u.hora + u.horas === h) u.horas++; else b.push({ hora: h, horas: 1 })
+    })
+    return b
+  }
+  function escolhida(h) { return sel.indexOf(h) >= 0 }
+  /** Quantas horas teria a sessão de `h` se ela entrasse na escolha (as seguidas de cada lado mais ela). */
+  function sessaoCom(h) {
+    var k = 1, a = h - 1, d = h + 1
+    while (escolhida(a)) { k++; a-- }
+    while (escolhida(d)) { k++; d++ }
+    return k
+  }
+  /** Tira as horas que não fecham uma sessão: a que começa sem preço ou a mais curta que o mínimo. */
+  function arrumar() {
+    var f = formato(), fica = []
+    blocos().forEach(function (b) {
+      while (b.horas && typeof preco(daHora(dia, b.hora), f) !== 'number') { b.hora++; b.horas-- }
+      if (b.horas >= cfg.min_hours) for (var i = 0; i < b.horas; i++) fica.push(b.hora + i)
+    })
+    sel = fica
+  }
   function total() {
-    var f = formato()
-    if (!f || !dia || hora == null) return null
-    var p = preco(daHora(dia, hora), f)                      // a tarifa do início vale para todas as horas
-    if (typeof p !== 'number') return null
-    var soma = p * horas
-    return { horas: horas, pessoas: pessoas, valor: soma * pessoas, porPessoa: soma, deposito: (Number(f.deposit) || 0) * pessoas }
+    var f = formato(), b = blocos()
+    if (!f || !dia || !b.length) return null
+    var soma = 0, horas = 0
+    for (var i = 0; i < b.length; i++) {
+      var p = preco(daHora(dia, b[i].hora), f)               // a tarifa do início vale para todas as horas da sessão
+      if (typeof p !== 'number') return null
+      soma += p * b[i].horas; horas += b[i].horas
+    }
+    return { blocos: b, horas: horas, pessoas: pessoas, valor: soma * pessoas, porPessoa: soma,
+      deposito: (Number(f.deposit) || 0) * pessoas * b.length }
   }
 
-  // ---------------------------------------------------------------- − / + (pessoas e horas)
+  // ---------------------------------------------------------------- − / + pessoas (as horas são os horários tocados)
   function limites() {
-    var f = formato(), x = dia && hora != null ? daHora(dia, hora) : null
-    var maxP = x ? Math.max(1, Math.min(capacidade(), x.spots)) : capacidade()
-    var minH = cfg ? cfg.min_hours : 1
-    var maxH = cfg ? (x && f ? Math.max(minH, seguidas(dia, hora, f, pessoas)) : cfg.max_hours) : 1
-    return { maxP: maxP, minH: minH, maxH: maxH }
+    var maxP = capacidade()
+    sel.forEach(function (h) { var x = daHora(dia, h); if (x) maxP = Math.min(maxP, x.spots) })
+    return { maxP: Math.max(1, maxP) }
   }
   function desenharPassos() {
     var l = limites()
     pessoas = Math.min(Math.max(1, pessoas), l.maxP)
-    horas = Math.min(Math.max(l.minH, horas), l.maxH)
-    ;[[passoPessoas, pessoas, 1, l.maxP], [passoHoras, horas, l.minH, l.maxH]].forEach(function (p) {
-      p[0].querySelector('.sim-n').textContent = String(p[1])
-      p[0].querySelector('.sim-menos').disabled = p[1] <= p[2]
-      p[0].querySelector('.sim-mais').disabled = p[1] >= p[3]
-    })
-    passoHoras.hidden = l.minH === l.maxH && (!cfg || cfg.min_hours === cfg.max_hours)
+    passoPessoas.querySelector('.sim-n').textContent = String(pessoas)
+    passoPessoas.querySelector('.sim-menos').disabled = pessoas <= 1
+    passoPessoas.querySelector('.sim-mais').disabled = pessoas >= l.maxP
     amigos.disabled = pessoas >= l.maxP
   }
-  function passo(qual, d) {
-    if (qual === 'pessoas') pessoas += d; else horas += d
-    desenharPassos()
-    if (qual === 'pessoas') desenharHoras()
-    atualizar()
-  }
-  [[passoPessoas, 'pessoas'], [passoHoras, 'horas']].forEach(function (p) {
-    p[0].querySelector('.sim-menos').addEventListener('click', function () { passo(p[1], -1) })
-    p[0].querySelector('.sim-mais').addEventListener('click', function () { passo(p[1], 1) })
-  })
+  function passo(d) { pessoas += d; desenharPassos(); desenharHoras(); atualizar() }
+  passoPessoas.querySelector('.sim-menos').addEventListener('click', function () { passo(-1) })
+  passoPessoas.querySelector('.sim-mais').addEventListener('click', function () { passo(1) })
   // "Bring friends": já com o máximo de lugares (a hora escolhida, ou todos os simuladores)
   amigos.addEventListener('click', function () { pessoas = limites().maxP; desenharPassos(); desenharHoras(); atualizar() })
 
@@ -158,13 +176,14 @@
     var t = total()
     if (online) {
       resumo.textContent = !carregou ? 'Loading…' : !dia ? 'Pick a day'
-        : dataCurta(dia) + (hora != null && t ? ' · ' + hh(hora) + '–' + hh(hora + t.horas) : ' · pick a time')
+        : dataCurta(dia) + (t ? ' · ' + t.blocos.map(function (b) { return hh(b.hora) + '–' + hh(b.hora + b.horas) }).join(', ')
+          + ' (' + t.horas + ' h)' : ' · pick a time')
           + ' · ' + pessoas + (pessoas === 1 ? ' driver' : ' drivers') + (f && chave ? (chave.checked ? ' · coach' : '') : f ? ' · ' + f.titulo : '')
     }
     precoEl.textContent = t ? usd(t.valor) : ''
     if (depositoEl) { depositoEl.hidden = !(t && t.deposito); depositoValor.textContent = t && t.deposito ? usd(t.deposito / t.pessoas) : '' }
-    var falta = !carregou || !dia ? 'dia' : hora == null ? 'hora' : null
-    if (carregou && cfg.online && ordem.length) aviso.textContent = AVISO
+    var falta = !carregou || !dia ? 'dia' : !sel.length ? 'hora' : null
+    if (carregou && cfg.online && ordem.length) aviso.textContent = (sel.length ? 'Tap more times to add hours. ' : '') + AVISO
     botao.hidden = semVenda
     botao.disabled = !!(falta || semVenda || !t)
     if (botao.disabled) botao.setAttribute('aria-disabled', 'true'); else botao.removeAttribute('aria-disabled')
@@ -191,7 +210,7 @@
         ['sim-dia-mes', data(iso, { month: 'short' })]].concat(t ? [['sim-dia-tag', rotulo(t)]] : []).forEach(function (p) {
         var s = document.createElement('span'); s.className = p[0]; s.textContent = p[1]; s.setAttribute('aria-hidden', 'true'); b.appendChild(s)
       })
-      b.addEventListener('click', function () { dia = iso; hora = null; desenharDias(); desenharHoras(); atualizar() })
+      b.addEventListener('click', function () { dia = iso; sel = []; desenharDias(); desenharHoras(); atualizar() })
       faixaDias.appendChild(b)
     })
     faixaDias.hidden = !ordem.length
@@ -220,17 +239,20 @@
     horasBox.textContent = ''
     var f = formato()
     if (!dia || !f) { horasBox.hidden = true; desenharPassos(); return }
-    if (hora != null && !cabe(dia, daHora(dia, hora) || { prices: {} }, f, 1)) hora = null
+    sel = sel.filter(function (h) { var x = daHora(dia, h); return x && x.spots >= pessoas && preco(x, f) !== undefined })
+    arrumar()
     var cap = capacidade()
     dias[dia].hours.forEach(function (x) {
       var p = preco(x, f)
       if (p === undefined) return
-      var pode = cabe(dia, x, f, hora === x.h ? 1 : pessoas)
+      // pode tocar: a que já está escolhida (para tirar), a que começa uma sessão ou a que encosta numa escolhida
+      var marcada = escolhida(x.h), encosta = escolhida(x.h - 1) || escolhida(x.h + 1)
+      var pode = marcada || (x.spots >= pessoas && sessaoCom(x.h) <= cfg.max_hours && (encosta || cabe(dia, x, f, pessoas)))
       var t = etiquetaDaHora(dia, x.h)
       var b = document.createElement('button')
       b.type = 'button'; b.className = 'sim-hora'
       b.disabled = !pode
-      b.setAttribute('aria-pressed', String(hora === x.h))
+      b.setAttribute('aria-pressed', String(marcada))
       var precoTxt = p === null ? 'Call us' : !x.spots ? 'Full' : usd(p)
       b.setAttribute('aria-label', hh(x.h) + ', ' + (p === null ? 'book by phone' : !x.spots ? 'full'
         : usd(p) + ' per hour, ' + x.spots + ' of ' + cap + ' seats free') + (t ? ', ' + t.label : ''))
@@ -241,11 +263,23 @@
         for (var i = 0; i < cap; i++) { var bola = document.createElement('i'); if (i < x.spots) bola.className = 'livre'; pts.appendChild(bola) }
       } else pts.textContent = x.spots + ' left'
       b.appendChild(h); b.appendChild(v); b.appendChild(pts)
-      b.addEventListener('click', function () { hora = x.h; desenharHoras(); atualizar() })
+      b.addEventListener('click', function () { tocar(x.h); desenharHoras(); atualizar() })
       horasBox.appendChild(b)
     })
     horasBox.hidden = !horasBox.childNodes.length
     desenharPassos()
+  }
+
+  /** Toca num horário: entra (com as horas do mínimo, se for o começo de uma sessão) ou sai. */
+  function tocar(h) {
+    if (escolhida(h)) sel = sel.filter(function (y) { return y !== h })
+    else {
+      var novas = [h]
+      if (!escolhida(h - 1) && !escolhida(h + 1)) for (var i = 1; i < cfg.min_hours; i++) novas.push(h + i)
+      sel = sel.concat(novas.filter(function (y) { return !escolhida(y) }))
+    }
+    sel.sort(function (a, b) { return a - b })
+    arrumar()
   }
 
   function escolherDia() {
@@ -257,7 +291,7 @@
   // ---------------------------------------------------------------- o formato: "With coach" ou os botões
   function mudouFormato() {
     if (!carregou) { atualizar(); return }
-    escolherDia(); hora = null; desenharDias(); desenharHoras(); atualizar()
+    escolherDia(); sel = []; desenharDias(); desenharHoras(); atualizar()
   }
   if (chave) {
     chave.addEventListener('change', function () {
@@ -273,9 +307,11 @@
     var f = formato(), t = total()
     if (!f || !t || !window.uraceCarrinho) return
     var querSorteio = !!(sorteio && sorteio.checked)
-    for (var i = 0; i < t.pessoas; i++) {
-      // uma linha por pessoa (um simulador cada): o piloto de cada uma é escolhido no carrinho
-      if (!window.uraceCarrinho.por({ tipo: 'sessao', servico: f.id, data: dia, hora: hora, horas: t.horas, sorteio: querSorteio, pessoa: true })) {
+    // uma linha por sessão e por pessoa (um simulador cada): o piloto de cada uma é escolhido no carrinho
+    var linhas = []
+    t.blocos.forEach(function (b) { for (var i = 0; i < t.pessoas; i++) linhas.push(b) })
+    for (var j = 0; j < linhas.length; j++) {
+      if (!window.uraceCarrinho.por({ tipo: 'sessao', servico: f.id, data: dia, hora: linhas[j].hora, horas: linhas[j].horas, sorteio: querSorteio, pessoa: true })) {
         ok.textContent = 'Your cart is full. '
         var ver = document.createElement('a'); ver.href = paraCarrinho; ver.textContent = 'View cart and pay'
         ok.appendChild(ver)
@@ -301,7 +337,6 @@
       cfg = d.config; formatos = d.formatos || []; comCarrinho = !!d.cart
       d.dias.forEach(function (x) { dias[x.date] = x; ordem.push(x.date) })
       carregou = true
-      horas = cfg.min_hours
       if (!ordem.length) { aviso.textContent = 'No dates open for booking right now. Please check back soon or call us.'; atualizar(); return }
       escolherDia()
       quantos.hidden = false
