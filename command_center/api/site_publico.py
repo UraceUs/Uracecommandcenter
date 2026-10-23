@@ -351,6 +351,49 @@ def sim2grid_mudar_faixa(fid: int, dados: SimFaixaIn, request: Request, con: sql
     return sim2grid.painel(con)
 
 
+class SimEtiquetaIn(BaseModel):
+    """#396: a etiqueta do dia (dia de piloto × dia de diversão). `days` ou `date`; horas vazias = o dia inteiro."""
+    label: str | None = None
+    icon: str | None = None
+    note: str | None = None
+    days: str | list[int] | None = None
+    date: str | None = None
+    start_hour: int | str | None = None
+    end_hour: int | str | None = None
+    active: bool | None = None
+    sort: int | None = None
+
+
+@r.post("/sim2grid/etiquetas", status_code=201)
+def sim2grid_criar_etiqueta(dados: SimEtiquetaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                            u=Depends(auth.exige("MANAGER"))):
+    from command_center.providers import sim2grid
+    try:
+        tid = sim2grid.criar_etiqueta(con, u["id"], dados.model_dump(exclude_unset=True))
+    except sim2grid.ErroSim as e:
+        raise HTTPException(400, str(e))
+    auditar(con, "sim2grid.tag.create", f"user:{u['id']}", user_id=u["id"], entity_type="sim_day_tag", entity_id=tid,
+            detail=dados.model_dump(exclude_unset=True), ip=auth._ip(request))
+    con.commit()
+    return {"id": tid, **sim2grid.painel(con)}
+
+
+@r.patch("/sim2grid/etiquetas/{tid}")
+def sim2grid_mudar_etiqueta(tid: int, dados: SimEtiquetaIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                            u=Depends(auth.exige("MANAGER"))):
+    """Desativar não apaga: a etiqueta sai do calendário do site e continua no painel para voltar."""
+    from command_center.providers import sim2grid
+    try:
+        mud = sim2grid.mudar_etiqueta(con, u["id"], tid, dados.model_dump(exclude_unset=True))
+    except sim2grid.ErroSim as e:
+        raise HTTPException(404 if "não existe" in str(e) else 400, str(e))
+    if mud:
+        auditar(con, "sim2grid.tag.update", f"user:{u['id']}", user_id=u["id"], entity_type="sim_day_tag", entity_id=tid,
+                detail={k: {"antes": a, "depois": d} for k, (a, d) in mud.items()}, ip=auth._ip(request))
+    con.commit()
+    return sim2grid.painel(con)
+
+
 # ------------------------------------------------------------------ produtos da loja (#298)
 @r.get("/produtos")
 def produtos(q: str = "", categoria: str | None = None, estado: str | None = None,

@@ -260,26 +260,34 @@ def test_pagina_da_lp_com_seo_e_os_precos_do_painel(sim):
     assert [t for n, t in p.h if n == "h1"] == [SG.PAGINA["h1"]]
     assert '<link rel="canonical" href="https://novo.urace.us/sim2grid-racing-simulator/">' in r.text
     assert f"<title>{SG.PAGINA['titulo']}</title>" in r.text
-    for trecho in ("Make time for your ambition.", "You can see the driver. Now see the path.", "Next lap: yours.",
-                   "10724 Cosmonaut Blvd, Box 5", "Regular coaching. Consistent training.", "Starting at $50",
-                   "I play racing games. Is SIM2GRID a good next step?", "Monday–Friday · 6 PM–midnight", "$75 / hour",
-                   "Saturday–Sunday · 8 AM–midnight", "$90 / hour", "$150 / hour", "3 sessions per week", "$1,800", 'data-online="1"', "sim2grid.js"):
+    # #396: a página de cinema — a reserva logo depois da foto; o texto longo da LP saiu
+    for trecho in ("Book your seat", "Monthly programs", "10724 Cosmonaut Blvd, Box 5", "Starting at $50",
+                   "What’s included in a simulator hour?", "Can I book this for my child?",
+                   "What if I need to change or cancel my booking?", 'role="switch"', "With coach", "from $125/h",
+                   "3 sessions per week", "$1,800", 'href="/pro-team/"', 'data-online="1"', "sim2grid.js", 'class="sim-barra"',
+                   "Bring friends", "simulator-cockpit.webp"):
         assert trecho in r.text, trecho
+    for saiu in ("You can see the driver. Now see the path.", "Bring the passion. Discover the possibilities.",
+                 "One passion. A world of possibilities.", "Next lap: yours."):
+        assert saiu not in r.text, saiu
+    assert r.text.count("<details>") == 5, "o FAQ tem 5 perguntas, fechadas"
     servico = next(x for x in p.ld if x.get("@type") == "Service")
     precos = {o["priceSpecification"]["price"] for o in servico["offers"] if "priceSpecification" in o}
     assert precos == {"50.00", "75.00", "90.00", "125.00", "150.00"} and all(
         o["priceSpecification"]["unitCode"] == "HUR" for o in servico["offers"] if "priceSpecification" in o)
     assert any(x.get("@type") == "FAQPage" for x in p.ld)
     faq = next(x for x in p.ld if x.get("@type") == "FAQPage")
-    custo = next(q for q in faq["mainEntity"] if q["name"] == "What does a simulator hour cost?")
+    custo = next(q for q in faq["mainEntity"] if q["name"] == "How much does it cost?")
     assert "Monday–Friday, 7 AM–5 PM: $50 per hour" in custo["acceptedAnswer"]["text"]
+    assert "Monday–Friday, 7 AM–5 PM: $125 per hour" in custo["acceptedAnswer"]["text"]
+    assert len(faq["mainEntity"]) == 5
     # o painel muda: a página segue (preço, faixa desativada, formato desativado)
     f = next(x for x in sim2grid.faixas(con) if x["seed_key"] == "solo:semana:dia")
     sim2grid.mudar_faixa(con, None, f["id"], {"price": 45})
     con.execute("UPDATE booking_services SET active=0 WHERE id=?", (coach,))
     con.commit()
     html = cli.get(CAMINHO).text
-    assert "Starting at $45" in html and "$125 / hour" not in html and "Hourly · With coaching" not in html
+    assert "Starting at $45" in html and "from $125/h" not in html and 'role="switch"' not in html
 
 
 def test_links_do_site_apontam_para_a_pagina_e_ela_esta_no_sitemap(sim):
@@ -370,4 +378,66 @@ def test_texto_das_faixas_e_das_horas():
     assert sim2grid.quando("2026-11-03", 18, 2) == "Tue, Nov 3, 2026 · 6 PM–8 PM (2 h)"
     assert sim2grid.do_slug("sim:18:2") == (18, 2) and sim2grid.do_slug("addon:3") is None
     assert date.fromisoformat(SG.REGRAS["open_from"]) == date(2026, 11, 1)
-    assert json.dumps(SG.PAGINA) and re.search(r"\{desde\}", SG.PAGINA["sub"])
+    assert json.dumps(SG.PAGINA) and re.search(r"\{desde\}", SG.PAGINA["sub"]) and re.search(r"\{capacidade\}", SG.PAGINA["sub"])
+
+
+# ------------------------------------------------------------------ a etiqueta do dia (#396)
+def _dia_api(cli, d):
+    j = cli.get("/ops/api/vitrine/sim2grid").json()
+    return next((x for x in j["dias"] if x["date"] == d.isoformat()), None)
+
+
+def test_etiqueta_do_dia_nasce_vazia_e_aparece_no_calendario(sim):
+    """#396, dono 23/10: "alguns dias frequentados por pilotos · outros dias por pessoas que vao levar como
+    entretenimento". Nada nasce marcado; a etiqueta da equipe aparece no dia (a data antes do dia da semana)."""
+    cli, con, st, qbo, tmp, solo, coach = sim
+    assert um(con, "SELECT COUNT(*) AS n FROM sim_day_tags")["n"] == 0, "a semente é vazia: a equipe define"
+    aplicar_schema(con)
+    assert um(con, "SELECT COUNT(*) AS n FROM sim_day_tags")["n"] == 0, "a migração é idempotente e não semeia"
+    j = cli.get("/ops/api/vitrine/sim2grid").json()
+    assert j["dias"] and all(x["tags"] == [] for x in j["dias"])
+    terca, sabado = dia(1), dia(5)
+    noite = sim2grid.criar_etiqueta(con, None, {"label": "Fun night", "icon": "🎮", "days": "1", "start_hour": 18, "end_hour": 24})
+    sim2grid.criar_etiqueta(con, None, {"label": "Pilot day", "icon": "🏁", "days": [5, 6], "note": "Coaches on site"})
+    sim2grid.criar_etiqueta(con, None, {"label": "League night", "date": terca.isoformat()})
+    con.commit()
+    assert _dia_api(cli, terca)["tags"] == [
+        {"label": "League night", "icon": "", "note": "", "start": None, "end": None},
+        {"label": "Fun night", "icon": "🎮", "note": "", "start": 18, "end": 24}], "a data vem antes do dia da semana"
+    assert _dia_api(cli, sabado)["tags"] == [{"label": "Pilot day", "icon": "🏁", "note": "Coaches on site", "start": None, "end": None}]
+    assert _dia_api(cli, dia(2))["tags"] == []
+    # desativar tira do site e não apaga
+    sim2grid.mudar_etiqueta(con, None, noite, {"active": False})
+    con.commit()
+    assert [t["label"] for t in _dia_api(cli, terca)["tags"]] == ["League night"]
+    assert um(con, "SELECT COUNT(*) AS n FROM sim_day_tags")["n"] == 3
+    for ruim in ({"label": "", "days": "1"}, {"label": "X" * 25, "days": "1"}, {"label": "Pilot day"},
+                 {"label": "Pilot day", "days": "1", "start_hour": 18}, {"label": "Pilot day", "days": "1", "start_hour": 20, "end_hour": 18},
+                 {"label": "Pilot day", "date": "23/10/2026"}, {"label": "Pilot day", "days": "1", "icon": "🏁" * 9}):
+        with pytest.raises(sim2grid.ErroSim):
+            sim2grid.criar_etiqueta(con, None, ruim)
+
+
+def test_painel_edita_a_etiqueta_do_dia_e_o_operador_so_ve(sim, painel):
+    cli, con, st, qbo, tmp, solo, coach = sim
+    eq = painel
+    _entra(eq, "op.sim@example.com")
+    r = eq.get("/ops/api/site/sim2grid")
+    assert r.status_code == 200 and r.json()["etiquetas"] == []
+    assert eq.get("/ops/api/site/sim2grid", headers={"If-None-Match": r.headers["etag"]}).status_code == 304, "GET com ETag"
+    assert eq.post("/ops/api/site/sim2grid/etiquetas", json={"label": "Pilot day", "days": "0"}).status_code == 403, "o operador só vê"
+    _entra(eq, "gerente.sim@example.com")
+    r = eq.post("/ops/api/site/sim2grid/etiquetas", json={"label": "Pilot day", "icon": "🏁", "days": [0, 1, 2]})
+    assert r.status_code == 201
+    tid = r.json()["id"]
+    assert [t["label"] for t in r.json()["etiquetas"]] == ["Pilot day"]
+    assert eq.post("/ops/api/site/sim2grid/etiquetas", json={"label": "Fun night"}).status_code == 400, "sem dia nem data"
+    segunda = dia(0)
+    r = eq.patch(f"/ops/api/site/sim2grid/etiquetas/{tid}", json={"label": "Fun night", "icon": "🎮", "start_hour": 18, "end_hour": 24})
+    assert r.status_code == 200
+    assert _dia_api(cli, segunda)["tags"] == [{"label": "Fun night", "icon": "🎮", "note": "", "start": 18, "end": 24}]
+    # por data: o dia da semana deixa de valer
+    assert eq.patch(f"/ops/api/site/sim2grid/etiquetas/{tid}", json={"date": dia(3).isoformat(), "days": None}).status_code == 200
+    assert _dia_api(cli, segunda)["tags"] == [] and _dia_api(cli, dia(3))["tags"][0]["label"] == "Fun night"
+    assert eq.patch("/ops/api/site/sim2grid/etiquetas/9999", json={"label": "X"}).status_code == 404
+    assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event LIKE 'sim2grid.tag.%'")["n"] == 3

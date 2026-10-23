@@ -196,29 +196,31 @@ def _venda(cad, br, base, site, largura, altura, produto, quem, dia):
 
 
 def _sim2grid(cad, br, site, largura, altura):
-    """#392: a página do SIM2GRID (a LP) e a reserva por hora até o carrinho: formato, dia, hora, pessoas."""
+    """#392/#396: a página do SIM2GRID (como app de cinema) e a reserva por hora até o carrinho: dia, hora, pessoas, Book."""
     v = br.new_page(viewport={"width": largura, "height": altura})
     erros = []
     v.on("pageerror", lambda e: erros.append(str(e)))
     with passo(cad, v, "sim2grid-pagina", "A página do SIM2GRID abre (#392)", "abri /sim2grid-racing-simulator/") as st:
         v.goto(site + "/sim2grid-racing-simulator/")
-        v.get_by_role("heading", name="Your first step into motorsport starts here", level=1).wait_for()
-        v.locator(".agenda-dia.aberto").first.wait_for()
-        st["resposta"] = "a página abriu com o texto da LP, os formatos com o preço por hora do painel e o calendário"
-    with passo(cad, v, "sim2grid-hora", "Escolher o formato, o dia e a hora", "With coaching, o primeiro dia aberto e a primeira hora") as st:
-        v.get_by_role("radio", name=re.compile("With coaching")).check()
-        v.locator(".agenda-dia.aberto:not(.ligar)").first.click()
+        v.get_by_role("heading", name="Racing simulators in Orlando", level=1).wait_for()
+        v.locator(".sim-hora:not([disabled])").first.wait_for()
+        telas = v.evaluate("document.documentElement.scrollHeight") / altura
+        st["resposta"] = (f"a 1ª tela tem a foto, a frase e a reserva (os dias e os horários com os lugares livres); "
+                          f"a página inteira tem {telas:.1f} telas")
+    with passo(cad, v, "sim2grid-hora", "Escolher o formato, o dia e a hora", "With coach, o primeiro dia aberto e a primeira hora") as st:
+        v.locator("label.sim-coach").click()
+        v.locator(".sim-dia.aberto").first.click()
         hora = v.locator(".sim-hora:not([disabled])").first
         hora.wait_for()
         texto = hora.inner_text().replace("\n", " ")
         hora.click()
         st["resposta"] = f"a hora mostra {texto!r} (o preço da faixa e os simuladores que sobram)"
-    with passo(cad, v, "sim2grid-pessoas", "Duas pessoas na mesma hora", "escolhi 2 em Simulators (people)") as st:
-        v.get_by_label("Simulators (people)").select_option("2")
+    with passo(cad, v, "sim2grid-pessoas", "Duas pessoas na mesma hora", "toquei no + de Drivers") as st:
+        v.locator('[data-passo="pessoas"] .sim-mais').click()
         r = v.evaluate(tn._VAZA)
         assert not r["rola"] and not r["culpados"], r
-        st["resposta"] = f"o botão somou as duas pessoas: {v.locator('.agenda-carrinho').inner_text().strip()!r}"
-    with passo(cad, v, "sim2grid-carrinho", "A hora de simulador no carrinho", 'cliquei em "Add to cart"') as st:
+        st["resposta"] = f"a barra somou as duas pessoas: {v.locator('.sim-barra .agenda-carrinho').inner_text().strip()!r}"
+    with passo(cad, v, "sim2grid-carrinho", "A hora de simulador no carrinho", 'toquei em "Book" na barra de baixo') as st:
         v.locator(".agenda-carrinho").click()
         v.wait_for_url(re.compile(r"/cart/"))
         v.locator(".carrinho-linha").nth(1).wait_for()

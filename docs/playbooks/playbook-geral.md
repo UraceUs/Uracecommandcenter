@@ -166,7 +166,7 @@ pedem acesso de operador.
 | Site | **Disponibilidade** | `/ops/site/disponibilidade` | a agenda que abre e fecha: semana, horários, regras e bloqueios | operador+ (mudar: gerente+) |
 | Site | **Serviços e preços** | `/ops/site/servicos` | **Adicionar serviço** em cima, escolhendo **em qual página do site** ele entra (#312); o preço, o depósito (com **Security deposit obrigatório**, #317) e o item do QuickBooks de cada serviço, com o **cartão do kart no site**, o **kart novo** (#297) e **onde cada um aparece hoje no site** | operador+ (mudar: gerente+) |
 | Site | **Cartões das páginas** | `/ops/site/cartoes` | os planos e preços da Academy, do Pro Team, do For Beginners e os **programas mensais do SIM2GRID** (#297, #392); **Adicionar cartão** em cima (#312) | operador+ (mudar: gerente+) |
-| Site | **Sim2Grid** | `/ops/site/sim2grid` | a hora de simulador do SIM2GRID (#392): as **regras** (vender online, simuladores por hora, horas mínimas e máximas, horizonte, antecedência, abertura, datas fechadas, idade, waiver, aviso e sorteio), as **faixas de preço por hora** de cada formato (com coach, sem coach; preço vazio = "ligue para nós") e as **reservas** que vêm do site, com o card de cada piloto. Detalhes na seção 6, "SIM2GRID" | operador+ (mudar: gerente+) |
+| Site | **Sim2Grid** | `/ops/site/sim2grid` | a hora de simulador do SIM2GRID (#392): as **regras** (vender online, simuladores por hora, horas mínimas e máximas, horizonte, antecedência, abertura, datas fechadas, idade, waiver, aviso e sorteio), as **faixas de preço por hora** de cada formato (com coach, sem coach; preço vazio = "ligue para nós"), a **etiqueta do dia** (🏁 Pilot day × 🎮 Fun night, #396) e as **reservas** que vêm do site, com o card de cada piloto. Detalhes na seção 6, "SIM2GRID" | operador+ (mudar: gerente+) |
 | Site | **Produtos da loja** | `/ops/site/produtos` | título, preço, fotos, texto, opções, estoque, **frete** e **depósito** de cada produto (#298), e **Como vendemos** (dropshipping ou em estoque, #309) | operador+ (mudar: gerente+) |
 | Site | **Estoque do site** | `/ops/site/estoque` (um produto: `/ops/site/estoque/<endereço>`) | o que é **dropshipping** e o que é **em estoque** (interno: o cliente nunca vê), o item do Estoque ligado a cada produto ou opção e **quanto tem** em cada local (*Galpão 5 · Pista 3*); ligar, criar o item a partir do produto e contar um local por vez (#309) | operador+ (contar); ligar, desligar e mudar o marcador: gerente+ |
 | Site | **Security deposit** | `/ops/site/deposito` | cada depósito pago no site, **devolver pelo Stripe** com o valor escolhido (parcial vale) e conferir no Stripe; e o **valor do depósito** que o site cobra, por sessão (com **Obrigatório**) e por produto (#317) | operador+ (devolver e mudar: gerente+) |
@@ -849,10 +849,24 @@ Dono, 22/10: *"na pagina do sim2grid eu preciso replicar essa lp ... ali dentro 
 aulas de kart podendo agendar ate 5 pessoas para a mesma hora, o valor do serviço é cobrado por hora. monte assim
 como montou o arrive and drive com todas as configurações ajustaveis"*.
 
-- **A página**: `novo.urace.us/sim2grid-racing-simulator/` (o mesmo endereço do urace.us de hoje), com o texto da LP:
-  os formatos e os preços por hora, a reserva, os programas mensais, o caminho SIM2GRID → Arrive and Drive → Academy →
-  Racing Team, o endereço e as perguntas. O menu (**Sim 2 Grid**), a página de programas (`/services/`, que ficou com um
-  resumo e o botão) e a Career levam para ela.
+- **A página** (#396, dono 23/10: *"imagina vc indo ao cinema na hora de construir ... tem que virar um point"*):
+  `novo.urace.us/sim2grid-racing-simulator/` (o mesmo endereço do urace.us de hoje), feita para o celular como um app de
+  cinema. A **1ª tela** é a foto do cockpit, uma frase e o botão; logo embaixo, a **reserva**: a faixa dos **dias** (rola
+  para o lado, com a etiqueta do dia), os **horários** (a hora, o preço e uma bolinha verde por simulador livre), **Drivers
+  − 1 +** e **Hours − 1 +**, o atalho **Bring friends** (já com o máximo de pessoas) e o interruptor **With coach** (troca
+  o formato sem coach ↔ com coach). A **barra preta fixa embaixo** mostra o dia, a hora, as pessoas, o total e **Book**: o
+  dia aberto mais próximo já vem escolhido, então do topo são 3 toques até o carrinho (o dia, a hora, Book). O balão do
+  chat e o banner de cookies sobem acima da barra. Depois da reserva, curto: os **programas mensais** num cartão, o
+  caminho **Simulator → Arrive & Drive → Academy → Racing Team** numa linha e **5 perguntas** fechadas (o que inclui,
+  preço, amigos, criança, cancelamento), com o endereço. No celular a página inteira cabe em ~4 telas (antes eram 13).
+  O menu (**Sim 2 Grid**), a página de programas (`/services/`) e a Career levam para ela.
+- **Etiqueta do dia: dia de piloto × dia de diversão** (#396; Site › Sim2Grid, "Etiqueta do dia"): o selo que aparece no
+  dia da faixa do calendário e no topo do dia escolhido, ex.: **🏁 Pilot day** (dia de treino) ou **🎮 Fun night** (noite
+  de levar os amigos). Cada etiqueta tem **ícone** (um emoji), **rótulo** curto em inglês (até 24 letras), **quando**
+  (**dias da semana** ou **uma data**), **de / até** (vazio = o dia todo; com horário, o ícone aparece só nas horas da
+  faixa) e um **texto curto do dia** opcional (ex.: *Coaches on site*). A data vem antes do dia da semana. **Nasce vazia**:
+  a equipe decide quais dias são de piloto e quais de diversão. Desativar tira do site e não apaga. Gerente e admin
+  mudam; operador vê.
 - **Formatos** são serviços de **Site › Serviços e preços** com o tipo **Hora de simulador (SIM2GRID)**: hoje, *sem
   coach* e *com coach*. Ali mudam o nome, o **nome no site**, a linha de baixo, o texto, o **depósito** (com
   "obrigatório") e o **item do QuickBooks**; desativar tira o formato da página. **Adicionar serviço → SIM2GRID →
@@ -866,8 +880,8 @@ como montou o arrive and drive com todas as configurações ajustaveis"*.
   **antecedência**, **abre a partir de** (a inauguração, 01/11/2026), **datas fechadas**, **idade mínima** (vazio: o site
   não diz e pede para ligar antes de reservar para criança), **waiver obrigatória**, o **aviso** perto do botão e o texto
   do **sorteio do mês** (vazio: sem a caixa). **Vender online** desligado: a página mostra preços e telefone, sem botão.
-- **Como a pessoa reserva**: formato → dia → hora de início (cada hora diz quantos simuladores sobram) → quantas horas e
-  quantas pessoas → carrinho → conta → Stripe, o mesmo caminho do Arrive and Drive. **Cada pessoa é um simulador e uma
+- **Como a pessoa reserva**: dia → hora de início (cada hora mostra os simuladores livres em bolinhas) → quantas pessoas e
+  quantas horas (−/+) → **Book** na barra de baixo → carrinho → conta → Stripe, o mesmo caminho do Arrive and Drive. **Cada pessoa é um simulador e uma
   linha do carrinho**, com o piloto dela (cada piloto no seu card). O preço é a soma das horas pela faixa de cada uma.
   O horário fica **segurado** enquanto o Checkout do Stripe vale (31 min); pago, vira **reserva paga** no card do piloto,
   com a venda **GANHO** em Vendas e, com a waiver ligada, a waiver do piloto. Se a hora encheu entre o checkout e o

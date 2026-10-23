@@ -2521,66 +2521,133 @@ def test_reserva_do_site_cliente_novo_cria_a_conta_poe_o_piloto_e_vai_para_o_pag
         adm.close()
 
 
-# ------------------------------------------------------------- SIM2GRID (#392)
-@pytest.mark.parametrize("largura", [360, 390, 1280])
-def test_sim2grid_escolhe_formato_dia_hora_e_pessoas_e_vai_ao_carrinho(servidor, navegador, largura):
-    """#392, dono 22/10: "podendo agendar ate 5 pessoas para a mesma hora, o valor do serviço é cobrado por hora".
-    A página da LP: formato → dia → hora de início (com os simuladores que sobram) → horas e pessoas → carrinho, com
-    uma linha por pessoa e o preço da faixa. Um h1, nada rola para o lado e o toque tem 40 px."""
-    site = servidor.removesuffix("/ops")
+# ------------------------------------------------------------- SIM2GRID (#392, #396)
+_SIM_COBRE = """() => {
+  // o que o medicao.js e o Kommo põem na tela: o banner de cookies (com a classe na raiz) e o balão do chat
+  const raiz = document.documentElement
+  const b = document.createElement('div'); b.className = 'consentimento'
+  const p = document.createElement('p'); p.textContent = 'We use cookies to measure our ads and improve the site. Privacy policy'
+  const a = document.createElement('div'); a.className = 'consentimento-acoes'
+  ;['Decline', 'Accept'].forEach(t => { const x = document.createElement('button'); x.className = 'btn btn-sm'; x.textContent = t; a.appendChild(x) })
+  b.appendChild(p); b.appendChild(a); document.body.appendChild(b)
+  raiz.style.setProperty('--consentimento-altura', (b.offsetHeight + 12) + 'px'); raiz.classList.add('com-consentimento')
+  const h = document.createElement('div'); h.className = 'amo-button-holder'
+  h.style.position = 'fixed'; h.style.right = '90px'; h.style.bottom = '90px'; h.style.zIndex = '2147483000'
+  const bt = document.createElement('button'); bt.style.width = '60px'; bt.style.height = '60px'; h.appendChild(bt); document.body.appendChild(h)
+}"""
+_SIM_LIVRE = """() => {
+  // a barra de reservar: nada por cima dela (o banner e o balão ficam acima), e o botão Book é o que recebe o toque
+  const barra = document.querySelector('.sim-barra').getBoundingClientRect()
+  const bt = document.querySelector('.sim-barra .agenda-carrinho').getBoundingClientRect()
+  const problemas = []
+  for (const sel of ['.consentimento', '.amo-button-holder']) {
+    const el = document.querySelector(sel)
+    if (el && el.getBoundingClientRect().bottom > barra.top + 1) problemas.push(sel + ' cobre a barra')
+  }
+  for (const [x, y] of [[bt.left + 4, bt.top + 4], [bt.right - 4, bt.bottom - 4], [bt.left + bt.width / 2, bt.top + bt.height / 2]]) {
+    const el = document.elementFromPoint(x, y)
+    if (!el || !el.closest('.sim-barra')) problemas.push('o toque em ' + Math.round(x) + ',' + Math.round(y) + ' cai em ' + (el ? el.className : 'nada'))
+  }
+  return problemas
+}"""
+_SIM_TOQUE = """() => [...document.querySelectorAll('.sim-agenda button, .sim-barra button, label.sim-coach, .sim-trilha a, .sim-planos a')]
+  .filter(e => e.offsetParent !== null || getComputedStyle(e).position === 'fixed')
+  .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 20)])
+  .filter(([h]) => h < 40)"""
+
+
+def _sim_abrir(servidor, navegador):
+    """O gerente tira a abertura de 01/11/2026 (regra do painel): a prova não depende do dia em que roda."""
     adm = entrar(navegador, servidor, largura=1280)
     csrf = _csrf(adm)
     antes = adm.request.get(servidor + "/api/site/sim2grid").json()["config"]
-    # a abertura (01/11/2026) é regra do painel: a prova não depende do dia em que roda
     assert adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf, data={"open_from": ""}).ok
+    return adm, csrf, antes
+
+
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_sim2grid_como_cinema_reserva_em_tres_toques(servidor, navegador, largura):
+    """#396, dono 23/10: "imagina vc indo ao cinema na hora de construir". Em 360/390 px: a reserva começa na 1ª tela
+    (a faixa dos dias e os primeiros horários, sem rolar pelo texto), a página tem no máximo 5 telas, são 3 toques até o
+    carrinho (o dia, a hora, Book) e "Bring friends" já leva o máximo de pessoas. A etiqueta do dia que o painel define
+    aparece no dia e no topo do dia. Nada cobre a barra de reservar (nem o banner de cookies, nem o balão do chat)."""
+    site = servidor.removesuffix("/ops")
+    adm, csrf, antes = _sim_abrir(servidor, navegador)
+    r = adm.request.post(servidor + "/api/site/sim2grid/etiquetas", headers=csrf,
+                         data={"label": "Pilot day", "icon": "🏁", "days": "0123456", "note": "Coaches on site"})
+    assert r.ok, r.text()
+    tid = r.json()["id"]
     try:
-        v = navegador.new_page(viewport={"width": largura, "height": 900})
+        v = navegador.new_page(viewport={"width": largura, "height": 844})
         erros = []
         v.on("pageerror", lambda e: erros.append(str(e)))
         v.goto(site + "/sim2grid-racing-simulator/")
         h1 = [t for n, t in _cabecalhos(v) if n == 1]
-        assert len(h1) == 1 and "Your first step into motorsport starts here".startswith(h1[0]), h1
-        v.get_by_role("radio", name=re.compile("With coaching")).check()
-        dia = v.locator(".agenda-dia.aberto:not(.ligar)").first
-        dia.wait_for()
-        dia.click()
+        assert len(h1) == 1 and "Racing simulators in Orlando".startswith(h1[0]), h1
         hora = v.locator(".sim-hora:not([disabled])").first
         hora.wait_for()
-        assert re.search(r"\$1(25|50) · 5 simulators left", hora.inner_text().replace("\n", " ")), hora.inner_text()
-        hora.click()
-        v.get_by_label("Simulators (people)").select_option("2")
-        botao = v.locator(".agenda-carrinho")
-        texto = botao.inner_text().strip()
-        assert re.fullmatch(r"Add to cart · \$(250|300)", texto), texto
-        r = v.evaluate(_VAZA)
-        assert not r["rola"] and not r["culpados"], r
+        assert re.fullmatch(r"(\d{1,2} (AM|PM)|Noon|Midnight)( 🏁)?\s+\$\d+", hora.inner_text().strip().replace("\n", " ")), hora.inner_text()
+        assert v.locator(".sim-hora:not([disabled])").first.locator(".sim-pontos i.livre").count() == 5, "5 lugares livres"
+        # a etiqueta do dia: no dia da faixa e no topo do dia escolhido
+        assert "Pilot day" in v.locator(".sim-dia[aria-pressed=true] .sim-dia-tag").inner_text()
+        assert "🏁 Pilot day" in v.locator(".sim-dia-topo").inner_text() and "Coaches on site" in v.locator(".sim-dia-topo").inner_text()
         if largura < 1000:
-            menor = v.evaluate("""() => [...document.querySelectorAll('.sim-agenda button, .sim-agenda select, label.sim-formato')]
-                .filter(e => e.offsetParent !== null).map(e => [e.getBoundingClientRect().height, (e.innerText || '').trim().slice(0, 20)])
-                .filter(([h]) => h < 40)""")
+            telas = v.evaluate("document.documentElement.scrollHeight") / 844
+            assert telas <= 5, f"a página tem {telas:.1f} telas em {largura} px"
+            barra = v.locator(".sim-barra").bounding_box()
+            assert v.evaluate("window.scrollY") == 0
+            assert v.locator(".sim-dias").bounding_box()["y"] + 60 < barra["y"], "os dias na 1ª tela"
+            assert hora.bounding_box()["y"] + hora.bounding_box()["height"] <= barra["y"], "o primeiro horário na 1ª tela, acima da barra"
+            menor = v.evaluate(_SIM_TOQUE)
             assert not menor, menor
+        r_ = v.evaluate(_VAZA)
+        assert not r_["rola"] and not r_["culpados"], r_
+        # 3 toques: o dia, a hora, Book (com "With coach" o preço é o do coach)
+        v.locator("label.sim-coach").click()
+        v.locator(".sim-dia.aberto").nth(1).click()
+        v.locator(".sim-hora:not([disabled])").first.click()
+        botao = v.locator(".sim-barra .agenda-carrinho")
+        assert re.fullmatch(r"Book · \$1(25|50)", botao.inner_text().strip()), botao.inner_text()
+        v.evaluate(_SIM_COBRE)
+        assert not v.evaluate(_SIM_LIVRE), v.evaluate(_SIM_LIVRE)
         botao.click()
         v.wait_for_url(re.compile(r"/cart/"))
-        v.locator(".carrinho-linha").nth(1).wait_for()
+        v.locator(".carrinho-linha").first.wait_for()
         linhas = v.locator(".carrinho-linha").all_inner_texts()
-        assert len(linhas) == 2 and all("SIM2GRID" in x and "(1 h)" in x for x in linhas), linhas
-        r = v.evaluate(_VAZA)
-        assert not r["rola"] and not r["culpados"], r
+        assert len(linhas) == 1 and "SIM2GRID" in linhas[0] and "(1 h)" in linhas[0], linhas
+        v.evaluate("() => window.uraceCarrinho.limpar()")
+        # "Bring friends": o atalho já leva os 5 simuladores — 3 toques até o carrinho com 5 lugares
+        v.goto(site + "/sim2grid-racing-simulator/")
+        v.locator(".sim-hora:not([disabled])").first.wait_for()
+        v.locator(".sim-amigos").click()
+        assert v.locator('[data-passo="pessoas"] .sim-n').inner_text() == "5"
+        v.locator(".sim-hora:not([disabled])").first.click()
+        assert re.fullmatch(r"Book · \$\d+", v.locator(".sim-barra .agenda-carrinho").inner_text().strip())
+        v.locator(".sim-barra .agenda-carrinho").click()
+        v.wait_for_url(re.compile(r"/cart/"))
+        v.locator(".carrinho-linha").nth(4).wait_for()
+        assert v.locator(".carrinho-linha").count() == 5, "uma linha por pessoa (um simulador cada)"
+        r_ = v.evaluate(_VAZA)
+        assert not r_["rola"] and not r_["culpados"], r_
         assert not erros, erros
         v.evaluate("() => window.uraceCarrinho.limpar()")
         v.close()
     finally:
+        adm.request.patch(servidor + f"/api/site/sim2grid/etiquetas/{tid}", headers=csrf, data={"active": False})
         adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf, data={"open_from": antes["open_from"] or ""})
         adm.close()
 
 
-def test_sim2grid_o_gerente_muda_a_faixa_no_painel_e_o_site_mostra(servidor, navegador):
-    """#392: "com todas as configurações ajustaveis". Site › Sim2Grid no celular: o gerente muda o preço de uma faixa e
-    o número de simuladores; a página do site mostra o preço novo e a regra nova, sem código."""
+def test_sim2grid_o_gerente_muda_a_faixa_e_a_etiqueta_no_painel_e_o_site_mostra(servidor, navegador):
+    """#392: "com todas as configurações ajustaveis". #396: a etiqueta do dia (piloto × diversão) também. Site › Sim2Grid
+    no celular: o gerente muda o preço de uma faixa, o número de simuladores e cria a etiqueta "Fun night"; a página do
+    site mostra o preço novo, a regra nova e a etiqueta, sem código."""
     site = servidor.removesuffix("/ops")
     adm = entrar(navegador, servidor, largura=390, altura=844)
     csrf = _csrf(adm)
     d = adm.request.get(servidor + "/api/site/sim2grid").json()
+    antes = d["config"]
+    assert adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf, data={"open_from": ""}).ok
     alvo = next(f for f in d["faixas"] if f["price"] == 75)
     try:
         abrir(adm, servidor, "/site/sim2grid")
@@ -2592,16 +2659,32 @@ def test_sim2grid_o_gerente_muda_a_faixa_no_painel_e_o_site_mostra(servidor, nav
         adm.get_by_label("Simuladores (pessoas por hora)").fill("4")
         adm.get_by_role("button", name="Salvar regras").click()
         adm.get_by_text("Regras salvas: o site já mostra.").wait_for()
+        # a etiqueta do dia: nasce vazia; o gerente cria "Fun night" para a semana inteira
+        nova = adm.locator("[data-etiqueta-nova]")
+        nova.get_by_label("Ícone").fill("🎮")
+        nova.get_by_label("Rótulo").fill("Fun night")
+        for b in nova.get_by_role("group", name="Dias da etiqueta nova").get_by_role("button").all():
+            b.click()
+        nova.get_by_label("Texto curto do dia").fill("Bring your friends")
+        nova.get_by_role("button", name="Adicionar etiqueta").click()
+        adm.get_by_text("Etiqueta criada: o calendário do site já mostra.").wait_for()
+        adm.locator("[data-etiqueta]").first.wait_for()
         r = adm.evaluate(_VAZA)
         assert not r["rola"] and not r["culpados"], r
         v = navegador.new_page(viewport={"width": 390, "height": 844})
         v.goto(site + "/sim2grid-racing-simulator/")
-        assert "$79 / hour" in v.locator(".sim-formatos").inner_text()
+        v.locator(".sim-dia-topo").wait_for()
+        assert "$79 per hour" in v.locator("#faq").text_content()
         assert "Up to 4 people" in v.locator(".sim-regras").inner_text()
+        assert "🎮 Fun night" in v.locator(".sim-dia-topo").inner_text() and "Bring your friends" in v.locator(".sim-dia-topo").inner_text()
+        assert "Fun night" in v.locator(".sim-dia.aberto .sim-dia-tag").first.inner_text()
         v.close()
     finally:
+        for t in adm.request.get(servidor + "/api/site/sim2grid").json()["etiquetas"]:
+            adm.request.patch(servidor + f"/api/site/sim2grid/etiquetas/{t['id']}", headers=csrf, data={"active": False})
         adm.request.patch(servidor + f"/api/site/sim2grid/faixas/{alvo['id']}", headers=csrf, data={"price": alvo["price"]})
-        adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf, data={"capacity": d["config"]["capacity"]})
+        adm.request.patch(servidor + "/api/site/sim2grid/config", headers=csrf,
+                          data={"capacity": antes["capacity"], "open_from": antes["open_from"] or ""})
         adm.close()
 
 
