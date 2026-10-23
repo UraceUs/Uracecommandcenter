@@ -344,7 +344,8 @@ def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, sessi
     elif PROGRAM_LINKS.get("call_link") and (holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "")
                                            or sdr_ponte.objecao_de_preco(texto)):
         tipo = holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "") or "objecao"
-        resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None, motivo=tipo)
+        resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None, motivo=tipo,
+                                       book=PROGRAM_LINKS.get("book_link"))
         saida["precisa_gente"] = True
         saida["nota"] = {"objecao": "Objeção de preço: a ponte oferece a call e passa a conversa para a equipe.",
                          "decisao": "Lead pronto para decidir: a ponte oferece a call e avisa a equipe na hora.",
@@ -641,7 +642,8 @@ def _resposta_de_espera(lead_id: int, lead_text: str, motivo: str | None = None)
     if link and tipo:
         conv = state.get_conversation(lead_id)
         state.log("gate", lead_id, f"{tipo}: oferta de call com o time")
-        return holding.call_offer(lead_text, link, contact_name=conv.get("contact_name"), motivo=tipo)
+        return holding.call_offer(lead_text, link, contact_name=conv.get("contact_name"), motivo=tipo,
+                                  book=PROGRAM_LINKS.get("book_link"))
     return _holding_reply(lead_id, lead_text)
 
 
@@ -888,10 +890,12 @@ def _objetivo_do_toque(attempt: int) -> str:
     """O que cada toque da cadência faz (dono, 14/10)."""
     if attempt == 0:
         link = PROGRAM_LINKS.get("call_link") or ""
+        book = PROGRAM_LINKS.get("book_link") or ""
+        reserva = (f" Then a last line offering to book the day directly instead: {book}" if book else "")
         return ("Goal: the lead stopped replying about 1h30 ago. Suggest a quick "
                 "15-minute call with our team to talk it through and present our "
                 f"programs properly, and send the calendar link {link} alone on its "
-                "own line.")
+                "own line." + reserva)
     # 22/10 (prompts do comercial): o 2º toque é útil e dá a saída fácil; pergunta repetida ensina que o silêncio
     # funciona, e "alguma dúvida?" não carrega nada
     return ("Goal: reactivate. Almost a day without a reply. Plain text, no link: one useful "
