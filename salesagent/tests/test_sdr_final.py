@@ -336,3 +336,33 @@ def test_persona_com_os_prompts_do_comercial():
     assert "never next to a price" in texto, "o slogan nunca responde preço"
     ponte = (SALESAGENT / "bridge" / "app.py").read_text(encoding="utf-8")
     assert "easy way out" in ponte and "ask if any question came up" not in ponte, "o 2º toque do código segue a persona"
+
+
+# ------------------------------------------------------------------ dono, 23/10: call com plano de treino e reserva
+BOOK = "https://urace.us/book-online/"
+
+
+@pytest.mark.parametrize("motivo", ["objecao", "decisao", "competidor"])
+def test_oferta_de_call_com_link_de_reserva(motivo):
+    from sdr import idiomas
+    for codigo in idiomas.IDIOMAS:
+        msg = holding.call_offer("x", LINK, lang=codigo, motivo=motivo, book=BOOK)
+        linhas = msg.split("\n")
+        assert len(linhas) == 4 and linhas[2] == LINK and linhas[3].endswith(BOOK), (codigo, motivo, linhas)
+        assert msg.count("?") <= 1
+
+
+def test_objecao_de_preco_promete_explicar_e_achar_o_plano():
+    assert "plano de treino" in holding.call_offer("É caro", LINK, lang="pt", motivo="objecao", book=BOOK)
+    assert "training plan" in holding.call_offer("too expensive", LINK, motivo="objecao")
+
+
+def test_agenda_e_reserva_juntas_passam_pela_guarda():
+    from sdr import estilo
+    texto = holding.call_offer("É caro", LINK, lang="pt", motivo="objecao", book=BOOK)
+    limpo, v = estilo.um_ativo(texto, False)
+    assert LINK in limpo and BOOK in limpo and not v, v
+    limpo, v = estilo.um_ativo(f"Veja o vídeo:\nhttps://youtu.be/x\nE reserve: {BOOK}", False)
+    assert BOOK not in limpo and v == ["mais_de_um_link"], "sem a agenda, a reserva é um segundo link"
+    limpo, _ = estilo.um_ativo(texto, True)
+    assert "http" not in limpo, "na primeira resposta, nenhum link"

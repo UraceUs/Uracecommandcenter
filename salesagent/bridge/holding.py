@@ -251,13 +251,13 @@ def waiting_message(lead_text: str, sent_before: int = 0,
 _OFERTA_CALL = {
     "objecao": {
         "pt": ["Entendo{nome}. Que tal uma call rápida de 15 minutos com o nosso time?",
-               "A gente conversa sobre os objetivos do piloto e o melhor caminho.",
+               "A gente explica melhor como funciona e acha o plano de treino certo pro piloto.",
                "Escolhe um horário aqui:", "{link}"],
         "es": ["Entiendo{nome}. ¿Qué tal una llamada rápida de 15 minutos con nuestro equipo?",
-               "Hablamos de los objetivos del piloto y del mejor camino.",
+               "Te explicamos mejor cómo funciona y buscamos el plan de entrenamiento ideal.",
                "Elige un horario aquí:", "{link}"],
         "en": ["I hear you{nome}. How about a quick 15-minute call with our team?",
-               "We talk through the driver's goals and the best path.",
+               "We'll explain how it works and find the right training plan for the driver.",
                "Pick a time here:", "{link}"],
     },
     "decisao": {
@@ -286,18 +286,37 @@ _OFERTA_CALL = {
 for _motivo, _tabela in _OFERTA_CALL.items():
     for _idioma, _linhas in idiomas.TEXTOS["oferta_call"][_motivo].items():
         _tabela.setdefault(_idioma, _linhas)
+# Dono, 23/10: "pode enviar [o book-online] quando sugerir a call". Última linha da oferta; a guarda de estilo
+# trata a agenda e a reserva juntas como um ativo só.
+_RESERVAR = {
+    "pt": "Se preferir, já dá pra reservar o dia direto aqui: {book}",
+    "en": "Or, if you'd rather book the day now: {book}",
+    "es": "O, si prefieres, reserva el día directo aquí: {book}",
+    "fr": "Ou, si vous préférez, réservez la journée directement ici : {book}",
+    "it": "Oppure, se preferisci, prenota la giornata direttamente qui: {book}",
+    "de": "Oder, wenn du lieber direkt buchen willst: {book}",
+    "ru": "Или, если удобнее, забронируйте день сразу здесь: {book}",
+    "zh": "如果你想直接预订当天，也可以在这里：{book}",
+    "ja": "直接日程を予約したい場合はこちらから：{book}",
+    "ko": "바로 날짜를 예약하고 싶으시면 여기에서 하실 수 있어요: {book}",
+    "ar": "أو إذا كنت تفضل، احجز اليوم مباشرة من هنا: {book}",
+    "hi": "या अगर आप चाहें, तो सीधे यहाँ दिन बुक करें: {book}",
+}
 MOTIVO_DA_CALL = {"NEGOCIACAO": "objecao", "SINAL_CONVERSAO": "decisao", "PILOTO_COMPETIDOR": "competidor"}
 
 
 def call_offer(lead_text: str, link: str, contact_name: str | None = None,
-               lang: str | None = None, motivo: str = "objecao") -> str:
+               lang: str | None = None, motivo: str = "objecao", book: str | None = None) -> str:
     """A oferta de call com o nosso time e o link do calendário, na medida do motivo
-    ("objecao", "decisao" ou "competidor"). Um ativo, uma pergunta no máximo."""
+    ("objecao", "decisao" ou "competidor"). Com `book`, a última linha oferece também a reserva direta
+    (dono, 23/10), e o "escolhe um horário" sobe para a linha de cima: continuam 4 balões."""
     lang = lang or detect_language(lead_text)
     nome = _primeiro_nome(contact_name)
     nome = "," + nome if nome else ""        # "Entendo, Eduardo." / "Entendo."
-    linhas = _OFERTA_CALL.get(motivo, _OFERTA_CALL["objecao"])[lang]
-    texto = "\n".join(l.format(nome=nome, link=link) for l in linhas)
+    linhas = list(_OFERTA_CALL.get(motivo, _OFERTA_CALL["objecao"])[lang])
+    if book:
+        linhas = [linhas[0], f"{linhas[1]} {linhas[2]}", linhas[3], _RESERVAR.get(lang, _RESERVAR["en"])]
+    texto = "\n".join(l.format(nome=nome, link=link, book=book or "") for l in linhas)
     return textproc.customer_facing(texto)
 
 
