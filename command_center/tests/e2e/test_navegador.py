@@ -1596,12 +1596,15 @@ def test_calendario_em_cards_a_corrida_traz_um_card_por_cliente(servidor, navega
     pg.get_by_role("button", name="Mês", exact=True).click()
     pg.locator(".md-cal-d.hoje .md-card.servico", has_text="David Pedalo").wait_for()   # o treino: card do cliente
     corrida = pg.locator(".md-cal-d .md-card.corrida", has_text="ROK")
-    if not corrida.count():                                    # a corrida é daqui a 9 dias: pode cair no mês seguinte
+    avancou = not corrida.count()
+    if avancou:                                                # a corrida é daqui a 9 dias: pode cair no mês seguinte
         pg.get_by_role("button", name="Próximo mês").click()
     corrida.first.wait_for()
     assert corrida.first.locator(".md-card-sub .md-card.servico", has_text="Bryan Sapata").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
+    if avancou:                                                # a semana abre na data da tela (dia 1 do mês seguinte):
+        pg.get_by_role("button", name="Hoje", exact=True).click()   # volta para hoje antes de trocar de vista
     pg.get_by_role("button", name="Semana", exact=True).click()
     pg.locator(".md-semana-d.hoje .md-card.servico", has_text="David Pedalo").wait_for()
     corrida = pg.locator(".md-semana-d .md-card.corrida", has_text="ROK")
