@@ -325,16 +325,13 @@ def _primeira_vez(chave: str) -> bool:
     return True
 
 
-# No Comercial o robô só responde na etapa em que o lead espera o vendedor. Em ATENDIMENTO e
-# depois, quem conversa é a pessoa.
-ETAPAS_COMERCIAL_QUE_O_ROBO_RESPONDE = {"ENTRADA"}
-
-
 def pode_responder(lead_id: int) -> tuple[bool, str]:
     """Nível atender, mensagem que chegou pelo webhook de conta: o robô responde a este lead?
-    Sim no funil Urace nas etapas que o SDR gerencia (First Contact, Cold Leads, Follow Up 1) e
-    no Comercial em ENTRADA. Não em Incoming leads, em card fechado, em etapa onde a equipe
-    trabalha, em funil fora do SDR e, na fase de teste, em lead sem a tag SDR_ATENDER_SO_TAG."""
+    Sim em card aberto de qualquer etapa dos funis do SDR (Urace e Comercial), inclusive as etapas em que a
+    equipe trabalha (dono, 27/10, #403: "responda todo mundo que está lá no Kommo ... responde
+    imediatamente"). Quando uma pessoa assume a conversa, ela usa Pausar IA (a ponte não enxerga quem
+    escreve no chat). Não em Incoming leads, em card fechado, em funil fora do SDR e, na fase de teste, em
+    lead sem a tag SDR_ATENDER_SO_TAG."""
     lead = kommo.get_lead(lead_id)
     local = mapa().localizar(lead.get("pipeline_id"), lead.get("status_id"))
     if local["incoming"]:
@@ -343,11 +340,6 @@ def pode_responder(lead_id: int) -> tuple[bool, str]:
         return False, "FUNIL_FORA_DO_SDR"
     if local["fechado"]:
         return False, "CARD_FECHADO"
-    if local["zona"] == regras.ENTRADA:
-        if not local["gerenciada"]:
-            return False, "ETAPA_DA_EQUIPE"
-    elif (local["etapa"] or "").strip().upper() not in ETAPAS_COMERCIAL_QUE_O_ROBO_RESPONDE:
-        return False, "ETAPA_DA_EQUIPE"
     if SDR_ATENDER_SO_TAG:
         tags = {str(t.get("name") or "") for t in (lead.get("_embedded") or {}).get("tags", [])}
         if SDR_ATENDER_SO_TAG not in tags:
