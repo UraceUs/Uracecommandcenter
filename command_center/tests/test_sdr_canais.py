@@ -393,6 +393,27 @@ def test_card_do_kommo_na_entrada_e_do_robo(ambiente, monkeypatch):
     assert sdr_canais.sms_evento(con, sms("Oi"), esperar=False)["robo"] == "respondeu"
 
 
+def test_mesma_pessoa_respondida_no_kommo_o_sms_nao_repete(ambiente, monkeypatch):
+    # #408: a ponte diz que o robô acabou de responder esta pessoa no Instagram; o SMS fica quieto, sem virar atenção
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    ponte({"rota": "outro_canal", "motivo": "JA_RESPONDIDO_POR_KOMMO", "mensagens": [],
+           "nota": "O robô respondeu esta pessoa por kommo há 2 min: não repete aqui."})
+    r = sdr_canais.sms_evento(con, sms("Oi"), esperar=False)
+    c = um(con, "SELECT * FROM sdr_canal_contatos WHERE canal='sms'")
+    assert "kommo" in r["robo"] and c["precisa_gente"] == 0 and enviados("sms") == []
+
+
+def test_cards_do_kommo_da_mesma_pessoa(ambiente):
+    con = ambiente["con"]
+    inserir(con, "crm_leads", external_id="900001", name="Ana", stage_name="ENTRADA", contact_phone="+1 407 555 0199",
+            contact_email="ana@example.com", tags="[]")
+    con.commit()
+    assert sdr_canais.leads_do_kommo(con, "sms", "14075550199") == ["900001"]
+    assert sdr_canais.leads_do_kommo(con, "email", "Ana@Example.com") == ["900001"]
+    assert sdr_canais.leads_do_kommo(con, "sms", "14075550100") == []
+
+
 def test_falha_no_envio_vira_atencao(ambiente, monkeypatch):
     monkeypatch.setenv("SDR_CANAL_SMS", "1")
     con = ambiente["con"]

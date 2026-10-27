@@ -20,6 +20,7 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
 | Cliente do painel, oportunidade com o closer, card do Kommo com tag de passagem (`escalated`, `sdr:handoff`, `sdr:agora-nao`) | **não responde**: é da equipe |
 | Card do Kommo em qualquer etapa, inclusive as da equipe (dono, 27/10, #403) | **responde na hora**; quem assume a conversa usa Pausar |
+| A mesma pessoa (mesmo telefone ou e-mail do card do Kommo) foi respondida pelo robô no Instagram/Facebook há menos de 30 min | **não repete** no SMS ou no e-mail, e vice-versa (#408; `SDR_DUPLICADO_MIN` no `bridge.env`, `0` desliga) |
 | O robô voltou sem texto (rota diferente de "não é lead") | **não conta como respondido**: vira **Precisa de atenção** para alguém responder à mão (#403) |
 | Conversa que o robô já passou para a equipe | **fica quieto** até alguém marcar resolvido |
 | Falhou o envio (Dialpad ou Gmail recusou) | vira **Precisa de atenção** |
