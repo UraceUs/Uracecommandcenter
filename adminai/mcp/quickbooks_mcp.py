@@ -794,22 +794,79 @@ LINHAS_SCHEMA = {"type": "array", "items": {"type": "object", "properties": {
     "item_id": {"type": "string"}, "quantidade": {"type": "number"}, "unitario": {"type": "number", "description": "valor UNITÁRIO pela Rate Card"},
     "descricao": {"type": "string"}}, "required": ["item_id", "unitario"]}}
 
+# ------------------------------------------------------------------ a nota ao cliente (#402)
+# Dono, 27/10: *"o Command Center enviou uma invoice e não tinha nada escrito nela ... se forem de
+# partes, colocar que são de partes ... se for um training day, ela lê o que está nos itens da invoice
+# e coloca no memo e no payment instructions do que é, qual a data"*. Nenhuma invoice sai em branco:
+# sem memo de quem chamou, o texto vem das próprias linhas. Em inglês — é o cliente que lê.
+_RX_PECA = re.compile(r"\b(tie ?rod|spindle|kingpin|stub ?axle|axle|bearing|chain|sprocket|brake|pad|disc|rotor|"
+                      r"tire|tyre|wheel|rim|hub|bumper|nassau|nose ?cone|fairing|sidepod|seat|radiator|"
+                      r"carburet\w*|carb|piston|gasket|spark ?plug|filter|clutch|exhaust|header|silencer|steering|"
+                      r"chassis|bolt|nut|washer|part)s?\b", re.I)
+_RX_SERVICO = re.compile(r"\b(training|coaching|academy|kart ?school|camp|school|session|race|rental|rent|"
+                         r"sim ?2 ?grid|simulator|deposit|monthly|membership|arrive ?and ?drive|coach|test ?day|"
+                         r"driver ?pass|pit ?pass|storage|transport)\w*", re.I)
+
+
+def _descricoes(linhas):
+    """As descrições das linhas, sem repetir e sem o sufixo de data (" - 2026-10-24")."""
+    out = []
+    for l in linhas or []:
+        d = re.sub(r"\s+-\s+\d{4}-\d{2}-\d{2}$", "", str(l.get("descricao") or "").strip())
+        if d and d not in out:
+            out.append(d)
+    return out
+
+
+def _us(iso):
+    try:
+        a, m, d = str(iso).split("-")
+        return f"{int(m):02d}/{int(d):02d}/{a}"
+    except (ValueError, AttributeError):
+        return None
+
+
+def memo_das_linhas(linhas, vence_em=None, data_servico=None, piloto=None):
+    """Nota ao cliente montada das linhas: o que é (peças ou serviço) + piloto + data do serviço,
+    e embaixo a instrução de pagamento. Usada quando quem chamou não mandou memo."""
+    descr = _descricoes(linhas)
+    juntas = " ".join(descr)
+    e_peca = bool(descr) and bool(_RX_PECA.search(juntas)) and not _RX_SERVICO.search(juntas)
+    if e_peca:
+        cabeca = "Parts | " + ", ".join(descr[:6])
+    elif descr:
+        cabeca = " | ".join(descr[:3])
+    else:
+        cabeca = "Urace service"
+    if piloto and piloto.lower() not in cabeca.lower():
+        cabeca += f" | {piloto}"
+    dia = _us(data_servico)
+    if dia:
+        cabeca += f" | Service date: {dia}"
+    o_que = "Parts used on the service date above." if (e_peca and dia) else \
+            ("Parts used on the kart." if e_peca else
+             ("Service on the date above." if dia else "Urace service."))
+    venc = _us(vence_em)
+    return f"{cabeca}\n{o_que} " + (f"Payment due by {venc}." if venc else "Payment due as agreed.")
+
 
 @srv.ferramenta("qbo_criar_invoice",
                 "Cria invoice para um cliente (id do QBO) com linhas [item_id, quantidade, unitario, descricao]. "
                 "'unitario' é o valor unitário da Rate Card; 'x 2 dias' é quantidade 2. NÃO envia. Com APLICAR=0 é simulação.",
                 {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD (2 dias antes do serviço)"},
-                 "memo": {"type": "string"}, "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
-def qbo_criar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None, numero=None):
+                 "memo": {"type": "string", "description": "Note to customer. Sem ele, é montado das linhas (o que é, piloto, data do serviço e instrução de pagamento) — nunca sai em branco (#402)"},
+                 "data_servico": {"type": "string", "description": "AAAA-MM-DD do serviço/uso da peça — entra na nota ao cliente"},
+                 "piloto": {"type": "string", "description": "nome do piloto — entra na nota ao cliente"}, "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
+def qbo_criar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None, numero=None,
+                      data_servico=None, piloto=None):
     corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
     if vence_em:
         corpo["DueDate"] = vence_em
     if _aplicar():
         corpo["DocNumber"] = str(numero).strip() if numero else _proximo_doc_number()   # nunca sem número
-    if memo:
-        corpo["CustomerMemo"] = {"value": memo[:1000]}          # "Note to customer"
-    if nota_privada or memo:
-        corpo["PrivateNote"] = (nota_privada or memo)[:4000]     # "Memo on statement": igual à nota (dono, 10/09)
+    memo = memo or memo_das_linhas(linhas, vence_em, data_servico, piloto)   # #402: nunca em branco
+    corpo["CustomerMemo"] = {"value": memo[:1000]}              # "Note to customer"
+    corpo["PrivateNote"] = (nota_privada or memo)[:4000]         # "Memo on statement": igual à nota (dono, 10/09)
     if email:
         corpo["BillEmail"] = {"Address": email}
     total = sum(l["Amount"] for l in corpo["Line"])
@@ -819,11 +876,14 @@ def qbo_criar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, 
 
 
 @srv.ferramenta("qbo_criar_estimate", "Cria estimate (pré-corrida) — mesmas linhas da invoice. Com APLICAR=0 é simulação.",
-                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "memo": {"type": "string"}}, ["cliente_id", "linhas"])
-def qbo_criar_estimate(cliente_id, linhas, memo=None):
+                {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "memo": {"type": "string", "description": "Note to customer. Sem ele, é montado das linhas (o que é, piloto, data do serviço e instrução de pagamento) — nunca sai em branco (#402)"},
+                 "data_servico": {"type": "string", "description": "AAAA-MM-DD do serviço/uso da peça — entra na nota ao cliente"},
+                 "piloto": {"type": "string", "description": "nome do piloto — entra na nota ao cliente"},}, ["cliente_id", "linhas"])
+def qbo_criar_estimate(cliente_id, linhas, memo=None, data_servico=None, piloto=None):
     corpo = {"CustomerRef": {"value": str(cliente_id)}, "Line": _linhas(linhas)}
-    if memo:
-        corpo["CustomerMemo"] = {"value": memo[:1000]}
+    memo = memo or memo_das_linhas(linhas, None, data_servico, piloto)       # #402: nunca em branco
+    corpo["CustomerMemo"] = {"value": memo[:1000]}
+    corpo["PrivateNote"] = memo[:4000]
     if not _aplicar():
         return {"aplicado": False, "modo": "SIMULAÇÃO (APLICAR=0)", "teria_feito": f"criar estimate para cliente {cliente_id}"}
     e = _req("/estimate", "POST", corpo).get("Estimate", {})
@@ -852,10 +912,11 @@ def qbo_enviar_invoice(id, email=None):
                 "Cria a invoice E envia por e-mail numa ação só. É a ação para propor quando o dono aprovar = enviar "
                 "(mensalidade do dia 1, diária, lead and follow). Exige aprovação humana no painel; com APLICAR=0 é simulação.",
                 {"cliente_id": {"type": "string"}, "linhas": LINHAS_SCHEMA, "vence_em": {"type": "string", "description": "AAAA-MM-DD (2 dias antes do serviço)"},
-                 "memo": {"type": "string", "description": "Note to customer: produto | categoria | piloto | Service date: MM/DD/AAAA"},
-                 "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
+                 "memo": {"type": "string", "description": "Note to customer. Sem ele, é montado das linhas (o que é, piloto, data do serviço e instrução de pagamento) — nunca sai em branco (#402)"},
+                 "data_servico": {"type": "string", "description": "AAAA-MM-DD do serviço/uso da peça — entra na nota ao cliente"},
+                 "piloto": {"type": "string", "description": "nome do piloto — entra na nota ao cliente"}, "email": {"type": "string"}, "nota_privada": {"type": "string", "description": "Memo on statement; igual ao memo"}}, ["cliente_id", "linhas"])
 def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, email=None, nota_privada=None, numero=None,
-                               requestid=None):
+                               requestid=None, data_servico=None, piloto=None):
     """#310: `requestid` vai no POST /invoice (o QuickBooks devolve a resposta original quando a mesma
     requestid se repete, em vez de criar outra). Criada a invoice, nada aqui levanta exceção: se o
     envio falha, volta a invoice criada com `enviado: False`, para quem chamou reenviar a MESMA
@@ -868,10 +929,9 @@ def qbo_criar_e_enviar_invoice(cliente_id, linhas, vence_em=None, memo=None, ema
             corpo["DocNumber"] = str(numero).strip() if numero else _proximo_doc_number()   # nunca sem número
     except Exception as e:                                       # antes do POST /invoice: nada foi criado
         raise InvoiceNaoCriada(str(e)[:400]) from e
-    if memo:
-        corpo["CustomerMemo"] = {"value": memo[:1000]}          # "Note to customer"
-    if nota_privada or memo:
-        corpo["PrivateNote"] = (nota_privada or memo)[:4000]     # "Memo on statement": igual à nota (dono, 10/09)
+    memo = memo or memo_das_linhas(linhas, vence_em, data_servico, piloto)   # #402: nunca em branco
+    corpo["CustomerMemo"] = {"value": memo[:1000]}              # "Note to customer"
+    corpo["PrivateNote"] = (nota_privada or memo)[:4000]         # "Memo on statement": igual à nota (dono, 10/09)
     if email:
         corpo["BillEmail"] = {"Address": email}
     total = sum(l["Amount"] for l in corpo["Line"])
@@ -999,9 +1059,9 @@ def qbo_criar_recorrencia(cliente_id, linhas, meses, inicio, nome=None, email=No
                                               "MaxOccurrences": meses}}}
     if email:
         inv["BillEmail"] = {"Address": email}
-    if memo:
-        inv["CustomerMemo"] = {"value": memo[:1000]}
-        inv["PrivateNote"] = memo[:4000]
+    memo = memo or memo_das_linhas(linhas)                                   # #402: nunca em branco
+    inv["CustomerMemo"] = {"value": memo[:1000]}
+    inv["PrivateNote"] = memo[:4000]
     total = sum(l["Amount"] for l in inv["Line"])
     desc = f"recorrência mensal de {total:.2f} para cliente {cliente_id}, {meses} meses, de {d0} a {d1}"
     if not _aplicar():
