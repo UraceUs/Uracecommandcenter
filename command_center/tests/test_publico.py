@@ -35,7 +35,8 @@ def test_sitemap_e_xml_valido_com_as_paginas_publicas(cli):
     r = cli.get("/sitemap.xml")
     assert r.status_code == 200 and r.headers["content-type"].startswith("application/xml")
     locs = [e.text for e in ET.fromstring(r.content).findall("s:url/s:loc", NS)]
-    assert locs == ["https://urace-bridge.duckdns.org/legal/privacy.html", "https://urace-bridge.duckdns.org/legal/eula.html"]
+    assert locs == ["https://urace-bridge.duckdns.org/legal/privacy.html", "https://urace-bridge.duckdns.org/legal/eula.html",
+                    "https://urace-bridge.duckdns.org/legal/terms.html"]
     assert all(re.fullmatch(r"\d{4}-\d{2}-\d{2}", e.text) for e in ET.fromstring(r.content).findall("s:url/s:lastmod", NS))
     assert "/ops" not in r.text, "o painel nunca vai para o sitemap"
 
@@ -73,3 +74,17 @@ def test_titulos_unicos():
 def test_painel_continua_fora_dos_buscadores():
     idx = open(os.path.join(os.path.dirname(__file__), "..", "web", "index.html"), encoding="utf-8").read()
     assert '<meta name="robots" content="noindex, nofollow" />' in idx
+
+
+def test_termos_de_sms_repetem_a_secao_8_sem_regra_nova():
+    """#404 (dono, 27/10): a página de termos de SMS repete o que a seção 8 da política já diz."""
+    import os
+    pasta = os.path.join(os.path.dirname(__file__), "..", "..", "adminai", "deploy", "legal")
+    termos = open(os.path.join(pasta, "terms.html"), encoding="utf-8").read()
+    politica = open(os.path.join(pasta, "privacy.html"), encoding="utf-8").read()
+    assert termos.count("<h1>") == 1 and 'rel="canonical" href="https://ops.urace.us/legal/terms.html"' in termos
+    for trecho in ("(407) 250-2291", "We\ndo not send marketing campaigns by text",
+                   "No mobile information will be shared", "Message and data\nrates may apply"):
+        assert trecho in termos, trecho
+    for chave in ("STOP", "UNSTOP", "HELP", "Dialpad", "Anthropic"):
+        assert f"{chave}" in termos and chave in politica, chave

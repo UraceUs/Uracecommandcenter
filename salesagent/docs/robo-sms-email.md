@@ -104,3 +104,6 @@ Pausar, Reativar e Resolvido.
   conversacional**, ter 2+ exemplos com "URACE", objetivo e "Reply STOP to opt out", e o site precisa da política
   de SMS (dado de celular não é compartilhado para marketing). Aprovação leva ~3 semanas. O Dialpad já trata
   STOP, UNSTOP e HELP sozinho. **Só ligar `SDR_CANAL_SMS` com a campanha Registered**; o e-mail não depende disso.
+  **27/10 (#404):** o SMS sai pelo (407) 250-2291 na campanha CKO11QL (Registered). A campanha nova que declarava
+  resposta automática foi **parada por decisão do dono** (sem custo): ver `dialpad-10dlc-campanha.md`. Os termos de
+  SMS estão em <https://ops.urace.us/legal/terms.html>.

@@ -24,6 +24,7 @@ echo "== publicando páginas legais =="
 sudo mkdir -p "$DST"
 sudo cp "$REPO/adminai/deploy/legal/privacy.html" "$DST/privacy.html"
 sudo cp "$REPO/adminai/deploy/legal/eula.html"    "$DST/eula.html"
+sudo cp "$REPO/adminai/deploy/legal/terms.html"   "$DST/terms.html"
 sudo chmod 644 "$DST"/*.html
 echo "-- páginas copiadas para $DST"
 
