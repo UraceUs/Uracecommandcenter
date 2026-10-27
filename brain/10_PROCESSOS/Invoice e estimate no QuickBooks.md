@@ -40,7 +40,7 @@ O texto é **lido das linhas da própria invoice**:
 | serviço | `Urace Training Day - Cadet 4T` |
 
 Depois do que é, vem o **piloto** e a **data do serviço**
-(`\| Elijah \| Service date: 10/24/2026`), e na linha de baixo a
+(`\| <piloto> \| Service date: 10/24/2026`), e na linha de baixo a
 **instrução de pagamento** com o vencimento:
 *"Parts used on the service date above. Payment due by 10/29/2026."*
 

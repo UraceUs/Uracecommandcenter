@@ -35,7 +35,7 @@ E, no mesmo dia: *"sempre traga para aprovar e enviar daqui"*.
 
 ## Por que
 
-A invoice URACE-0044 (peças do Elijah usadas em 24/10, Michael Nicholas, $267,28) saiu com a nota
+Uma invoice de peças emitida em 27/10 (o cliente está no card do painel) saiu com a nota
 "Parts | Urace Academy": sem o piloto, sem a data do uso e sem dizer o vencimento. Pelo caminho
 genérico do MCP a nota era **opcional** — quem criasse a invoice sem passar o texto mandava uma
 invoice em branco para o cliente. O cliente recebe uma cobrança sem saber do que é.
