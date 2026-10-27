@@ -116,8 +116,9 @@ def rodar() -> list[str]:
     })
 
     print("1. Escopo: onde o robô responde")
-    for lid, esperado in ((101, (True, "OK")), (102, (False, "ETAPA_DA_EQUIPE")), (103, (True, "OK")),
-                          (104, (False, "ETAPA_DA_EQUIPE")), (105, (False, "FUNIL_FORA_DO_SDR")),
+    # dono, 27/10 (#403): etapa da equipe (Hot Leads, ATENDIMENTO) também recebe resposta, na hora
+    for lid, esperado in ((101, (True, "OK")), (102, (True, "OK")), (103, (True, "OK")),
+                          (104, (True, "OK")), (105, (False, "FUNIL_FORA_DO_SDR")),
                           (106, (False, "CARD_FECHADO"))):
         check(f"lead {lid} -> {esperado}", sdr_ponte.pode_responder(lid) == esperado, sdr_ponte.pode_responder(lid))
     sdr_ponte.SDR_ATENDER_SO_TAG = "teste-sdr"
@@ -291,6 +292,10 @@ def rodar() -> list[str]:
     check("objeção no SMS: oferta de call e a equipe é avisada (precisa_gente)",
           c2["precisa_gente"] and any("calendar.app.google" in m for m in c2["mensagens"]), c2)
     check("nada escrito no Kommo nem disparado", (len(k.notas), len(k.bots)) == (escritas_antes, bots_antes))
+    app._call_agent = lambda lead_id, msg, session_key=None: ("", [])
+    c3 = app.turno_de_canal("sms", "14075550188", "tem vaga?", "Bia", True)
+    check("modelo vazio no SMS: o lead recebe a mensagem de espera e a equipe é avisada (#403)",
+          c3["mensagens"] and c3["precisa_gente"] and c3["rota"] == "responder", c3)
     try:
         app.turno_de_canal("whatsapp", "x", "oi")
         check("canal desconhecido é recusado", False)
@@ -301,10 +306,10 @@ def rodar() -> list[str]:
     print("\n3. Fora do escopo: só organiza")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
     antes = len(k.bots)
-    r = app.responder_eventos(_evento("m3", 104, "oi, tudo certo pra sexta?"), espera=0)
-    check("lead com a pessoa (ATENDIMENTO) não recebe resposta da ponte",
-          r == [{"lead_id": 104, "resposta": "ETAPA_DA_EQUIPE"}] and len(k.bots) == antes, (r, k.bots))
-    check("mas o card é organizado", (104, "oi, tudo certo pra sexta?") in triados)
+    r = app.responder_eventos(_evento("m3", 105, "oi, tudo certo pra sexta?"), espera=0)
+    check("lead de funil fora do SDR não recebe resposta da ponte",
+          r == [{"lead_id": 105, "resposta": "FUNIL_FORA_DO_SDR"}] and len(k.bots) == antes, (r, k.bots))
+    check("mas o card é organizado", (105, "oi, tudo certo pra sexta?") in triados)
 
     print("\n4. Se o Salesbot do Kommo já tratou a mensagem, a ponte não responde de novo")
     state.update_conversation(103, last_inbound_at=int(time.time()), last_inbound_text="tem aula sábado?")

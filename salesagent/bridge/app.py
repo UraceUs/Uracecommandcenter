@@ -368,6 +368,14 @@ def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, sessi
             saida["precisa_gente"] = True
         resposta = textproc.customer_facing(raw)
     limpo, cortes = sdr_ponte.limpar_texto(resposta, primeira=primeira)
+    if not limpo:
+        # O modelo voltou vazio (ou a guarda cortou tudo): o lead recebe a mensagem de espera e a equipe é
+        # avisada, como no Kommo (send_to_lead). Em 26/10 um SMS ficou sem resposta assim (#403).
+        limpo, mais = sdr_ponte.limpar_texto(
+            holding.waiting_message(texto, 0, contact_name=nome or None, first_contact=primeira), primeira=primeira)
+        cortes = cortes + mais
+        saida["precisa_gente"] = True
+        saida["nota"] = "O modelo não deu resposta: o lead recebe a mensagem de espera e a equipe assume."
     saida["cortes"] = cortes
     saida["mensagens"] = dividir_em_mensagens(limpo) if limpo else []
     return saida
