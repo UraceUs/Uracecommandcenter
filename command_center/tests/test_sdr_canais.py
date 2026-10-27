@@ -343,14 +343,45 @@ def test_conversa_ja_passada_para_a_equipe_o_robo_fica_quieto(ambiente, monkeypa
     assert "passou esta conversa" in r["robo"] and len(enviados("sms")) == 1
 
 
-def test_card_do_kommo_com_a_equipe_o_robo_nao_responde(ambiente, monkeypatch):
+def test_card_do_kommo_em_etapa_da_equipe_o_robo_responde(ambiente, monkeypatch):
+    # dono, 27/10 (#403): o robô responde card em qualquer etapa, na hora; quem assume usa Pausar IA
     monkeypatch.setenv("SDR_CANAL_SMS", "1")
     con = ambiente["con"]
     inserir(con, "crm_leads", external_id="k-1", name="Ana", stage_name="ATENDIMENTO", contact_phone="+1 407 555 0199",
             tags="[]")
     con.commit()
     r = sdr_canais.sms_evento(con, sms("Oi"), esperar=False)
-    assert "ATENDIMENTO" in r["robo"] and enviados("sms") == []
+    assert r["robo"] == "respondeu" and len(enviados("sms")) == 2
+
+
+def test_card_do_kommo_com_tag_de_passagem_o_robo_nao_responde(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    inserir(con, "crm_leads", external_id="k-1", name="Ana", stage_name="ATENDIMENTO", contact_phone="+1 407 555 0199",
+            tags='["sdr:handoff"]')
+    con.commit()
+    r = sdr_canais.sms_evento(con, sms("Oi"), esperar=False)
+    assert "sdr:handoff" in r["robo"] and enviados("sms") == []
+
+
+def test_sms_com_resposta_vazia_vira_atencao(ambiente, monkeypatch):
+    # 26/10 (#403): a ponte voltou com rota=responder e 0 balões; o SMS contou como respondido e o lead ficou sem nada
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    ponte({"rota": "responder", "motivo": None, "mensagens": []})
+    r = sdr_canais.sms_evento(con, sms("Oi"), esperar=False)
+    c = um(con, "SELECT * FROM sdr_canal_contatos WHERE canal='sms'")
+    assert r["robo"] != "respondeu" and c["precisa_gente"] == 1 and "responda à mão" in c["precisa_motivo"]
+    assert um(con, "SELECT COUNT(*) AS n FROM audit_logs WHERE event='sdr.canal.sms.resposta'")["n"] == 0
+
+
+def test_sms_automatico_fica_quieto_sem_atencao(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    ponte({"rota": "silenciar", "motivo": "MENSAGEM_AUTOMATICA", "mensagens": []})
+    r = sdr_canais.sms_evento(con, sms("Your code is 123456"), esperar=False)
+    c = um(con, "SELECT * FROM sdr_canal_contatos WHERE canal='sms'")
+    assert "não é lead" in r["robo"] and c["precisa_gente"] == 0 and enviados("sms") == []
 
 
 def test_card_do_kommo_na_entrada_e_do_robo(ambiente, monkeypatch):

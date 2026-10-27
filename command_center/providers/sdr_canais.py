@@ -228,8 +228,8 @@ def pausar(con, row, motivo):
             detail={"motivo": motivo, "horas": pausa_horas()})
 
 
-# As etapas do Kommo em que o robô atende (as mesmas do Instagram); fora delas o card é da equipe.
-ETAPAS_DO_ROBO = {"first contact", "cold leads", "follow up 1", "entrada"}
+# Tag de passagem no card do Kommo: a conversa já foi entregue a uma pessoa. A etapa do card não bloqueia mais
+# (dono, 27/10, #403: o robô responde card em qualquer etapa, como no Instagram).
 TAGS_DA_EQUIPE = {"escalated", "sdr:handoff", "sdr:agora-nao"}
 
 
@@ -241,7 +241,7 @@ def oportunidade_da_equipe(opp):
 
 def da_equipe(con, canal, valor):
     """Por que este contato é da equipe e não do robô (None = é lead para o robô). Cliente, oportunidade em
-    aberto com o closer e card do Kommo fora das etapas do robô ou com tag de passagem."""
+    aberto com o closer e card do Kommo com tag de passagem."""
     from command_center.providers import identidade
     if canal == "sms":
         from command_center.api import dialpad
@@ -270,9 +270,6 @@ def da_equipe(con, canal, valor):
             tags = set()
         if tags & TAGS_DA_EQUIPE:
             return f"card do Kommo com a equipe ({', '.join(sorted(tags & TAGS_DA_EQUIPE))})"
-        etapa = (lead.get("stage_name") or "").strip().lower()
-        if etapa and etapa not in ETAPAS_DO_ROBO:
-            return f"card do Kommo em {lead.get('stage_name')}: é a equipe que responde"
     return None
 
 
@@ -311,6 +308,20 @@ def perguntar_ao_robo(canal, contato_, texto, nome, primeira):
                                     headers={"Content-Type": "application/json", "X-Api-Key": chave})
     with urllib.request.urlopen(pedido, timeout=150) as resp:
         return json.loads(resp.read() or b"{}")
+
+
+def sem_baloes(con, row, canal, resposta):
+    """O robô voltou sem texto. "Não é lead" (silenciar) fica quieto; qualquer outra rota vazia vira Precisa de
+    atenção, para nenhum lead ficar sem resposta sem ninguém saber (26/10, #403: SMS marcado como respondido com 0
+    balões). Devolve o motivo."""
+    if resposta.get("rota") == "silenciar":
+        motivo = f"não é lead ({resposta.get('motivo') or 'silenciar'})"
+    else:
+        motivo = "o robô não teve resposta para esta mensagem: responda à mão"
+        atualizar(con, "sdr_canal_contatos", row["id"], precisa_gente=1, precisa_motivo=motivo)
+    auditar(con, f"sdr.canal.{canal}.sem_resposta", "system", entity_type="sdr_canal", entity_id=row["id"],
+            detail={"motivo": motivo, "rota": resposta.get("rota")})
+    return motivo
 
 
 def falhou_envio(con, row, canal, erro):
@@ -508,6 +519,11 @@ def _responder_sms(con, contato_id, esperar):
     texto = "\n".join(m["texto"] for m in novas)
     resposta = perguntar_ao_robo("sms", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0)
     baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
+    if not baloes:
+        motivo = sem_baloes(con, row, "sms", resposta)
+        atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=novas[-1]["external_id"])
+        con.commit()
+        return {"robo": motivo}
     for i, balao in enumerate(baloes):
         if i and esperar:
             time.sleep(_intervalo(balao))
@@ -725,9 +741,10 @@ def ler_email(con):
         resposta = perguntar_ao_robo("email", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0)
         baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
         if not baloes:
+            motivo = sem_baloes(con, row, "email", resposta)
             atualizar(con, "sdr_canal_contatos", row["id"], ultima_tratada=ultima["message_id"])
             con.commit()
-            feitos.append({"para": email, "robo": resposta.get("nota") or "sem resposta"})
+            feitos.append({"para": email, "robo": motivo})
             continue
         assunto = ultima.get("assunto") or "URACE"
         if not assunto.lower().startswith("re:"):

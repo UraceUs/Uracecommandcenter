@@ -1373,6 +1373,13 @@ O robô de vendas no Kommo. Três níveis:
 - Instrução vale acima da persona do robô, com duas exceções fixas: **o preço vem da tabela** e as
   **travas de segurança**. Instrução não muda preço.
 - Horário de atendimento humano mostrado no painel: seg–sex, 8h–18h (Orlando).
+- **Onde ele responde (dono, 27/10, #403):** Instagram e Facebook pelo Kommo, em card aberto dos funis Urace e
+  Comercial, **em qualquer etapa, inclusive ATENDIMENTO e as outras da equipe**; SMS do número da empresa (Dialpad)
+  e e-mail da support@. Mover o card de etapa **não** para o robô.
+- **Vai responder você mesmo?** Antes, clique em **Pausar IA** na conversa (chat do Kommo ou Robô SDR). O robô não
+  enxerga quem escreve no chat: sem a pausa, ele e você respondem juntos. No SMS e no e-mail, a sua resposta à mão
+  pausa o robô naquele contato por 72 h sozinha.
+- Conversa em **Precisa de atenção** (SMS e e-mail) é lead que o robô não respondeu: responda à mão.
 - Viu o robô errar? Relate com o lead (id ou nome) e o que aconteceu. Quem cuida do robô resolve.
 
 ---

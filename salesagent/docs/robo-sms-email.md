@@ -18,7 +18,9 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (o Dialpad confirma e bloqueia o contato) e nunca mais escreve; UNSTOP devolve |
 | SMS só com HELP / INFO | **não responde**: o Dialpad manda a mensagem de ajuda do escritório |
 | "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
-| Cliente do painel, oportunidade com o closer, card do Kommo fora das etapas do robô ou com tag de passagem | **não responde**: é da equipe |
+| Cliente do painel, oportunidade com o closer, card do Kommo com tag de passagem (`escalated`, `sdr:handoff`, `sdr:agora-nao`) | **não responde**: é da equipe |
+| Card do Kommo em qualquer etapa, inclusive as da equipe (dono, 27/10, #403) | **responde na hora**; quem assume a conversa usa Pausar |
+| O robô voltou sem texto (rota diferente de "não é lead") | **não conta como respondido**: vira **Precisa de atenção** para alguém responder à mão (#403) |
 | Conversa que o robô já passou para a equipe | **fica quieto** até alguém marcar resolvido |
 | Falhou o envio (Dialpad ou Gmail recusou) | vira **Precisa de atenção** |
 | Canal ligado depois de dias desligado | **não responde e-mail velho** (só o que chegou nos últimos 30 min) |
