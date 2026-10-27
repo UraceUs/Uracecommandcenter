@@ -1,5 +1,39 @@
 # Campanha 10DLC do robô no SMS (Dialpad)
 
+> **PARADO por decisão do dono (27/10, #404):** "não quero custos, essas coisas de campanha você pode parar.
+> Deixe documentação preparada, mas não realize." Este documento fica pronto para uso futuro; **não executar**.
+> O SMS do robô continua saindo pelo número do escritório na campanha atual, CKO11QL (Registered).
+
+## O que aconteceu em 27/10 (relatório da extensão do Dialpad)
+
+- A campanha nova foi **enviada** em 27/10/2026 e ficou "Pending internal review registration approval", **sem número**
+  associado (o formulário não tem campo de número; trocar número de campanha só pelo suporte). Ainda sem ID.
+- O scanner do Dialpad não leu a política de privacidade e mandou para revisão manual. Conferido no VPS em 27/10: a
+  página responde 200 para qualquer user-agent e o `robots.txt` libera `/legal/`.
+- Ajustes que o formulário exigiu (aprovados pelo dono): só **2 exemplos** (o 3º ficou de fora); "**URACE.US**" (nome
+  da marca registrada) nos exemplos e nas respostas de STOP e UNSTOP; o STOP passou a dizer "**no further messages**".
+  As três opções que mandam o Dialpad usar esses textos ficaram ligadas.
+- Termos: a ops.urace.us não tinha página de termos e a extensão usou o link da política. Desde #404 existe
+  <https://ops.urace.us/legal/terms.html>, que repete a seção 8.
+- Custo, segundo o artigo de ajuda do Dialpad citado pela extensão (o formulário só pedia para aceitar as taxas, sem
+  mostrar valor): $15 de vetting uma vez e uma taxa mensal ($10 Customer Care, ou $1,50 se tratada como UCaaS de
+  baixo volume). Prazo da revisão: até 10 dias úteis.
+- Decisão do dono em 27/10: **retirar** a campanha pendente para não ter custo. Prompt para a extensão:
+
+```
+Tarefa: retirar (cancelar/withdraw/delete) SÓ a campanha 10DLC NOVA, enviada em 27/10/2026, que está "Pending internal review registration approval" e sem número associado. Motivo: o dono decidiu não ter custo com campanha nova.
+Regras: NÃO toque na campanha CKO11QL nem na marca URACE.US INC. NÃO mexa em números, usuários, roteamento ou outras configurações. NÃO mande SMS. NÃO abra chamado. NÃO copie nem mostre chave ou segredo.
+1. Abra a lista de campanhas 10DLC e localize a campanha nova (data de envio 27/10/2026, sem número).
+2. Se houver opção de cancelar, retirar ou apagar ESSA campanha, use-a e confirme.
+3. Se não houver opção, PARE e não faça mais nada.
+Relate: se a campanha foi retirada, o status final, se aparece alguma cobrança ou taxa já lançada (valor e data) e se a CKO11QL continua "Registered" com os 3 números.
+```
+
+Se um dia o dono quiser registrar de novo, use os textos abaixo **com os ajustes acima** (2 exemplos com "URACE.US",
+STOP com "no further messages", termos em /legal/terms.html).
+
+---
+
 Dono, 22/10: "registrar uma campanha 10DLC que declare resposta automática". A campanha atual do número do escritório
 (CKO11QL, tipo UCAAS_LOW, "conversational, low volume") não diz que há resposta automática. O robô agora responde
 todo lead por SMS, então a operadora precisa ver isso declarado. Quem registra é o dono (ou a extensão logada no

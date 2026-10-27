@@ -16,7 +16,7 @@ from fastapi.responses import PlainTextResponse, Response
 r = APIRouter(tags=["publico"])
 
 LEGAL = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "adminai", "deploy", "legal"))
-PAGINAS = ("privacy", "eula")
+PAGINAS = ("privacy", "eula", "terms")
 
 
 def _host(request):
