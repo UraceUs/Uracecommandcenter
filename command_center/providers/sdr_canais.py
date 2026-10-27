@@ -293,7 +293,20 @@ def bloqueio(con, canal, row, cliente=False):
 
 
 # ------------------------------------------------------------------ a ponte do robô
-def perguntar_ao_robo(canal, contato_, texto, nome, primeira):
+def leads_do_kommo(con, canal, contato_):
+    """Os cards do Kommo da mesma pessoa (pelo telefone ou pelo e-mail): a ponte não responde duas vezes quem
+    o robô acabou de responder no Instagram ou no Facebook (#408)."""
+    if canal == "sms":
+        from command_center.api import dialpad
+        achado = dialpad.liga_a_quem(con, contato_)
+        linhas = [um(con, "SELECT external_id FROM crm_leads WHERE id=?", (achado["lead_id"],))] if achado.get("lead_id") else []
+    else:
+        linhas = todos(con, "SELECT external_id FROM crm_leads WHERE contact_email=? ORDER BY id DESC LIMIT 5",
+                       (contato_de("email", contato_),))
+    return [str(r["external_id"]) for r in linhas if r and str(r["external_id"] or "").isdigit()]
+
+
+def perguntar_ao_robo(canal, contato_, texto, nome, primeira, kommo_leads=()):
     """POST /tools/canal na ponte. Devolve {rota, motivo, mensagens, precisa_gente, nota, ...}."""
     falso = os.environ.get("CC_PONTE_FAKE")
     if falso:                                    # teste: a resposta da ponte vem de um arquivo JSON
@@ -303,7 +316,7 @@ def perguntar_ao_robo(canal, contato_, texto, nome, primeira):
     if not chave:
         raise RuntimeError("a ponte do robô não está configurada neste servidor (AGENT_API_KEY)")
     corpo = json.dumps({"canal": canal, "contato": contato_, "texto": texto, "nome": nome or "",
-                        "primeira": bool(primeira)}).encode()
+                        "primeira": bool(primeira), "kommo_leads": list(kommo_leads)}).encode()
     pedido = urllib.request.Request(sdr_api.PONTE + "/tools/canal", data=corpo, method="POST",
                                     headers={"Content-Type": "application/json", "X-Api-Key": chave})
     with urllib.request.urlopen(pedido, timeout=150) as resp:
@@ -316,6 +329,8 @@ def sem_baloes(con, row, canal, resposta):
     balões). Devolve o motivo."""
     if resposta.get("rota") == "silenciar":
         motivo = f"não é lead ({resposta.get('motivo') or 'silenciar'})"
+    elif resposta.get("rota") == "outro_canal":                 # #408: a mesma pessoa já foi respondida no Kommo
+        motivo = resposta.get("nota") or "o robô acabou de responder esta pessoa por outro canal"
     else:
         motivo = "o robô não teve resposta para esta mensagem: responda à mão"
         atualizar(con, "sdr_canal_contatos", row["id"], precisa_gente=1, precisa_motivo=motivo)
@@ -517,7 +532,8 @@ def _responder_sms(con, contato_id, esperar):
     if motivo:
         return {"robo": motivo}
     texto = "\n".join(m["texto"] for m in novas)
-    resposta = perguntar_ao_robo("sms", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0)
+    resposta = perguntar_ao_robo("sms", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0,
+                                 leads_do_kommo(con, "sms", row["contato"]))
     baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
     if not baloes:
         motivo = sem_baloes(con, row, "sms", resposta)
@@ -738,7 +754,8 @@ def ler_email(con):
         texto = sem_citacao(ultima.get("corpo"))
         if (row.get("respostas") or 0) == 0 and ultima.get("assunto"):
             texto = f"{ultima['assunto']}\n{texto}"
-        resposta = perguntar_ao_robo("email", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0)
+        resposta = perguntar_ao_robo("email", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0,
+                                     leads_do_kommo(con, "email", row["contato"]))
         baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
         if not baloes:
             motivo = sem_baloes(con, row, "email", resposta)
@@ -785,7 +802,8 @@ def responder_formulario(con, oid, nome, email, assunto, mensagem):
     texto = f"{assunto}\n{mensagem}"
     # na hora a linha já nasce tratada (a fila de formulários não volta nela); a da fila já existe e não muda aqui
     guardar(con, "email", row["contato"], "entrada", "lead", texto, f"site-{oid}", motivo="formulário na hora")
-    resposta = perguntar_ao_robo("email", row["contato"], texto, nome, (row.get("respostas") or 0) == 0)
+    resposta = perguntar_ao_robo("email", row["contato"], texto, nome, (row.get("respostas") or 0) == 0,
+                                 leads_do_kommo(con, "email", row["contato"]))
     baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
     if not baloes:
         return False

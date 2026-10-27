@@ -342,6 +342,23 @@ def rodar() -> list[str]:
     check("arquivo ilegível = nenhuma pausa (a ponte segue respondendo)", pausas.ia_pausada(101) is False)
     arquivo.unlink()
     check("sem o arquivo, nenhuma pausa", pausas.pausadas() == {})
+
+    print("\n6. A mesma pessoa no Kommo e no SMS/e-mail não recebe a resposta duas vezes (#408)")
+    c = app.turno_de_canal("sms", "14075550177", "oi, quanto custa?", "Ana", True, kommo_leads=[103])
+    check("respondida no Kommo há pouco: o SMS não repete", c["rota"] == "outro_canal" and not c["mensagens"]
+          and c["motivo"] == "JA_RESPONDIDO_POR_KOMMO", c)
+    c = app.turno_de_canal("sms", "14075550166", "oi, quanto custa?", "Bia", True, kommo_leads=["102"])
+    check("sem resposta recente no Kommo: o SMS responde", bool(c["mensagens"]), c)
+    antes = len(k.bots)
+    r = app.responder_eventos(_evento("m7", 102, "oi de novo"), espera=0)
+    with state.db() as conn:
+        g = conn.execute("SELECT detail FROM audit WHERE kind='gate' AND lead_id=102 ORDER BY id DESC LIMIT 1").fetchone()
+    check("e o Instagram da mesma pessoa não repete", len(k.bots) == antes and g and "JA_RESPONDIDO_POR_SMS" in g[0],
+          (k.bots, g))
+    janela, app.SDR_DUPLICADO_MIN = app.SDR_DUPLICADO_MIN, 0
+    c = app.turno_de_canal("sms", "14075550177", "e sábado?", "Ana", False, kommo_leads=[103])
+    app.SDR_DUPLICADO_MIN = janela
+    check("SDR_DUPLICADO_MIN=0 desliga a trava", bool(c["mensagens"]), c)
     return list(FALHAS)
 
 

@@ -61,6 +61,14 @@ CREATE TABLE IF NOT EXISTS confirmations (
     question TEXT,               -- o que o lead perguntou
     answer TEXT NOT NULL         -- o que o humano respondeu (human-confirmed fact)
 );
+-- Quando o robô respondeu cada lead do Kommo, e por qual canal (#408): a mesma pessoa no Instagram e
+-- no SMS não recebe a resposta duas vezes.
+CREATE TABLE IF NOT EXISTS respostas_por_canal (
+    lead_id INTEGER NOT NULL,
+    canal TEXT NOT NULL,         -- kommo | sms | email
+    ts INTEGER NOT NULL,
+    PRIMARY KEY (lead_id, canal)
+);
 """
 
 
@@ -157,6 +165,23 @@ def update_conversation(lead_id: int, **fields) -> None:
             f"UPDATE conversations SET {cols}, updated_at=? WHERE lead_id=?",
             (*fields.values(), int(time.time()), lead_id),
         )
+
+
+def marcar_resposta(lead_id: int, canal: str) -> None:
+    """O robô acabou de responder este lead por este canal (#408)."""
+    with db() as conn:
+        conn.execute("INSERT OR REPLACE INTO respostas_por_canal (lead_id, canal, ts) VALUES (?,?,?)",
+                     (int(lead_id), canal, int(time.time())))
+
+
+def respondido_em_outro_canal(lead_id: int, canal: str, janela_s: int) -> tuple[str, int] | None:
+    """O robô respondeu este lead por OUTRO canal há menos de `janela_s` segundos? (canal, segundos atrás)."""
+    if not lead_id or janela_s <= 0:
+        return None
+    with db() as conn:
+        row = conn.execute("SELECT canal, ts FROM respostas_por_canal WHERE lead_id=? AND canal<>? AND ts>=? "
+                           "ORDER BY ts DESC LIMIT 1", (int(lead_id), canal, int(time.time()) - janela_s)).fetchone()
+    return (row["canal"], int(time.time()) - row["ts"]) if row else None
 
 
 def transition(lead_id: int, to_state: str, reason: str = "", by_human: bool = False) -> bool:
