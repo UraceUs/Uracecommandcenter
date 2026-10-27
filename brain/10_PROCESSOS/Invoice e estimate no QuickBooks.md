@@ -28,6 +28,26 @@ não está entre ler e escrever — está entre **escrever e ENVIAR**.
 Criar não é enviar. A invoice fica salva, com link, esperando revisão —
 é exatamente esse o ponto do fluxo.
 
+## 📝 A nota ao cliente — nunca em branco (dono, 27/10; #402)
+
+Toda invoice, estimate e recorrência sai com **"Note to customer"** e
+**"Memo on statement"** preenchidos, em **inglês** (é o cliente que lê).
+O texto é **lido das linhas da própria invoice**:
+
+| O que a invoice tem | Como a nota começa |
+|---|---|
+| peças | `Parts \| Parolin tie rod, Parolin cadet spindle` |
+| serviço | `Urace Training Day - Cadet 4T` |
+
+Depois do que é, vem o **piloto** e a **data do serviço**
+(`\| <piloto> \| Service date: 10/24/2026`), e na linha de baixo a
+**instrução de pagamento** com o vencimento:
+*"Parts used on the service date above. Payment due by 10/29/2026."*
+
+Quem cria pode escrever a nota à mão; sem isso, ela é montada sozinha.
+**Invoice que chega ao cliente sem dizer do que é, é defeito.**
+Ver [[D-2026-10-27 - Toda invoice sai com a nota ao cliente preenchida]].
+
 Antes de criar cliente: **buscar pelo responsável e pelo e-mail**
 (ver [[Clientes]]) — é assim que se evita duplicata.
 Antes de criar item: `qbo_catalog_search_products`, e só criar o que
@@ -37,6 +57,11 @@ voltar `found: false`.
 
 **A IA cria e SALVA. A IA NÃO ENVIA.** A invoice fica com status pendente
 esperando [[Italo Silveira]] ou [[Eduardo Resende]] revisar e enviar.
+
+**Revisão de 27/10 (dono: _"sempre traga para aprovar e enviar daqui"_):** a
+revisão e o envio acontecem **no Command Center**. A IA põe a invoice na fila
+de aprovação do painel; aprovada, ela sai. A IA **não** manda o dono abrir o
+QuickBooks para clicar em enviar.
 
 Só envia quando um dos dois disser **explicitamente** "pode enviar" /
 "envie diretamente" **para aquele cliente**. Autorização de um caso não

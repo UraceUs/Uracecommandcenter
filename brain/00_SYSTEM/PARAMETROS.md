@@ -86,6 +86,7 @@ para o dono preencher, com aviso de quais têm preço no catálogo.
 | Taxa de pista | **nunca entra na invoice** — paga direto na pista |
 | Frequência do depósito | **um por CLIENTE**, enquanto estiver retido |
 | Ordem de cobrança | 1º invoice do serviço · 2º depósito (assim que a 1ª for paga — **ou no limite dos 4 dias, pago ou não**) |
+| **Nota ao cliente na invoice** ("Note to customer" e "Memo on statement") | **nunca em branco** (dono, 27/10). Diz o que é, lido das linhas — **peça** sai como `Parts \| <peças>`, serviço sai com o nome do serviço —, mais o **piloto** e a **data do serviço**, e embaixo a instrução de pagamento com o vencimento. Em **inglês**. Ver [[D-2026-10-27 - Toda invoice sai com a nota ao cliente preenchida]] |
 
 ### Quando cobrar o depósito (regra do dono, 28/08)
 
@@ -139,7 +140,7 @@ A regra geral continua sendo **não enviar**. Estas são as exceções:
 | ✅ Pedido de produção do macacão | fornecedor atual | 28/08 |
 | ✅ **Invoice do security deposit** (valor fixo US$ 400) | cliente do serviço | 28/08 |
 | ✅ **Waiver do [[DocuSign]]** (parental ou adult) | responsável ou piloto | **31/08** |
-| ⏸️ Invoice do serviço e qualquer outra | **IA envia só depois de aprovação humana no Command Center** (`REQUIRES_APPROVAL`, auditado). Antes de 04/09: humano enviava | **04/09** |
+| ⏸️ Invoice do serviço e qualquer outra | **IA envia só depois de aprovação humana no Command Center** (`REQUIRES_APPROVAL`, auditado). Antes de 04/09: humano enviava. **27/10:** o envio é sempre pelo painel — a IA não manda o dono abrir o QuickBooks para clicar em enviar | **04/09** |
 | 🚫 **Todo o resto** (triagem, respostas da inbox) | **só rascunho** | — |
 
 ⏳ Ainda **não decidido**: `sendReminder` do [[DocuSign]] (cutucar quem
@@ -197,8 +198,9 @@ Enquanto o "ok" não vem, o lote fica em stand-by — ver
 | 2026-08-31 | Margem de peça fixada em **+15%**; lembrete de cobrança **a cada 2 dias, só para invoice OVERDUE** | Italo |
 | 2026-08-31 | **IA autorizada a ENVIAR a waiver** do [[DocuSign]] (4ª exceção da regra de e-mail). Travas obrigatórias em [[Waiver de responsabilidade]] | Italo |
 | 2026-08-31 | [[DocuSign]] conectado e sondado. Conta é a **`support@`** — o fluxo da waiver deixa de depender da caixa de e-mail. IDs dos 2 templates registrados; validade da waiver fixada em **1 ano da assinatura** | Italo |
-| 2026-08-31 | Mensal Academy 4T e Baby Kart corrigidos para **$2.756,90** e sessão extra dos dois para **$689,23** (planilha diz $2.756,00 / $689,00 — 4 células a arrumar, ver [[Rate Card]]). Regra fixada: **sessão extra = mensal ÷ 4**, e **pacote sai do mensal, nunca da unitária**. E-mail de invoice: **sai pelo próprio QuickBooks**, não existe template a escrever | Italo |
+| 2026-08-31 | Mensal Academy 4T e Baby Kart corrigidos para **$2.756,90** e sessão extra dos dois para **$689,23** (planilha diz $2.756,00 / $689,00 — 4 células a arrumar, ver [[Rate Card]]). Regra fixada: **sessão extra = mensal ÷ 4**, e **pacote sai do mensal, nunca da unitária**. E-mail de invoice: sai pelo próprio QuickBooks, não existe template a escrever [[SUPERADO em 27/10: a invoice é aprovada E enviada pelo painel; ver a linha de 27/10 abaixo]] | Italo |
 | 2026-08-31 | Reminder de cobrança: **aprovação por lote**, sem autorização permanente | Italo |
 | 2026-09-04 | **Invoice pode ser enviada pela IA depois de aprovada no painel** — substitui "humano envia" de 28/08. Política `REQUIRES_APPROVAL`, com quem aprovou no audit. Ver [[D-2026-09-04 - Invoice sai depois de aprovada no painel]] | Italo |
+| 2026-10-27 | **Toda invoice sai com a nota ao cliente preenchida** (o que é, piloto, data do serviço e instrução de pagamento, lidos das linhas) — invoice em branco é defeito. E **a invoice é aprovada e enviada pelo painel**, não pelo botão do QuickBooks: *"sempre traga para aprovar e enviar daqui"*. Substitui a linha de 31/08 sobre o e-mail sair pelo QuickBooks | Italo |
 | 2026-09-04 | **VIP dispensa waiver** (Renato Pistoni, primeiro da lista). **RACES fica fora da varredura de waiver.** [[DocuSign]] em produção | Italo |
 | 2026-08-31 | [[Rate Card]] passa a ser a fonte de preço **acima do catálogo do QuickBooks**; ordem de precedência registrada. IDs das duas planilhas adicionados | Italo (skill `urace-faturamento-qbo`) |
