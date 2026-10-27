@@ -37,8 +37,8 @@ import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
                     FOLLOWUP_BOT_ID, HUMAN_OPERATORS, HUMAN_REPLY_TOKEN,
                     HUMAN_WHATSAPP, HUMAN_WHATSAPP_LIST, KOMMO_BOT_SECRET,
-                    KOMMO_TOKEN, PROGRAM_LINKS, SALESBOT_DISPLAY, SDR_MODO,
-                    URACE_DIR)
+                    KOMMO_TOKEN, PROGRAM_LINKS, SALESBOT_DISPLAY, SDR_DUPLICADO_MIN,
+                    SDR_MODO, URACE_DIR)
 
 app = FastAPI(title="urace-sales-bridge")
 state.instalar_mascara_nos_logs()  # 13/10: a chave do webhook não vai para o journal
@@ -410,12 +410,26 @@ _CONTEXTO_CANAL = {
 }
 
 
-def turno_de_canal(canal: str, contato: str, texto: str, nome: str = "", primeira: bool = True) -> dict:
+def turno_de_canal(canal: str, contato: str, texto: str, nome: str = "", primeira: bool = True,
+                   kommo_leads: list | tuple = ()) -> dict:
+    """`kommo_leads`: os cards do Kommo da mesma pessoa (o painel acha pelo telefone ou e-mail). Se o robô
+    respondeu um deles pelo Instagram/Facebook há pouco, aqui não responde de novo (#408)."""
     texto = (texto or "").strip()[:3000]
     if canal not in _CONTEXTO_CANAL or not texto or not (contato or "").strip():
         raise HTTPException(400, "canal, contato e texto são obrigatórios")
+    leads = [int(x) for x in kommo_leads or () if str(x).isdigit()]
+    for lid in leads:
+        outro = state.respondido_em_outro_canal(lid, canal, SDR_DUPLICADO_MIN * 60)
+        if outro:
+            return {"rota": "outro_canal", "motivo": f"JA_RESPONDIDO_POR_{outro[0].upper()}", "diretivas": [],
+                    "cortes": [], "mensagens": [], "precisa_gente": False,
+                    "nota": f"O robô respondeu esta pessoa por {outro[0]} há {outro[1] // 60} min: não repete aqui."}
     chave = hashlib.sha256(f"{canal}:{contato.strip().lower()}".encode()).hexdigest()[:20]
-    return _turno_sem_kommo(texto, nome, primeira, _CONTEXTO_CANAL[canal], f"canal-{canal}-{chave}")
+    saida = _turno_sem_kommo(texto, nome, primeira, _CONTEXTO_CANAL[canal], f"canal-{canal}-{chave}")
+    if saida["mensagens"]:
+        for lid in leads:
+            state.marcar_resposta(lid, canal)
+    return saida
 
 
 @app.post("/tools/playground")
@@ -434,7 +448,7 @@ async def tool_canal(request: Request, x_api_key: str | None = Header(None)):
     p = await request.json()
     return {"ok": True, **await asyncio.to_thread(
         turno_de_canal, str(p.get("canal", "")), str(p.get("contato", "")), str(p.get("texto", "")),
-        str(p.get("nome", "")), bool(p.get("primeira", True)))}
+        str(p.get("nome", "")), bool(p.get("primeira", True)), p.get("kommo_leads") or [])}
 
 
 @app.post("/tools/sdr")
@@ -523,6 +537,14 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         # last_outbound_at evita que o resgate do agendador responda por nós.
         state.update_conversation(lead_id, last_outbound_at=int(time.time()))
         state.log("gate", lead_id, f"SDR: sem resposta ({rota['motivo']}) — não é lead")
+        _pending_returns.pop(lead_id, None)
+        return
+    outro = (state.respondido_em_outro_canal(lead_id, "kommo", SDR_DUPLICADO_MIN * 60)
+             if rota["acao"] != "confirmar_opt_out" else None)
+    if outro:
+        # A mesma pessoa acabou de receber a resposta do robô por SMS ou e-mail (#408): não manda de novo aqui.
+        state.log("gate", lead_id, f"atender: sem resposta (JA_RESPONDIDO_POR_{outro[0].upper()}, "
+                                   f"{outro[1] // 60} min) — evita mensagem duplicada")
         _pending_returns.pop(lead_id, None)
         return
     if rota["acao"] == "confirmar_opt_out":
@@ -1101,6 +1123,7 @@ def send_to_lead(lead_id: int, text: str) -> None:
     perde e fica visível pro time no card.
     """
     if SDR_MODO == "atender":
+        state.marcar_resposta(lead_id, "kommo")
         limpo = sdr_ponte.limpar(lead_id, text)
         if not limpo:
             conv = state.get_conversation(lead_id)

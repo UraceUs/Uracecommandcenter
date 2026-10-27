@@ -1379,6 +1379,9 @@ O robô de vendas no Kommo. Três níveis:
 - **Vai responder você mesmo?** Antes, clique em **Pausar IA** na conversa (chat do Kommo ou Robô SDR). O robô não
   enxerga quem escreve no chat: sem a pausa, ele e você respondem juntos. No SMS e no e-mail, a sua resposta à mão
   pausa o robô naquele contato por 72 h sozinha.
+- **Sem resposta em dobro (#408):** se o robô respondeu a pessoa no Instagram ou no Facebook, ele não responde de
+  novo pelo SMS ou pelo e-mail nos 30 minutos seguintes (e vice-versa). Ele reconhece a mesma pessoa pelo telefone ou
+  pelo e-mail do card no Kommo.
 - Conversa em **Precisa de atenção** (SMS e e-mail) é lead que o robô não respondeu: responda à mão.
 - Viu o robô errar? Relate com o lead (id ou nome) e o que aconteceu. Quem cuida do robô resolve.
 

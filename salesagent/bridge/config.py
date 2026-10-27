@@ -113,6 +113,10 @@ if SDR_MODO not in ("observar", "organizar", "atender"):
 # Nível atender, fase de teste (13/10): com uma tag aqui, a ponte só responde a lead que tem essa
 # tag no Kommo (ex.: teste-sdr, só no card de teste). Vazio = responde a todo lead no escopo do SDR.
 SDR_ATENDER_SO_TAG = _bridge.get("SDR_ATENDER_SO_TAG", "").strip()
+# Mesma pessoa em dois canais (#408, dono 27/10: "para não ir mensagens duplicadas"): se o robô respondeu o
+# lead do Kommo por outro canal (Instagram/Facebook, SMS ou e-mail) há menos que isso, não responde de novo.
+# 0 desliga.
+SDR_DUPLICADO_MIN = int(_bridge.get("SDR_DUPLICADO_MIN", "30") or 0)
 # Usuário do Kommo que recebe as tarefas de handoff (responsável único).
 KOMMO_RESPONSAVEL_ID = _bridge.get("KOMMO_RESPONSAVEL_ID", "")
 
