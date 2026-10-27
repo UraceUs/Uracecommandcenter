@@ -197,7 +197,7 @@ fi
 # páginas legais (issue #25: canonical, descrição e schema markup): se já foram publicadas
 # uma vez por servir_legal.sh, cada deploy leva a versão nova
 if [ -d /var/www/urace-legal ]; then
-    sudo cp "$REPO/adminai/deploy/legal/privacy.html" "$REPO/adminai/deploy/legal/eula.html" /var/www/urace-legal/
+    sudo cp "$REPO/adminai/deploy/legal/privacy.html" "$REPO/adminai/deploy/legal/eula.html" "$REPO/adminai/deploy/legal/terms.html" /var/www/urace-legal/
     sudo chmod 644 /var/www/urace-legal/*.html
     echo "-- páginas legais atualizadas em /var/www/urace-legal"
 fi
