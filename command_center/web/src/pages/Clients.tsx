@@ -43,7 +43,7 @@ function Duplicados({ onChanged }: { onChanged: () => void }) {
   }
   const n = data?.pairs.length ?? 0
   if (!loading && n === 0 && !(data?.merged.length)) return null
-  return <Section title={tr("Possíveis duplicados")} count={n} right={<div className="row">{n > 0 && can('OPERATOR') && <button className="btn sm" disabled={busy} onClick={parecerDaIa}>{busy ? <Spinner /> : '✦'} {tr("Pedir parecer da IA")}</button>}<button className="btn ghost sm" onClick={() => setOpen(o => !o)}>{open ? tr("esconder") : tr("ver")}</button></div>}>
+  return <Section title={tr("Possíveis duplicados")} count={n} right={<div className="row">{n > 0 && can('OPERATOR') && <button className="btn sm" disabled={busy} onClick={parecerDaIa}>{busy ? <Spinner /> : '✦'} {tr("Pedir parecer da IA")}</button>}<button className="btn ghost sm" onClick={() => setOpen(o => !o)}>{open ? tr("Esconder") : tr("Ver")}</button></div>}>
     {!open ? <div className="small muted">{n} {tr("par(es) com nomes quase iguais esperando decisão")}{data?.merged.length ? tr(" · {0} união(ões) feitas", data.merged.length) : ''}.</div> : <>
       {n === 0 && <div className="small muted">{tr("Nenhum par pendente.")}</div>}
       {(data?.pairs || []).map(p => { const par = ia?.[`${p.a.id}-${p.b.id}`]; return <div className="act" key={`${p.a.id}-${p.b.id}`}>
@@ -70,7 +70,7 @@ function NovoCliente({ onClose, onCreated }: { onClose: () => void; onCreated: (
   // #204: irmão tem o mesmo responsável, e-mail e telefone — por aqui abriria o card do outro
   if (irmao) return <CardIrmao onClose={onClose} onDone={onCreated} />
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 640 }} onMouseDown={e => e.stopPropagation()}>
-    <button className="btn ghost sm close" onClick={onClose}>✕</button>
+    <button className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>{tr("Novo cliente")}</h2><div className="small muted">{tr("O responsável é quem paga e assina. Se já existir alguém com o mesmo e-mail, telefone ou nome, o card existente abre em vez de duplicar.")}</div></div>
     <button className="btn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setIrmao(true)}>{tr("É irmão de um cliente? Criar card de irmão")}</button>
     <div className="grid g2">
@@ -153,7 +153,7 @@ export function Clients() {
     <Duplicados onChanged={reload} />
     <Section title={tr("Clientes")} count={rows.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading rows={8} /> :
-        rows.length === 0 ? <Empty title={tr("Nenhum cliente")}>{tr("Sem registros com esse filtro. Se a lista está vazia, rode “Sincronizar agora” no Dashboard.")}</Empty> :
+        rows.length === 0 ? <Empty title={tr("Nenhum cliente")}>{tr("Sem registros com esse filtro. Se a lista está vazia, toque em “Sincronizar” na tela Hoje.")}</Empty> :
         <div className="tbl-wrap"><table className="tbl rsp">
           <thead><tr><th>{tr("Piloto")}</th><th>{tr("Responsável e contato")}</th><th>{tr("Status")}</th><th>{tr("Próximo serviço")}</th><th className="hide-md">{tr("Último")}</th><th>{tr("Waiver")}</th><th>{tr("Serviços")}</th><th>{tr("E-mails")}</th></tr></thead>
           <tbody>{rows.map(c => {
@@ -162,7 +162,7 @@ export function Clients() {
             const semWaiver = dias !== null && dias <= 2 && w !== 'completed' && !c.vip
             return <tr key={c.id} className="click" onClick={() => open(c.id)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') open(c.id) }}>
               <td className="first"><span className="cd-av rsp-av" aria-hidden="true">{iniciais(c.pilot_name || c.name)}</span><div className="row">{!!c.pro_driver && <span title={tr("Pro Racing Driver")} style={{ color: 'var(--warn)' }}>★</span>}<b>{c.pilot_name || c.name}</b>{!!c.vip && <Chip tone="warn">{tr("VIP")}</Chip>}{c.plan_type === 'monthly' && <Chip tone="accent">{tr("mensal")}</Chip>}{c.plan_type === 'daily' && <Chip tone="outline">{tr("diária")}</Chip>}</div>{!c.pilot_name && <div className="small muted">{tr("piloto é o próprio")}</div>}</td>
-              <td className="rsp-sub" data-l={tr("Responsável")}>{c.pilot_name ? c.name : <span className="muted">{tr("o próprio")}</span>}<div className="small muted truncate" style={{ maxWidth: 260 }}>{c.email || tr("sem e-mail")}{c.phone ? ` · ${c.phone}` : ''}</div></td>
+              <td className="rsp-sub" data-l={tr("Responsável")}>{c.pilot_name ? c.name : <span className="muted">{tr("o próprio")}</span>}<div className="small muted" style={{ maxWidth: 260, overflowWrap: 'anywhere' }}>{c.email || tr("sem e-mail")}{c.phone ? ` · ${c.phone}` : ''}</div></td>
               <td className="rsp-pill" data-l={tr("Status")}><Status s={c.status} />{!!c.status_locked && <span className="small muted" title={tr("mudado à mão")}> 🔒</span>}</td>
               <td data-l={tr("Próximo")} className={`mono nowrap${c.next_service ? ' rsp-bloco' : ''}`}>{c.next_service ? <><b style={{ color: dias !== null && dias <= 1 ? 'var(--brand)' : undefined }}>{dias === 0 ? tr("HOJE") : dias === 1 ? tr("AMANHÃ") : tr("em {0} d", dias)}</b> <span className="muted small">{fmtDate(c.next_service)}</span></> : <span className="muted">—</span>}</td>
               <td data-l={tr("Último")} className="mono hide-md">{c.last_service ? fmtDate(c.last_service) : <span className="muted">—</span>}</td>

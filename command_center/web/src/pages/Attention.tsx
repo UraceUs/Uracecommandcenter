@@ -53,7 +53,7 @@ function Balao({ a, onDone }: { a: A; onDone: () => void }) {
   }
   return <div className="balao" onClick={e => e.stopPropagation()}>
     <TextoComVoz valor={text} onChange={setText} linhas={3} autoFocus placeholder={tr("Diga (ou dite) à IA o que fazer com isto. Ex.: \"o valor deste serviço é $350, produto Practice 2T; envie a invoice e a waiver parental\".")} />
-    <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> {tr("guardar na memória da IA")} {a.client_id ? tr("(deste cliente)") : tr("(itens do tipo {0})", a.entity.type)}</label><span className="grow" /><button className="btn ghost sm" onClick={onDone}>{tr("cancelar")}</button><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : tr("✦ Enviar à IA")}</button></div>
+    <div className="row wrap"><label className="check"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} /> {tr("Guardar na memória da IA")} {a.client_id ? tr("(deste cliente)") : tr("(itens do tipo {0})", a.entity.type)}</label><span className="grow" /><button className="btn ghost sm" onClick={onDone}>{tr("Cancelar")}</button><button className="btn primary sm" disabled={busy || !text.trim()} onClick={send}>{busy ? <span className="spin" /> : tr("✦ Enviar à IA")}</button></div>
   </div>
 }
 
@@ -98,7 +98,7 @@ export function AttentionList({ items, onChange, mini }: { items: A[]; onChange?
       {a.entity.type === 'ai_pendencia' && <Link className="btn" to="/ai">{a.action || tr("Ver no AI Command")}</Link>}
       {a.link && <a className="btn" href={a.link} target="_blank" rel="noopener noreferrer" title={tr("Abrir no sistema de origem")}>{sysOf(a.link)} ↗</a>}
       {can('OPERATOR') && !a.dismissed && <button className={`btn${balao === a.key ? '' : ' primary'}`} onClick={() => setBalao(b => b === a.key ? null : a.key)} title={tr("Diga à IA o que fazer com este item")}>{tr("✦ Instruir a IA")}</button>}
-      {can('OPERATOR') && !a.dismissed && <button className="btn" disabled={busy === a.key} onClick={() => hide(a)} title={tr("Esconde o aviso; não apaga a origem")}>{tr("ocultar")}</button>}
+      {can('OPERATOR') && !a.dismissed && <button className="btn" disabled={busy === a.key} onClick={() => hide(a)} title={tr("Esconde o aviso; não apaga a origem")}>{tr("Ocultar")}</button>}
       {can('OPERATOR') && a.dismissed && !a.dismissed.auto && <button className="btn" disabled={busy === a.key} onClick={() => restore(a)}>{tr("Restaurar")}</button>}</>}>
     {((!mini && !!a.facts?.filter(([, v]) => v && v !== '—').length) || a.dismissed || (!a.client_id && !['approvals', 'ai', 'integration', 'email', 'stock'].includes(a.entity.type) && a.action)) && <CdLista>
       {/* no Hoje (compacto), os fatos vão numa linha só, embaixo do porquê */}
@@ -121,7 +121,7 @@ export function AttentionPage() {
   const hidden = (data || []).filter(a => a.dismissed).length
   return <>
     <PageHeader title={tr("Precisa de atenção")} help={tr("Só o que a IA não resolveu sozinha, do mais grave para o menos. Ocultar esconde o aviso; a origem (tarefa, envelope, e-mail) fica onde está.")}>
-      <label className="check"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> {tr("mostrar ocultos")}{showHidden && hidden > 0 && <> ({hidden})</>}</label><button className="btn" onClick={reload}>↻</button>
+      <label className="check"><input type="checkbox" checked={showHidden} onChange={e => setShowHidden(e.target.checked)} /> {tr("Mostrar ocultos")}{showHidden && hidden > 0 && <> ({hidden})</>}</label><button className="btn" onClick={reload} aria-label={tr("Atualizar")} title={tr("Atualizar")}>↻</button>
     </PageHeader>
     <div className="tabs">
       <button className={f === 'ALL' ? 'on' : ''} onClick={() => setF('ALL')}>{tr("Todos")} <span className="count">{data?.length ?? 0}</span></button>

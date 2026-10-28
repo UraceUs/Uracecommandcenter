@@ -141,8 +141,8 @@ export function Races() {
   const semData = (races.data || []).filter(r => !r.date_start)
   return <>
     <PageHeader title={tr("Corridas")} help={<>{tr("A coluna RACES do Asana, só corridas. Clique numa corrida para convidar os ★ Pro; o piloto fica nela até a confirmação.")}</>}>
-      {can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>{tr("+ Nova corrida")}</button>}<button className="btn" onClick={races.reload}>↻</button></PageHeader>
-    <div className="cal-h"><button className="btn sm" onClick={() => setYm(ym.m === 0 ? { y: ym.y - 1, m: 11 } : { y: ym.y, m: ym.m - 1 })}>◀</button><h2 className="h1" style={{ fontSize: 20, margin: '0 8px', textTransform: 'capitalize' }}>{MESES[ym.m]} {ym.y}</h2><button className="btn sm" onClick={() => setYm(ym.m === 11 ? { y: ym.y + 1, m: 0 } : { y: ym.y, m: ym.m + 1 })}>▶</button><button className="btn ghost sm" onClick={() => setYm({ y: hoje.getFullYear(), m: hoje.getMonth() })}>{tr("hoje")}</button>
+      {can('OPERATOR') && <button className="btn primary" onClick={() => setNova(true)}>{tr("+ Nova corrida")}</button>}<button className="btn" onClick={races.reload} aria-label={tr("Atualizar")} title={tr("Atualizar")}>↻</button></PageHeader>
+    <div className="cal-h"><button className="btn sm" aria-label={tr("Mês anterior")} onClick={() => setYm(ym.m === 0 ? { y: ym.y - 1, m: 11 } : { y: ym.y, m: ym.m - 1 })}>‹</button><h2 className="h1" style={{ fontSize: 20, margin: '0 8px', textTransform: 'capitalize' }}>{MESES[ym.m]} {ym.y}</h2><button className="btn sm" aria-label={tr("Próximo mês")} onClick={() => setYm(ym.m === 11 ? { y: ym.y + 1, m: 0 } : { y: ym.y, m: ym.m + 1 })}>›</button><button className="btn ghost sm" onClick={() => setYm({ y: hoje.getFullYear(), m: hoje.getMonth() })}>{tr("Hoje")}</button>
       <span className="grow" /><span className="small muted">{(races.data || []).length} {tr("corrida(s) no calendário")}</span></div>
     {races.error && !races.data ? <ErrorState error={races.error} retry={races.reload} /> : !races.data ? <Loading rows={6} /> :
       <div className="cal">

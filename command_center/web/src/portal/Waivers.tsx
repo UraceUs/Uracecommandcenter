@@ -43,7 +43,8 @@ export function MinhasWaivers() {
     {erro && <div className="banner crit" role="alert"><span className="bi" aria-hidden="true">✕</span><div className="grow">{erro}</div></div>}
     {aviso && <div className="banner ok" role="status"><span className="bi" aria-hidden="true">✓</span><div className="grow">{aviso}</div></div>}
     {!d ? (!erro && <div className="state"><span className="spin" /></div>)
-      : !d.items.length ? <p className="muted small" style={{ margin: 0 }}>No waivers signed here yet. <Link to="/portal/drivers">Go to Drivers</Link> to sign one.</p>
+      /* #442: o estado vazio no cartão, como em My sessions */
+      : !d.items.length ? <div className="card card-b"><p className="muted" style={{ margin: 0 }}>No waivers signed here yet. <Link to="/portal/drivers">Go to Drivers</Link> to sign one.</p></div>
       : <ul className="stack portal-waivers" style={{ gap: 10 }}>{d.items.map(w => {
         const [rot, tom] = SITUACAO[w.status]
         return <li key={w.id} className="card card-b stack portal-waiver-item" style={{ gap: 6 }}>

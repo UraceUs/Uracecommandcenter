@@ -79,7 +79,7 @@ function Calendario({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => voi
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const go = (delta: number) => { const d = new Date(y, m - 1 + delta, 1); const n = new URLSearchParams(sp); n.set('m', `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`); setSp(n, { replace: true }) }
   const todayIso = iso(hoje)
-  return <div className="card"><div className="card-h"><button className="btn sm" onClick={() => go(-1)}>‹</button><h2 className="h1" style={{ fontSize: 20 }}>{first.toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric' })}</h2><button className="btn sm" onClick={() => go(1)}>›</button><div className="grow" /><button className="btn ghost sm" onClick={() => { const n = new URLSearchParams(sp); n.delete('m'); setSp(n, { replace: true }) }}>{tr("hoje")}</button></div>
+  return <div className="card"><div className="card-h"><button className="btn sm" aria-label={tr("Mês anterior")} onClick={() => go(-1)}>‹</button><h2 className="h1" style={{ fontSize: 20, textTransform: 'capitalize' }}>{first.toLocaleDateString(LOCALE(), { month: 'long', year: 'numeric' })}</h2><button className="btn sm" aria-label={tr("Próximo mês")} onClick={() => go(1)}>›</button><div className="grow" /><button className="btn ghost sm" onClick={() => { const n = new URLSearchParams(sp); n.delete('m'); setSp(n, { replace: true }) }}>{tr("Hoje")}</button></div>
     <div className="cal">{['seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom'].map(d => <div key={d} className="dow">{tr(d)}</div>)}
       {days.map(d => { const k = iso(d); const ts = byDay.get(k) || []; return <div key={k} className={`day${d.getMonth() !== m - 1 ? ' out' : ''}${k === todayIso ? ' today' : ''}`}>
         <span className="n">{d.getDate()}</span>
@@ -97,7 +97,7 @@ function ordenar(ts: Task[]) {
 function Quadro({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void }) {
   const cols = useMemo(() => { const mp = new Map<string, Task[]>(); for (const t of tasks) { const k = t.section || '—'; mp.set(k, [...(mp.get(k) || []), t]) }
     return [...mp.entries()].sort((a, b) => { const ia = ORDEM_SECOES.indexOf(a[0]), ib = ORDEM_SECOES.indexOf(b[0]); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) }) }, [tasks])
-  if (cols.length === 0) return <div className="card"><Empty title={tr("Quadro vazio")}>{tr("Nenhuma tarefa espelhada. Sincronize no Dashboard.")}</Empty></div>
+  if (cols.length === 0) return <div className="card"><Empty title={tr("Quadro vazio")}>{tr("Nenhuma tarefa espelhada. Toque em “Sincronizar” na tela Hoje.")}</Empty></div>
   const hojeSec = ORDEM_SECOES[(new Date().getDay() + 6) % 7 - 1] || ''   // seg → nada; ter…dom → coluna do dia
   return <div className="board">{cols.map(([sec, ts]) => <div className={`col${sec === hojeSec ? ' today' : ''}${sec === 'Finished Services' ? ' hist' : ''}`} key={sec}><div className="ch">{sec === hojeSec ? '● ' : ''}{sec}<span className="count">{ts.length}</span></div><div className="cards">
     {ts.map(t => { const d = daysUntil(t.due_on); return <div key={t.id} className={`tcard${t.status === 'completed' ? ' done' : ''}`} onClick={() => onOpen(t)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onOpen(t) }}>
@@ -132,7 +132,7 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
     </div>
     {det.loading && !det.data && <Loading rows={4} />}
     {det.error && <ErrorState error={det.error} retry={det.reload} />}
-    {det.data && !det.data.connected && <Banner tone="warn">{tr("Sem Asana ao vivo agora:")} {det.data.reason}{tr(". Mostrando só o espelho.")}</Banner>}
+    {det.data && !det.data.connected && <Banner tone="warn">{tr("Sem Asana ao vivo agora:")} {String(det.data.reason || '').replace(/[.\s]+$/, '')}{tr(". Mostrando só o espelho.")}</Banner>}
     {det.data?.connected && <>
       <Section title={tr("Descrição")}>{det.data.task?.notas ? <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font)', margin: 0, fontSize: 13.5 }}>{det.data.task.notas}</pre> : <span className="muted small">{tr("sem descrição")}</span>}</Section>
       <div className="grid g2">
@@ -183,7 +183,7 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 720 }} onMouseDown={e => e.stopPropagation()}>
-    <button className="btn ghost sm close" onClick={onClose}>✕</button>
+    <button className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>{tr("Nova tarefa de serviço")}</h2><div className="small muted">{tr("Cria no Asana a partir do modelo oficial (com as subtarefas), na coluna do dia da data. A IA é avisada e prepara waiver e invoice.")}</div></div>
     <div className="grid g2">
       <div className="field"><label>{tr("Piloto *")}</label><div className="row" style={{ gap: 6 }}><input className="input" value={f.pilot_name} onChange={e => set('pilot_name', e.target.value)} /><Mic valor={f.pilot_name} onTexto={t => set('pilot_name', t)} /></div></div>
@@ -242,7 +242,7 @@ function LinkClient({ w, onDone }: { w: Waiver; onDone: () => void }) {
   const [q, setQ] = useState('')
   const clients = useGet<Client[]>(q.length >= 2 ? '/clients' + qs({ q }) : null)
   return <div className="row wrap" onClick={e => e.stopPropagation()}>
-    <input className="input" style={{ width: 200 }} placeholder={tr("vincular a… (piloto/nome)")} value={q} onChange={e => setQ(e.target.value)} />
+    <input className="input" style={{ width: 200, maxWidth: '100%' }} aria-label={tr("Vincular ao cliente")} placeholder={tr("vincular a… (piloto/nome)")} value={q} onChange={e => setQ(e.target.value)} />
     {(clients.data || []).slice(0, 5).map(c => <button key={c.id} className="btn sm" onClick={async () => { try { await api.post(`/waivers/${w.id}/link`, { client_id: c.id }); toast(tr("Vinculado."), 'ok'); setQ(''); onDone() } catch (ex) { toast((ex as ApiError).message, 'crit') } }}>{c.pilot_name || c.name}</button>)}
   </div>
 }
@@ -257,7 +257,7 @@ function EnviarWaiver({ onClose, onDone }: { onClose: () => void; onDone: () => 
     try { await api.post('/waivers/send', f); toast(tr("Waiver enviada pelo DocuSign."), 'ok'); onDone(); onClose() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) }
   }
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 560 }} onMouseDown={e => e.stopPropagation()}>
-    <button className="btn ghost sm close" onClick={onClose}>✕</button>
+    <button className="btn ghost sm close" onClick={onClose} aria-label={tr("Fechar")}>✕</button>
     <div><h2 className="h1" style={{ fontSize: 22 }}>{tr("Enviar waiver")}</h2><div className="small muted">{tr("Parental quando o piloto é menor: quem assina é o responsável. O DocuSign recusa se já houver waiver válida ou envelope aberto para o e-mail.")}</div></div>
     <div className="grid g2">
       <div className="field"><label>{tr("Modelo")}</label><select className="input" value={f.template} onChange={e => setF({ ...f, template: e.target.value })}><option value="parental">{tr("Parental (piloto menor)")}</option><option value="adult">{tr("Adult")}</option></select></div>
@@ -368,14 +368,14 @@ export function DocuSignPage() {
       {can('OPERATOR') && <button className="btn primary" onClick={() => setEnviar(true)}>{tr("+ Enviar waiver")}</button>}
       {tab !== 'tpl' && <input className="input" style={{ width: 200 }} placeholder={tr("Buscar…")} title={tr("signatário, e-mail, piloto, responsável, menor ou assunto")} value={q} onChange={e => setQ(e.target.value)} aria-label={tr("Buscar nas waivers")} />}
       {tab !== 'tpl' && tab !== 'signed' && tab !== 'int' && <select className="input" style={{ width: 220 }} value={st} onChange={e => setSt(e.target.value)}><option value="all">{tr("Todos (")}{Object.values(counts).reduce((a, n) => a + n, 0)})</option>{Object.entries(counts).map(([k, n]) => <option key={k} value={k}>{WAIVER_LABEL[k] || k} ({n})</option>)}</select>}
-      <button className="btn" onClick={() => { env.reload(); tpl.reload() }}>↻</button></div>
+      <button className="btn" onClick={() => { env.reload(); tpl.reload() }} aria-label={tr("Atualizar")} title={tr("Atualizar")}>↻</button></div>
     {enviar && <EnviarWaiver onClose={() => setEnviar(false)} onDone={env.reload} />}
     {tab !== 'tpl' && <Section title={tab === 'lixo' ? tr("Na lixeira do painel") : tab === 'signed' ? tr("Waivers assinadas (parental e adult)") : tab === 'int' ? tr("Documentos internos (o support@ assina; não são waiver de cliente)") : tr("Envelopes")} count={rows.length} tight>
       {env.error && !env.data ? <ErrorState error={env.error} retry={env.reload} /> : env.loading && !env.data ? <Loading /> : rows.length === 0 ? <Empty>{tab === 'lixo' ? tr("Nada na lixeira.") : q ? tr("Nada bate com a busca.") : tab === 'int' ? tr("Nenhum documento interno espelhado. A próxima sincronia do DocuSign marca os envelopes que o support@ assina.") : tr("Nenhum envelope espelhado com esse filtro.")}</Empty> :
         <div className="tbl-wrap"><table className="tbl rsp"><thead><tr><th>{tr("Signatário")}</th><th>{tab === 'int' ? tr("Documento") : tr("Cliente / piloto")}</th><th>{tr("Modelo")}</th><th>{tr("Status")}</th><th>{tr("Enviada")}</th><th>{tr("Assinada")}</th><th>{tr("Expira")}</th><th></th></tr></thead><tbody>
           {rows.map(w => { const aberto = ['sent', 'delivered', 'autoresponded'].includes(w.status || ''); return <tr key={w.id}>
             <td className="first">{w.signer_name}<div className="small muted">{w.signer_email}</div>{w.minor_name && <div className="small">{tr("menor:")} <b>{w.minor_name}</b></div>}{tab !== 'int' && w.subject && <div className="small muted" title={w.subject}>{w.subject.slice(0, 60)}</div>}</td>
-            <td data-l={tab === 'int' ? tr("Documento") : tr("Piloto")}>{tab === 'int' ? <span title={w.subject || ''}>{w.subject || <span className="muted">{tr("sem assunto")}</span>}</span> : w.client_id ? <><a onClick={() => nav(`/clients/${w.client_id}`)} style={{ cursor: 'pointer' }}>{w.client_pilot || w.client_name}</a>{w.client_pilot && <div className="small muted">{w.client_name}</div>}{w.link_reason && <div className="small muted" title={w.link_reason}>{w.link_by === 'human' ? tr("vínculo à mão") : tr("vínculo automático")}</div>}</> : <><span className="muted">{tr("não vinculado")}</span>{can('OPERATOR') && <LinkClient w={w} onDone={env.reload} />}</>}</td>
+            <td data-l={tab === 'int' ? tr("Documento") : tr("Piloto")}>{tab === 'int' ? <span title={w.subject || ''}>{w.subject || <span className="muted">{tr("sem assunto")}</span>}</span> : w.client_id ? <><a onClick={() => nav(`/clients/${w.client_id}`)} style={{ cursor: 'pointer' }}>{w.client_pilot || w.client_name}</a>{w.client_pilot && <div className="small muted">{w.client_name}</div>}{w.link_reason && <div className="small muted" title={w.link_reason}>{w.link_by === 'human' ? tr("vínculo à mão") : tr("vínculo automático")}</div>}</> : <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>{/* #442: no celular o texto, o rótulo e o campo disputavam a mesma linha */}<span className="muted">{tr("não vinculado")}</span>{can('OPERATOR') && <LinkClient w={w} onDone={env.reload} />}</div>}</td>
             <td className="rsp-sub" data-l={tr("Modelo")}>{w.template}</td>
             <td className="rsp-pill" data-l={tr("Status")}>{w.voided_at ? <Status s="voided" label={tr("anulada")} /> : <Status s={w.status} label={WAIVER_LABEL[w.status || ''] || w.status} />}</td>
             <td data-l={tr("Enviada")} className="mono">{fmtDate(w.sent_at)}</td><td data-l={tr("Assinada")} className="mono">{fmtDate(w.completed_at)}</td><td data-l={tr("Expira")} className="mono">{fmtDate(w.expires_at)}</td>
@@ -515,7 +515,7 @@ export function GmailPage() {
       {can('OPERATOR') && <button className="btn quiet" disabled={classifying || semSug === 0} onClick={classify} title={tr("Só sugere o marcador (não move) para as threads ainda sem sugestão")}>{classifying ? <Spinner /> : ''} {tr("só sugerir")}{semSug > 0 && ` (${semSug})`}</button>}
       <button className="btn" onClick={() => { emails.reload(); labels.reload() }} aria-label={tr("Atualizar")}>↻</button></div>
     <Progress on={triaging || classifying || !!triage.data?.running} />
-    {labels.data && !labels.data.connected && <Banner tone="warn">{tr("Gmail não conectado neste servidor:")} {labels.data.reason}{tr(". A lista abaixo é só o espelho.")}</Banner>}
+    {labels.data && !labels.data.connected && <Banner tone="warn">{tr("Gmail não conectado neste servidor:")} {String(labels.data.reason || '').replace(/[.\s]+$/, '')}{tr(". A lista abaixo é só o espelho.")}</Banner>}
     <div className="mail">
       <div className="labels">
         <div className={`lb${sel === 'INBOX' ? ' on' : ''}`} onClick={() => setSel('INBOX')}>{tr("Caixa de entrada")}<span className="c">{inbox.length}</span></div>
@@ -525,7 +525,7 @@ export function GmailPage() {
         {userLabels.map(l => <div key={l.name} className={`lb${sel === l.name ? ' on' : ''}`} onClick={() => setSel(l.name)} title={l.name}><span className="truncate">{l.name}</span><span className="c">{(l.inbox_count || 0) + inbox.filter(e => e.suggested_label === l.name && !(JSON.parse(e.labels || '[]') as string[]).includes(l.name)).length || ''}</span></div>)}
       </div>
       <div className="list">
-        {emails.error && !emails.data ? <ErrorState error={emails.error} retry={emails.reload} /> : emails.loading && !emails.data ? <Loading rows={8} /> : rows.length === 0 ? <Empty title={tr("Vazio")}>{sel === 'INBOX' ? tr("Nenhuma thread na inbox espelhada. Sincronize no Dashboard.") : tr("Nada aqui.")}</Empty> :
+        {emails.error && !emails.data ? <ErrorState error={emails.error} retry={emails.reload} /> : emails.loading && !emails.data ? <Loading rows={8} /> : rows.length === 0 ? <Empty title={tr("Vazio")}>{sel === 'INBOX' ? tr("Nenhuma thread na inbox espelhada. Toque em “Sincronizar” na tela Hoje.") : tr("Nada aqui.")}</Empty> :
           rows.map(e => <div key={e.id} className={`item${String(e.id) === openId ? ' on' : ''}`} onClick={() => setOpenId(String(e.id))}>
             <span className="from">{(e.sender || '').replace(/<.*>/, '').trim() || e.sender}</span><span className="when">{fmtDateTime(e.last_at)}</span>
             <span className="subj">{e.subject || tr("(sem assunto)")}{e.messages && e.messages > 1 ? <span className="muted"> ({e.messages})</span> : null}</span>
@@ -663,7 +663,7 @@ export function QuickBooksPage() {
   const det = safeJson(i?.detail) as { nota?: string; realm_id?: string; empresa?: string } | null
   return <>
     <IntHeader system="quickbooks" title={tr("QuickBooks")} desc={tr("Invoices e pagamentos da URACE US INC. A IA prepara; enviar pede aprovação. Nunca apaga.")} openHref="https://qbo.intuit.com/" openLabel={tr("Abrir o QuickBooks")} />
-    {sp.get('connected') && <Banner tone="ok">{tr("QuickBooks conectado. Rode “Sincronizar agora” no Dashboard para trazer as invoices.")}</Banner>}
+    {sp.get('connected') && <Banner tone="ok">{tr("QuickBooks conectado. Toque em “Sincronizar” na tela Hoje para trazer as invoices.")}</Banner>}
     {sp.get('erro') && <Banner tone="crit">{tr("A Intuit devolveu erro no consentimento:")} {sp.get('erro')}</Banner>}
     {!connected && <div className="card card-b stack">
       <div className="h2">{tr("Conectar")}</div>
@@ -695,7 +695,7 @@ export function QuickBooksPage() {
           <button className="btn primary sm" disabled={selecionadas.length === 0} onClick={() => setLemb(true)}>{tr("⏰ Lembretes")}{selecionadas.length ? ` (${selecionadas.length})` : ''}</button></>}</div>
       </div>
       <Section title={tr("Invoices")} count={rows.length} tight>
-      {inv.error && !inv.data ? <ErrorState error={inv.error} retry={inv.reload} /> : inv.loading && !inv.data ? <Loading /> : rows.length === 0 ? <Empty>{filtrando ? tr("Nada bate com o filtro.") : tr("Nenhuma invoice espelhada. Sincronize no Dashboard.")}</Empty> :
+      {inv.error && !inv.data ? <ErrorState error={inv.error} retry={inv.reload} /> : inv.loading && !inv.data ? <Loading /> : rows.length === 0 ? <Empty>{filtrando ? tr("Nada bate com o filtro.") : tr("Nenhuma invoice espelhada. Toque em “Sincronizar” na tela Hoje.")}</Empty> :
         <div className="tbl-wrap"><table className="tbl rsp"><thead><tr><th></th><th>{tr("Nº")}</th><th>{tr("Cliente")}</th><th className="hide-md">{tr("Emitida")}</th><th>{tr("Vence")}</th><th>{tr("Valor")}</th><th>{tr("Saldo")}</th><th>{tr("Status")}</th><th>{tr("Lembrete")}</th><th></th></tr></thead><tbody>
           {rows.map(x => <tr key={x.id} className={sel.includes(x.id) ? 'on' : ''}><td>{ABERTA(x) && <input type="checkbox" checked={sel.includes(x.id)} onChange={() => toggleSel(x.id)} aria-label={tr("Selecionar {0}", x.doc_number)} />}</td><td className="mono first" data-l={tr("Nº")}>{x.doc_number}{x.memo && <div className="small muted truncate" style={{ maxWidth: 220 }} title={x.memo}>{x.memo}</div>}</td><td data-l={tr("Cliente")}>{x.client_id ? <a href={`/ops/clients?open=${x.client_id}`}>{x.pilot_name || x.client_name}</a> : <span className="muted">{tr("não vinculado")}</span>}</td><td className="mono hide-md" data-l={tr("Emitida")}>{fmtDate(x.issued_on)}</td><td className="mono" data-l={tr("Vence")}>{fmtDate(x.due_on)}</td><td className="mono" data-l={tr("Valor")}>{money(x.amount)}</td><td className="mono rsp-bloco" data-l={tr("Saldo")}>{money(x.balance)}</td><td className="rsp-pill" data-l={tr("Status")}><Status s={x.status} /></td><td data-l={tr("Lembrete")}><LembreteChip i={x} onChange={inv.reload} /></td><td><SysLink links={x.links} one /></td></tr>)}
         </tbody></table></div>}
