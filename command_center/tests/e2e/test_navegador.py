@@ -6792,3 +6792,38 @@ def test_editar_no_card_muda_nome_email_e_telefone(servidor, navegador, largura)
     assert pg.request.get(servidor + f"/api/clients/{cid}").json()["client"]["email"] == f"nina.novo.{largura}@example.com"
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
+
+
+@pytest.mark.parametrize("largura", [390, 1280])
+def test_pesquisar_cliente_pelo_client_id_e_abrir_o_card(servidor, navegador, largura):
+    """#430, dono 28/10: "preciso que seja possível puxar as informações e abrir o card pesquisando com o id do cliente".
+    O Client ID acha o card no filtro de Clientes, no Vincular/Unir (o seletor) e na busca do topo, que abre o card."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    cid = pg.request.post(servidor + "/api/clients", headers=csrf,
+                          data={"name": f"Ana Pelo Id {largura}", "pilot_name": f"Leo Pelo Id {largura}",
+                                "email": f"ana.pelo.id.{largura}@example.com"}).json()["id"]
+    # filtro da lista de Clientes
+    abrir(pg, servidor, "/clients")
+    pg.get_by_label("Filtrar").fill(str(cid))
+    pg.get_by_text(f"Leo Pelo Id {largura}").first.wait_for()
+    # o seletor do Unir dois clientes (o mesmo do Vincular ao cliente)
+    pg.locator("details.more > summary").first.click()
+    pg.get_by_role("button", name="⧉ Unir dois clientes").click()
+    pg.get_by_label("Cliente 1").fill(str(cid))
+    opcao = pg.locator(".lpick-menu .opt", has_text=f"#{cid}")
+    opcao.wait_for()
+    assert f"Leo Pelo Id {largura}" in opcao.inner_text()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.keyboard.press("Escape")
+    # a busca do topo: o número traz o card e o Enter abre
+    abrir(pg, servidor, "/")
+    pg.keyboard.press("Control+k")
+    pg.get_by_label("Buscar", exact=True).fill(f"#{cid}")
+    pg.locator(".pal").get_by_text(f"Ana Pelo Id {largura}").first.wait_for()
+    pg.keyboard.press("Enter")
+    pg.wait_for_url(lambda u: u.endswith(f"/clients/{cid}"))
+    pg.get_by_role("heading", level=1, name=f"Leo Pelo Id {largura}").wait_for()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()

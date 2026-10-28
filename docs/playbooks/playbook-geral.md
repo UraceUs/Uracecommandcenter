@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 28/10/2026 (#420, a **IA do painel opera** o Command Center inteiro, como quem pediu; antes, #410, o **Editar** do card corrige nome, e-mail, telefone, piloto e nascimento; antes, #394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
+> Atualizado em 28/10/2026 (#430, a busca de cliente aceita o **Client ID**; antes, #420, a **IA do painel opera** o Command Center inteiro, como quem pediu; antes, #410, o **Editar** do card corrige nome, e-mail, telefone, piloto e nascimento; antes, #394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
 > equipe, só o serviço do plano, add-ons e a invoice das extras na hora da marcação; antes, #115, o **pacote de prova** da waiver para o advogado; antes, #117, conferir o documento da
 > waiver no balcão e o nascimento travado, e #313, o
 > cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
@@ -806,6 +806,11 @@ medidas). Hoje o seletor aparece, por exemplo, em:
 Regra prática: **antes de digitar dados de alguém, procure o card.** Se existir, vincule. Se não
 existir, crie o cliente em Clientes › **+ Novo cliente** (o painel avisa quando ele já existe e
 abre o card dele).
+
+**Pelo Client ID (#430, dono, 28/10).** Toda busca de cliente também aceita o número do card: `621`,
+`#621` ou `id 621`. Vale no filtro de **Clientes**, no seletor **Vincular ao cliente** (e no **Unir dois
+clientes**), na busca de cima (**⌘K**: o card daquele número vem primeiro e o Enter abre) e no Claude
+(`urace_clientes`). O número busca já com 1 dígito; o seletor mostra o `#número` de cada card.
 
 ---
 
