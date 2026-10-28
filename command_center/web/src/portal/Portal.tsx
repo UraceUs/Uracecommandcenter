@@ -501,8 +501,9 @@ function Historico() {
   return <div className="stack" style={{ gap: 18 }}>
     <div><h1 className="h1">Service history</h1><p className="muted" style={{ margin: '4px 0 0' }}>Every session and service with URACE.</p></div>
     {!h ? <div className="state"><span className="spin" /></div>
-      : !h.linked ? <p className="muted small" style={{ margin: 0 }}>Your history with URACE will show here once our team connects your account to your records.</p>
-      : !h.services.length ? <p className="muted small" style={{ margin: 0 }}>No services yet.</p>
+      /* #442: o estado vazio no cartão, como em My sessions */
+      : !h.linked ? <div className="card card-b"><p className="muted" style={{ margin: 0 }}>Your history with URACE will show here once our team connects your account to your records.</p></div>
+      : !h.services.length ? <div className="card card-b"><p className="muted" style={{ margin: 0 }}>No services yet.</p></div>
       : <div className="card"><div className="tbl">{h.services.map((x, i) => <div className="tr" key={i}>
         <span style={{ width: 92 }} className="small">{dataUS(x.date)}</span><span className="grow">{x.service}{x.driver && <span className="small muted"> · {x.driver}</span>}</span>
         <span className={`chip ${x.status === 'done' ? 'ok' : 'neutral'}`}>{x.status === 'done' ? 'Done' : 'Scheduled'}</span></div>)}</div></div>}
