@@ -172,6 +172,13 @@ def camada_pacote():
         ("Tem desconto para 2 pilotos?", entrada, regras.PROMOVER, "ATENDIMENTO", roteador.ESCALAR),
         ("Obrigado!", entrada, regras.FICA, "First Contact", roteador.RESPONDER),
         ("Quanto custa?", {"existe": True, "zona": regras.COMERCIAL}, regras.ANEXAR, None, roteador.RESPONDER),
+        # dono, 28/10 (#426): card fechado que volta a falar reabre, mesmo sem sinal e fechado há meses
+        ("Oi", {"existe": True, "zona": regras.COMERCIAL, "fechado": True}, regras.REABRIR, "ENTRADA",
+         roteador.RESPONDER),
+        ("oi, tudo bem?", {"existe": True, "zona": regras.ENTRADA, "fechado": True}, regras.REABRIR, "ENTRADA",
+         roteador.RESPONDER),
+        ("Oi", {"existe": True, "zona": regras.COMERCIAL, "fechado": True, "ganho": True}, regras.ANEXAR, None,
+         roteador.RESPONDER),
     ]
     for texto, card, acao, etapa, rota in casos:
         r = sdr.avaliar(texto, card=card)

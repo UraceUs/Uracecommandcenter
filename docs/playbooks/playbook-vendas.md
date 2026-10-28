@@ -1392,6 +1392,9 @@ O robô de vendas no Kommo. Três níveis:
 - **Fim de semana e noite (#418):** o robô responde o SMS e o e-mail todo dia, a qualquer hora. Fora do horário do
   time (seg–sex 8h–18h) ele leva a pessoa a marcar a call de 15 min pelo link do Google Calendar, já na primeira
   resposta. A call marcada aparece na agenda do time como sempre.
+- **Card fechado que volta a falar (#428):** o robô responde. O perdido volta para Comercial > ENTRADA com a tag
+  `sdr:reaberto`; o ganho (cliente) fica como está, com a tag `sdr:cliente-voltou`. Quem pediu para parar
+  (`opt_out`) não recebe nada. Fechar o card não tira o robô: use Pausar IA.
 - Viu o robô errar? Relate com o lead (id ou nome) e o que aconteceu. Quem cuida do robô resolve.
 
 ---

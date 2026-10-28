@@ -101,6 +101,8 @@ def _card(lead: dict, m: funil.Mapa) -> tuple[dict, dict]:
         # comercial a triagem diz "subir", e a ponte transforma em aviso.
         "zona": local["zona"] or regras.ENTRADA,
         "fechado": local["fechado"],
+        "ganho": int(lead.get("status_id") or 0) == regras.STATUS_GANHO,
+        "do_sdr": local["do_sdr"],
         "fechado_em": datetime.fromtimestamp(int(fechado_em), timezone.utc) if fechado_em else None,
         "etapa": local["etapa"],
     }
@@ -326,12 +328,16 @@ def _primeira_vez(chave: str) -> bool:
     return True
 
 
+TAGS_DE_OPT_OUT = set(regras.TAGS_POR_MOTIVO["OPT_OUT"])
+
+
 def pode_responder(lead_id: int) -> tuple[bool, str]:
     """Nível atender, mensagem que chegou pelo webhook de conta: o robô responde a este lead?
     Sim em card aberto de qualquer etapa dos funis do SDR (Urace e Comercial), inclusive as etapas em que a
     equipe trabalha (dono, 27/10, #403: "responda todo mundo que está lá no Kommo ... responde
     imediatamente"). Quando uma pessoa assume a conversa, ela usa Pausar IA (a ponte não enxerga quem
-    escreve no chat). Não em Incoming leads, em card fechado, em funil fora do SDR e, na fase de teste, em
+    escreve no chat). Card fechado também recebe e a triagem reabre o perdido (dono, 28/10, #426), menos
+    quem pediu para parar (tag opt_out). Não em Incoming leads, em funil fora do SDR e, na fase de teste, em
     lead sem a tag SDR_ATENDER_SO_TAG."""
     lead = kommo.get_lead(lead_id)
     local = mapa().localizar(lead.get("pipeline_id"), lead.get("status_id"))
@@ -339,10 +345,11 @@ def pode_responder(lead_id: int) -> tuple[bool, str]:
         return False, "INCOMING_LEADS"
     if not local["do_sdr"]:
         return False, "FUNIL_FORA_DO_SDR"
-    if local["fechado"]:
-        return False, "CARD_FECHADO"
+    tags = {str(t.get("name") or "") for t in (lead.get("_embedded") or {}).get("tags", [])}
+    # Card fechado responde e reabre (dono, 28/10, #426); quem pediu para parar (tag opt_out) nunca.
+    if local["fechado"] and TAGS_DE_OPT_OUT & tags:
+        return False, "OPT_OUT"
     if SDR_ATENDER_SO_TAG:
-        tags = {str(t.get("name") or "") for t in (lead.get("_embedded") or {}).get("tags", [])}
         if SDR_ATENDER_SO_TAG not in tags:
             return False, "SEM_TAG_DE_TESTE"
     return True, "OK"
