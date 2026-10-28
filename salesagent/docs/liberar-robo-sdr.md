@@ -22,7 +22,9 @@ Este roteiro é para tirar essa trava, com a segurança de poder desligar em um 
 2. `sudo systemctl restart sales-bridge && systemctl is-active sales-bridge`
 3. A partir daí o robô responde todo lead do Instagram e do Facebook com card aberto nos funis Urace e Comercial,
    **em qualquer etapa, inclusive as da equipe** (dono, 27/10, #403: "responde imediatamente"). Não recebe: Incoming
-   leads, card fechado, funil fora do SDR e conversa com a IA pausada.
+   leads, funil fora do SDR, conversa com a IA pausada e card fechado com a tag `opt_out`.
+   **Card fechado que volta a falar (dono, 28/10, #428):** o robô responde; o perdido volta para Comercial >
+   ENTRADA com a tag `sdr:reaberto`, e o ganho (cliente) fica como está, com a tag `sdr:cliente-voltou`.
 
 Liberado em 27/10 (a linha foi comentada, `#SDR_ATENDER_SO_TAG=teste-sdr`, com backup em `bridge.env.bak-AAAA-MM-DD`).
 
@@ -33,7 +35,7 @@ O robô **não sabe** quando alguém da equipe escreve no chat. Antes de respond
 - clicar em **Pausar IA** no chat do Kommo, ou na página Robô SDR → "Conversas com a IA pausada".
 
 Desde 27/10 (#403) mover o card para ATENDIMENTO **não** para o robô: ele responde em qualquer etapa. Só Pausar IA
-(ou fechar o card) tira o robô da conversa.
+tira o robô da conversa: fechar o card não, porque desde 28/10 (#428) mensagem nova em card fechado reabre.
 
 Se não fizer, o robô e a pessoa podem responder juntos. Para voltar a automatizar: "Reativar IA".
 

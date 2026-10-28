@@ -162,6 +162,8 @@ MOTIVOS_NAO_ENTRADA = {
     "MIDIA_SEM_CONTEXTO": "Áudio, imagem ou figurinha sem texto útil.",
     "SEM_SINAL_COMERCIAL": "Conversa sem sinal comercial suficiente.",
     "CARD_ABERTO_EXISTENTE": "Contato já está na zona Comercial (sem duplicar).",
+    "CARD_FECHADO_VOLTOU": "Card fechado como perdido voltou a falar: reabre em Comercial > ENTRADA.",
+    "CLIENTE_VOLTOU": "Card ganho (cliente) voltou a falar: o robô responde e o card fica como está.",
 }
 
 MOTIVOS_ESCALONAMENTO = {
