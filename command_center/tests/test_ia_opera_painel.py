@@ -41,6 +41,10 @@ def test_ia_classifica_a_rota_ler_fazer_e_aprovar(con):
     assert c(con, "painel_api", {"metodo": "PATCH", "caminho": "/clients/1"}) == "fazer"          # editar o card: direto
     assert c(con, "painel_api", {"metodo": "POST", "caminho": "/clients/1/waiver-invite"}) == "aprovar"   # sai para o cliente
     assert c(con, "painel_api", {"metodo": "DELETE", "caminho": "/estoque/item/3"}) == "aprovar"  # apagar: clique
+    # #422: unir cards e remover não voltam atrás — clique, como o painel_unir_clientes sempre foi
+    assert c(con, "painel_api", {"metodo": "POST", "caminho": "/client-merge"}) == "aprovar"
+    assert c(con, "painel_api", {"metodo": "POST", "caminho": "/site/agenda/bloqueios/4/remover"}) == "aprovar"
+    assert c(con, "painel_api", {"metodo": "POST", "caminho": "/compras/7/cancelar"}) == "fazer"      # interno
     con.execute("UPDATE action_policies SET policy='BLOCKED' WHERE action='apagar_qualquer_coisa'")
     assert c(con, "painel_api", {"metodo": "DELETE", "caminho": "/estoque/item/3"}) == "bloqueada"   # "a IA nunca apaga"
     assert c(con, "painel_api", {"metodo": "PATCH", "caminho": "/clients/1"}) == "fazer"
@@ -87,7 +91,7 @@ def test_sair_para_fora_ou_apagar_nunca_roda_sem_o_aprovar(con):
     uid = _pessoa(con, "dono@urace.us", "ADMIN")
     cid = _card(con)
     con.commit()
-    for metodo, caminho in (("POST", f"/clients/{cid}/waiver-invite"), ("DELETE", "/estoque/item/1")):
+    for metodo, caminho in (("POST", f"/clients/{cid}/waiver-invite"), ("DELETE", "/estoque/item/1"), ("POST", "/client-merge")):
         with pytest.raises(ValueError, match="aprovar"):
             mcp_operar.executar_como(uid, metodo, caminho, {})
     with pytest.raises(ValueError, match="não são operados"):
