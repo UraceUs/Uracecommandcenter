@@ -260,9 +260,10 @@ export function Policies() {
     <Banner tone="info">{tr("Decisões do dono já em código: invoice só depois de aprovada (04/09); IA não envia e-mail; nada é apagado; Matt tasks e ADM URACE são só leitura.")}</Banner>
     <Section title={tr("Ações")} count={data?.length} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-        <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Ação")}</th><th>{tr("Sistema")}</th><th>{tr("Política")}</th><th>{tr("Nota")}</th><th>{tr("Mudar para")}</th></tr></thead><tbody>
-          {(data || []).map(p => <tr key={p.action}><td className="mono">{p.action}</td><td>{p.system}</td><td><Chip tone={statusTone(p.policy)}>{POLICY_LABEL[p.policy]}</Chip></td><td className="small ink2">{p.note}</td>
-            <td><select className="input" style={{ width: 170 }} value={p.policy} disabled={busy === p.action || p.action.startsWith('apagar')} onChange={e => set(p.action, e.target.value as Policy)}>
+        // #442: no celular cada ação vira cartão (.tbl.rsp); antes só a coluna "Ação" cabia e a política ficava fora da tela
+        <div className="tbl-wrap"><table className="tbl rsp"><thead><tr><th>{tr("Ação")}</th><th>{tr("Sistema")}</th><th>{tr("Política")}</th><th>{tr("Nota")}</th><th>{tr("Mudar para")}</th></tr></thead><tbody>
+          {(data || []).map(p => <tr key={p.action}><td className="mono first" style={{ fontSize: 'inherit' }}>{p.action}</td><td data-l={tr("Sistema")}>{p.system}</td><td className="rsp-pill"><Chip tone={statusTone(p.policy)}>{POLICY_LABEL[p.policy]}</Chip></td><td className="small ink2 rsp-sub">{p.note}</td>
+            <td data-l={tr("Mudar para")}><select className="input" style={{ width: 170, maxWidth: '100%' }} aria-label={tr("Mudar para")} value={p.policy} disabled={busy === p.action || p.action.startsWith('apagar')} onChange={e => set(p.action, e.target.value as Policy)}>
               {(['SAFE', 'REQUIRES_CONFIRMATION', 'REQUIRES_APPROVAL', 'BLOCKED'] as Policy[]).map(x => <option key={x} value={x}>{POLICY_LABEL[x]}</option>)}</select></td></tr>)}
         </tbody></table></div>}
     </Section>
@@ -474,7 +475,7 @@ function ComoUsar() {
 
       <div className="card" style={{ padding: '12px 14px' }}>
         <b>{tr("4. Se a chave vazar")}</b>
-        <div className="small ink2">{tr("Revogue aqui — corta na hora, o pedido seguinte já recebe erro — e crie outra. Não existe \"trocar o segredo\": a identidade da chave é o segredo. O")} <span className="mono">{tr("urk_&lt;id&gt;")}</span> {tr("que aparece na lista é público de propósito (vai no log e na auditoria) e sozinho não abre nada.")}</div>
+        <div className="small ink2">{tr("Revogue aqui — corta na hora, o pedido seguinte já recebe erro — e crie outra. Não existe \"trocar o segredo\": a identidade da chave é o segredo. O")} <span className="mono">{'urk_<id>'}</span> {tr("que aparece na lista é público de propósito (vai no log e na auditoria) e sozinho não abre nada.")}</div>
       </div>
     </div>
   </details>
@@ -548,7 +549,7 @@ export function Audit() {
   const rows = pg.itens, data = pg.itens, error = pg.erro, loading = pg.carregando, reload = pg.recarregar
   return <>
     <PageHeader title={tr("Auditoria")} help={<>{tr("Registro imutável (gatilhos no banco impedem UPDATE/DELETE). Logins, comandos, decisões, mudanças de política.")}</>}>
-      <input className="input" style={{ width: 260 }} placeholder={tr("Filtrar")} value={q} onChange={e => setQ(e.target.value)} /><button className="btn" onClick={reload}>↻</button></PageHeader>
+      <input className="input" style={{ width: 260 }} placeholder={tr("Filtrar")} value={q} onChange={e => setQ(e.target.value)} /><button className="btn" onClick={reload} aria-label={tr("Atualizar")} title={tr("Atualizar")}>↻</button></PageHeader>
     <Section title={tr("Eventos")} count={pg.total} tight>
       {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> : rows.length === 0 ? <Empty>{tr("Nada registrado.")}</Empty> :
         <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Quando")}</th><th>{tr("Evento")}</th><th>{tr("Quem")}</th><th>{tr("IP")}</th><th>{tr("Entidade")}</th><th>{tr("Detalhe")}</th></tr></thead><tbody>

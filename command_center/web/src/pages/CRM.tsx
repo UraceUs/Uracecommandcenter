@@ -11,7 +11,7 @@ import { useGet } from '../api/hooks'
 import { useItemNaRota } from '../api/rota'
 import { useAuth } from '../auth/useAuth'
 import { Banner, Chip, Empty, ErrorState, Loading, Scrim, Spinner } from '../components/ui'
-import { statusTone, type Tone } from '../components/uiConst'
+import { STATUS_PT, statusTone, type Tone } from '../components/uiConst'
 import { Icon } from '../components/Icon'
 import { ago, fmtDate, fmtDateLong, fmtDateTime, fmtTime, money } from '../components/fmt'
 import { usePerguntar } from '../components/usePerguntar'
@@ -500,7 +500,7 @@ function LigarChat() {
       <ol className="small" style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
         <li>{tr("Kommo →")} <b>{tr("Communication tools → Salesbots")}</b> {tr("→ novo bot")} <b>{tr("command-center")}</b>{tr(": um único bloco, o do widget")} <b>{tr("“Chase — responder ao lead”")}</b> {tr("(já instalado), com a URL acima no campo. Nada depois do bloco.")}</li>
         <li>{tr("Kommo →")} <b>{tr("Leads → Sales funnel → Automate")}</b>{tr(": em cada etapa onde o lead conversa, gatilho")} <b>{tr("mensagem recebida")}</b> {tr("→ bot")} <b>{tr("command-center")}</b>.</li>
-        <li>{tr("Pegue o id do bot na lista (")}<code>{tr("list_item_&lt;id&gt;")}</code>{tr(") e grave")} <code>{tr("KOMMO_BOT_ID=&lt;id&gt;")}</code> {tr("em")} <code>{tr("~/.urace/kommo.env")}</code>{tr("; reinicie o serviço (")}<code>{tr("sudo systemctl restart urace-command-center")}</code>).</li>
+        <li>{tr("Pegue o id do bot na lista (")}<code>{'list_item_<id>'}</code>{tr(") e grave")} <code>{'KOMMO_BOT_ID=<id>'}</code> {tr("em")} <code>{tr("~/.urace/kommo.env")}</code>{tr("; reinicie o serviço (")}<code>{tr("sudo systemctl restart urace-command-center")}</code>).</li>
         <li>{tr("Mande uma mensagem de teste pelo Instagram: ela aparece em Conversas. Responda daqui: sai no chat como mensagem do bot, com o seu texto.")}</li>
       </ol>
     </div></details>
@@ -530,7 +530,8 @@ export function CRM({ vista }: { vista: 'chat' | 'funil' }) {
         <div className="small ink2">{b.data?.total || 0} {tr("leads")}{b.data?.pendentes ? <> · <b>{b.data.pendentes}</b> {tr("esperando resposta")}</> : null}</div></div>
       <div className="grow" />
       <div className="row wrap">
-        <Chip tone={statusTone(b.data?.integracao?.status)} dot>{b.data?.integracao?.status || tr("DISCONNECTED")}</Chip>
+        {/* #442: o estado no mesmo rótulo de Integrações ("ok", "desligado"), não o código em inglês */}
+        <Chip tone={statusTone(b.data?.integracao?.status)} dot>{STATUS_PT[b.data?.integracao?.status || 'DISCONNECTED'] || b.data?.integracao?.status}</Chip>
         {can('MANAGER') && <button className="btn" disabled={busy} onClick={sincronizar}>{busy ? <Spinner /> : tr("⟳ Sincronizar")}</button>}
       </div>
     </div>
