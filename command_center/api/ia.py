@@ -529,13 +529,6 @@ def command_list(limit: int = 30, u=Depends(auth.usuario_atual), con: sqlite3.Co
     return todos(con, sql, ((u["id"], limit) if mine else (limit,)))
 
 
-_AUTO_PREFIXOS = ("EVENTO AUTOMÁTICO", "TAREFA:")
-
-
-def _eh_auto(texto):
-    return (texto or "").startswith(_AUTO_PREFIXOS)
-
-
 @r.get("/threads")
 def threads(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """Uma conversa por usuário (decisão do dono, 10/09). Gerente/admin vê a de todos e a automática;

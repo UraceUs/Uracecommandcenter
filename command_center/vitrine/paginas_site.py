@@ -18,7 +18,7 @@ from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
 from command_center.vitrine import conteudo_sim2grid as SG
 from command_center.vitrine import dica, idioma, medicao
-from command_center.vitrine.paginas import PORTAL, PRECO_KART, _lista, _negocio, estatico, foto_url, layout, preco_kart, tamanho_estatico, usd  # noqa: F401
+from command_center.vitrine.paginas import PORTAL, _lista, _negocio, estatico, foto_url, layout, preco_kart, tamanho_estatico, usd  # noqa: F401
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
 
@@ -143,13 +143,6 @@ def _hero(d, classe="hero-servico"):
     <div class="hero-acoes"><a class="btn" href="{e(href)}">{e(rot)}</a></div>
   </div>
 </section>"""
-
-
-def _colunas(titulo, itens, ident):
-    return f"""<section class="faixa clara" aria-labelledby="{ident}"><div class="largura">
-  <h2 id="{ident}">{e(titulo)}</h2>
-  <div class="cartoes">{"".join(f"<article class='cartao'><h3>{e(t)}</h3><p>{e(p)}</p></article>" for t, p in itens)}</div>
-</div></section>"""
 
 
 # ------------------------------------------------------------------ serviços

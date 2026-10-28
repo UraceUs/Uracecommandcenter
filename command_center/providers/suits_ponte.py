@@ -757,11 +757,6 @@ def _pedidos_do_fornecedor(con, assunto):
     return achados
 
 
-def _pedido_do_fornecedor(con, assunto):
-    achados = _pedidos_do_fornecedor(con, assunto)
-    return next(iter(achados)) if len(achados) == 1 else None
-
-
 def conversas_novas(con, gm, ignoradas=None):
     """Conversa nova que ainda não é de pedido nenhum: com o marcador Suits, do designer, ou de um
     cliente com pedido aberto. Quem mandou decide o papel; o pedido é achado antes da IA.
