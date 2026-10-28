@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from command_center.api import auth, dialpad, ia, rotas
+from command_center.api import rotas_clientes, rotas_docusign, rotas_gmail, rotas_ia, rotas_qbo  # #436: o rotas.py dividido
 from command_center.api.cache_api import ETagAPI, paginar
 from command_center.db import auditar, aplicar_schema, conectar, get_db, todos, um
 
@@ -267,6 +268,12 @@ app.middleware("http")(observabilidade.middleware)
 app.include_router(observabilidade.r)
 
 app.include_router(rotas.r)
+# #436: o rotas.py dividido por assunto; logo depois dele, para valer a mesma precedência entre caminhos
+app.include_router(rotas_clientes.r)
+app.include_router(rotas_gmail.r)
+app.include_router(rotas_docusign.r)
+app.include_router(rotas_qbo.r)
+app.include_router(rotas_ia.r)
 app.include_router(ia.r)
 from command_center.api import qbo  # noqa: E402
 app.include_router(qbo.r)

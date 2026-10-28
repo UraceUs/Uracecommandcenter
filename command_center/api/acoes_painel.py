@@ -54,18 +54,18 @@ def painel_unir_clientes(con, user_id, keep_id, drop_id, motivo=None):
 
 
 def painel_varrer_cliente(con, user_id, client_id):
-    from command_center.api import rotas
+    from command_center.api import rotas_clientes
     c = um(con, "SELECT * FROM clients WHERE id=?", (int(client_id),))
     if not c:
         return {"aplicado": False, "motivo": "cliente não encontrado"}
-    saida = rotas._varrer_cliente(con, c)
+    saida = rotas_clientes._varrer_cliente(con, c)
     con.execute("UPDATE clients SET scanned_at=? WHERE id=?", (agora(), c["id"]))
     auditar(con, "client.scan", "ia", user_id=user_id, entity_type="client", entity_id=c["id"], detail=saida)
     return {"aplicado": True, **saida}
 
 
 def painel_waiver_lixeira(con, user_id, waiver_id, motivo=None):
-    from command_center.api import rotas
+    from command_center.api import rotas_docusign
     from command_center.providers import NaoConectado, modulo
     w = um(con, "SELECT * FROM waivers WHERE id=?", (int(waiver_id),))
     if not w:
@@ -74,7 +74,7 @@ def painel_waiver_lixeira(con, user_id, waiver_id, motivo=None):
     if w["source"] == "urace" and w["status"] == "completed":
         return {"aplicado": False, "motivo": "RECUSADO: waiver assinada na área do cliente é registro legal e não vai para a "
                                               "lixeira; para tirar de vigor, um gerente anula com motivo no card do cliente"}
-    env = rotas._envelope_id(con, w["id"])
+    env = rotas_docusign._envelope_id(con, w["id"])
     anulado = None
     if env and w["status"] in ("sent", "delivered", "autoresponded"):
         try:

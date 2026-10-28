@@ -6,7 +6,7 @@
 > **Antes deste, o geral:** conexão, papéis, mapa das telas, IA do painel e regras gerais estão em
 > [`docs/playbooks/playbook-geral.md`](playbook-geral.md). Aqui só entra o que é de venda.
 >
-> **De onde saiu:** tudo foi conferido no código (`command_center/api/vendas.py`, `rotas.py`,
+> **De onde saiu:** tudo foi conferido no código (`command_center/api/vendas.py`, `rotas.py` e `rotas_*.py`,
 > `site_publico.py`, `crm.py`, `sdr.py`, `suits.py`, `mcp_operar.py`, `google.py`, `providers/cobranca_agenda.py`,
 > `providers/venda_site.py`, `providers/google_agenda.py`) e nos processos do cérebro (`brain/10_PROCESSOS/`). Quando o código e
 > um documento antigo discordam, vale o código, e a diferença está dita.

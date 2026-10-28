@@ -354,7 +354,12 @@ relativos à raiz do repositório `UraceUs/Uraceagent`, branch
 | Parte | Arquivo |
 |---|---|
 | Autenticação, RBAC, auditoria | `command_center/api/auth.py` |
-| Rotas principais e dashboard | `command_center/api/rotas.py` |
+| Rotas principais e dashboard (integrações, sincronia, busca, listas, políticas) | `command_center/api/rotas.py` |
+| Rotas dos clientes (card, duplicados, criação manual, Pro, contrato, equipamento, corridas) | `command_center/api/rotas_clientes.py` |
+| Rotas do Gmail (marcadores, triagem, manual, filtros nativos) | `command_center/api/rotas_gmail.py` |
+| Rotas do DocuSign (modelos, waivers, convite) | `command_center/api/rotas_docusign.py` |
+| Rotas do QuickBooks e detalhe do Asana | `command_center/api/rotas_qbo.py` |
+| Rotas da IA que age e fontes de contexto | `command_center/api/rotas_ia.py` |
 | App, arquivos do build, cabeçalhos | `command_center/api/main.py` |
 | Vendas (oportunidades, fechamento) | `command_center/api/vendas.py` |
 | Ações do painel e de venda | `command_center/api/acoes_painel.py` |

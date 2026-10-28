@@ -8,7 +8,7 @@ Duas camadas, sempre com o "por quê":
    UM marcador da lista real da caixa. Nunca inventa marcador: a resposta
    é validada contra os nomes existentes.
 
-Nada aqui escreve no Gmail. Mover é um clique humano (rotas.py).
+Nada aqui escreve no Gmail. Mover é um clique humano (rotas_gmail.py).
 """
 import json
 import re
