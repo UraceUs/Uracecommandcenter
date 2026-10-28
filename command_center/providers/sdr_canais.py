@@ -97,6 +97,20 @@ def contato_de(canal, valor):
     return "1" + d if len(d) == 10 else d                   # número dos EUA sem o 1 vira +1…
 
 
+# 0800 dos EUA: empresa, não pessoa (lead escreve do celular)
+_GRATUITOS = {"800", "833", "844", "855", "866", "877", "888"}
+
+
+def numero_automatico(contato):
+    """Código curto ou 0800 (dono, 28/10, #412: o robô respondeu um código de 5 dígitos e um (855)): não é lead."""
+    d = so_digitos(contato)
+    if len(d) < 10:
+        return "código curto (SMS automático): não é lead"
+    if len(d) == 11 and d[0] == "1" and d[1:4] in _GRATUITOS:
+        return "número gratuito (0800, de empresa): não é lead"
+    return None
+
+
 def permitido(canal, contato):
     """A lista de teste (`SDR_CANAL_SO_PARA`). Vazia: todo lead. Telefone compara pelos últimos 10 dígitos."""
     lista = [x.strip() for x in cfg("SDR_CANAL_SO_PARA").split(",") if x.strip()]
@@ -275,6 +289,8 @@ def da_equipe(con, canal, valor):
 
 def bloqueio(con, canal, row, cliente=False):
     """Por que o robô NÃO responde a este contato agora (None = pode responder)."""
+    if canal == "sms" and numero_automatico(row["contato"]):
+        return numero_automatico(row["contato"])
     if not ligado(canal):
         return f"canal {canal} desligado (SDR_CANAL_{canal.upper()})"
     if nivel() != "atender":
