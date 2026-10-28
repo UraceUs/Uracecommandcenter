@@ -593,11 +593,6 @@ def achar_compras(con, info):
     return []
 
 
-def achar_compra(con, info):
-    ids = achar_compras(con, info)
-    return ids[0] if ids else None
-
-
 def _mesmo_fornecedor(a, b):
     a, b = canonico(a or ""), canonico(b or "")
     return a == b or a.startswith("Não identificado") or b.startswith("Não identificado")

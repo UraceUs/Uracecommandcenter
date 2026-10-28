@@ -53,7 +53,6 @@ EVENTOS = {
     "evidence_exported": "Evidence package exported",
 }
 ANTES = ("invite_sent", "screen_opened", "pdf_delivered", "all_pages_viewed", "code_sent", "code_verified", "reviewed")
-DEPOIS = ("copy_emailed", "copy_email_failed", "id_checked", "id_check_failed", "voided", "downloaded", "evidence_exported")
 DA_TELA = {"screen_opened", "all_pages_viewed"}           # o que só o navegador sabe
 FLUXOS = ("account", "invite", "staff")
 JANELA_HORAS = 24                                        # a mesma da leitura (#107)

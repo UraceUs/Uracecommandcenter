@@ -388,11 +388,6 @@ def preco_minimo():
     return min(k["preco"] for k in KARTS if not k.get("proprio"))
 
 
-def chaves_dos_karts():
-    """As chaves dos karts do site, na ordem da página (`booking_services.site_kart`)."""
-    return tuple(k["nome"] for k in KARTS)
-
-
 def kart_da_chave(chave):
     """O kart do site com essa chave, sem distinguir maiúscula nem espaço à toa. None se não é kart."""
     c = " ".join(str(chave or "").split()).lower()

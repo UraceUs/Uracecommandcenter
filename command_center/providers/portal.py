@@ -47,7 +47,6 @@ MEDIDAS_LIMITE_DIAS = 60
 CAMPOS_CONTA = ("name", "birth_date", "phone_country", "phone", "address_line1", "address_line2", "city", "state", "zip",
                 "country")
 OBRIGATORIOS_CONTA = ("name", "birth_date", "phone", "address_line1", "city")
-CAMPOS_PILOTO = ("name", "birth_date", "email", "phone", "notes", "social")
 _PAIS = re.compile(r"^[A-Z]{2}$")
 _DDI = re.compile(r"^\+\d{1,4}$")
 _SOCIAL = re.compile(r"^(@[A-Za-z0-9._]{1,30}|https?://[^\s]{4,200})$")
