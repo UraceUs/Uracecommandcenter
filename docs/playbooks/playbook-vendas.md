@@ -1383,6 +1383,8 @@ O robô de vendas no Kommo. Três níveis:
   novo pelo SMS ou pelo e-mail nos 30 minutos seguintes (e vice-versa). Ele reconhece a mesma pessoa pelo telefone ou
   pelo e-mail do card no Kommo.
 - Conversa em **Precisa de atenção** (SMS e e-mail) é lead que o robô não respondeu: responda à mão.
+- **SMS automático (#412):** código curto (como os de verificação) e número 0800 (800, 833, 844, 855, 866, 877,
+  888) não recebem resposta do robô nem viram Precisa de atenção; a mensagem fica guardada na conversa.
 - Viu o robô errar? Relate com o lead (id ou nome) e o que aconteceu. Quem cuida do robô resolve.
 
 ---
