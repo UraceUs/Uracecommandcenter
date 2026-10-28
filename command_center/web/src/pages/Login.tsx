@@ -8,7 +8,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { destinoOAuth } from '../auth/oauthNext'
 import { Banner } from '../components/ui'
 import { Icon } from '../components/Icon'

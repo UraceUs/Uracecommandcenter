@@ -4,48 +4,17 @@
  * Piloto com medida vencida (60+ dias) ou cadastro incompleto não marca até atualizar. */
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { nomeNoPlano, papi, PortalError, rotuloCobertura, usd, type Account, type AgendaCfg, type Booking, type Dia, type Driver, type PlanoPiloto, type Servico } from './api'
+import { nomeNoPlano, papi, PortalError, rotuloCobertura, usd, type Account, type AgendaCfg, type Booking, type Dia, type PlanoPiloto, type Servico } from './api'
 import { porNoCarrinhoDoSite } from './carrinhoSite'
 import { PlanoEmMontagem } from './Contador'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
+import { bloqueioDoPiloto, dataLonga, escolhaDoSite, faixa, PERIODO, STATUS } from './agenda'
 
-const PERIODO: Record<string, string> = { manha: 'Morning', tarde: 'Afternoon', dia: 'Full day' }
-const STATUS: Record<string, [string, string]> = { pendente: ['Waiting for confirmation', 'warn'], confirmada: ['Confirmed', 'ok'],
-  recusada: ['Not available', 'crit'], cancelada: ['Cancelled', 'neutral'] }
 const SEMANA = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-function horaUS(h: string) {
-  const [hh, mm] = h.split(':').map(Number)
-  return `${((hh + 11) % 12) + 1}${mm ? `:${String(mm).padStart(2, '0')}` : ''} ${hh < 12 ? 'AM' : 'PM'}`
-}
-export const faixa = (cfg: AgendaCfg, p: string) => p === 'manha' ? `${horaUS(cfg.morning_start)} – ${horaUS(cfg.morning_end)}`
-  : p === 'tarde' ? `${horaUS(cfg.afternoon_start)} – ${horaUS(cfg.afternoon_end)}` : `${horaUS(cfg.morning_start)} – ${horaUS(cfg.afternoon_end)}`
-export const dataLonga = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-export const PERIODOS = PERIODO
-export const STATUS_SESSAO = STATUS
 const mesDe = (iso: string) => iso.slice(0, 7)
 // #314: vários dias num pedido, só para o aluno recorrente — o código vem só quando ele abre a tela
 const AgendarVarios = lazy(() => import('./AgendarVarios').then(m => ({ default: m.AgendarVarios })))
-
-/** #148: o site novo manda o cliente para cá com o que ele já escolheu lá
- * (`?date=2026-10-16&period=manha&kart=4-stroke`). Só vale o que tem formato certo. */
-export function escolhaDoSite(q: URLSearchParams) {
-  const data = q.get('date') || ''
-  const periodo = q.get('period') || ''
-  const kart = (q.get('kart') || '').slice(0, 40)
-  return {
-    dia: /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : null,
-    periodo: (['manha', 'tarde', 'dia'].includes(periodo) ? periodo : null) as 'manha' | 'tarde' | 'dia' | null,
-    kart: kart || null,
-  }
-}
-
-/** Por que este piloto não pode marcar agora (ou null). */
-export function bloqueioDoPiloto(p: Driver): string | null {
-  if (p.measures_status === 'faltando') return 'complete the profile first'
-  if (p.measures_status === 'vencida') return 'update the measurements first'
-  return null
-}
 
 /** Uma sessão, escrita do mesmo jeito em todas as telas (#81): dia, período com horário,
  *  piloto, serviço com preço e a situação. `solta` é a versão sem cartão, para morar dentro
@@ -76,13 +45,11 @@ export function Sessoes() {
   const [total, setTotal] = useState(0)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const carregar = useCallback(async () => {
-    try {
-      const [b, d] = await Promise.all([papi<{ bookings: Booking[]; total: number }>('GET', `/bookings?limit=${POR_PAGINA}`),
-        papi<{ config: AgendaCfg }>('GET', '/availability')])
-      setSessoes(b.bookings); setTotal(b.total); setCfg(d.config)
-    } catch (e) { setErro((e as PortalError).message) }
-  }, [])
+  // Encadeado em then (#433): o estado só muda na resposta, e o effect que chama isto não faz setState síncrono.
+  const carregar = useCallback(() => Promise.all([papi<{ bookings: Booking[]; total: number }>('GET', `/bookings?limit=${POR_PAGINA}`),
+    papi<{ config: AgendaCfg }>('GET', '/availability')])
+    .then(([b, d]) => { setSessoes(b.bookings); setTotal(b.total); setCfg(d.config) })
+    .catch(e => { setErro((e as PortalError).message) }), [])
   useEffect(() => { carregar() }, [carregar])
   async function maisSessoes() {
     try {
@@ -143,9 +110,9 @@ export function Agendar({ conta }: { conta: Account }) {
       .catch(() => setPlanos([]))
   }, [conta])
 
-  const carregar = useCallback(async () => {
-    try {
-      const d = await papi<{ config: AgendaCfg; dias: Dia[]; services: Servico[] }>('GET', '/availability')
+  // Encadeado em then (#433): o estado só muda na resposta da agenda.
+  const carregar = useCallback(() => papi<{ config: AgendaCfg; dias: Dia[]; services: Servico[] }>('GET', '/availability')
+    .then(d => {
       setDias(d.dias); setCfg(d.config); setServicos(d.services)
       // #253: o kart escolhido no site novo escolhe só o serviço com esse nome; sem serviço do kart,
       // nada vem escolhido (a tela avisa) — nunca um serviço que não é do kart
@@ -155,8 +122,7 @@ export function Agendar({ conta }: { conta: Account }) {
       // abre no primeiro mês que tem dia aberto: no dia 30, o mês corrente pode não ter mais nada
       const primeiro = d.dias.find(x => x.any_open)
       setMes(m => (d.dias.some(x => x.any_open && mesDe(x.date) === m) || !primeiro) ? m : mesDe(primeiro.date))
-    } catch (e) { setErro((e as PortalError).message) }
-  }, [doSite])
+    }).catch(e => { setErro((e as PortalError).message) }), [doSite])
   useEffect(() => { carregar() }, [carregar])
 
   const porData = useMemo(() => Object.fromEntries((dias || []).map(d => [d.date, d])), [dias])
@@ -177,7 +143,8 @@ export function Agendar({ conta }: { conta: Account }) {
   const comTd = !!plano?.training_day && !avulsa
   const listaServicos = comTd && plano?.services?.length ? servicos.filter(x => plano.services?.includes(x.id)) : servicos
   const servicoFora = comTd && servico != null && !listaServicos.some(x => x.id === servico)
-  useEffect(() => { if (servicoFora) setServico(listaServicos.length === 1 ? listaServicos[0].id : null) }, [servicoFora, listaServicos])
+  // o serviço escolhido saiu da lista do plano: troca já no render, sem effect (#433)
+  if (servicoFora) setServico(listaServicos.length === 1 ? listaServicos[0].id : null)
   // a sessão avulsa do aluno recorrente paga como a de qualquer cliente: no carrinho (Stripe) se ligado, senão invoice
   // #340: o piloto pro nunca vai para o carrinho (dono, 19/10: "nao cobrar na marcação e sim na invoice pelo QuickBooks")
   const noCarrinho = plano?.payment === 'stripe' || (avulsa && !!plano?.recurring && carrinho && !plano?.pro)

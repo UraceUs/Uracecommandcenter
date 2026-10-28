@@ -11,12 +11,18 @@ export function useGet<T>(path: string | null, every?: number): Loaded<T> {
   const [error, setError] = useState<ApiError | null>(null)
   const [loading, setLoading] = useState(!!path)
   const [tick, setTick] = useState(0)
+  // Mudou o caminho (ou pediu recarga): ajusta o estado no próprio render, não num effect (#433).
+  const chave = path ? `${tick}:${path}` : null
+  const [chaveVista, setChaveVista] = useState(chave)
+  if (chave !== chaveVista) {
+    setChaveVista(chave)
+    if (!path) { setData(null); setLoading(false) } else setLoading(true)
+  }
   const alive = useRef(true)
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
   useEffect(() => {
-    if (!path) { setData(null); setLoading(false); return }
+    if (!path) return
     let cancel = false
-    setLoading(true)
     api.get<T>(path).then(d => { if (!cancel && alive.current) { setData(d); setError(null) } })
       .catch((e: ApiError) => { if (!cancel && alive.current) setError(e) })
       .finally(() => { if (!cancel && alive.current) setLoading(false) })
@@ -54,9 +60,12 @@ export function usePaginado<T>(base: string, tamanho = 100) {
   const [carregando, setCarregando] = useState(true)
   const [versao, setVersao] = useState(0)
   const sep = base.includes('?') ? '&' : '?'
+  // Mudou o filtro (ou pediu recarga): volta a "carregando" no próprio render (#433).
+  const chave = `${versao}:${tamanho}:${base}`
+  const [chaveVista, setChaveVista] = useState(chave)
+  if (chave !== chaveVista) { setChaveVista(chave); setCarregando(true) }
   useEffect(() => {
     let cancel = false
-    setCarregando(true)
     api.pagina<T>(`${base}${sep}limit=${tamanho}&offset=0`)
       .then(r => { if (!cancel) { setItens(r.itens); setTotal(r.total); setErro(null) } })
       .catch((e: ApiError) => { if (!cancel) setErro(e) })

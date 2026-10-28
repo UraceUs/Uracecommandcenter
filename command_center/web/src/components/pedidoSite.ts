@@ -1,6 +1,6 @@
 /* #245: o estado do pedido do site (carrinho e loja) como a equipe lê, e o tom do chip. Cada estado
  * é um resultado do Stripe; o cliente vê o mesmo na página do pedido (/order/<token>/). */
-import type { Tone } from './ui'
+import type { Tone } from './uiConst'
 import { tr } from '../i18n'
 
 export const ESTADO_PEDIDO: Record<string, string> = {

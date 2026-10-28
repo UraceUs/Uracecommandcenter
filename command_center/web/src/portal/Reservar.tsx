@@ -7,7 +7,7 @@
  * (kart, dia, turno e de onde veio a pessoa) atravessa o login sem se perder. */
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { bloqueioDoPiloto, dataLonga, escolhaDoSite, faixa, PERIODOS } from './Agendar'
+import { bloqueioDoPiloto, dataLonga, escolhaDoSite, faixa, PERIODOS } from './agenda'
 import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, type Cotacao, type Servico, type CheckoutPlano, type Plano,
   type PlanoPiloto } from './api'
 import { porNoCarrinhoDoSite } from './carrinhoSite'
@@ -417,10 +417,10 @@ export function Acompanhar({ plano = false }: { plano?: boolean }) {
   const [c, setC] = useState<Checkout | CheckoutPlano | null>(null)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const carregar = useCallback(async () => {
-    try { setC(await papi<Checkout | CheckoutPlano>('GET', plano ? `/plans/${id}` : `/bookings/${id}`)); setErro(null) }
-    catch (e) { setErro((e as PortalError).message) }
-  }, [id, plano])
+  // Encadeado em then (#433): o estado só muda na resposta.
+  const carregar = useCallback(() => papi<Checkout | CheckoutPlano>('GET', plano ? `/plans/${id}` : `/bookings/${id}`)
+    .then(r => { setC(r); setErro(null) })
+    .catch(e => { setErro((e as PortalError).message) }), [id, plano])
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => { if (plano) return; fetch('/ops/api/vitrine/agenda', { credentials: 'omit' }).then(r => r.json()).then(a => setCfg(a.config)).catch(() => null) }, [plano])
   const r = c ? (plano ? resumoPlano(c as CheckoutPlano) : resumoSessao(c as Checkout, cfg)) : null

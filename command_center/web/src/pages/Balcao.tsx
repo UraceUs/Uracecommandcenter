@@ -10,18 +10,19 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { irComPasse, pedirPasse, restaurarReferrer } from '../auth/passe'
 import { Banner, Chip, Empty, PageHeader, Scrim, Section } from '../components/ui'
 import { FotoPeca } from '../components/FotoPeca'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { tr } from '../i18n'
 import { CAMERA, novoDetector, temCamera, vibrar } from '../components/Leitor'
 import { Picker } from '../components/Unir'
 import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { fmtDate, fmtDateTime } from '../components/fmt'
 import type { Client } from '../api/types'
-import { adicionarLinha, BuscaQbo, MaisProximos, PorNoRascunho, RascunhoInvoice, RevisaoInvoice } from './BalcaoRascunho'
+import { BuscaQbo, MaisProximos, PorNoRascunho, RascunhoInvoice, RevisaoInvoice } from './BalcaoRascunho'
+import { adicionarLinha } from './balcaoRascunhoApi'
 
 type Modo = 'cobrar' | 'guardar'
 interface Cliente { id: number; nome: string; responsavel: string; vip?: boolean }
@@ -634,9 +635,12 @@ function CampoPeca({ campo, texto, setTexto, indo, guardar, onLer, onSugestao, o
   local: string; setLocal: (l: string) => void }) {
   const [sug, setSug] = useState<Sugestao[] | null>(null)
   const [soLeitor, setSoLeitor] = useState(lerSoLeitor)
+  // texto curto ou só o leitor: sem sugestões, limpas no render e não num effect (#433)
+  const semSugestao = texto.trim().length < 2 || soLeitor
+  if (semSugestao && sug !== null) setSug(null)
   useEffect(() => {
     const t = texto.trim()
-    if (t.length < 2 || soLeitor) { setSug(null); return }
+    if (t.length < 2 || soLeitor) return
     let vale = true
     const h = setTimeout(() => {
       api.get<{ itens: Sugestao[] }>(`/balcao/aproximado${qs({ q: t.slice(0, 120) })}`)

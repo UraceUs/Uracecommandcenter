@@ -15,7 +15,7 @@
  * e os add-ons saem numa invoice do QuickBooks na hora da marcação, nunca no Stripe. */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { dataLonga, faixa, PERIODOS } from './Agendar'
+import { dataLonga, faixa, PERIODOS } from './agenda'
 import { nomeNoPlano, papi, PortalError, usd, type AgendaCfg, type CheckoutGrupo, type Cotacao, type Dia, type PlanoPiloto, type Servico, type Turno } from './api'
 import { ContadorDoPlano } from './Contador'
 
@@ -244,10 +244,10 @@ export function AcompanharGrupo() {
   const [c, setC] = useState<CheckoutGrupo | null>(null)
   const [cfg, setCfg] = useState<AgendaCfg | null>(null)
   const [erro, setErro] = useState<string | null>(null)
-  const carregar = useCallback(async () => {
-    try { setC(await papi<CheckoutGrupo>('GET', `/bookings/group/${gid}`)); setErro(null) }
-    catch (e) { setErro((e as PortalError).message) }
-  }, [gid])
+  // Encadeado em then (#433): o estado só muda na resposta.
+  const carregar = useCallback(() => papi<CheckoutGrupo>('GET', `/bookings/group/${gid}`)
+    .then(r => { setC(r); setErro(null) })
+    .catch(e => { setErro((e as PortalError).message) }), [gid])
   useEffect(() => { carregar() }, [carregar])
   useEffect(() => { papi<{ config: AgendaCfg }>('GET', '/availability').then(a => setCfg(a.config)).catch(() => null) }, [])
   const preparando = !!c && (c.pagamento.estado === 'preparando' || c.waiver.estado === 'preparando')

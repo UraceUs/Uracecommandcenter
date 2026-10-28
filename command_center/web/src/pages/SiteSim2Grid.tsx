@@ -14,9 +14,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Banner, Chip, Empty, ErrorState, Loading, Section } from '../components/ui'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { tr } from '../i18n'
 
 interface Config { online: number; capacity: number; min_hours: number; max_hours: number; horizon_days: number; min_notice_hours: number

@@ -7,7 +7,7 @@ import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader } from '../components/ui'
 import { fmtDate, fmtDateTime } from '../components/fmt'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { tr } from '../i18n'
 
 type Kind = 'invoice' | 'recibo' | 'contrato' | 'waiver' | 'historico'

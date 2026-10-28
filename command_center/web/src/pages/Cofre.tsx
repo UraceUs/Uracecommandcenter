@@ -8,9 +8,9 @@
 import { useEffect, useId, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { Cartao, CdItem, CdLista } from '../components/Cartao'
 import { tr, LOCALE } from '../i18n'
 
