@@ -16,15 +16,16 @@ export function Picker({ label, value, onPick, exclude, sugestoes }: { label: st
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const id = useId()
-  const lista = useGet<Client[]>(q.trim().length >= 2 ? `/clients?q=${encodeURIComponent(q.trim())}` : null)
+  const busca = q.trim().length >= 2 || /^#?\d+$/.test(q.trim())          // #430: o Client ID busca com 1 dígito
+  const lista = useGet<Client[]>(busca ? `/clients?q=${encodeURIComponent(q.trim())}` : null)
   const hits = (lista.data || []).filter(c => c.id !== exclude).slice(0, 10)
   if (value) return <div className="field"><label>{label}</label><div className="row wrap"><b>{value.pilot_name || value.name}</b><span className="small muted">{value.pilot_name && value.pilot_name !== value.name ? tr("resp. {0} · ", value.name) : ''}{value.email || tr("sem e-mail")} · {value.phone || tr("sem tel")}</span><button className="btn ghost sm" onClick={() => onPick(null)}>{tr("trocar")}</button></div></div>
   return <div className="field"><label htmlFor={id}>{label}</label>
-    <div className="lpick"><input id={id} className="input" value={q} placeholder={tr("Digite o nome do piloto ou do responsável…")} onFocus={() => setOpen(true)} onChange={e => { setQ(e.target.value); setOpen(true) }} />
-      {open && (q.trim().length >= 2 || (sugestoes && sugestoes.length > 0)) && <div className="lpick-menu">
-        {q.trim().length < 2 && sugestoes?.map(s => <div key={s.id} className="opt" onMouseDown={ev => { ev.preventDefault(); onPick(s); setOpen(false) }}><span className="truncate">✦ {s.pilot_name || s.name}</span><span className="c">{s.why}</span></div>)}
-        {q.trim().length >= 2 && (lista.loading && !lista.data ? <div className="small muted" style={{ padding: '6px 10px' }}>{tr("buscando…")}</div> : hits.length === 0 ? <div className="small muted" style={{ padding: '6px 10px' }}>{tr("Nenhum cliente com “")}{q}”.</div> :
-          hits.map(c => <div key={c.id} className="opt" onMouseDown={ev => { ev.preventDefault(); onPick(c); setOpen(false) }}><span className="truncate">{c.pilot_name || c.name}{c.pilot_name && c.pilot_name !== c.name ? <span className="muted"> {tr("· resp.")} {c.name}</span> : null}</span><span className="c">{c.email || c.phone || ''}</span></div>))}
+    <div className="lpick"><input id={id} className="input" value={q} placeholder={tr("Nome do piloto, do responsável ou o Client ID…")} onFocus={() => setOpen(true)} onChange={e => { setQ(e.target.value); setOpen(true) }} />
+      {open && (busca || (sugestoes && sugestoes.length > 0)) && <div className="lpick-menu">
+        {!busca && sugestoes?.map(s => <div key={s.id} className="opt" onMouseDown={ev => { ev.preventDefault(); onPick(s); setOpen(false) }}><span className="truncate">✦ {s.pilot_name || s.name}</span><span className="c">{s.why}</span></div>)}
+        {busca && (lista.loading && !lista.data ? <div className="small muted" style={{ padding: '6px 10px' }}>{tr("buscando…")}</div> : hits.length === 0 ? <div className="small muted" style={{ padding: '6px 10px' }}>{tr("Nenhum cliente com “")}{q}”.</div> :
+          hits.map(c => <div key={c.id} className="opt" onMouseDown={ev => { ev.preventDefault(); onPick(c); setOpen(false) }}><span className="truncate">{c.pilot_name || c.name}{c.pilot_name && c.pilot_name !== c.name ? <span className="muted"> {tr("· resp.")} {c.name}</span> : null} <span className="muted mono">#{c.id}</span></span><span className="c">{c.email || c.phone || ''}</span></div>))}
       </div>}
     </div></div>
 }

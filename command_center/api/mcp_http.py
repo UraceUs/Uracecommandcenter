@@ -97,11 +97,14 @@ def _f_clientes(con, busca=None, limite=50, **_):
     sql = ("SELECT id, name, pilot_name, email, phone, status, vip FROM clients "
            "WHERE COALESCE(kind,'') <> 'separado'")
     p = []
+    ordem, po = "", []
     if busca:
-        sql += " AND (name LIKE ? OR pilot_name LIKE ? OR email LIKE ?)"
-        p += [f"%{busca}%"] * 3
-    sql += " ORDER BY name LIMIT ?"
-    p.append(min(int(limite or 50), 200))
+        from command_center.providers import identidade
+        f, pf, ordem, po = identidade.filtro_busca(busca, "")      # #430: também pelo Client ID
+        sql += f" AND {f}"
+        p += pf
+    sql += f" ORDER BY {ordem}name LIMIT ?"
+    p += po + [min(int(limite or 50), 200)]
     return {"clientes": [dict(c) for c in todos(con, sql, tuple(p))]}
 
 
@@ -400,7 +403,7 @@ FERRAMENTAS = {
         {"id": {"type": "integer", "description": "id do item"}}, ["id"], _f_estoque_item),
     "urace_clientes": (
         "Clientes da URACE: responsável, piloto, contato e situação.",
-        {"busca": {"type": "string", "description": "nome, piloto ou e-mail"},
+        {"busca": {"type": "string", "description": "nome, piloto, e-mail ou o Client ID (621 ou #621)"},
          "limite": {"type": "integer", "description": "quantos (padrão 50, teto 200)"}},
         [], _f_clientes),
     "urace_cliente": (

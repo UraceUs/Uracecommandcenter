@@ -139,7 +139,7 @@ export function Clients() {
     <div className="tabs"><button className={aba === 'all' ? 'on' : ''} onClick={() => set('v', '')}>{tr("Todos")}</button><button className={aba === 'pro' ? 'on' : ''} onClick={() => set('v', 'pro')}>{tr("★ Pro Racing Drivers")}</button></div>
     {aba === 'pro' && <Banner tone="info">{tr("Pilotos prontos para competir. No card do cliente, o botão")} <b>{tr("★ Tornar Pro")}</b> {tr("traz ele para cá e libera equipamento e corridas. Convites e prévia de custo ficam no calendário de")} <a href="/ops/races">{tr("Corridas")}</a>.</Banner>}
     <div className="row wrap toolbar-page">
-      <input className="input" style={{ maxWidth: 320 }} placeholder={tr("Piloto, responsável ou e-mail")} value={q} onChange={e => setQ(e.target.value)} aria-label={tr("Filtrar")} />
+      <input className="input" style={{ maxWidth: 320 }} placeholder={tr("Piloto, responsável, e-mail ou Client ID")} value={q} onChange={e => setQ(e.target.value)} aria-label={tr("Filtrar")} />
       <select className="input" style={{ width: 190 }} value={status} onChange={e => set('status', e.target.value)} aria-label={tr("Status")}>
         <option value="">{tr("Ativos e inativos")}</option><option value="ACTIVE">{tr("Ativos (6 meses)")}</option><option value="INACTIVE">{tr("Inativos")}</option><option value="NEW">{tr("Novos")}</option><option value="PENDING">{tr("Pendentes")}</option><option value="AT_RISK">{tr("Em risco")}</option><option value="COMPLETED">{tr("Concluídos")}</option><option value="SEPARADO">{tr("Separados (não são clientes)")}</option>
       </select>

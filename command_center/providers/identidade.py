@@ -471,6 +471,23 @@ def limpar_contatos(con):
 
 
 # ------------------------------------------------------------- busca
+# #430 (dono, 28/10: "deixe a opção de pesquisar clientes tb pelo id"): "621", "#621" ou "id 621" é o Client ID.
+RX_CLIENT_ID = re.compile(r"^\s*(?:#|id\s*:?\s*)?(\d{1,9})\s*$", re.I)
+
+
+def filtro_busca(q, a="c"):
+    """(sql, params, ordem, params_ordem) da busca de clientes: responsável, piloto, e-mail e, quando o texto é
+    um número, o Client ID — esse card vem primeiro. `a` é o apelido da tabela clients na consulta."""
+    pre = f"{a}." if a else ""
+    like = f"%{(q or '').strip()}%"
+    sql, p = f"({pre}name LIKE ? OR {pre}pilot_name LIKE ? OR {pre}email LIKE ?", [like] * 3
+    m = RX_CLIENT_ID.match(q or "")
+    if not m:
+        return sql + ")", p, "", []
+    cid = int(m.group(1))
+    return sql + f" OR {pre}id = ?)", p + [cid], f"({pre}id = ?) DESC, ", [cid]
+
+
 def acha_pessoa(con, email=None, telefone=None, nome=None, piloto=None):
     """Cliente existente para esta identidade, na ordem de confiança."""
     if email:

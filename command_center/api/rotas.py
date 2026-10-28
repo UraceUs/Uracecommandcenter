@@ -205,8 +205,10 @@ def clients(response: Response, status: str | None = None, q: str | None = None,
         where.append("c.vip=?"); p.append(1 if vip else 0)
     if pro is not None:
         where.append("c.pro_driver=?"); p.append(1 if pro else 0)
+    ordem, po = "", []
     if q:
-        where.append("(c.name LIKE ? OR c.pilot_name LIKE ? OR c.email LIKE ?)"); p += [f"%{q}%"] * 3
+        f, pf, ordem, po = identidade.filtro_busca(q)      # #430: também pelo Client ID
+        where.append(f); p += pf
     return paginar(con, f"""
         SELECT c.*, s.label AS stage,
           (SELECT COUNT(*) FROM tasks t WHERE t.client_id=c.id AND t.deleted_at IS NULL AND t.status='open') AS open_tasks,
@@ -217,8 +219,8 @@ def clients(response: Response, status: str | None = None, q: str | None = None,
           (SELECT COUNT(*) FROM emails e WHERE e.client_id=c.id AND e.handled=0) AS emails_open,
           (SELECT MAX(synced_at) FROM tasks t WHERE t.client_id=c.id) AS last_activity
         FROM clients c LEFT JOIN client_stages s ON s.code=c.stage_code
-        WHERE {' AND '.join(where)} ORDER BY MAX(COALESCE(next_service, ''), COALESCE(last_service, '')) DESC,
-              COALESCE(c.pilot_name, c.name), c.id""", p, response, limit=limit, offset=offset)
+        WHERE {' AND '.join(where)} ORDER BY {ordem}MAX(COALESCE(next_service, ''), COALESCE(last_service, '')) DESC,
+              COALESCE(c.pilot_name, c.name), c.id""", p + po, response, limit=limit, offset=offset)
 
 
 @r.get("/clients/{cid}")
@@ -386,11 +388,12 @@ def client_patch(cid: int, dados: ClienteIn, request: Request, u=Depends(auth.ex
 @r.get("/search")
 def search(q: str, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     q = (q or "").strip()
-    if len(q) < 2:
+    if len(q) < 2 and not identidade.RX_CLIENT_ID.match(q):      # #430: o Client ID busca com 1 dígito
         return {"clients": [], "tasks": [], "waivers": [], "emails": [], "commands": []}
     like = f"%{q}%"
+    f, pf, ordem, po = identidade.filtro_busca(q, "")
     out = {
-        "clients": todos(con, "SELECT id, name, pilot_name, email, status, vip FROM clients WHERE name LIKE ? OR pilot_name LIKE ? OR email LIKE ? LIMIT 8", (like,) * 3),
+        "clients": todos(con, f"SELECT id, name, pilot_name, email, status, vip FROM clients WHERE {f} ORDER BY {ordem}id LIMIT 8", (*pf, *po)),
         "tasks": todos(con, "SELECT id, title, due_on, section, status, client_id FROM tasks WHERE title LIKE ? LIMIT 8", (like,)),
         "waivers": todos(con, "SELECT id, signer_name, signer_email, status, expires_at, client_id FROM waivers WHERE signer_name LIKE ? OR signer_email LIKE ? LIMIT 8", (like, like)),
         "emails": todos(con, "SELECT id, subject, sender, mailbox, last_at, client_id FROM emails WHERE subject LIKE ? OR sender LIKE ? LIMIT 8", (like, like)),
