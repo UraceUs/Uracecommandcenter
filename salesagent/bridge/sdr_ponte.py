@@ -304,10 +304,11 @@ def limpar(lead_id: int, texto: str) -> str:
     return limpo
 
 
-def limpar_texto(texto: str, primeira: bool) -> tuple[str, list[str]]:
+def limpar_texto(texto: str, primeira: bool, link_na_primeira: bool = False) -> tuple[str, list[str]]:
     """A guarda sem estado: regra de um (link e pergunta) e estilo. Usada pela
-    resposta real e pelo teste do painel, para os dois nunca divergirem."""
-    limpo, violacoes = estilo.um_ativo(texto, primeira)
+    resposta real e pelo teste do painel, para os dois nunca divergirem. `link_na_primeira`: fora do horário do
+    time o SMS e o e-mail levam o link da call já na primeira resposta (#418)."""
+    limpo, violacoes = estilo.um_ativo(texto, primeira and not link_na_primeira)
     limpo, reapresentou = estilo.sem_reapresentacao(limpo, primeira)
     limpo, mais = estilo.aplicar(limpo)
     return limpo, violacoes + reapresentou + mais
