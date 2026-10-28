@@ -526,8 +526,9 @@ export function Users() {
     </InserirNoTopo>
     <Section title={tr("Cadastrados")} count={data?.length} tight>
         {error && !data ? <ErrorState error={error} retry={reload} /> : loading && !data ? <Loading /> :
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Nome")}</th><th>{tr("E-mail")}</th><th>{tr("Papel")}</th><th>{tr("Ativo")}</th><th>{tr("Último login")}</th><th></th></tr></thead><tbody>
-            {(data || []).map(u => <tr key={u.id}><td>{u.name}</td><td className="small">{u.email}</td><td><PapelEditavel u={u} self={u.id === user?.id} onChanged={reload} /></td><td>{u.active ? <Chip tone="ok">{tr("sim")}</Chip> : <Chip tone="neutral">{tr("não")}</Chip>}</td><td className="small nowrap">{u.last_login_at
+          // #442: no celular cada pessoa vira cartão (.tbl.rsp); antes o papel e os botões ficavam fora da tela
+          <div className="tbl-wrap"><table className="tbl rsp"><thead><tr><th>{tr("Nome")}</th><th>{tr("E-mail")}</th><th>{tr("Papel")}</th><th>{tr("Ativo")}</th><th>{tr("Último login")}</th><th></th></tr></thead><tbody>
+            {(data || []).map(u => <tr key={u.id}><td className="first">{u.name}</td><td className="small rsp-sub">{u.email}</td><td data-l={tr("Papel")}><PapelEditavel u={u} self={u.id === user?.id} onChanged={reload} /></td><td data-l={tr("Ativo")}>{u.active ? <Chip tone="ok">{tr("sim")}</Chip> : <Chip tone="neutral">{tr("não")}</Chip>}</td><td className="small nowrap" data-l={tr("Último login")}>{u.last_login_at
                 ? <><span className="mono">{fmtDateTime(u.last_login_at)}</span><div className="muted">{ago(u.last_login_at)}</div></>
                 : <span className="muted">{tr("nunca entrou")}</span>}</td>
               <td><div className="row wrap" style={{ gap: 6, justifyContent: 'flex-end' }}>
