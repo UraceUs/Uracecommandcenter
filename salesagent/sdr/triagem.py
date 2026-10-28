@@ -98,13 +98,13 @@ def _decidir(evento, analise, card, agora):
                or analise["compete"] or analise["conversao"])
     sinal = gatilho or analise["sensivel"] or bool(analise["sinais"]["pit_id"]) or analise["score"] >= regras.LIMIAR
 
-    # 4. Fechado em venda há pouco, voltou com sinal: reabre.
-    if no_comercial and card.get("fechado"):
-        if not sinal:
-            return _resultado(regras.FICA, "SEM_SINAL_COMERCIAL", analise)
-        dias = _dias_desde(card.get("fechado_em"), agora)
-        if dias is not None and dias <= regras.JANELA_REABERTURA_DIAS:
-            return _resultado(regras.REABRIR, "INTENCAO_COMERCIAL", analise, C["QUALIFICANDO"], ["sdr:reaberto"])
+    # 4. Card fechado que voltou a falar (dono, 28/10, #426: "robô responde e reabre"): o perdido volta para
+    #    Comercial > ENTRADA, em qualquer funil e sem prazo; o ganho é cliente e fica onde está (reabrir apagaria a
+    #    venda no Kommo). Opt-out já parou lá em cima. Funil fora do SDR segue com o aviso de contato antigo.
+    if card.get("fechado") and card.get("do_sdr", True):
+        if card.get("ganho"):
+            return _resultado(regras.ANEXAR, "CLIENTE_VOLTOU", analise, tags=["sdr:cliente-voltou"])
+        return _resultado(regras.REABRIR, "CARD_FECHADO_VOLTOU", analise, C["QUALIFICANDO"], ["sdr:reaberto"])
 
     # 5. Sem texto útil: espera contexto.
     if not analise["tem_texto"]:

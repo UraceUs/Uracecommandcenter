@@ -113,13 +113,16 @@ def rodar() -> list[str]:
         105: _lead(105, 9, 1),                   # outro funil
         106: _lead(106, 1, 143),                 # Urace fechado
         107: _lead(107, 1, 10),                  # First Contact, sem a tag de teste
+        108: _lead(108, 2, 143, ["opt_out"]),    # Comercial fechado: pediu para parar
+        109: _lead(109, 1, 142),                 # Urace ganho (cliente)
     })
 
     print("1. Escopo: onde o robô responde")
     # dono, 27/10 (#403): etapa da equipe (Hot Leads, ATENDIMENTO) também recebe resposta, na hora
     for lid, esperado in ((101, (True, "OK")), (102, (True, "OK")), (103, (True, "OK")),
                           (104, (True, "OK")), (105, (False, "FUNIL_FORA_DO_SDR")),
-                          (106, (False, "CARD_FECHADO"))):
+                          # dono, 28/10 (#426): card fechado responde e reabre; quem pediu para parar, nunca
+                          (106, (True, "OK")), (108, (False, "OPT_OUT")), (109, (True, "OK"))):
         check(f"lead {lid} -> {esperado}", sdr_ponte.pode_responder(lid) == esperado, sdr_ponte.pode_responder(lid))
     sdr_ponte.SDR_ATENDER_SO_TAG = "teste-sdr"
     check("fase de teste: First Contact sem a tag não recebe", sdr_ponte.pode_responder(107) == (False, "SEM_TAG_DE_TESTE"))
