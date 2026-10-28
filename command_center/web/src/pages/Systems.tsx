@@ -7,11 +7,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Scrim, Section, Spinner, Status, SysLink, WAIVER_LABEL } from '../components/ui'
+import { useAuth } from '../auth/useAuth'
+import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Scrim, Section, Spinner, Status, SysLink } from '../components/ui'
+import { WAIVER_LABEL } from '../components/uiConst'
 import { daysUntil, fmtDate, fmtDateTime, money, safeJson } from '../components/fmt'
-import { usePerguntar } from '../components/Perguntar'
-import { useToast } from '../components/Toast'
+import { usePerguntar } from '../components/usePerguntar'
+import { useToast } from '../components/useToast'
 import { Mic, TextoComVoz } from '../components/Voz'
 import { tr, LOCALE } from '../i18n'
 
@@ -172,7 +173,8 @@ function NovaTarefa({ onClose, onDone }: { onClose: () => void; onDone: () => vo
   const [f, setF] = useState({ pilot_name: '', responsible: '', email: '', phone: '', dob: '', height: '', weight: '', waist: '', experience: '', product: 'Urace Daily', category: '2 stroke', package_n: 1, package_total: 4, days: 1, due_on: '', extra_notes: '' })
   const [busy, setBusy] = useState(false)
   const set = (k: string, v: string | number) => setF({ ...f, [k]: v })
-  const idade = f.dob ? Math.floor((Date.now() - new Date(f.dob + 'T12:00:00Z').getTime()) / (365.25 * 86400000)) : null
+  const [agora] = useState(() => Date.now())   // a idade conta a partir de quando o formulário abriu (#433)
+  const idade = f.dob ? Math.floor((agora - new Date(f.dob + 'T12:00:00Z').getTime()) / (365.25 * 86400000)) : null
   const menor = idade !== null && idade < 18
   const faltam = [!f.pilot_name.trim() && tr('piloto'), !f.email.includes('@') && tr('e-mail'), !f.phone.trim() && tr('telefone'), !f.due_on && tr('data'), (menor || idade === null) && !f.responsible.trim() && (menor ? tr('responsável (piloto menor)') : tr('nascimento ou responsável'))].filter(Boolean) as string[]
   async function save() {
@@ -414,14 +416,14 @@ export function LabelPicker({ labels, exclude, onPick, placeholder = tr("Adicion
   const qn = norm(q.trim())
   const hits = labels.filter(l => !ex.has(l.name.toLowerCase())).filter(l => !qn || norm(l.name).includes(qn))
     .sort((a, b) => (norm(a.name).startsWith(qn) ? 0 : 1) - (norm(b.name).startsWith(qn) ? 0 : 1) || a.name.localeCompare(b.name)).slice(0, 12)
-  useEffect(() => { setIx(0) }, [q])
   useEffect(() => {
     const h = (ev: MouseEvent) => { if (box.current && !box.current.contains(ev.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h)
   }, [])
-  function pick(name: string) { onPick(name); setQ(''); setOpen(false) }
+  // a busca mudou: a seleção volta ao primeiro, no próprio evento e não num effect (#433)
+  function pick(name: string) { onPick(name); if (q) setIx(0); setQ(''); setOpen(false) }
   return <div className="lpick" ref={box}>
-    <input className="input" value={q} placeholder={placeholder} aria-label={tr("Buscar marcador")} onFocus={() => setOpen(true)} onChange={ev => { setQ(ev.target.value); setOpen(true) }}
+    <input className="input" value={q} placeholder={placeholder} aria-label={tr("Buscar marcador")} onFocus={() => setOpen(true)} onChange={ev => { setQ(ev.target.value); setIx(0); setOpen(true) }}
       onKeyDown={ev => { if (ev.key === 'ArrowDown') { ev.preventDefault(); setIx(i => Math.min(i + 1, hits.length - 1)) } else if (ev.key === 'ArrowUp') { ev.preventDefault(); setIx(i => Math.max(i - 1, 0)) } else if (ev.key === 'Enter') { ev.preventDefault(); if (hits[ix]) pick(hits[ix].name) } else if (ev.key === 'Escape') setOpen(false) }} />
     {open && <div className="lpick-menu" role="listbox">
       {hits.length === 0 ? <div className="small muted" style={{ padding: '6px 10px' }}>{tr("Nenhum marcador com “")}{q}{tr("”. A IA não cria marcador; crie no Gmail.")}</div>
@@ -569,7 +571,7 @@ export function GmailPage() {
 // ------------------------------------------------------------- QuickBooks
 const ABERTA = (i: Invoice) => ['open', 'sent', 'overdue'].includes(i.status || '') && (i.balance || 0) > 0
 const CAD_PT: Record<string, string> = { daily: tr("diário"), weekly: tr("semanal"), custom: tr("personalizado") }
-export function cadenciaTexto(i: Invoice) { return i.reminder_cadence === 'custom' ? `a cada ${i.reminder_every_days} d` : CAD_PT[i.reminder_cadence || ''] || '' }
+function cadenciaTexto(i: Invoice) { return i.reminder_cadence === 'custom' ? `a cada ${i.reminder_every_days} d` : CAD_PT[i.reminder_cadence || ''] || '' }
 
 /** Estado do lembrete de uma invoice, com o toggle (dono, 16/09). */
 export function LembreteChip({ i, onChange }: { i: Invoice; onChange: () => void }) {

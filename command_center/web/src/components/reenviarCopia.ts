@@ -1,8 +1,8 @@
 /* #114: "Reenviar cópia" da waiver assinada no próprio sistema (card do cliente e Site › Waiver). Vai sempre ao
  * e-mail que assinou; a janela mostra esse e-mail antes do clique. */
 import { api, ApiError } from '../api/client'
-import { usePerguntar } from './Perguntar'
-import { useToast } from './Toast'
+import { usePerguntar } from './usePerguntar'
+import { useToast } from './useToast'
 import { tr } from '../i18n'
 
 export interface CopiaW { status: 'sent' | 'failed'; at: string; to: string | null; message_id?: string | null; by?: string | null }

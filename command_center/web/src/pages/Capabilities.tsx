@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useGet } from '../api/hooks'
-import { Chip, Empty, ErrorState, Loading, PageHeader, Section, Status, SYS_NAME } from '../components/ui'
+import { Chip, Empty, ErrorState, Loading, PageHeader, Section, Status } from '../components/ui'
+import { SYS_NAME } from '../components/uiConst'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
 

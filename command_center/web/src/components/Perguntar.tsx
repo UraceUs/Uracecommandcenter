@@ -13,26 +13,11 @@ import { Scrim } from './ui'
      const r = await perguntar({ titulo: '…', ok: 'Não saiu: mandar', alt: 'Saiu: registrar' })
      // com `alt` (a terceira escolha), devolve true, 'alt' ou false; Enter não escolhe por você
 */
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Mic } from './Voz'
 import { tr } from '../i18n'
+import { Ctx, type Pergunta, type Responder } from './usePerguntar'
 
-export interface Pergunta {
-  titulo: string
-  texto?: ReactNode
-  ok?: string
-  cancelar?: string
-  perigo?: boolean
-  campo?: string
-  valor?: string
-  /** campo de senha: não aparece na tela, não é ditado e o navegador não guarda */
-  segredo?: boolean
-  /** a terceira escolha (devolve 'alt'). Com ela, Enter não confirma e o foco começa no Cancelar */
-  alt?: string
-}
-type Responder = (p: Pergunta) => Promise<boolean | string | null>
-
-const Ctx = createContext<Responder>(async () => false)
 
 export function PerguntarProvider({ children }: { children: ReactNode }) {
   const [p, setP] = useState<Pergunta | null>(null)
@@ -82,5 +67,3 @@ export function PerguntarProvider({ children }: { children: ReactNode }) {
     </Scrim>}
   </Ctx.Provider>
 }
-
-export const usePerguntar = () => useContext(Ctx)

@@ -4,10 +4,10 @@ import { useEffect, useId, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Banner, Chip, Scrim, Spinner } from './ui'
-import { usePerguntar } from './Perguntar'
-import { useToast } from './Toast'
+import { usePerguntar } from './usePerguntar'
+import { useToast } from './useToast'
 import { tr } from '../i18n'
 
 type Sug = Client & { why?: string }

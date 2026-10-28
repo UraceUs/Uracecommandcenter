@@ -52,6 +52,12 @@ export function novoDetector(): Promise<Detector> {
   return BD ? Promise.resolve(new BD({ formats: FORMATOS })) : detectorZxing()
 }
 
+/** Liga a câmera no elemento de vídeo (fora do hook: o elemento é do DOM, não estado do React, #433). */
+function ligarVideo(el: HTMLVideoElement, s: MediaStream) {
+  el.srcObject = s
+  return el.play()
+}
+
 /** A câmera de trás ligada no `video` enquanto o componente existir; lê só quando `ativo`.
  *  Cada código lido chama `onLer` (uma vez por leitura; quem chama decide se pausa). */
 export function useLeitor(video: RefObject<HTMLVideoElement | null>, ativo: boolean, onLer: (t: string) => void) {
@@ -70,7 +76,7 @@ export function useLeitor(video: RefObject<HTMLVideoElement | null>, ativo: bool
         const [det, s] = await Promise.all([novoDetector(), navigator.mediaDevices.getUserMedia(CAMERA)])
         stream = s
         if (parar || !video.current) { s.getTracks().forEach(t => t.stop()); return }
-        video.current.srcObject = s; await video.current.play(); setPronto(true)
+        await ligarVideo(video.current, s); setPronto(true)
         while (!parar) {
           if (ativoRef.current && video.current) {
             try { const r = await det.detect(video.current); if (r[0]?.rawValue && ativoRef.current) lerRef.current(r[0].rawValue) } catch { /* quadro ruim */ }

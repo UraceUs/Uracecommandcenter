@@ -7,8 +7,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError, qs } from '../api/client'
 import { Banner, Chip, Scrim, Section } from '../components/ui'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { tr } from '../i18n'
+import { adicionarLinha } from './balcaoRascunhoApi'
 
 export interface ItemQboLista { id: string; name: string; full_name: string | null; price: number | null; type: string | null }
 interface LinhaRz { id: number; origem: 'estoque' | 'quickbooks' | 'livre'; nome: string; descricao: string | null; qty: number
@@ -20,11 +21,6 @@ export interface EstadoRz { rascunho: Rz | null; faturados: Rz[]; gerente: boole
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 const ORIGEM: Record<string, string> = { estoque: tr("estoque"), quickbooks: tr("QuickBooks"), livre: tr("linha livre") }
 const num = (s: string) => { const n = Number(s.replace(',', '.')); return s.trim() !== '' && Number.isFinite(n) ? n : null }
-
-/** Linha nova no rascunho do card (cria o rascunho na primeira). Peça do estoque, item do QuickBooks ou livre. */
-export function adicionarLinha(clientId: number, corpo: Record<string, unknown>) {
-  return api.post<EstadoRz>(`/balcao/cliente/${clientId}/rascunho/linhas`, corpo)
-}
 
 /** O inventário inteiro do QuickBooks, buscado e paginado no servidor (o espelho do catálogo). */
 export function BuscaQbo({ onEscolher, rotulo }: { onEscolher: (i: ItemQboLista) => void; rotulo?: string }) {
@@ -119,7 +115,11 @@ function LinhaEditavel({ base, l, travada, onMudou }: { base: string; l: LinhaRz
   const toast = useToast()
   const [qty, setQty] = useState(String(l.qty))
   const [preco, setPreco] = useState(l.preco != null ? String(l.preco) : '')
-  useEffect(() => { setQty(String(l.qty)); setPreco(l.preco != null ? String(l.preco) : '') }, [l.qty, l.preco])
+  // a linha mudou no servidor: os campos voltam ao valor dela, no render e não num effect (#433)
+  const [vistos, setVistos] = useState({ qty: l.qty, preco: l.preco })
+  if (vistos.qty !== l.qty || vistos.preco !== l.preco) {
+    setVistos({ qty: l.qty, preco: l.preco }); setQty(String(l.qty)); setPreco(l.preco != null ? String(l.preco) : '')
+  }
   async function salvar(campo: 'qty' | 'preco', valor: string) {
     const n = num(valor)
     if (n === null || n === (campo === 'qty' ? l.qty : l.preco)) return

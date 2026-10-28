@@ -17,12 +17,12 @@ import { Link } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { Client } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Scrim } from '../components/ui'
 import { FotoPeca } from '../components/FotoPeca'
 import { Icon } from '../components/Icon'
-import { usePerguntar } from '../components/Perguntar'
-import { useToast } from '../components/Toast'
+import { usePerguntar } from '../components/usePerguntar'
+import { useToast } from '../components/useToast'
 import { Picker } from '../components/Unir'
 import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { tr } from '../i18n'
@@ -630,7 +630,9 @@ export function Estoque() {
     for (const k of Object.keys(m)) m[k].sort((a, b) => (a.subcategory || '').localeCompare(b.subcategory || '') || a.name.localeCompare(b.name))
     return m
   }, [itens])
-  useEffect(() => { if (busca) setVazias(false) }, [busca])
+  // buscou algo: mostra as prateleiras vazias de novo, ao ver a busca mudar no render (#433)
+  const [buscaVista, setBuscaVista] = useState('')
+  if (busca !== buscaVista) { setBuscaVista(busca); if (busca) setVazias(false) }
 
   const deClientes = (d?.itens || []).filter(i => i.de_clientes > 0)
   const semQtd = d?.a_contar.length || 0

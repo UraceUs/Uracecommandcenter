@@ -17,6 +17,7 @@ import { guardarVisual, visual3d, visualSite } from './visual'
 import '../styles/portal-3d.css'
 import '../styles/portal-site.css'
 import logoSite from '../assets/site/logo.svg'
+import { siteUrl } from './siteUrl'
 
 const AssinarWaiver = lazy(() => import('./Waiver').then(m => ({ default: m.AssinarWaiver })))   // o quadro de assinatura só nesta rota
 const Reservar = lazy(() => import('./Reservar').then(m => ({ default: m.Reservar })))         // #164: a reserva do site
@@ -235,13 +236,6 @@ function Cadastro({ onEntrou }: { onEntrou: (a: Account) => void }) {
 }
 
 /* ------------------------------------------------------------ dentro da conta */
-/** #164: o endereço das páginas do site (Arrive and Drive, início). No próprio site é o mesmo host;
- * no my.urace.us e no ops.urace.us, até a troca do DNS do urace.us, é o novo.urace.us. */
-export function siteUrl(caminho = '/') {
-  const h = typeof location !== 'undefined' ? location.hostname : ''
-  return (h === 'my.urace.us' || h === 'ops.urace.us' ? 'https://novo.urace.us' : '') + caminho
-}
-
 /** O cabeçalho preto do site (#164): a mesma marca e o caminho de volta para as páginas. */
 function TopoSite({ children }: { children?: ReactNode }) {
   return <header className="portal-top">

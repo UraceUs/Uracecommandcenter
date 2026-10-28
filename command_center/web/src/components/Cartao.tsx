@@ -10,14 +10,9 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import './Cartao.css'
+import { iniciais } from './iniciais'
 
 export type TomD = 'ok' | 'warn' | 'crit' | 'info' | 'neutral'
-
-/** As iniciais do nome: "Marina Costa" → "MC"; sem nome, "#". */
-export function iniciais(nome?: string | null) {
-  const p = (nome || '').replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean)
-  return ((p[0]?.[0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() || '#'
-}
 
 export interface CartaoProps {
   /** o id do título (o cartão é um `article` com aria-labelledby nele) */

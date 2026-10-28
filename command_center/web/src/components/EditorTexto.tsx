@@ -6,8 +6,8 @@
  * o parágrafo é <p>, e o editor vazio já começa dentro de um <p> (a primeira linha também é parágrafo). O link aceita
  * "/" (a home) e recusa "//" e a barra invertida, como o servidor. */
 import { useEffect, useRef } from 'react'
-import { usePerguntar } from './Perguntar'
-import { useToast } from './Toast'
+import { usePerguntar } from './usePerguntar'
+import { useToast } from './useToast'
 import { tr } from '../i18n'
 
 const LINK_OK = /^(?:(?:https?:\/\/|mailto:|tel:)[^\s"'<>\\]+|\/(?!\/)[^\s"'<>\\]*)$/

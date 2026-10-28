@@ -12,11 +12,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useItemNaRota } from '../api/rota'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Spinner } from '../components/ui'
 import { Icon } from '../components/Icon'
 import { ago, fmtTime } from '../components/fmt'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { Avisos } from '../components/Avisos'
 import { Cartao } from '../components/Cartao'
 import { ConectarClaude } from '../components/ConectarClaude'
@@ -234,17 +234,22 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
   const chaveRascunho = `cc.equipe.rascunho.${id}`
 
   // o rascunho sobrevive à sessão caída, como no chat do Kommo (lição de 21/09)
-  useEffect(() => {
+  // trocou de canal: o rascunho dele entra no campo no render, não num effect (#433)
+  const [idVisto, setIdVisto] = useState<number | null>(null)
+  if (id !== idVisto) {
+    setIdVisto(id)
     try { setTexto(localStorage.getItem(`cc.equipe.rascunho.${id}`) || '') } catch { setTexto('') }
-  }, [id])
+  }
   useEffect(() => {
     try { if (texto.trim()) localStorage.setItem(chaveRascunho, texto); else localStorage.removeItem(chaveRascunho) } catch { /* sem storage */ }
   }, [texto, chaveRascunho])
 
+  // a conversa recomeça quando o effect abaixo recomeça (mesmas dependências), limpa no render (#433)
+  const [depsVistas, setDepsVistas] = useState({ id, onMudou })
+  if (depsVistas.id !== id || depsVistas.onMudou !== onMudou) { setDepsVistas({ id, onMudou }); setConversa(null); setErro(null) }
   useEffect(() => {
     let vivo = true
     ultimo.current = 0
-    setConversa(null); setErro(null)
     async function puxar() {
       try {
         const d = await api.get<Conversa>(`/equipe/canais/${id}?desde=${ultimo.current}`)
