@@ -1383,6 +1383,8 @@ O robô de vendas no Kommo. Três níveis:
   novo pelo SMS ou pelo e-mail nos 30 minutos seguintes (e vice-versa). Ele reconhece a mesma pessoa pelo telefone ou
   pelo e-mail do card no Kommo.
 - Conversa em **Precisa de atenção** (SMS e e-mail) é lead que o robô não respondeu: responda à mão.
+- **Lead do Kommo sem resposta? (#414)** `GET /ops/api/sdr/rastro/{lead_id}` mostra o que a ponte fez com ele
+  (mensagem, resposta, trava, erro) e um veredito: respondido, ou a trava ou o erro que segurou a resposta.
 - Viu o robô errar? Relate com o lead (id ou nome) e o que aconteceu. Quem cuida do robô resolve.
 
 ---
@@ -1438,6 +1440,7 @@ Os corpos abaixo são **exemplos fictícios**. Não copie nomes nem e-mails daqu
 | conversas do Kommo | `GET /ops/api/crm/inbox` | — | todos |
 | waivers | `GET /ops/api/waivers` | — | todos |
 | estado do robô SDR | `GET /ops/api/sdr/painel` | — | todos |
+| por que o robô (não) respondeu um lead do Kommo | `GET /ops/api/sdr/rastro/{lead_id}` | `n` (até 300) | Operador |
 | o seu Google Calendar conectado? | `GET /ops/api/google/status` | — | Operador |
 | os seus compromissos do Google | `GET /ops/api/google/events` | consulta `{"de": "2026-10-20", "ate": "2026-10-27"}` (dias da Flórida, até 62) | Operador |
 

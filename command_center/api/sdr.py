@@ -610,3 +610,58 @@ def painel(u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_
 @r.get("/auditoria")
 def auditoria(lead: str | None = None, acao: str | None = None, n: int = 50, u=Depends(auth.usuario_atual)):
     return auditoria_ponte(lead, acao, max(1, min(n, 200)))
+
+
+# ------------------------------------------------------------------ o rastro de um lead (#414)
+# O que a ponte fez com o lead, além da decisão do card: o webhook cru (hook_raw) e as diretrizes internas ficam de fora.
+RASTRO = {"inbound": "mensagem do lead", "outbound": "resposta enviada", "outbound_fallback": "resposta virou nota (não entregue)",
+          "gate": "trava", "error": "erro", "escalation": "passou para a equipe", "human_reply": "resposta da equipe",
+          "followup": "follow-up", "saida_vista": "o Kommo viu mensagem saindo", "sdr": "decisão do card",
+          "salesbot_continue": "Salesbot"}
+
+
+def _veredito(itens):
+    """A última mensagem do lead teve resposta? Olha o evento mais novo entre mensagem, resposta, trava e erro."""
+    for x in itens:                                            # mais novo primeiro
+        k = x["tipo"]
+        if k == "outbound":
+            return {"respondido": True, "texto": "respondido: a última coisa que a ponte fez foi responder", "quando": x["quando"]}
+        if k == "saida_vista":
+            return {"respondido": True, "texto": "o Kommo viu mensagem saindo depois (do robô ou da equipe)", "quando": x["quando"]}
+        if k == "outbound_fallback":
+            return {"respondido": False, "texto": "a resposta virou nota e não chegou ao lead: responda à mão", "quando": x["quando"]}
+        if k in ("gate", "error"):
+            return {"respondido": False, "texto": f"{RASTRO[k]}: {x['detalhe'][:300]}", "quando": x["quando"]}
+        if k == "inbound":
+            return {"respondido": False, "texto": "mensagem recebida, sem resposta e sem trava registrada depois dela",
+                    "quando": x["quando"]}
+    return {"respondido": None, "texto": "a ponte não tem registro deste lead (a mensagem pode não ter chegado ao webhook)",
+            "quando": None}
+
+
+@r.get("/rastro/{lead_id}")
+def rastro(lead_id: int, n: int = 60, u=Depends(auth.exige("OPERATOR"))):
+    """Dono, 28/10 (#414): por que o robô não respondeu este lead do Kommo. Lê ~/.urace/salesbridge.db só em leitura."""
+    con = _abrir_ponte()
+    if con is None:
+        return {"lead_id": lead_id, "itens": [], "veredito": None, "motivo": "ponte sem auditoria"}
+    tipos = tuple(RASTRO)
+    try:
+        rows = con.execute(f"SELECT id, ts, kind, detail FROM audit WHERE lead_id=? AND kind IN ({','.join('?' * len(tipos))}) "
+                           "ORDER BY ts DESC, id DESC LIMIT ?", (lead_id, *tipos, max(1, min(n, 300)))).fetchall()
+    except sqlite3.Error:
+        return {"lead_id": lead_id, "itens": [], "veredito": None, "motivo": "ponte sem auditoria"}
+    finally:
+        con.close()
+    itens = []
+    for x in rows:
+        ts = int(x["ts"] or 0)
+        quando = datetime.fromtimestamp(ts, timezone.utc).astimezone(FUSO).isoformat(timespec="seconds")
+        if x["kind"] == "sdr":
+            d = _decisao({"id": x["id"], "ts": ts, "lead_id": lead_id, "detail": x["detail"]})
+            detalhe = " · ".join(v for v in (d["acao"], d["motivo"], d["fez"]) if v)
+        else:
+            detalhe = x["detail"] or ""
+        itens.append({"id": x["id"], "quando": quando, "tipo": x["kind"], "o_que": RASTRO[x["kind"]], "detalhe": detalhe[:1000]})
+    pausa = ler_pausas().get(str(lead_id))
+    return {"lead_id": lead_id, "ia_pausada": bool(pausa), "veredito": _veredito(itens), "itens": itens}
