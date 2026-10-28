@@ -5,7 +5,7 @@ precise operar ou explicar o sistema. Tudo aqui foi conferido no código, não �
 lembrança: quando uma regra existe, o arquivo que a impõe está citado.
 
 **Painel:** https://ops.urace.us/ops/
-**Última revisão:** 17/09/2026 · 207 testes automatizados passando
+**Última revisão:** 28/10/2026 (#445) · a bateria inteira roda no CI a cada PR
 
 ---
 
@@ -276,6 +276,21 @@ seja operador.
 livre decidem tudo; o operador decide nos módulos dele — o que inclui vendas;
 invoice e QuickBooks nunca saem do gerente para cima. Leitura não decide nada.
 
+**A IA opera o painel inteiro** (#420, #422). Na conversa com uma pessoa, o agente ganha
+as ferramentas `painel_operacoes` (o que o papel dela pode fazer) e `painel_api` (chama a
+mesma rota do botão). A chamada roda **como quem pediu** (`mcp_operar.executar_como`, com
+uma sessão interna revogada no fim de cada chamada): o papel dela vale, a rota valida e
+audita, e o que entra na auditoria leva o nome dela. `agente_sdk.classificar` separa:
+
+| Tipo | Exemplos | O que acontece |
+|---|---|---|
+| ler | `GET` | roda direto, não vira ação |
+| fazer | editar card, mover etapa, cancelar compra interna | roda direto e fica como ação feita |
+| aprovar | sai para o cliente, cobra, apaga (`DELETE`), unir cards, remover (`NAO_VOLTA`) | vira cartão de aprovar; o clique executa pela rota, como quem aprovou |
+
+`painel_api = BLOCKED` desliga tudo; `apagar_qualquer_coisa = BLOCKED` faz a IA nunca
+apagar. A rotina sem pessoa (sincronia, eventos) não recebe essas ferramentas: só lê.
+
 ---
 
 ## 8. Atualizar o sistema
@@ -296,8 +311,9 @@ O deploy roda solto do terminal (`setsid nohup`), grava em
 `~/.urace/deploy-<data>.log` e sobrevive à queda do SSH. Se a conexão cair:
 `tail -n 60 "$(ls -t ~/.urace/deploy-*.log | head -1)"`.
 
-O que o script faz, em ordem: venv → `npm ci && npm run build` → **pytest** (se
-um teste falha, o deploy para) → primeiro ADMIN se não houver ninguém → unit
+O que o script faz, em ordem: venv → `npm ci && npm run build` → **pytest**, só
+quando o commit não tem a tag `ci-verde/<sha>` do CI (com a tag, a bateria já passou no
+GitHub; sem ela, roda aqui e, se um teste falha, o deploy para) → primeiro ADMIN se não houver ninguém → unit
 systemd em `127.0.0.1:8790` → bloco `/ops` no Caddy → prova real (`/ops/` 200,
 API sem sessão 401, páginas legais 200).
 
@@ -325,6 +341,13 @@ asfalto — nada quebra.
 | Auditoria não se apaga | gatilhos no SQLite contra `UPDATE`/`DELETE` em `audit_logs` |
 | Tudo no fuso da Flórida | `America/New_York` no servidor (`vendas.hoje_local`, `dia_local`, `quando_pt`) e no frontend (`components/fmt.ts`) |
 | Segredo nunca no repositório | tokens em `~/.urace/*.env` no VPS |
+| A IA opera só pela rota, como quem pediu | `mcp_operar.executar_como`; o caminho é decodificado e recusado com `%`, `//`, `..`, `\`, `?` ou `#` (`caminho_seguro`), então não há atalho para pular o aprovar (#438) |
+| Fora do alcance da IA | `auth`, `portal` e `cofre` (`mcp_operar.FORA`); `/system/update` só com o clique de uma pessoa (`SO_COM_CLIQUE`) (#438) |
+| Webhook sem segredo é recusado | Kommo (`KOMMO_HOOK_KEY`/`KOMMO_WEBHOOK_SECRET`), Dialpad (`DIALPAD_HOOK_KEY`/`SECRET`), WhatsApp (`WA_APP_SECRET`) e Stripe (`STRIPE_WEBHOOK_SECRET`), comparados em tempo constante (#438) |
+| Nada de buscar URL de terceiros com o token | a foto do Kommo só vem de host do próprio Kommo, sem levar o token a outro lugar (#438) |
+| E-mail aberto não roda script | corpo do Gmail com CSP `sandbox`, também quando aberto direto numa aba (`rotas_gmail.py`, #438) |
+| Formulário do site não vira canhão de e-mail | limite por IP e por e-mail de destino (`vitrine.py`, #438) |
+| Toda rota nova nasce fechada | `test_seguranca_rotas.py` falha se uma rota nova fica sem login fora da lista de públicas (com o motivo), e confere 401 sem credencial, um cliente não alcançar o outro, cabeçalhos e cookies (#438) |
 
 ---
 
@@ -366,6 +389,11 @@ relativos à raiz do repositório `UraceUs/Uraceagent`, branch
 | Motor da IA (contexto, execução) | `command_center/api/motor.py` |
 | Conversa com o agente, políticas, aprovação | `command_center/api/ia.py` |
 | Normalização de argumentos de ação | `command_center/api/acoes.py` |
+| Agente (Claude Agent SDK), portão ler/fazer/aprovar | `command_center/api/agente_sdk.py` |
+| A IA e o MCP operando o painel pela rota | `command_center/api/mcp_operar.py` |
+| MCP para o Claude de cada pessoa (`/ops/mcp`) | `command_center/api/mcp_http.py`, `command_center/api/oauth.py` |
+| HTML de e-mail e CSP | `command_center/api/html_seguro.py` |
+| Busca e identidade do cliente (nome, e-mail, telefone, Client ID) | `command_center/providers/identidade.py` |
 | Chat e funil do Kommo | `command_center/api/crm.py` |
 | Atualizar o sistema | `command_center/api/sistema.py` |
 | Schema e migrações | `command_center/db/schema.sql`, `command_center/db/__init__.py` |
@@ -416,8 +444,9 @@ exato de cada `ACAO` (`motor.contexto_da_venda`).
 **Como testar antes de entregar**
 
 ```bash
-python3 -m pytest command_center/tests -q          # 207 testes
-cd command_center/web && npx tsc --noEmit -p tsconfig.app.json && npm run build
+ruff check . && python -m pytest -q                 # Python 3.11; --parte K/6 reparte como o CI
+cd command_center/web && npm run build && npx oxlint src
+CC_E2E=1 python -m pytest -q command_center/tests/e2e
 ```
 
 ---

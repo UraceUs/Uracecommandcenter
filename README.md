@@ -88,6 +88,10 @@ cd ~/Uraceagent && git pull origin claude/commandcenter-vps && bash adminai/depl
 
 O script roda em segundo plano (sobrevive à queda do SSH), prepara o ambiente Python, gera o build do painel e reinicia o serviço (`uvicorn` em `127.0.0.1:8790`, atrás do Caddy). Com a tag `ci-verde` do commit, a bateria de testes não roda de novo na VPS; sem ela, roda. As migrações do banco rodam sozinhas quando o serviço sobe, e a "prova real" no fim confere o painel no ar.
 
+## Segurança
+
+As travas estão no código e têm teste, não dependem do modelo: login com `scrypt`, sessão só por cookie `HttpOnly`/`Secure`/`SameSite=Strict` e `X-CSRF` em toda mutação; a IA opera só pela rota, como a pessoa que pediu, e o que sai para o cliente, cobra ou apaga espera o clique; webhooks sem segredo são recusados; auditoria que não se apaga. A lista completa, com o arquivo de cada regra, está no [manual](docs/manual-do-command-center.md) (seção 9). `command_center/tests/test_seguranca_rotas.py` trava rota nova sem login, cabeçalhos e cookies.
+
 ## Regras que não mudam
 
 - Nada se destrói: dados, bancos e credenciais críticas só mudam com autorização do dono.
