@@ -309,3 +309,29 @@ def test_testar_o_robo_tem_limite_por_minuto(cli, pasta, monkeypatch):
     agora = time.time()
     assert sdr._teste_liberado(1, agora + 120) is True
     sdr._teste_recente.clear()
+
+
+# ------------------------------------------------------------------ o rastro de um lead (#414)
+def test_rastro_diz_por_que_o_robo_nao_respondeu(cli, pasta):
+    """Dono, 28/10: 14 leads do Kommo com a última mensagem sem resposta; a auditoria só mostrava a decisão do card."""
+    agora = int(time.time())
+    _ponte_db(pasta, [
+        (agora - 300, 8101, "inbound", "Oi, quanto custa?"),
+        (agora - 290, 8101, "outbound", "Oi! Aqui é o Chase, da URACE."),
+        (agora - 200, 8101, "hook_raw", "ct=x :: corpo cru do webhook"),
+        (agora - 100, 8101, "sdr", json.dumps({"acao": "anexar_card", "motivo": "CARD_ABERTO_EXISTENTE"})),
+        (agora - 99, 8101, "gate", "atender: sem resposta da ponte (CARD_FECHADO) — só organiza"),
+        (agora - 50, 8102, "inbound", "Tem vaga sábado?"),
+        (agora - 40, 8103, "inbound", "oi"),
+        (agora - 39, 8103, "outbound_fallback", "resposta gravada como nota, não entregue"),
+    ])
+    entra(cli, "op@urace.us")
+    r = cli.get(B + "/sdr/rastro/8101").json()
+    assert r["veredito"]["respondido"] is False and "CARD_FECHADO" in r["veredito"]["texto"]
+    assert [x["tipo"] for x in r["itens"]] == ["gate", "sdr", "outbound", "inbound"], "sem o webhook cru"
+    assert r["itens"][1]["detalhe"].startswith("anexar_card · CARD_ABERTO_EXISTENTE")
+    assert cli.get(B + "/sdr/rastro/8102").json()["veredito"]["texto"].startswith("mensagem recebida, sem resposta")
+    assert "nota" in cli.get(B + "/sdr/rastro/8103").json()["veredito"]["texto"]
+    assert cli.get(B + "/sdr/rastro/9999").json()["veredito"]["respondido"] is None
+    _ponte_db(pasta, [(agora - 10, 8102, "outbound", "Temos sim!")])
+    assert cli.get(B + "/sdr/rastro/8102").json()["veredito"]["respondido"] is True
