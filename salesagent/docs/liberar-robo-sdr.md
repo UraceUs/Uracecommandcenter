@@ -43,6 +43,8 @@ Se não fizer, o robô e a pessoa podem responder juntos. Para voltar a automati
 - No VPS: `sudo journalctl -u sales-bridge --since "1 hour ago" --no-pager | grep -iE "error|429|nota|fallback" | tail -30`
   - `429`: o Kommo limitou as chamadas (cada balão é um disparo do bot de entrega). Avise e baixe o nível.
   - `resposta gravada como nota, não entregue`: a entrega falhou naquele lead; uma pessoa responde à mão.
+- Um lead ficou sem resposta? `GET /ops/api/sdr/rastro/{lead_id}` (ou peça ao Claude) diz por quê: a trava
+  (IA pausada, card fechado, Incoming leads, já respondido por SMS, não é lead) ou o erro (#414).
 - Tags para filtrar no Kommo: `followup:1-call`, `followup:2-reativacao`, `followup:sem-resposta-24h`,
   `sdr:agora-nao`, `sdr:handoff`.
 
