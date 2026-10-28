@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Urace_Command_center__urace_api"
+    ]
+  }
+}
