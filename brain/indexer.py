@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Indexador do Sales Brain — Markdown do vault → índice de busca SQLite FTS5.
 
-Porta da lógica do pipeline legado (`legacy-v1/kb/indexer.py`) para o stack
+Porta da lógica do pipeline legado (`docs/historico/legacy-v1/kb/indexer.py`) para o stack
 atual: mesma disciplina (indexação incremental por hash de conteúdo, poda de
 órfãos, self-test sem custo), alvo diferente (SQLite FTS5 em vez de
 Postgres/pgvector — decisão D2 da auditoria: a solução mais simples que
