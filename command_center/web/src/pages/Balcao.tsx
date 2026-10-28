@@ -968,7 +968,7 @@ export function Balcao() {
         <form className="balcao-leitor" onSubmit={e => { e.preventDefault(); ler(qrCliente) }}>
           <label className="fld grow"><span>{tr("Leia o QR do cliente")}</span>
             <input ref={campoCliente} type="text" value={qrCliente} onChange={e => setQrCliente(e.target.value)} autoComplete="off" autoCapitalize="off"
-              spellCheck={false} enterKeyHint="go" /></label>
+              spellCheck={false} enterKeyHint="go" placeholder={tr("Passe o leitor no QR do card ou use a câmera")} /></label>
           <div className="balcao-leitor-acoes"><button type="button" className="btn primary" onClick={() => setCamera(true)}>{tr("Ler com a câmera")}</button></div>
         </form>
       </div>

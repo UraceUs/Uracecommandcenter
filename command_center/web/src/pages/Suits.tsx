@@ -117,7 +117,7 @@ export function Suits() {
     </PageHeader>
     <SaudeTopo />
     <nav className="tabs" aria-label={tr("Suits")}>{ABAS.map(([path, rot]) => <NavLink key={path} to={path ? `/suits/${path}` : '/suits'} end
-      className={() => (aba === path ? 'on' : '')}>{rot}{path === 'leads' && resumo.data ? <span className="count">{tr("&nbsp;")}{resumo.data.leads}</span> : null}</NavLink>)}</nav>
+      className={() => (aba === path ? 'on' : '')}>{rot}{path === 'leads' && resumo.data ? <span className="count">{resumo.data.leads}</span> : null}</NavLink>)}</nav>
     {meta.error ? <div className="card"><ErrorState error={meta.error} retry={meta.reload} /></div>
       : aba === 'leads' ? <Leads />
       : aba === 'fornecedores' ? <Fornecedores />
@@ -773,7 +773,7 @@ function Leads() {
       <label className="fld"><span>{tr("Nota")}</span><input value={novo.notes || ''} onChange={e => setNovo(x => ({ ...x, notes: e.target.value }))} /></label>
       <div className="row gap"><button className="btn ghost" onClick={() => setNovo(null)}>{tr("Cancelar")}</button><button className="btn primary" onClick={criar}>{tr("Guardar")}</button></div>
     </div>}
-    {erro ? <ErrorState error={erro} retry={recarregar} /> : carregando && !itens.length ? <Loading /> : !itens.length ? <Empty title={tr("Nenhum lead aqui")} />
+    {erro ? <ErrorState error={erro} retry={recarregar} /> : carregando && !itens.length ? <Loading /> : !itens.length ? <Empty title={tr("Nenhum lead aqui")}>{tr("Quem perguntar de macacão e ainda não fechar entra nesta lista. Use “Novo lead” para registrar.")}</Empty>
       : <div className="cd-grade">{itens.map(l => <Cartao key={l.id} id={`lead-${l.id}`} estado={l.status === 'aberto' ? tr("aberto") : l.status === 'convertido' ? tr("virou pedido") : l.status === 'perdido' ? tr("perdido") : l.status}
           tom={l.status === 'aberto' ? 'warn' : l.status === 'convertido' ? 'ok' : 'neutral'} avatar={l.name} avatarTom="azul" nome={l.name}
           sub={[[l.email, l.phone].filter(Boolean).join(' · ') || '—']}
