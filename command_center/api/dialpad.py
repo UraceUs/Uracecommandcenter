@@ -213,7 +213,7 @@ async def webhook(request: Request, con: sqlite3.Connection = Depends(get_db)):
     chave = _chave_hook()
     if not chave:
         raise HTTPException(409, f"DIALPAD_HOOK_KEY ainda não está em {ENV}. Veja docs/adminai/dialpad-conexao.md.")
-    if request.query_params.get("key") != chave:
+    if not hmac.compare_digest(request.query_params.get("key") or "", chave):     # #438: tempo constante
         raise HTTPException(403, "chave do webhook não confere")
 
     bruto = (await request.body()).decode("utf-8", "replace").strip()

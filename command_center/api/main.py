@@ -250,6 +250,13 @@ async def _cabecalhos(request: Request, call_next):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
     resp.headers["Cache-Control"] = cache_de(request.url.path) or resp.headers.get("Cache-Control", "no-store")
+    # #438: HTTPS sempre (o Caddy não mandava HSTS). Só quando o pedido veio por TLS, e sem includeSubDomains:
+    # outro nome da casa ainda em http não fica preso
+    if auth._seguro(request):
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000"
+    # #438: o painel e a área do cliente (/ops) nunca no buscador, também no que não é HTML (JSON, PDF, foto)
+    if request.url.path == BASE or request.url.path.startswith(BASE + "/"):
+        resp.headers["X-Robots-Tag"] = "noindex, nofollow"
     if "Content-Security-Policy" in resp.headers:      # rota com política própria (corpo de e-mail em iframe)
         return resp
     resp.headers["X-Frame-Options"] = "DENY"

@@ -34,8 +34,9 @@ from command_center.api import auth
 from command_center.db import auditar, conectar
 
 PREFIXO = "/ops/api/"
-# fora do MCP: credenciais e sessões (login, senha, chaves) e a área do cliente (outra porta)
-FORA = re.compile(r"^/ops/api/(auth|portal)(/|$)")
+# fora do MCP: credenciais e sessões (login, senha, chaves), a área do cliente (outra porta) e, #438, o cofre de
+# senhas: a IA do painel entra com uma sessão de navegador interna e passava pelo `so_livre` do cofre como o dono.
+FORA = re.compile(r"^/ops/api/(auth|portal|cofre)(/|$)")
 METODOS = ("GET", "POST", "PATCH", "PUT", "DELETE")
 # o que manda algo para fora (cliente, QuickBooks, DocuSign, e-mail, Kommo, Asana) ou cobra.
 # #204: o chat do Kommo mora em /crm/* (responder, etapa, tags, nota): o documento já dizia que
@@ -237,11 +238,7 @@ def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=Fals
     metodo = str(metodo or "").upper()
     if metodo not in METODOS:
         raise ValueError(f"método inválido: use um de {', '.join(METODOS)}")
-    caminho = "/" + str(caminho or "").lstrip("/")
-    if not caminho.startswith(PREFIXO):
-        caminho = PREFIXO + caminho.lstrip("/").removeprefix("ops/api/")
-    if ".." in caminho or "?" in caminho or "#" in caminho:
-        raise ValueError("caminho inválido: passe a consulta em 'consulta', não na URL")
+    caminho = caminho_seguro(caminho)
     if FORA.match(caminho):
         raise ValueError("login, chaves e área do cliente não são operados pelo MCP")
     op = _operacao(metodo, caminho)
@@ -283,14 +280,35 @@ def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=Fals
 
 
 def normalizar(caminho):
-    """'clients/621', '/clients/621' ou '/ops/api/clients/621' → '/ops/api/clients/621'."""
-    caminho = "/" + str(caminho or "").lstrip("/")
+    """'clients/621', '/clients/621' ou '/ops/api/clients/621' → '/ops/api/clients/621'.
+
+    #438: o caminho sai DECODIFICADO (`%2F` vira `/`, `%6D` vira `m`), porque é assim que o roteador o enxerga.
+    Antes, `PATCH /clients/1%2Fmensal` era classificado pelo modelo `/clients/{cid}` (fazer) e o roteador, que
+    decodifica, executava `PATCH /clients/1/mensal` (cobrança mensal: aprovar) sem o clique."""
+    from urllib.parse import unquote
+    caminho = "/" + unquote(str(caminho or "")).lstrip("/")
     return caminho if caminho.startswith(PREFIXO) else PREFIXO + caminho.lstrip("/").removeprefix("ops/api/")
+
+
+# #438: o que sobra depois de decodificar uma vez e ainda muda o destino: `%` (codificado duas vezes: o httpx
+# manda `%6D` como está e o roteador decodifica), `..`/`.` como segmento, barra dupla, barra invertida,
+# consulta ou âncora dentro do caminho e caractere de controle.
+_CAMINHO_RUIM = re.compile(r"%|\\|//|\?|#|[\x00-\x1f\x7f]|(^|/)\.{1,2}(/|$)")
+
+
+def caminho_seguro(caminho):
+    """O caminho normalizado e decodificado, ou ValueError. O mesmo texto é o que se classifica e o que se chama."""
+    c = normalizar(caminho)
+    if _CAMINHO_RUIM.search(c) or ".." in c:
+        raise ValueError("caminho inválido: passe a consulta em 'consulta', não na URL, e o caminho sem codificar")
+    return c
 
 
 # #422: o que não volta atrás, pelo caminho da rota (o mesmo critério do RX_APROVAR dos nomes de ferramenta):
 # unir cards, anular, apagar/excluir/remover. Pela IA do painel, vira o aprovar de um clique.
 NAO_VOLTA = re.compile(r"(^|[/_-])(merge|unir|void|anular|apagar|excluir|remover|delete)([/_-]|$)", re.I)
+# #438: o que não sai para fora nem apaga, mas não é trabalho do dia a dia da IA: atualizar o servidor (deploy).
+SO_COM_CLIQUE = re.compile(r"^/ops/api/system/update$")
 
 
 def tipo_para_ia(metodo, caminho):
@@ -299,9 +317,12 @@ def tipo_para_ia(metodo, caminho):
     metodo = str(metodo or "").upper()
     if metodo == "GET":
         return "ler"
-    caminho = normalizar(caminho)
+    try:
+        caminho = caminho_seguro(caminho)
+    except ValueError:
+        return "fazer"                     # o `executar_como` recusa o caminho torto com a mensagem para a IA
     op = _operacao(metodo, caminho)
-    if op and (op["confirma"] or metodo == "DELETE" or NAO_VOLTA.search(op["caminho"])):
+    if op and (op["confirma"] or metodo == "DELETE" or NAO_VOLTA.search(op["caminho"]) or SO_COM_CLIQUE.match(op["caminho"])):
         return "aprovar"
     return "fazer"
 
@@ -325,11 +346,9 @@ def executar_como(user_id, metodo, caminho, corpo=None, consulta=None, aprovado=
     metodo = str(metodo or "").upper()
     if metodo not in METODOS:
         raise ValueError(f"método inválido: use um de {', '.join(METODOS)}")
-    caminho = normalizar(caminho)
-    if ".." in caminho or "?" in caminho or "#" in caminho:
-        raise ValueError("caminho inválido: passe a consulta em 'consulta', não na URL")
+    caminho = caminho_seguro(caminho)
     if FORA.match(caminho):
-        raise ValueError("login, chaves e área do cliente não são operados pela IA")
+        raise ValueError("login, chaves, cofre e área do cliente não são operados pela IA")
     op = _operacao(metodo, caminho)
     if not op:
         raise ValueError(f"{metodo} {caminho} não existe no painel (veja painel_operacoes)")

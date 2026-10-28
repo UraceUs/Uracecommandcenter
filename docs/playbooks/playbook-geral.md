@@ -1300,7 +1300,8 @@ ler"*).** No AI Command ela usa a **mesma rota do botão**, **como a pessoa que 
 quem pediu valem (a IA de um operador não faz o que é do gerente), a tela valida igual (ex.: o e-mail de outro
 card é recusado) e a auditoria sai no nome da pessoa. Editar e organizar rodam na hora; o que **sai para fora,
 cobra ou apaga** no painel (invoice, waiver, e-mail, Kommo, Asana, mensalidade, lixeira) vira o **aprovar** de
-um clique, e quem aprova executa com o papel dele. Login, chaves e a área do cliente ficam fora. Para desligar,
+um clique, e quem aprova executa com o papel dele. Login, chaves, o **cofre** e a área do cliente ficam fora;
+**atualizar o servidor** pela IA também pede o clique (#438). Para desligar,
 ponha `painel_api` em `BLOCKED` em Políticas da IA. Rotina automática (sem pessoa por trás) continua só lendo o painel.
 
 Ação que não tem política própria pede confirmação. Qualquer ação com "apagar", "excluir",
