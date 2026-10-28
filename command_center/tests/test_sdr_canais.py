@@ -694,6 +694,29 @@ def test_formulario_que_falhou_na_hora_nao_volta_na_fila(ambiente, monkeypatch):
     assert sdr_canais.volta(ambiente["con"], esperar=False)["formulario"]["conversas"] == []
 
 
+@pytest.mark.parametrize("de", ['"Infra Support" <support@infra.example.com>', "Billing <billing@vendor.example.com>",
+                                "Sales <sales@ferramenta.example.com>"])
+def test_email_de_endereco_de_empresa_o_robo_nao_responde(ambiente, monkeypatch, de):
+    # 22 e 27/10 (#413): o robô respondeu o support@ de um fornecedor e a conversa caiu em Precisa de atenção
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    caixa([thread(de=de, corpo="Your ticket was updated. Need help?")])
+    r = sdr_canais.ler_email(ambiente["con"])
+    c = um(ambiente["con"], "SELECT * FROM sdr_canal_contatos WHERE canal='email'")
+    assert "não é lead" in r["conversas"][0]["robo"] and enviados("email") == [] and c["precisa_gente"] == 0
+
+
+def test_email_da_lista_de_ignorados_o_robo_nao_responde(ambiente, monkeypatch):
+    monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    monkeypatch.setenv("SDR_CANAL_EMAIL_IGNORAR", "vendedor.example.com, @outro.example.com")
+    caixa([thread(de="Vendedor <fulano@vendedor.example.com>", corpo="Quick question about your phone system")])
+    r = sdr_canais.ler_email(ambiente["con"])
+    assert "SDR_CANAL_EMAIL_IGNORAR" in r["conversas"][0]["robo"] and enviados("email") == []
+    # quem não está na lista continua sendo lead
+    caixa([thread(tid="t-2", mid="m-2", de="Ana <ana@example.com>")])
+    sdr_canais.ler_email(ambiente["con"])
+    assert len(enviados("email")) == 1
+
+
 @pytest.mark.parametrize("numero", ["98626", "+18555550123", "+1 (800) 555-0123"])
 def test_sms_de_codigo_curto_ou_0800_o_robo_nao_responde(ambiente, monkeypatch, numero):
     # 26/10 (#412): o robô respondeu um código curto de 5 dígitos e um (855): serviço automático, não lead
