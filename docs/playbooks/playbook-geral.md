@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 22/10/2026 (#394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
+> Atualizado em 28/10/2026 (#410, o **Editar** do card corrige nome, e-mail, telefone, piloto e nascimento; antes, #394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
 > equipe, só o serviço do plano, add-ons e a invoice das extras na hora da marcação; antes, #115, o **pacote de prova** da waiver para o advogado; antes, #117, conferir o documento da
 > waiver no balcão e o nascimento travado, e #313, o
 > cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
@@ -410,6 +410,19 @@ Dentro do card (`/ops/clients/<n>`), as abas:
 
 O box vê o card **sem valores**: não aparecem mensalidade, corridas, conta no site, e-mails,
 invoices nem IA.
+
+#### Editar o card: nome, e-mail, telefone (#410)
+
+**Editar** (operador+) corrige os dados da pessoa, não só status, etapa e notas: **Responsável**
+(quem paga e assina), **Piloto** (vazio = o próprio responsável), **Nascimento do piloto**,
+**E-mail**, **E-mail alternativo**, **Telefone** e **Empresa**. **Salvar** grava só o que mudou.
+
+- O responsável não fica vazio. E-mail precisa ser válido; o telefone sai no formato da casa
+  (`407-555-0100`). Nascimento não pode ser no futuro. Campo opcional vazio apaga o valor.
+- **E-mail de outro card é recusado**: aparece "O e-mail … já está no card N". Se é a mesma pessoa,
+  use **⋯ › Unir com outro card**; se é irmão, o card do irmão já aceita o e-mail do responsável.
+- A sincronia do Asana e do QuickBooks **não desfaz** a correção: ela só preenche campo vazio.
+- A auditoria guarda o valor de antes e o de depois.
 
 #### Waiver por card: DocuSign ou nativa (#348)
 
