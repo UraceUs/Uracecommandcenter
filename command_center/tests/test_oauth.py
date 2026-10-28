@@ -29,6 +29,13 @@ SENHA = "senha-forte-123"
 VOLTA = "https://claude.ai/api/mcp/auth_callback"
 
 
+@pytest.fixture(autouse=True)
+def _sem_limite_de_registro(monkeypatch):
+    """#438: o registro aberto tem limite por IP; aqui cada teste registra o seu cliente, todos do mesmo IP."""
+    from command_center.api import oauth as _o
+    monkeypatch.setattr(_o, "REGISTROS_POR_HORA", 10**6)
+
+
 @pytest.fixture(scope="module")
 def cli():
     pasta = tempfile.mkdtemp()

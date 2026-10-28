@@ -786,9 +786,9 @@ def test_perfil_informado_no_painel_e_foto_do_webhook(cli, chat, monkeypatch):
 
 
 def test_foto_do_lead_vem_pelo_servidor_e_fica_em_cache(cli, chat, monkeypatch, tmp_path):
-    import urllib.request
     from command_center.api import crm as _crm
     monkeypatch.setenv("URACE_DIR", str(tmp_path))
+    monkeypatch.setenv("KOMMO_TOKEN", "token-ficticio")          # #438: sem token, nada de "Bearer " vazio
     h = entra(cli, "admin@urace.us")
     cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
     lid = _lid("5001")
@@ -804,7 +804,9 @@ def test_foto_do_lead_vem_pelo_servidor_e_fica_em_cache(cli, chat, monkeypatch, 
         def __enter__(self): return self
         def __exit__(self, *a): return False
         def read(self, n=None): return b"\\xff\\xd8imagem"
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=10: chamadas.append(req.get_header("Authorization")) or R())
+    import socket
+    monkeypatch.setattr(socket, "getaddrinfo", lambda h, *a, **k: [(2, 1, 6, "", ("93.184.215.14", 0))])   # #438: sem DNS no teste
+    monkeypatch.setattr(_crm, "_abrir_sem_redirecionar", lambda req: chamadas.append(req.get_header("Authorization")) or R())
     r = cli.get(f"{B}/crm/leads/{lid}/avatar", headers=h)
     assert r.status_code == 200 and r.headers["content-type"].startswith("image/jpeg") and r.content.startswith(b"\\xff\\xd8")
     assert chamadas and chamadas[0] and chamadas[0].startswith("Bearer ")

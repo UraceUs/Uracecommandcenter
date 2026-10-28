@@ -82,7 +82,9 @@ def email_html(eid: int, message_id: str, u=Depends(auth.usuario_atual), con: sq
         raise HTTPException(502, f"Gmail: {str(ex)[:300]}")
     html = r_.get("html") or ("<pre style='white-space:pre-wrap'>%s</pre>" % (r_.get("texto") or "").replace("&", "&amp;").replace("<", "&lt;"))
     resp = HTMLResponse(html_seguro.pagina(html, r_.get("assunto") or e["subject"] or ""))
-    resp.headers["Content-Security-Policy"] = html_seguro.CSP
+    # #438: `sandbox` no cabeçalho: aberto direto numa aba (fora do iframe com sandbox do painel), o e-mail continua
+    # numa origem opaca, sem acesso ao cookie nem à API do painel. Links abrem fora (allow-popups).
+    resp.headers["Content-Security-Policy"] = html_seguro.CSP + "; sandbox allow-popups allow-popups-to-escape-sandbox"
     resp.headers["X-Frame-Options"] = "SAMEORIGIN"
     return resp
 
