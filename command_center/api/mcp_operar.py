@@ -288,14 +288,20 @@ def normalizar(caminho):
     return caminho if caminho.startswith(PREFIXO) else PREFIXO + caminho.lstrip("/").removeprefix("ops/api/")
 
 
+# #422: o que não volta atrás, pelo caminho da rota (o mesmo critério do RX_APROVAR dos nomes de ferramenta):
+# unir cards, anular, apagar/excluir/remover. Pela IA do painel, vira o aprovar de um clique.
+NAO_VOLTA = re.compile(r"(^|[/_-])(merge|unir|void|anular|apagar|excluir|remover|delete)([/_-]|$)", re.I)
+
+
 def tipo_para_ia(metodo, caminho):
     """#420: ler | fazer | aprovar — o que a IA do painel faz com esta rota. Lê e faz o trabalho interno direto;
-    o que sai para fora, cobra (o `confirma` do conector) ou apaga vira o cartão de aprovar de um clique."""
+    o que sai para fora, cobra (o `confirma` do conector), apaga ou não volta atrás vira o cartão de aprovar."""
     metodo = str(metodo or "").upper()
     if metodo == "GET":
         return "ler"
-    op = _operacao(metodo, normalizar(caminho))
-    if op and (op["confirma"] or metodo == "DELETE"):
+    caminho = normalizar(caminho)
+    op = _operacao(metodo, caminho)
+    if op and (op["confirma"] or metodo == "DELETE" or NAO_VOLTA.search(op["caminho"])):
         return "aprovar"
     return "fazer"
 
@@ -327,7 +333,7 @@ def executar_como(user_id, metodo, caminho, corpo=None, consulta=None, aprovado=
     op = _operacao(metodo, caminho)
     if not op:
         raise ValueError(f"{metodo} {caminho} não existe no painel (veja painel_operacoes)")
-    if (op["confirma"] or metodo == "DELETE") and not aprovado:
+    if tipo_para_ia(metodo, caminho) == "aprovar" and not aprovado:
         raise ValueError("isto sai para fora, cobra ou apaga: só roda depois do aprovar de uma pessoa")
     con = conectar()
     try:
