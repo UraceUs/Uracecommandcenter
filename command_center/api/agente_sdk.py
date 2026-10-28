@@ -72,10 +72,11 @@ SERVIDORES = {"quickbooks": "quickbooks_mcp.py", "asana": "asana_mcp.py", "gmail
 NOME_PAINEL = "painel"
 NOME_SUITS = "suits"
 NOME_PENDENCIAS = "pendencias"
+NOME_OPERAR = "operar"
 FERRAMENTAS_EMBUTIDAS = ["Read", "Glob", "Grep", "WebSearch", "WebFetch", "ToolSearch"]
 
 # Leituras que o `acoes.eh_consulta` (feito para o protocolo antigo) não conhece pelo nome.
-LEITURAS = {"docusign_templates", "docusign_envelopes", "qbo_recorrencias", "gmail_baixar_anexo",
+LEITURAS = {"painel_operacoes", "docusign_templates", "docusign_envelopes", "qbo_recorrencias", "gmail_baixar_anexo",
             "qbo_itens", "qbo_invoices", "qbo_invoice", "qbo_estimates",
             "suits_pedidos", "suits_pedido", "suits_leads", "suits_fornecedores", "suits_anexos",
             "pendencias_abertas", "atelie_grupo_mensagens"}
@@ -131,6 +132,14 @@ def classificar(con, nome, args=None):
     pol = ia._politica(con, nome)
     if pol == "BLOCKED":
         return "bloqueada"
+    if nome == "painel_api":                          # #420: decide pela rota, não pelo nome da ferramenta
+        from command_center.api import mcp_operar
+        a = args or {}
+        if str(a.get("metodo") or "").upper() == "DELETE":   # a guarda-chuva do dono para apagar vale aqui também
+            g = um(con, "SELECT policy FROM action_policies WHERE action='apagar_qualquer_coisa'")
+            if g and g["policy"] == "BLOCKED":
+                return "bloqueada"
+        return mcp_operar.tipo_para_ia(a.get("metodo"), a.get("caminho"))
     if nome in AUTOMATICAS and pol == "SAFE":
         return "fazer"
     if args is not None and lembrete_em_aberto(con, nome, args):
@@ -147,6 +156,9 @@ _CHAVES_ALVO = ("email", "para", "to", "nome", "cliente", "cliente_nome", "pilot
 def resumo(nome, args):
     """Uma linha legível do que a ferramenta faria — é o que aparece no cartão de aprovar."""
     a = args if isinstance(args, dict) else {}
+    if nome == "painel_api":                          # #420: a rota e o que vai no corpo
+        corpo = json.dumps(a.get("corpo"), ensure_ascii=False)[:200] if a.get("corpo") not in (None, {}, []) else ""
+        return f"painel — {str(a.get('metodo') or '').upper()} {a.get('caminho') or ''}" + (f" · {corpo}" if corpo else "")
     partes = [f"{k}: {a[k]}" for k in _CHAVES_ALVO if a.get(k) not in (None, "", [])][:4]
     linhas = a.get("linhas")
     if isinstance(linhas, list) and linhas:
@@ -310,7 +322,7 @@ class Portao:
             if nome == "qbo_lembrete_invoice":           # #230: saiu sem clique; o painel faz a conta do lembrete
                 self.feitas.append(registrar_feita(con, self.command_id, nome, args, resposta))
                 _registrar_lembrete(con, args, resposta)
-            elif classificar(con, nome) == "fazer":
+            elif classificar(con, nome, args if nome == "painel_api" else None) == "fazer":
                 self.feitas.append(registrar_feita(con, self.command_id, nome, args, resposta))
         finally:
             con.close()
@@ -377,6 +389,59 @@ def ferramentas_do_painel():
                                 input_schema={"type": "object", "properties": props, "required": obrig},
                                 handler=fabrica(fn)))
     return create_sdk_mcp_server(NOME_PAINEL, "1.0.0", lista)
+
+
+def ferramentas_de_operar(user_id):
+    """#420 (dono, 28/10: *"ela tem autonomia para fazer tudo ali dentro, não é só ler ... operar, editar, mudar o
+    que for preciso"*): o painel inteiro para o AI Command, como a PESSOA que fez o pedido (o papel dela vale), pela
+    mesma rota do botão. Ler e o trabalho interno rodam direto; o que sai para fora, cobra ou apaga o portão
+    transforma no cartão de aprovar antes de chegar aqui."""
+    from claude_agent_sdk import SdkMcpTool, create_sdk_mcp_server
+
+    from command_center.api import mcp_operar
+
+    def operacoes(args):
+        con = conectar()
+        try:
+            quem = mcp_operar._quem_pelo_id(con, user_id)
+        finally:
+            con.close()
+        r = mcp_operar.operacoes(quem, (args or {}).get("busca"), (args or {}).get("limite") or 60)
+        r["como_usar"] = ("chame painel_api com metodo e caminho (troque {id} pelo número) e o corpo em JSON. Ler e o "
+                          "trabalho interno rodam na hora; o que tem confirma=true (ou DELETE) vira um aprovar de um clique.")
+        return r
+
+    def api(args):
+        a = args or {}
+        return mcp_operar.executar_como(user_id, a.get("metodo"), a.get("caminho"), a.get("corpo"), a.get("consulta"))
+
+    def fabrica(fn):
+        async def handler(args):
+            try:
+                res = await asyncio.to_thread(fn, args)
+                return {"content": [{"type": "text", "text": json.dumps(res, ensure_ascii=False, default=str)[:20000]}]}
+            except Exception as e:
+                return {"content": [{"type": "text", "text": f"{type(e).__name__}: {str(e)[:300]}"}], "is_error": True}
+        return handler
+
+    return create_sdk_mcp_server(NOME_OPERAR, "1.0.0", [
+        SdkMcpTool(name="painel_operacoes",
+                   description="O que dá para fazer no Command Center com o papel de quem pediu: cada rota (método, caminho, "
+                               "papel, campos do corpo e se pede aprovação). Use `busca` (ex.: 'clients', 'estoque', 'compras').",
+                   input_schema={"type": "object", "properties": {"busca": {"type": "string"}, "limite": {"type": "integer"}},
+                                 "required": []},
+                   handler=fabrica(operacoes)),
+        SdkMcpTool(name="painel_api",
+                   description="Opera o Command Center pela mesma rota do botão, como quem pediu: editar o card do cliente "
+                               "(PATCH /clients/{id} com name, email, phone, pilot_name, pilot_dob…), estoque, compras, "
+                               "agenda, checklists, Suits, tudo. Ler e o trabalho interno rodam na hora; o que sai para "
+                               "fora, cobra ou apaga vira um aprovar de um clique.",
+                   input_schema={"type": "object", "properties": {
+                       "metodo": {"type": "string", "enum": ["GET", "POST", "PATCH", "PUT", "DELETE"]},
+                       "caminho": {"type": "string", "description": "ex.: /clients/621"},
+                       "corpo": {"type": "object"}, "consulta": {"type": "object"}}, "required": ["metodo", "caminho"]},
+                   handler=fabrica(api)),
+    ])
 
 
 def pastas_da_ponte(escopo):
@@ -467,6 +532,7 @@ O CÉREBRO é a memória da empresa (processos, clientes, equipe, fornecedores, 
 COMO TRABALHAR
 - Leia antes de perguntar: QuickBooks (todas as invoices, clientes, itens e o histórico de preços), Asana, Gmail, DocuSign, Kommo, o painel (urace_*), a web e o cérebro. Nunca diga que não tem acesso a uma leitura sem tentar.
 - Faça direto o trabalho interno: tarefa, comentário e seção no Asana; cliente, item, invoice e estimate no QuickBooks SEM enviar; rascunho de e-mail; marcador no Gmail.
+- O COMMAND CENTER INTEIRO é seu para operar (dono, 28/10: "ela tem autonomia para fazer tudo ali dentro, não é só ler"), com o papel de quem pediu: editar o card do cliente (nome do responsável, piloto, nascimento, e-mail, telefone, empresa, status, notas), estoque, compras, agenda, checklists, Suits, vendas e o resto. Ache a rota com painel_operacoes e faça com painel_api. Nunca diga que só consegue ler o painel: faça. Se a rota recusar (papel, validação, e-mail de outro card), diga o motivo que ela deu.
 - O que sai da empresa ou não volta atrás (enviar invoice, waiver, lembrete ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência): chame a ferramenta normalmente. O painel não executa: transforma num "aprovar" de um clique e te devolve o número. Não insista nem procure outro caminho. A waiver é a exceção que o dono abriu: com a política dela em SAFE, ela sai na hora. O lembrete de invoice EM ABERTO também: `qbo_lembrete_invoice` com a invoice ainda com saldo sai na hora (dono, 14/10); invoice paga volta para o clique.
 
 PEDIDO INCOMPLETO (dono, 12/10: quem escreve aqui nem sempre sabe dar a instrução completa; o processo está em 10_PROCESSOS/Pedido incompleto.md)
@@ -545,6 +611,8 @@ def _opcoes(modelo, sistema, portao, limite, retomar, max_turnos):
         servidores[NOME_PAINEL] = ferramentas_do_painel()
         servidores[NOME_SUITS] = ferramentas_dos_suits(portao.user_id)
         servidores[NOME_PENDENCIAS] = ferramentas_das_pendencias(portao.command_id, portao.user_id)
+        if portao.user_id:                             # #420: opera como a pessoa; sem pessoa (rotina), só lê
+            servidores[NOME_OPERAR] = ferramentas_de_operar(portao.user_id)
     permitidas = embutidas + [f"mcp__{n}__*" for n in servidores]
     leitura = pastas_da_ponte(portao.escopo) if portao.escopo is not None else pastas_de_leitura()
     return ClaudeAgentOptions(

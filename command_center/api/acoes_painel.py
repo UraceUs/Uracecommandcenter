@@ -389,7 +389,20 @@ def painel_waiver_convite(con, user_id, client_id):
             "modelo": inv["kind"], "piloto": inv["driver_name"], "vale_ate": inv["expires_at"]}
 
 
+def painel_api(con, user_id, metodo, caminho, corpo=None, consulta=None):
+    """#420: a operação do painel que a IA pediu e uma pessoa aprovou (o que sai para fora, cobra ou apaga). Roda
+    pela rota do botão, como QUEM APROVOU: o papel dela vale, e a rota faz as travas de sempre."""
+    from command_center.api import mcp_operar
+    try:
+        r = mcp_operar.executar_como(user_id, metodo, caminho, corpo, consulta, aprovado=True)
+    except ValueError as e:
+        return {"aplicado": False, "motivo": str(e)}
+    return {"aplicado": r["ok"], "status": r["status"], "resposta": r["resposta"],
+            **({} if r["ok"] else {"motivo": f"o painel respondeu {r['status']}: {str(r['resposta'])[:300]}"})}
+
+
 ACOES = {
+    "painel_api": (painel_api, ("metodo", "caminho", "corpo", "consulta")),
     "painel_unir_clientes": (painel_unir_clientes, ("keep_id", "drop_id", "motivo")),
     "painel_varrer_cliente": (painel_varrer_cliente, ("client_id",)),
     "painel_waiver_lixeira": (painel_waiver_lixeira, ("waiver_id", "motivo")),
@@ -404,6 +417,7 @@ ACOES = {
     "venda_fechar": (venda_fechar, ("opp_id", "nome")),
 }
 DESCRICOES = {
+    "painel_api": "Operação do painel pedida pela IA (método e caminho da rota, com o corpo): roda pela mesma rota do botão, como quem aprova.",
     "painel_unir_clientes": "Une dois cards de cliente em um. Só quando têm o mesmo e-mail, telefone ou responsável; fora disso é decisão humana.",
     "painel_varrer_cliente": "Varre o Gmail (urace@ e support@) e o DocuSign de um cliente e liga o que achar ao card.",
     "painel_waiver_lixeira": "Tira uma waiver do painel (restaurável). Envelope em aberto é anulado no DocuSign; assinado do DocuSign só some do painel. "
@@ -423,7 +437,7 @@ DESCRICOES = {
 def executar(con, user_id, acao, args):
     fn, params = ACOES[acao]
     kw = {k: args.get(k) for k in params if k in args}
-    opcionais = ("motivo", "opp_id", "nome", "texto", "minutos", "proximo_em", "proximo_que", "o_que",
+    opcionais = ("corpo", "consulta", "motivo", "opp_id", "nome", "texto", "minutos", "proximo_em", "proximo_que", "o_que",
                  "onde", "quando", "notas", "titulo", "etapa", "resultado")
     faltam = [k for k in params if k not in kw and k not in opcionais]
     if faltam:
