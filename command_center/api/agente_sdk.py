@@ -135,6 +135,10 @@ def classificar(con, nome, args=None):
     if nome == "painel_api":                          # #420: decide pela rota, não pelo nome da ferramenta
         from command_center.api import mcp_operar
         a = args or {}
+        if str(a.get("metodo") or "").upper() == "DELETE":   # a guarda-chuva do dono para apagar vale aqui também
+            g = um(con, "SELECT policy FROM action_policies WHERE action='apagar_qualquer_coisa'")
+            if g and g["policy"] == "BLOCKED":
+                return "bloqueada"
         return mcp_operar.tipo_para_ia(a.get("metodo"), a.get("caminho"))
     if nome in AUTOMATICAS and pol == "SAFE":
         return "fazer"

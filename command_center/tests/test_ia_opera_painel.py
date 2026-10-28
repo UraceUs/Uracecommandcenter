@@ -41,6 +41,9 @@ def test_ia_classifica_a_rota_ler_fazer_e_aprovar(con):
     assert c(con, "painel_api", {"metodo": "PATCH", "caminho": "/clients/1"}) == "fazer"          # editar o card: direto
     assert c(con, "painel_api", {"metodo": "POST", "caminho": "/clients/1/waiver-invite"}) == "aprovar"   # sai para o cliente
     assert c(con, "painel_api", {"metodo": "DELETE", "caminho": "/estoque/item/3"}) == "aprovar"  # apagar: clique
+    con.execute("UPDATE action_policies SET policy='BLOCKED' WHERE action='apagar_qualquer_coisa'")
+    assert c(con, "painel_api", {"metodo": "DELETE", "caminho": "/estoque/item/3"}) == "bloqueada"   # "a IA nunca apaga"
+    assert c(con, "painel_api", {"metodo": "PATCH", "caminho": "/clients/1"}) == "fazer"
     con.execute("INSERT INTO action_policies (action, policy) VALUES ('painel_api', 'BLOCKED')")
     assert c(con, "painel_api", {"metodo": "PATCH", "caminho": "/clients/1"}) == "bloqueada"      # o dono desliga tudo
 
