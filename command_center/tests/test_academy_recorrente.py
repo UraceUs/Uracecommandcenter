@@ -267,7 +267,7 @@ def test_vaga_do_pacote_devolvida_vale_para_a_extra_ainda_nao_cobrada(con, cenar
 
 def test_card_da_equipe_acima_do_contrato_conta_so_o_pacote_e_as_extras(con):
     """Pacote de 4: 3 do plano e 2 pagas no Stripe no mês. Sobra 1 vaga e nada está acima do contrato; uma extra, sim."""
-    from command_center.api.rotas import resumo_mensalidade
+    from command_center.api.rotas_clientes import resumo_mensalidade
     card, cid, pid = aluno(con, sessoes=4)
     m = _mes()
     for d in ("03", "04", "05"):

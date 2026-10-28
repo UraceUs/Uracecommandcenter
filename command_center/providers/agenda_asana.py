@@ -63,8 +63,8 @@ def _dados(con, b):
 
 
 def titulo(x):
-    """O padrão do quadro: 'Piloto_Serviço [n/m]' (rotas.nome_tarefa)."""
-    from command_center.api.rotas import nome_tarefa
+    """O padrão do quadro: 'Piloto_Serviço [n/m]' (rotas_clientes.nome_tarefa)."""
+    from command_center.api.rotas_clientes import nome_tarefa
     return nome_tarefa(x["driver"] or x["resp"], x["service_name"] or "Session", None, x["n"], x["m"])
 
 
