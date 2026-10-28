@@ -46,7 +46,9 @@ Os guias ficam dentro do próprio painel, em **Administrativo › Como usar**, p
 | [`skills/`](skills) | skills de apoio (Asana, calendário, DocuSign, faturamento no QuickBooks) |
 | `relatorios/`, `tarefas/` | a ponte com a VPS: relatórios que ela escreve e tarefas para ela |
 | `dados/` | dados derivados (por exemplo, as peças mais usadas a partir do QuickBooks) |
-| `legacy-v1/`, `admagent/` | versões antigas, mantidas só como referência |
+| `admagent/` | a identidade do agente administrativo (lida pelos scripts do `salesagent/`) |
+| `.obsidian/` | a configuração do cofre do Obsidian: o repositório inteiro abre como cofre e as notas ficam em `brain/` (ver `brain/_meta/COMECE AQUI.md`) |
+| [`docs/historico/`](docs/historico) | o que não roda mais, guardado como referência: a geração 1 do agente (`legacy-v1/`, n8n/Supabase, nunca implantada) e o README do agente de vendas antigo |
 
 ## Rodar e testar
 
@@ -65,10 +67,10 @@ CC_E2E=1 python -m pytest -q command_center/tests/e2e
 ```
 
 O CI (`.github/workflows/ci.yml`) roda tudo isso em cada PR: ruff, pytest, tsc, oxlint, build e end-to-end.
-Desde #344 o pytest do backend e o end-to-end rodam em 3 máquinas cada, ao mesmo tempo, sem tirar nenhum
+Desde #344 o pytest do backend e o end-to-end rodam em várias máquinas ao mesmo tempo (6 cada, desde #387), sem tirar nenhum
 teste: `--parte K/N` (o `conftest.py` da raiz) reparte por arquivo — um arquivo fica inteiro numa parte, na
 ordem de sempre; só o arquivo grande do e2e vai em blocos seguidos — e cada parte imprime `parte K/N: X de T testes coletados`. Para repetir uma parte aqui:
-`python -m pytest -q --parte 2/3` ou `CC_E2E=1 python -m pytest -q command_center/tests/e2e --parte 1/3`.
+`python -m pytest -q --parte 2/6` ou `CC_E2E=1 python -m pytest -q command_center/tests/e2e --parte 1/6`.
 Sem `--parte`, roda tudo.
 
 ## Como uma mudança chega à VPS
@@ -78,13 +80,13 @@ O padrão completo de engenharia está em [`CLAUDE.md`](CLAUDE.md).
 1. Uma **issue** com o pedido nas palavras do dono e o que conta como "feito".
 2. Um **branch** `claude/issue-<n>-<assunto>`, saindo de `claude/commandcenter-vps` (o branch que roda na VPS).
 3. Um **PR** para esse branch, com `Closes #<n>` e o template. O PR inclui teste novo que falha sem a mudança, e o guia do assunto atualizado (Playbook junto).
-4. Com o CI verde, o merge, e então o **deploy** na VPS:
+4. Com o CI verde, o merge. O CI do push no branch da VPS grava a tag `ci-verde/<sha>` (#286, #387); o bloco de deploy só vai ao dono depois dela, um por bloco de issues (#277):
 
 ```bash
-cd ~/Uraceagent && git fetch origin claude/commandcenter-vps && git checkout claude/commandcenter-vps && git pull origin claude/commandcenter-vps && bash adminai/deploy/command_center/servir_command_center.sh
+cd ~/Uraceagent && git pull origin claude/commandcenter-vps && bash adminai/deploy/command_center/servir_command_center.sh
 ```
 
-O script prepara o ambiente Python, gera o build do painel, roda os testes do backend e reinicia o serviço (`uvicorn` em `127.0.0.1:8790`, atrás do Caddy). As migrações do banco rodam sozinhas quando o serviço sobe.
+O script roda em segundo plano (sobrevive à queda do SSH), prepara o ambiente Python, gera o build do painel e reinicia o serviço (`uvicorn` em `127.0.0.1:8790`, atrás do Caddy). Com a tag `ci-verde` do commit, a bateria de testes não roda de novo na VPS; sem ela, roda. As migrações do banco rodam sozinhas quando o serviço sobe, e a "prova real" no fim confere o painel no ar.
 
 ## Regras que não mudam
 
