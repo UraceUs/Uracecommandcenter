@@ -4961,5 +4961,8 @@
 "Nenhuma etiqueta: o calendário sai sem selo": "No labels: the calendar shows no badge",
 "Dias da etiqueta": "Label days",
 "Dias da etiqueta nova": "New label days",
-"Adicionar etiqueta": "Add label"
+"Adicionar etiqueta": "Add label",
+"Responsável (quem paga e assina)": "Guardian (who pays and signs)",
+"vazio = o próprio responsável": "empty = the guardian themself",
+"E-mail alternativo": "Alternate e-mail"
 }
