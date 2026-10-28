@@ -54,7 +54,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const catalog = useGet<Catalog>(id && tab === 'equip' ? '/catalog' : null)
   const corridas = useGet<Race[]>(id && tab === 'races' ? `/races?client_id=${id}&all=true` : null)
   const [edit, setEdit] = useState(false)
-  const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '', plan_type: '', pro_driver: false })
+  const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '', plan_type: '', pro_driver: false,
+    name: '', pilot_name: '', pilot_dob: '', email: '', email_alt: '', phone: '', company: '' })
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [selInv, setSelInv] = useState<number[]>([])
@@ -96,11 +97,18 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     try { await api.patch(`/clients/${c.id}/profile`, { pro_driver: vai }); toast(vai ? tr("Agora é Pro Racing Driver.") : tr("Saiu de Pro Racing Driver."), 'ok'); if (!vai && (tab === 'equip' || tab === 'races')) setTab('timeline'); reload() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setProBusy(false) }
   }
-  function openEdit() { setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '', plan_type: c.plan_type || '', pro_driver: !!c.pro_driver }); setEdit(true) }
+  function openEdit() {
+    setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '', plan_type: c.plan_type || '', pro_driver: !!c.pro_driver,
+      name: c.name || '', pilot_name: c.pilot_name || '', pilot_dob: (c.pilot_dob || '').slice(0, 10), email: c.email || '', email_alt: c.email_alt || '', phone: c.phone || '', company: c.company || '' })
+    setEdit(true)
+  }
   async function save() {
     setSaving(true)
     try {
       const body: Record<string, unknown> = { status: form.status, stage_code: form.stage_code || null, notes: form.notes, monthly_plan: form.monthly_plan || null, monthly_note: form.monthly_note || null }
+      // #410: só vai o contato que mudou; vazio apaga (o responsável não fica vazio — o servidor recusa)
+      for (const k of ['name', 'pilot_name', 'pilot_dob', 'email', 'email_alt', 'phone', 'company'] as const)
+        if (form[k].trim() !== ((k === 'pilot_dob' ? (c.pilot_dob || '').slice(0, 10) : c[k]) || '')) body[k] = form[k].trim()
       if (can('MANAGER')) body.vip = form.vip
       await api.patch(`/clients/${c.id}`, body)
       const perfil: Record<string, unknown> = { plan_type: form.plan_type }
@@ -172,6 +180,15 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       </div>
     </details>
     {edit && <Section title={tr("Editar cliente")}>
+      <div className="grid g3" style={{ marginBottom: 12 }}>
+        <div className="field"><label htmlFor="ed-name">{tr("Responsável (quem paga e assina)")}</label><input id="ed-name" className="input" required autoComplete="off" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ed-pilot">{tr("Piloto")}</label><input id="ed-pilot" className="input" autoComplete="off" value={form.pilot_name} onChange={e => setForm({ ...form, pilot_name: e.target.value })} placeholder={tr("vazio = o próprio responsável")} /></div>
+        <div className="field"><label htmlFor="ed-dob">{tr("Nascimento do piloto")}</label><input id="ed-dob" className="input" type="date" value={form.pilot_dob} onChange={e => setForm({ ...form, pilot_dob: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ed-email">{tr("E-mail")}</label><input id="ed-email" className="input" type="email" inputMode="email" autoComplete="off" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ed-email2">{tr("E-mail alternativo")}</label><input id="ed-email2" className="input" type="email" inputMode="email" autoComplete="off" value={form.email_alt} onChange={e => setForm({ ...form, email_alt: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ed-phone">{tr("Telefone")}</label><input id="ed-phone" className="input" type="tel" inputMode="tel" autoComplete="off" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ed-company">{tr("Empresa")}</label><input id="ed-company" className="input" autoComplete="off" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} /></div>
+      </div>
       <div className="grid g3">
         <div className="field"><label>{tr("Status")}</label><select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{['ACTIVE', 'NEW', 'PENDING', 'AT_RISK', 'COMPLETED', 'INACTIVE'].map(s => <option key={s}>{s}</option>)}</select></div>
         <div className="field"><label>{tr("Etapa")}</label><select className="input" value={form.stage_code} onChange={e => setForm({ ...form, stage_code: e.target.value })}><option value="">—</option>{data.stages.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}</select></div>

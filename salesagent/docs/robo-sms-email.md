@@ -16,6 +16,7 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | "Oi" e "quanto custa" logo em seguida | espera 8 s e responde uma vez só |
 | Objeção, pronto para fechar, já compete, pede pessoa | oferece a call (ou a frase de espera) e a conversa entra em **Precisa de atenção** |
 | SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (o Dialpad confirma e bloqueia o contato) e nunca mais escreve; UNSTOP devolve |
+| SMS de código curto (menos de 10 dígitos) ou de número 0800 dos EUA (800, 833, 844, 855, 866, 877, 888) | **não responde** e não vira Precisa de atenção: é serviço automático, não lead (#412) |
 | SMS só com HELP / INFO | **não responde**: o Dialpad manda a mensagem de ajuda do escritório |
 | "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
 | Cliente do painel, oportunidade com o closer, card do Kommo com tag de passagem (`escalated`, `sdr:handoff`, `sdr:agora-nao`) | **não responde**: é da equipe |
@@ -26,6 +27,7 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | Falhou o envio (Dialpad ou Gmail recusou) | vira **Precisa de atenção** |
 | Canal ligado depois de dias desligado | **não responde e-mail velho** (só o que chegou nos últimos 30 min) |
 | E-mail automático, newsletter, lista, resposta de férias, @urace.us, já marcado por filtro do Gmail | **ignora** |
+| E-mail de endereço de empresa (support@, help@, billing@, invoice@, account@, security@, abuse@, admin@, sales@, partners@, careers@, jobs@, hr@) ou da lista `SDR_CANAL_EMAIL_IGNORAR` | **ignora** e não vira Precisa de atenção: é fornecedor, não lead (#413); fica na support@ para a equipe |
 | Uma pessoa da equipe responde à mão (SMS pelo Dialpad ou e-mail na conversa) | **pausa o robô naquele contato** por 72 h; para voltar: `POST /ops/api/sdr/canais/{id}` com `reativar` |
 | Nível do robô em Observar ou Organizar | não envia nada |
 | Follow-up por SMS ou e-mail | **não existe nesta fase** (SMS de follow-up é solicitação pela lei da Flórida) |
@@ -64,6 +66,7 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | `SDR_CANAL_ESPERA_MIN` | 10 | SMS que chegou há menos que isso fica para a volta seguinte (a pessoa ainda está escrevendo) |
 | `SDR_CANAL_FILA_HORAS` | 72 | SMS mais velho que isso não é respondido pela volta (cobre o fim de semana) |
 | `SDR_CANAL_EMAIL_IDADE_H` | 72 | e-mail mais velho que isso (cabeçalho Date) que o robô nunca viu não é respondido: fica com a equipe |
+| `SDR_CANAL_EMAIL_IGNORAR` | vazio | domínios ou endereços que o robô nunca responde, separados por vírgula (`fornecedor.com,fulano@outro.com`): fornecedor que escreve de endereço pessoal |
 | `SDR_CANAL_EMAIL_MIN` | 3 | só com `SDR_CANAL_LOTE_MIN=0`: de quantos em quantos minutos ele lê a support@ |
 | `SDR_CANAL_RAJADA_SEG` | 8 | só com `SDR_CANAL_LOTE_MIN=0`: quanto ele espera mensagens seguidas no SMS antes de responder |
 

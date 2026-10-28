@@ -1383,6 +1383,10 @@ O robô de vendas no Kommo. Três níveis:
   novo pelo SMS ou pelo e-mail nos 30 minutos seguintes (e vice-versa). Ele reconhece a mesma pessoa pelo telefone ou
   pelo e-mail do card no Kommo.
 - Conversa em **Precisa de atenção** (SMS e e-mail) é lead que o robô não respondeu: responda à mão.
+- **E-mail de fornecedor (#413):** o robô não responde endereço de empresa (support@, billing@, sales@...) e nem os
+  domínios de `SDR_CANAL_EMAIL_IGNORAR`; o e-mail fica na support@ para a equipe ler.
+- **SMS automático (#412):** código curto (como os de verificação) e número 0800 (800, 833, 844, 855, 866, 877,
+  888) não recebem resposta do robô nem viram Precisa de atenção; a mensagem fica guardada na conversa.
 - **Lead do Kommo sem resposta? (#414)** `GET /ops/api/sdr/rastro/{lead_id}` mostra o que a ponte fez com ele
   (mensagem, resposta, trava, erro) e um veredito: respondido, ou a trava ou o erro que segurou a resposta.
 - Viu o robô errar? Relate com o lead (id ou nome) e o que aconteceu. Quem cuida do robô resolve.
