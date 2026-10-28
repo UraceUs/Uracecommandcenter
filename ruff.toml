@@ -3,7 +3,7 @@
 # estiver limpo nela — lint que ninguém consegue deixar verde vira ruído.
 target-version = "py311"
 line-length = 160
-extend-exclude = ["legacy-v1", "salesagent", "admagent", "command_center/web", "**/node_modules"]
+extend-exclude = ["docs/historico/legacy-v1", "salesagent", "admagent", "command_center/web", "**/node_modules"]
 
 [lint]
 select = ["E9", "F"]
