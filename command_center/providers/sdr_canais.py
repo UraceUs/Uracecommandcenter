@@ -626,6 +626,9 @@ def responder_fila_sms(con, esperar=True, espera=None):
 # ------------------------------------------------------------------ e-mail (support@)
 _AUTOMATICO = re.compile(r"(no-?reply|do-?not-?reply|mailer-daemon|postmaster|notifications?@|bounce|"
                          r"newsletter|marketing@|news@|info@.*\.(?:mailchimp|sendgrid))", re.I)
+# endereço de função: empresa (fornecedor, sistema), não uma pessoa querendo correr (dono, 28/10, #413)
+_FUNCAO = re.compile(r"^(support|suporte|help|helpdesk|billing|invoices?|accounts?|accounting|security|abuse|admin|"
+                     r"sales|partners?|careers|jobs|hr)@", re.I)
 _LABELS_OK = {"INBOX", "UNREAD", "IMPORTANT", "STARRED", "CATEGORY_PERSONAL"}
 _CITACAO = re.compile(r"^(On .+ wrote:|Em .+ escreveu:|El .+ escribió:|Le .+ a écrit ?:|-----Original Message-----|"
                       r"From: .+|De: .+|Sent from my )", re.M)
@@ -656,6 +659,11 @@ def automatico(remetente, cabecalhos, marcadores):
     email = _email_de(remetente)
     if not email or "@" not in email or email.endswith("@urace.us") or _AUTOMATICO.search(email):
         return "remetente automático ou da URACE"
+    if _FUNCAO.search(email):
+        return "endereço de empresa (support@, billing@...): não é lead"
+    ignorar = [x.strip().lower().lstrip("@") for x in cfg("SDR_CANAL_EMAIL_IGNORAR").split(",") if x.strip()]
+    if any(email == x or email.endswith("@" + x) or email.endswith("." + x) for x in ignorar):
+        return "na lista de ignorados (SDR_CANAL_EMAIL_IGNORAR): não é lead"
     h = {k.lower(): (v or "").lower() for k, v in (cabecalhos or {}).items()}
     if h.get("auto-submitted") and h["auto-submitted"] != "no":
         return "resposta automática (Auto-Submitted)"
