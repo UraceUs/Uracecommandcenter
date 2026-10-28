@@ -282,6 +282,82 @@ def chamar(quem, ctx, metodo, caminho, corpo=None, consulta=None, confirmar=Fals
     return {"status": status, "ok": 200 <= status < 300, "resposta": resposta}
 
 
+def normalizar(caminho):
+    """'clients/621', '/clients/621' ou '/ops/api/clients/621' → '/ops/api/clients/621'."""
+    caminho = "/" + str(caminho or "").lstrip("/")
+    return caminho if caminho.startswith(PREFIXO) else PREFIXO + caminho.lstrip("/").removeprefix("ops/api/")
+
+
+def tipo_para_ia(metodo, caminho):
+    """#420: ler | fazer | aprovar — o que a IA do painel faz com esta rota. Lê e faz o trabalho interno direto;
+    o que sai para fora, cobra (o `confirma` do conector) ou apaga vira o cartão de aprovar de um clique."""
+    metodo = str(metodo or "").upper()
+    if metodo == "GET":
+        return "ler"
+    op = _operacao(metodo, normalizar(caminho))
+    if op and (op["confirma"] or metodo == "DELETE"):
+        return "aprovar"
+    return "fazer"
+
+
+def _quem_pelo_id(con, user_id):
+    """A pessoa do painel, no mesmo formato que `auth.usuario_atual` devolve."""
+    u = con.execute("SELECT id, email, name, role, cargo, active FROM users WHERE id=?", (user_id,)).fetchone()
+    if not u or not u["active"]:
+        raise ValueError("a pessoa que fez o pedido não está ativa no painel")
+    return {"id": u["id"], "email": u["email"], "name": u["name"], "role": u["role"], "free": auth.livre(u["email"]),
+            "cargo": None if auth.livre(u["email"]) else u["cargo"], "via": "ia"}
+
+
+def executar_como(user_id, metodo, caminho, corpo=None, consulta=None, aprovado=False):
+    """#420 (dono, 28/10: *"ela tem que operar, editar, mudar o que for preciso ... fazer tudo ali dentro"*): a IA do
+    painel (AI Command) opera como a pessoa que fez o pedido, pela MESMA rota do botão — papel, cargo, validação,
+    travas e auditoria da rota valem iguais. A credencial é uma sessão interna que vale só esta chamada e é revogada
+    no fim. O que vai para fora ou cobra (`confirma`) só roda com `aprovado=True`, isto é, depois do clique de uma
+    pessoa no cartão de aprovar (motor → acoes_painel.painel_api)."""
+    import secrets as _s
+    metodo = str(metodo or "").upper()
+    if metodo not in METODOS:
+        raise ValueError(f"método inválido: use um de {', '.join(METODOS)}")
+    caminho = normalizar(caminho)
+    if ".." in caminho or "?" in caminho or "#" in caminho:
+        raise ValueError("caminho inválido: passe a consulta em 'consulta', não na URL")
+    if FORA.match(caminho):
+        raise ValueError("login, chaves e área do cliente não são operados pela IA")
+    op = _operacao(metodo, caminho)
+    if not op:
+        raise ValueError(f"{metodo} {caminho} não existe no painel (veja painel_operacoes)")
+    if (op["confirma"] or metodo == "DELETE") and not aprovado:
+        raise ValueError("isto sai para fora, cobra ou apaga: só roda depois do aprovar de uma pessoa")
+    con = conectar()
+    try:
+        quem = _quem_pelo_id(con, user_id)
+        if not pode(quem, op["papel"]):
+            raise ValueError(f"isto é do papel {op['papel']} ou acima; quem pediu é {quem['role']}")
+        token, _ = auth.abrir_sessao(con, quem["id"], False, "127.0.0.1", "ai-command (interna)")
+        con.commit()
+    finally:
+        con.close()
+    csrf = _s.token_urlsafe(24)
+    ctx = {"base_url": "http://127.0.0.1",
+           "cabecalhos": {"cookie": f"{auth.COOKIE_SESSAO}={token}; {auth.COOKIE_CSRF}={csrf}", "x-csrf": csrf,
+                          "user-agent": "ai-command (interna)"}}
+    status = None
+    try:
+        status, resposta = _requisicao(ctx, metodo, caminho, corpo, consulta)
+    finally:
+        con = conectar()
+        try:
+            auth.revogar_sessao(con, token)
+            if metodo != "GET":
+                auditar(con, "ai.painel_api", f"user:{quem['id']}", user_id=quem["id"], entity_type="mcp",
+                        detail={"metodo": metodo, "caminho": caminho, "status": status, "aprovado": bool(aprovado)})
+            con.commit()
+        finally:
+            con.close()
+    return {"status": status, "ok": 200 <= status < 300, "resposta": resposta}
+
+
 def _requisicao(ctx, metodo, caminho, corpo, consulta):
     """A requisição de verdade, para o próprio app (ASGI), com a credencial de quem chamou.
     Roda num laço de eventos próprio: quem chama já está fora do laço do servidor."""
