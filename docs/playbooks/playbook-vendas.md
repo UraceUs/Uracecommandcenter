@@ -138,7 +138,7 @@ sem dano ao kart; dano acima do depósito é cobrado à parte.
 | Fechar venda | **Fechar venda** | cada passo com "feito", "aguardando" ou "falhou"; auditoria `sales.close` |
 | Pagamento | QuickBooks → espelho do painel | o espelho sincroniza a cada 15 min |
 | Waiver | DocuSign ou área do cliente | `sent` → `completed`. **`delivered` não é assinada** |
-| Contato ou pedido pelo site | `/contact/` e a loja | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260) |
+| Contato ou pedido pelo site | `/contact/` e a loja | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260). Limite contra robô: 8 envios por conexão a cada 10 min e 6 por hora para o mesmo e-mail (#438); passou disso, o site pede para tentar mais tarde |
 | Chat do site | balão do Kommo nas páginas públicas (#170) | a conversa vira lead no Kommo, como no site antigo, e aparece no Chat do Kommo; responda por lá |
 
 ### As etapas e o que move cada uma

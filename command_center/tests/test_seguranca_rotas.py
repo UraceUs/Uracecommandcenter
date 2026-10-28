@@ -261,6 +261,16 @@ def test_cabecalhos_do_painel(cli):
         assert "script-src" not in csp or "'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";")[0]
 
 
+def test_cabecalhos_do_site_publico(site):
+    """O site também: sem `unsafe-eval` nem script inline, sem moldura de fora, nosniff e HTTPS sempre."""
+    for caminho in ("/", "/contact/", "/cart/"):
+        h = site.get(caminho).headers
+        csp = h["content-security-policy"]
+        assert "frame-ancestors 'none'" in csp and "unsafe-eval" not in csp, caminho
+        assert "'unsafe-inline'" not in csp.split("script-src", 1)[1].split(";")[0], caminho
+        assert h["x-content-type-options"] == "nosniff" and h["strict-transport-security"].startswith("max-age="), caminho
+
+
 def test_hsts_so_por_https():
     """Em http puro (máquina local) o navegador ignoraria, e o teste local não pode prender o localhost em https."""
     with TestClient(app, base_url="http://127.0.0.1") as c:
@@ -454,3 +464,49 @@ def test_registro_oauth_tem_limite_por_conexao(cli):
     corpo = {"client_name": "Cliente Ficticio", "redirect_uris": ["https://cliente.example.com/cb"]}
     codigos = [cli.post("/ops/oauth/register", json=corpo).status_code for _ in range(oauth.REGISTROS_POR_HORA + 1)]
     assert codigos[:-1] == [201] * oauth.REGISTROS_POR_HORA and codigos[-1] == 429
+
+
+# ------------------------------------------------------------------ formulários públicos do site
+@pytest.fixture()
+def site(tmp_path, monkeypatch):
+    from command_center.api import vitrine
+    monkeypatch.setenv("CC_DB_PATH", str(tmp_path / "cc.sqlite"))
+    monkeypatch.setenv("URACE_DIR", str(tmp_path))
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))
+    monkeypatch.delenv("CC_SITE_HOSTS", raising=False)
+    vitrine._envios.clear()
+    with TestClient(app, base_url="https://novo.urace.us") as t:
+        yield t
+    vitrine._envios.clear()
+
+
+def test_contato_do_site_tem_limite_por_ip_e_por_e_mail_de_destino(site, tmp_path):
+    """#438: a confirmação vai para o e-mail digitado; sem teto por destino, trocando de IP, dava para encher a
+    caixa de alguém com e-mails da URACE. Por conexão: 8 a cada 10 min; por destino: 6 por hora."""
+    import json
+
+    from command_center.api import vitrine
+
+    def manda(email):
+        return site.post("/ops/api/vitrine/contato", json={"nome": "Rita Ficticia", "email": email, "mensagem": "Oi, tudo bem?"})
+    alvo = "rita.ficticia@example.com"
+    assert [manda(alvo).status_code for _ in range(vitrine._MAX_POR_EMAIL)] == [200] * vitrine._MAX_POR_EMAIL
+    assert manda(alvo).status_code == 400, "o mesmo destino, de novo na mesma hora"
+    assert manda("outra.ficticia@example.com").status_code == 200, "outro destino da mesma conexão ainda passa"
+    assert manda("mais.uma.ficticia@example.com").status_code == 400, "a conexão passou de 8 em 10 min"
+    enviados = [json.loads(x)["to"] for x in (tmp_path / "emails.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert enviados.count(alvo) == vitrine._MAX_POR_EMAIL
+
+
+def test_volta_do_stripe_usa_so_o_host_conferido():
+    """#438: `Host: novo.urace.us:@outro.example` passava no `e_do_site` (que olha só o nome antes do `:`) e o
+    `_origem` devolvia o cabeçalho inteiro: a volta do Stripe apontava para o outro."""
+    from starlette.requests import Request
+
+    from command_center.api import vitrine
+
+    def origem(host):
+        return vitrine._origem(Request({"type": "http", "headers": [(b"host", host.encode())]}))
+    assert origem("novo.urace.us:@outro.example") == "https://novo.urace.us"
+    assert origem("novo.urace.us") == "https://novo.urace.us"
+    assert origem("127.0.0.1:8000") == "http://127.0.0.1:8000"
