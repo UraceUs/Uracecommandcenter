@@ -590,6 +590,33 @@ def reenviar(lid: int, mid: int, dados: ReenviarIn, request: Request, u=Depends(
     return {"ok": True, "msg_id": novo, "como": como, "detalhe": det}
 
 
+def _host_do_kommo(url):
+    """O host é do Kommo (ou do amoCRM, o mesmo serviço)? Só para ele vai o token da conta."""
+    import re
+    from urllib.parse import urlsplit
+    host = (urlsplit(url).hostname or "").lower()
+    return bool(re.search(r"(^|\.)(kommo\.com|amocrm\.com|amocrm\.ru)$", host))
+
+
+def _avatar_pode(url):
+    """https, porta padrão, sem usuário na autoridade e resolvendo só para IP público (a regra do `pagina`)."""
+    from urllib.parse import urlsplit
+    from command_center.providers import pagina
+    try:
+        if urlsplit(url).scheme != "https":
+            return False
+        pagina._conferir(url)
+        return True
+    except (pagina.ErroPagina, ValueError):
+        return False
+
+
+def _abrir_sem_redirecionar(req):
+    import urllib.request
+    from command_center.providers import pagina
+    return urllib.request.build_opener(pagina._SemRedirecionar).open(req, timeout=10)
+
+
 @r.get("/leads/{lid}/avatar")
 def avatar(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
     """Foto do perfil que o Kommo manda no webhook. A URL (amojo.kommo.com) não é pública: o servidor
@@ -616,10 +643,18 @@ def avatar(lid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = De
         except Exception:
             token = ""
     dados, mt = None, None
-    for headers in ({"Authorization": f"Bearer {token}", "User-Agent": "urace-command-center"}, {"User-Agent": "urace-command-center"}):
+    # #438: o endereço vem de fora (o autor da mensagem no webhook). O token da conta do Kommo só vai para o próprio
+    # Kommo; endereço que não resolve para IP público (127.0.0.1, 10.x, 169.254.x…) nem é buscado (SSRF); e o
+    # redirecionamento não é seguido (levaria o cabeçalho com o token para onde o outro lado mandar).
+    if not _avatar_pode(url):
+        raise HTTPException(404, "foto indisponível")
+    cabecalhos = [{"User-Agent": "urace-command-center"}]
+    if token and _host_do_kommo(url):
+        cabecalhos.insert(0, {"Authorization": f"Bearer {token}", "User-Agent": "urace-command-center"})
+    for headers in cabecalhos:
         try:
             req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with _abrir_sem_redirecionar(req) as resp:
                 ct = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
                 corpo = resp.read(3_000_000)
                 if ct.startswith("image/") and corpo:

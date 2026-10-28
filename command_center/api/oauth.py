@@ -49,6 +49,7 @@ ESCOPO = "mcp:read"          # ler o painel pelo MCP (o padrão)
 # rota continua conferindo o papel dela, e o que é só do gerente continua só do gerente.
 ESCOPO_OPERAR = "mcp:write"
 PAPEL_PARA_OPERAR = "OPERATOR"
+REGISTROS_POR_HORA = 20      # #438: por IP; o conector do claude.ai registra uma vez por conexão
 
 
 def emissor(request=None):
@@ -122,6 +123,13 @@ def registrar(dados: dict, request: Request, con: sqlite3.Connection = Depends(g
     """O cliente se apresenta e recebe um `client_id`. **Sem sessão**, de propósito: é o
     que a especificação pede, e registrar-se ainda não dá acesso a nada — só o
     `/authorize`, com gente logada aprovando, é que dá."""
+    # #438: registrar é aberto (a especificação manda), mas não sem fim: cada registro é uma linha no banco
+    ip = auth._ip(request)
+    desde = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
+    if um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key=? AND at>?", (f"oauth-register:{ip}", desde))["n"] >= REGISTROS_POR_HORA:
+        raise HTTPException(429, "registros demais desta conexão; tente de novo mais tarde")
+    inserir(con, "login_attempts", key=f"oauth-register:{ip}", ok=1)
+    con.commit()
     uris = dados.get("redirect_uris") or []
     if not isinstance(uris, list) or not uris:
         raise HTTPException(400, "redirect_uris é obrigatório")

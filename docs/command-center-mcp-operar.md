@@ -96,5 +96,7 @@ que confere no QuickBooks antes de gravar. A invoice criada cujo envio falhou sa
 - Chave de API (`urk_…`) sem "só leitura" também opera, pelo papel da chave. A chave já criada passa de
   "só leitura" para operação (e volta) em **Usuários › Chaves de API › Liberar para operar**, sem
   trocar o valor; só o administrador muda, e fica na auditoria (`apikey.mode`, #209).
-- Ficam fora do MCP: login, senha e chaves (`/ops/api/auth/*`) e a área do cliente (`/ops/api/portal/*`).
+- Ficam fora do MCP: login, senha e chaves (`/ops/api/auth/*`) e a área do cliente (`/ops/api/portal/*`), e o cofre de senhas
+  (`/ops/api/cofre/*`, #438).
+- O caminho vai sem codificar (#438): `%2F`, `//`, `..`, `?` ou `#` no caminho é recusado; a consulta vai em `consulta`.
 - Código: `command_center/api/mcp_operar.py`; testes: `command_center/tests/test_mcp_operar.py`.

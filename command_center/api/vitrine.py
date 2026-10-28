@@ -381,16 +381,32 @@ def _ip(request):
     return auth._ip(request)
 
 
-def _estourou(ip):
+# #438: o formulário manda a confirmação para o e-mail digitado. Sem teto por destino, trocando de IP dava para
+# encher a caixa de outra pessoa com e-mails da URACE. Contato e pedido somados: 6 por hora para o mesmo endereço.
+_JANELA_EMAIL, _MAX_POR_EMAIL = 3600, 6
+
+
+def _conta(chave, janela, maximo):
     with _tranca:
         t = time.time()
-        fila = [x for x in _envios.get(ip, ()) if t - x < _JANELA]
-        if len(fila) >= _MAXIMO:
-            _envios[ip] = fila
+        if len(_envios) > 5000:            # #438: a memória não cresce sem fim com IPs que não voltam
+            for k in [k for k, v in _envios.items() if not v or t - v[-1] > _JANELA_EMAIL]:
+                del _envios[k]
+        fila = [x for x in _envios.get(chave, ()) if t - x < janela]
+        if len(fila) >= maximo:
+            _envios[chave] = fila
             return True
         fila.append(t)
-        _envios[ip] = fila
+        _envios[chave] = fila
         return False
+
+
+def _estourou(ip):
+    return _conta(ip, _JANELA, _MAXIMO)
+
+
+def _estourou_email(email):
+    return _conta("email:" + (email or "").strip().lower(), _JANELA_EMAIL, _MAX_POR_EMAIL)
 
 
 async def _campos(request):
@@ -479,7 +495,7 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
         return _responde(request, True, "/contact/?sent=1")
     if erro:
         return _responde(request, False, "/contact/", erro)
-    if _estourou(_ip(request)):
+    if _estourou(_ip(request)) or _estourou_email(c["email"]):
         return _responde(request, False, "/contact/", "Too many messages in a row. Please try again in a few minutes.")
     if len(c.get("mensagem", "")) < 2:
         return _responde(request, False, "/contact/", "Please write a message.")
@@ -546,7 +562,7 @@ async def pedido(request: Request, con: sqlite3.Connection = Depends(get_db)):
         return _responde(request, False, volta, "Product not found.")
     if erro:
         return _responde(request, False, volta, erro)
-    if _estourou(_ip(request)):
+    if _estourou(_ip(request)) or _estourou_email(c["email"]):
         return _responde(request, False, volta, "Too many requests in a row. Please try again in a few minutes.")
     try:
         qtd = max(1, min(20, int(c.get("quantidade") or 1)))
@@ -573,7 +589,11 @@ async def pedido(request: Request, con: sqlite3.Connection = Depends(get_db)):
 # ------------------------------------------------------------------ loja paga no Stripe (#174)
 def _origem(request):
     """https://<endereço do site> para a volta do Stripe (no teste local, http com a porta)."""
-    h = (request.headers.get("host") or "").strip().lower()
+    # #438: só o nome do host (o que o `e_do_site` conferiu) e a porta em dígitos. Antes ia o cabeçalho inteiro:
+    # `Host: novo.urace.us:@outro.example` passava no `e_do_site` e a volta do Stripe ia para o outro.
+    bruto = (request.headers.get("host") or "").strip().lower()
+    porta = bruto.rpartition(":")[2] if ":" in bruto else ""
+    h = host_de(request) + (f":{porta}" if porta.isdigit() else "")
     local = host_de(request) in ("127.0.0.1", "localhost")
     return ("http://" if local else "https://") + h
 
