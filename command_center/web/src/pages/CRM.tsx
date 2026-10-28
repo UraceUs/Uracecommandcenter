@@ -525,10 +525,10 @@ export function CRM({ vista }: { vista: 'chat' | 'funil' }) {
   if (b.loading && !b.data) return <Loading rows={6} />
   if (b.error) return <ErrorState error={b.error} retry={b.reload} />
   return <div className="stack">
-    <div className="card-h">
-      <div><h1 className="h1">{vista === 'chat' ? tr("Chat · Kommo") : tr("Funil de vendas · Kommo")}</h1>
+    {/* #442: cabeçalho de página como nas outras telas (page-h); o card-h é de cartão, com recuo e fio embaixo */}
+    <div className="page-h">
+      <div className="grow"><h1 className="h1">{vista === 'chat' ? tr("Chat · Kommo") : tr("Funil de vendas · Kommo")}</h1>
         <div className="small ink2">{b.data?.total || 0} {tr("leads")}{b.data?.pendentes ? <> · <b>{b.data.pendentes}</b> {tr("esperando resposta")}</> : null}</div></div>
-      <div className="grow" />
       <div className="row wrap">
         {/* #442: o estado no mesmo rótulo de Integrações ("ok", "desligado"), não o código em inglês */}
         <Chip tone={statusTone(b.data?.integracao?.status)} dot>{STATUS_PT[b.data?.integracao?.status || 'DISCONNECTED'] || b.data?.integracao?.status}</Chip>

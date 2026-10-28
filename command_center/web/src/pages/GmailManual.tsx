@@ -171,12 +171,12 @@ export function GmailManual() {
   if (d.error) return <ErrorState error={d.error} retry={d.reload} />
   const r = d.data?.resumo || {}
   return <div className="stack">
-    <div className="card-h">
-      <div><h1 className="h1">{tr("Manual dos marcadores · Gmail")}</h1>
+    {/* #442: cabeçalho de página como nas outras telas (page-h); o card-h é de cartão, com recuo e fio embaixo */}
+    <div className="page-h">
+      <div className="grow"><h1 className="h1">{tr("Manual dos marcadores · Gmail")}</h1>
         <div className="small ink2">{tr("O que a IA entendeu de cada marcador da caixa")} <b>{caixa}{tr("@urace.us")}</b>{tr(". Ela só classifica com o que você confirmar — e só nesta caixa.")}</div>
         <div className="tabs" style={{ marginTop: 8 }}>{(['urace', 'support'] as Caixa[]).map(c =>
           <button key={c} className={caixa === c ? 'on' : ''} onClick={() => trocarCaixa(c)}>{c}@</button>)}</div></div>
-      <div className="grow" />
       <div className="row wrap">
         {can('MANAGER') && <button className="btn" disabled={busy === 'reler'} onClick={reler}>{busy === 'reler' ? <Spinner /> : tr("⟳ Reler a caixa")}</button>}
         {can('MANAGER') && !!r.pendente && <button className="btn primary" disabled={!!busy} onClick={() => confirmar()}>{busy === 'tudo' ? <Spinner /> : tr("Confirmar tudo ({0})", r.pendente)}</button>}
