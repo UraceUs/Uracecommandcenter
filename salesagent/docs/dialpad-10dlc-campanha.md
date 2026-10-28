@@ -3,6 +3,8 @@
 > **PARADO por decisão do dono (27/10, #404):** "não quero custos, essas coisas de campanha você pode parar.
 > Deixe documentação preparada, mas não realize." Este documento fica pronto para uso futuro; **não executar**.
 > O SMS do robô continua saindo pelo número do escritório na campanha atual, CKO11QL (Registered).
+>
+> **28/10:** o dono confirmou que a campanha nova foi **retirada** no Dialpad. Fica só a CKO11QL.
 
 ## O que aconteceu em 27/10 (relatório da extensão do Dialpad)
 
