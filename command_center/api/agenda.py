@@ -142,14 +142,14 @@ def _rodar_ratecard(con):
 def _rodar_varredura(con):
     """Gmail + DocuSign de cada cliente ativo, em thread própria (dono, 17/09: "a IA deve fazer isso")."""
     import threading
-    from command_center.api import rotas
-    if rotas._SCAN["running"]:
+    from command_center.api import rotas_clientes
+    if rotas_clientes._SCAN["running"]:
         return {"pulada": "varredura anterior ainda rodando"}
     admin = um(con, "SELECT id FROM users WHERE role='ADMIN' AND active=1 ORDER BY id LIMIT 1")
     if not admin:
         return {"pulada": "sem ADMIN"}
-    rotas._SCAN.update(running=True, done=0, total=0, result=None, finished_at=None)
-    threading.Thread(target=rotas._scan_all_thread, args=(admin["id"],), daemon=True, name="cc-varredura").start()
+    rotas_clientes._SCAN.update(running=True, done=0, total=0, result=None, finished_at=None)
+    threading.Thread(target=rotas_clientes._scan_all_thread, args=(admin["id"],), daemon=True, name="cc-varredura").start()
     return {"iniciada": True, "em_segundo_plano": True}
 
 

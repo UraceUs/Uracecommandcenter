@@ -468,10 +468,10 @@ def test_extrai_texto_do_openclaw_novo():
 
 # ------------------------------------------------ fontes de contexto (09/09): planilhas, arquivos, links
 def test_contexto_planilha_arquivo_e_prompt(cli, tmp_path, monkeypatch):
-    from command_center.api import motor, rotas
+    from command_center.api import motor, rotas_ia
     from command_center.db import conectar
-    monkeypatch.setattr(rotas, "CONTEXT_DIR", str(tmp_path / "ctx"))
-    monkeypatch.setattr(rotas, "_workspace_contexto", lambda: str(tmp_path / "ws" / "contexto"))
+    monkeypatch.setattr(rotas_ia, "CONTEXT_DIR", str(tmp_path / "ctx"))
+    monkeypatch.setattr(rotas_ia, "_workspace_contexto", lambda: str(tmp_path / "ws" / "contexto"))
     h = entra(cli, "admin@urace.us")
     base = cli.get(B + "/context").json()
     assert any(c["title"] == "Rate Card 2026" and c["kind"] == "sheet" for c in base)       # semente
@@ -498,7 +498,7 @@ def test_contexto_planilha_arquivo_e_prompt(cli, tmp_path, monkeypatch):
 
 
 def test_nome_da_tarefa_padrao():
-    from command_center.api.rotas import nome_tarefa, PRODUTOS
+    from command_center.api.rotas_clientes import nome_tarefa, PRODUTOS
     assert nome_tarefa("Renato Faixa Pistoni", "Urace Daily", "2T", 1, 1) == "Renato Faixa Pistoni_Urace Daily_2T [1/1]"
     assert nome_tarefa("Enzo Kartian", "Academy", "4T", 3, 4) == "Enzo Kartian_Academy_4T [3/4]"
     assert nome_tarefa("Davi", "Corrida", None, 1, 2) == "Davi_Corrida [1/2]"
@@ -538,7 +538,7 @@ def test_mensalidade_dia_1_um_evento_por_cliente(cli):
 
 # ------------------------------------------------ Pro Racing Drivers, mensalidade, equipamento, corridas (09/09)
 def test_mensalidade_por_memo_e_sessoes(cli):
-    from command_center.api.rotas import mes_da_invoice
+    from command_center.api.rotas_clientes import mes_da_invoice
     from command_center.db import conectar, inserir
     assert mes_da_invoice({"memo": "Urace Academy Training Program + Tuner [August, 2026]", "issued_on": "2026-09-01"}) == "2026-08"
     assert mes_da_invoice({"memo": "sem mês", "issued_on": "2026-09-03"}) == "2026-09"
@@ -784,7 +784,7 @@ def test_triagem_move_para_principal_e_guarda_quem_precisa_humano(cli, monkeypat
 
 
 def test_adicionar_marcador_e_corpo_html_sem_gmail(cli, monkeypatch):
-    from command_center.api import rotas
+    from command_center.api import rotas_gmail
     h = entra(cli, "admin@urace.us")
     es = cli.get(B + "/emails?mailbox=urace").json()
     e = [x for x in es if x["links"]][0]
@@ -797,7 +797,7 @@ def test_adicionar_marcador_e_corpo_html_sem_gmail(cli, monkeypatch):
     class Gm:
         def rotular_humano(self, conta, tid, add): return {"aplicado": True, "adicionado": add}
         def mensagem_html(self, conta, mid): return {"html": "<p>Oi <img src='cid:x'><script>bad()</script></p>", "texto": "Oi", "assunto": "S"}
-    monkeypatch.setattr(rotas, "modulo", lambda s: Gm())
+    monkeypatch.setattr(rotas_gmail, "modulo", lambda s: Gm())
     r = cli.post(B + f"/emails/{e['id']}/labels", headers=h, json={"add": ["Amazon", "Amazon"]})
     assert r.status_code == 200 and r.json()["labels"].count("Amazon") == 1
     e2 = [x for x in cli.get(B + "/emails?mailbox=urace").json() if x["id"] == e["id"]][0]
@@ -819,7 +819,7 @@ def test_adicionar_marcador_e_corpo_html_sem_gmail(cli, monkeypatch):
 
 def test_calendario_de_corridas_segue_a_coluna_races(cli, monkeypatch):
     """Uma corrida por tarefa da coluna RACES; concluída sai do calendário; convite comenta na tarefa (Asana falso)."""
-    from command_center.api import rotas
+    from command_center.api import rotas_clientes
     from command_center.db import conectar, inserir, um
     from command_center.providers import sync
     con = conectar()
@@ -854,8 +854,8 @@ def test_calendario_de_corridas_segue_a_coluna_races(cli, monkeypatch):
         def criar_do_modelo_humano(self, modelo, nome, secao_gid=None, notas=None, vence_em=None):
             assert modelo == "1208930444315129" and secao_gid == "sec-races"
             return {"aplicado": True, "gid": "7770099", "nome": nome, "link": "https://app.asana.com/x"}
-    monkeypatch.setattr(rotas, "modulo", lambda s: As())
-    monkeypatch.setattr(rotas, "chamar", lambda s, f, **a: [{"gid": "sec-races", "nome": "RACES"}, {"gid": "s2", "nome": "SATURDAY"}] if f == "asana_secoes" else (_ for _ in ()).throw(AssertionError(f)))
+    monkeypatch.setattr(rotas_clientes, "modulo", lambda s: As())
+    monkeypatch.setattr(rotas_clientes, "chamar", lambda s, f, **a: [{"gid": "sec-races", "nome": "RACES"}, {"gid": "s2", "nome": "SATURDAY"}] if f == "asana_secoes" else (_ for _ in ()).throw(AssertionError(f)))
     pro = cli.get(B + "/clients?pro=true").json()[0]
     assert cli.post(B + f"/races/{rid}/invite", headers=h, json={"client_id": pro["id"]}).status_code == 201
     iid = [x for x in cli.get(B + "/races").json() if x["id"] == rid][0]["invited"][0]["id"]
@@ -1499,7 +1499,7 @@ def test_manual_separa_as_duas_caixas(cli, monkeypatch):
         con.close()
 
     # reler a support@ NÃO pode apagar a presença da urace@ — era o bug do refresh
-    monkeypatch.setattr("command_center.api.rotas.chamar", lambda s, f, **a: [
+    monkeypatch.setattr("command_center.api.rotas_gmail.chamar", lambda s, f, **a: [
         {"nome": "Customer Service/Leads", "id": "l1", "tipo": "user"},
         {"nome": "[teste] criado depois do manual", "id": "l3", "tipo": "user"},
         {"nome": "wNews", "id": "l2", "tipo": "user"}])
@@ -1554,7 +1554,7 @@ def test_confirmar_tudo_nao_atravessa_a_caixa(cli, monkeypatch):
 # ------------------------------------------------ filtros nativos pelo painel (15/09)
 def test_filtros_nativos_estado_download_e_geracao(cli, monkeypatch):
     """O scp do dono falhou e não devia existir: o painel gera, mostra e entrega o XML."""
-    from command_center.api import rotas
+    from command_center.api import rotas_gmail
     h = entra(cli, "admin@urace.us")
     assert cli.get(B + "/gmail/filtros/outra", headers=h).status_code == 404
     e = cli.get(B + "/gmail/filtros/urace", headers=h).json()
@@ -1562,10 +1562,10 @@ def test_filtros_nativos_estado_download_e_geracao(cli, monkeypatch):
     assert cli.get(B + "/gmail/filtros/urace/download", headers=h).status_code == 404
 
     # com o arquivo gerado: conta os filtros, entrega o XML e o relatório
-    os.makedirs(rotas.FILTROS_DIR, exist_ok=True)
-    with open(os.path.join(rotas.FILTROS_DIR, "mailFilters-urace.xml"), "w", encoding="utf-8") as f:
+    os.makedirs(rotas_gmail.FILTROS_DIR, exist_ok=True)
+    with open(os.path.join(rotas_gmail.FILTROS_DIR, "mailFilters-urace.xml"), "w", encoding="utf-8") as f:
         f.write("<feed><entry>a</entry><entry>b</entry></feed>")
-    with open(os.path.join(rotas.FILTROS_DIR, "filtros-urace.md"), "w", encoding="utf-8") as f:
+    with open(os.path.join(rotas_gmail.FILTROS_DIR, "filtros-urace.md"), "w", encoding="utf-8") as f:
         f.write("# Filtros\n| `wNews` | promo@x.com | 9/9 |")
     e = cli.get(B + "/gmail/filtros/urace", headers=h).json()
     assert e["existe"] is True and e["filtros"] == 2 and e["gerado_em"] and "wNews" in e["relatorio"]
@@ -1578,12 +1578,12 @@ def test_filtros_nativos_estado_download_e_geracao(cli, monkeypatch):
     # gerar: dispara em segundo plano e não roda duas vezes ao mesmo tempo
     h = entra(cli, "admin@urace.us")          # o login do viewer acima trocou a sessão
     disparos = []
-    monkeypatch.setattr(rotas, "_gerar_filtros_thread", lambda conta, uid: disparos.append(conta))
+    monkeypatch.setattr(rotas_gmail, "_gerar_filtros_thread", lambda conta, uid: disparos.append(conta))
     assert cli.post(B + "/gmail/filtros/support/gerar", headers=h).json()["started"] is True
     assert disparos == ["support"]
-    rotas._filtros_rodando["support"] = True
+    rotas_gmail._filtros_rodando["support"] = True
     assert cli.post(B + "/gmail/filtros/support/gerar", headers=h).json()["started"] is False
-    rotas._filtros_rodando["support"] = False
+    rotas_gmail._filtros_rodando["support"] = False
 
 
 def test_triagem_dispara_o_fluxo_da_waiver_quando_o_email_e_waiver(cli, monkeypatch):
@@ -1621,10 +1621,10 @@ def test_filtros_aplicados_pela_api_pulam_o_que_ja_existe(cli, monkeypatch, tmp_
     """Dono, 16/09: "consegue fazer sem ser pela extensão?". A importação pela tela
     travou (conta delegada pede reautenticação) e um clique a mais disparou a criação
     em dobro. Pela API não há nem um nem outro."""
-    from command_center.api import rotas
+    from command_center.api import rotas_gmail
     h = entra(cli, "admin@urace.us")
-    os.makedirs(rotas.FILTROS_DIR, exist_ok=True)
-    with open(os.path.join(rotas.FILTROS_DIR, "mailFilters-urace.xml"), "w", encoding="utf-8") as f:
+    os.makedirs(rotas_gmail.FILTROS_DIR, exist_ok=True)
+    with open(os.path.join(rotas_gmail.FILTROS_DIR, "mailFilters-urace.xml"), "w", encoding="utf-8") as f:
         f.write("""<?xml version='1.0' encoding='UTF-8'?>
 <feed xmlns='http://www.w3.org/2005/Atom' xmlns:apps='http://schemas.google.com/apps/2006'>
   <entry><apps:property name='from' value='mcinfo@ups.com'/><apps:property name='label' value='Shipping Status'/></entry>
@@ -1642,7 +1642,7 @@ def test_filtros_aplicados_pela_api_pulam_o_que_ja_existe(cli, monkeypatch, tmp_
             if marcador.startswith("Softwares"):
                 raise RuntimeError("marcador não existe nesta caixa")
             return True, {"filtro_id": "f1", "marcador": marcador}
-    monkeypatch.setattr(rotas, "modulo", lambda s: Gmail())
+    monkeypatch.setattr(rotas_gmail, "modulo", lambda s: Gmail())
     r = cli.post(B + "/gmail/filtros/urace/aplicar", headers=h).json()
     assert r["criados"] == 1 and r["pulados"] == 1 and len(r["erros"]) == 1
     assert r["erros"][0]["marcador"] == "Softwares|Apps/Docusign"
@@ -1760,7 +1760,7 @@ def test_envelope_interno_e_aba_propria(cli):
 
 # ================= 16/09: modelos do DocuSign — ver, renomear, trocar o PDF =================
 def test_modelo_docusign_ver_renomear_e_trocar_pdf(cli, monkeypatch, tmp_path):
-    from command_center.api import rotas
+    from command_center.api import rotas_docusign
     from command_center.providers import NaoConectado
     TID = "c51aede4-bba5-40df-9f14-24c340e2bd3e"
     estado = {"nome": "Adult Waiver of Liability", "pdf": b"%PDF-1.4 antigo", "trocas": []}
@@ -1778,7 +1778,7 @@ def test_modelo_docusign_ver_renomear_e_trocar_pdf(cli, monkeypatch, tmp_path):
             assert pdf.startswith(b"%PDF")
             estado["trocas"].append((did, nome_arquivo)); estado["pdf"] = pdf; return {"ok": True}
 
-    monkeypatch.setattr(rotas, "TEMPLATES_DIR", str(tmp_path))
+    monkeypatch.setattr(rotas_docusign, "TEMPLATES_DIR", str(tmp_path))
     import command_center.providers as prov
     monkeypatch.setattr(prov, "modulo", lambda s: Docusign())
     h = entra(cli, "admin@urace.us")
