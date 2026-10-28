@@ -1,63 +1,17 @@
 import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState, type HTMLAttributes, type ReactNode } from 'react'
 import { ApiError } from '../api/client'
-import type { Level, Policy } from '../api/types'
 import { tr } from '../i18n'
-
-export type Tone = 'ok' | 'warn' | 'crit' | 'info' | 'neutral' | 'accent' | 'outline'
+import { STATUS_GLYPH, STATUS_PT, SYS_NAME, statusKind, type StatusKind, type Tone } from './uiConst'
 
 export function Chip({ tone = 'neutral', children, dot, glyph, title }: { tone?: Tone | 'run' | 'wait'; children: ReactNode; dot?: boolean; glyph?: string; title?: string }) {
   return <span className={`chip ${tone}`} title={title}>{glyph ? <span className="g" aria-hidden="true">{glyph}</span> : dot && <i />}{children}</span>
 }
 
-/** Linguagem de estado do Pit Wall: cor + glifo + texto, nunca só a cor.
- *  ✓ feito/ok · ◐ em andamento · ○ esperando · ▲ atenção · ✕ falhou/crítico · — desligado */
-export type StatusKind = 'ok' | 'run' | 'wait' | 'warn' | 'crit' | 'off'
-export const STATUS_GLYPH: Record<StatusKind, string> = { ok: '✓', run: '◐', wait: '○', warn: '▲', crit: '✕', off: '—' }
-export function statusKind(s?: string | null): StatusKind {
-  switch ((s || '').toUpperCase()) {
-    case 'CONNECTED': case 'COMPLETED': case 'DONE': case 'APPROVED': case 'ACTIVE': case 'SAFE': case 'PAID': case 'OK': case 'CONFIRMED': return 'ok'
-    case 'SYNCING': case 'RUNNING': case 'QUEUED': return 'run'
-    case 'PROPOSED': case 'DELIVERED': case 'SENT': case 'PENDING': case 'NEW': case 'OPEN': case 'INVITED': case 'REQUIRES_APPROVAL': case 'REQUIRES_CONFIRMATION': case 'DRAFT': return 'wait'
-    case 'DEGRADED': case 'AT_RISK': case 'OVERDUE': return 'warn'
-    case 'ERROR': case 'FAILED': case 'REJECTED': case 'AUTORESPONDED': case 'DECLINED': case 'VOIDED': case 'BLOCKED': return 'crit'
-    case 'DISCONNECTED': case 'INACTIVE': case 'CANCELLED': case 'SKIPPED': return 'off'
-    default: return 'wait'
-  }
-}
 const KIND_TONE: Record<StatusKind, Tone | 'run' | 'wait'> = { ok: 'ok', run: 'run', wait: 'wait', warn: 'warn', crit: 'crit', off: 'neutral' }
-/** Nome em português de cada estado cru que a API devolve. O que não estiver aqui aparece como veio. */
-export const STATUS_PT: Record<string, string> = {
-  CONNECTED: 'ok', DEGRADED: tr("degradado"), ERROR: tr("erro"), DISCONNECTED: tr("desligado"), SYNCING: tr("sincronizando"),
-  ACTIVE: tr("ativo"), INACTIVE: tr("inativo"), NEW: tr("novo"), PENDING: tr("pendente"), AT_RISK: tr("em risco"), COMPLETED: tr("concluído"),
-  open: tr("aberto"), completed: tr("concluído"), paid: tr("paga"), overdue: tr("vencida"), sent: tr("enviada"), draft: tr("rascunho"),
-  PROPOSED: tr("esperando você"), APPROVED: tr("aprovada"), RUNNING: tr("executando"), QUEUED: tr("na fila"), DONE: tr("feita"), FAILED: tr("falhou"), REJECTED: tr("rejeitada"), BLOCKED: tr("bloqueada"), SKIPPED: tr("pulado"),
-}
 export function Status({ s, label, kind }: { s?: string | null; label?: ReactNode; kind?: StatusKind }) {
   const k = kind || statusKind(s)
   return <Chip tone={KIND_TONE[k]} glyph={STATUS_GLYPH[k]}>{label ?? (STATUS_PT[s || ''] ?? STATUS_PT[(s || '').toUpperCase()] ?? (s || '').toLowerCase())}</Chip>
-}
-export const LEVEL_GLYPH: Record<Level, string> = { CRITICAL: '✕', HIGH: '▲', MEDIUM: '●', LOW: '○' }
-
-export function levelTone(l: Level): Tone {
-  return l === 'CRITICAL' ? 'crit' : l === 'HIGH' ? 'warn' : l === 'MEDIUM' ? 'info' : 'neutral'
-}
-export function statusTone(s?: string | null): Tone {
-  switch ((s || '').toUpperCase()) {
-    case 'CONNECTED': case 'COMPLETED': case 'DONE': case 'APPROVED': case 'ACTIVE': case 'SAFE': return 'ok'
-    case 'DEGRADED': case 'SYNCING': case 'RUNNING': case 'QUEUED': case 'PROPOSED': case 'DELIVERED': case 'SENT':
-    case 'PENDING': case 'AT_RISK': case 'REQUIRES_APPROVAL': case 'REQUIRES_CONFIRMATION': case 'NEW': return 'warn'
-    case 'ERROR': case 'FAILED': case 'REJECTED': case 'AUTORESPONDED': case 'DECLINED': case 'VOIDED': case 'BLOCKED': case 'OVERDUE': return 'crit'
-    case 'DISCONNECTED': case 'INACTIVE': case 'CANCELLED': return 'neutral'
-    default: return 'neutral'
-  }
-}
-export const POLICY_LABEL: Record<Policy, string> = {
-  SAFE: tr("Automática"), REQUIRES_CONFIRMATION: tr("Confirmar"), REQUIRES_APPROVAL: tr("Aprovação"), BLOCKED: tr("Bloqueada"),
-}
-export const WAIVER_LABEL: Record<string, string> = {
-  completed: tr("assinada"), delivered: tr("aberta, não assinada"), sent: tr("enviada, não aberta"),
-  autoresponded: tr("e-mail devolveu"), declined: tr("recusada"), voided: tr("anulada"),
 }
 
 export function Spinner() { return <span className="spin" aria-label={tr("carregando")} /> }
@@ -127,8 +81,6 @@ export function Ext({ href, children }: { href?: string | null; children: ReactN
 }
 
 
-/** Nome legível de cada sistema, para o link ficar ao lado do SEU item — nunca solto no topo. */
-export const SYS_NAME: Record<string, string> = { site: tr("Página do pedido"), asana: tr("Asana"), docusign: tr("DocuSign"), gmail: tr("Gmail"), quickbooks: tr("QuickBooks"), qbo: tr("QuickBooks"), brain: tr("Cérebro"), kommo: tr("Kommo"), backup: tr("Backup do banco") }
 export function SysLink({ links, one }: { links?: { system: string; external_id: string; deep_link: string | null }[] | null; one?: boolean }) {
   const ls = (links || []).filter(l => l.deep_link)
   if (ls.length === 0) return null
@@ -146,16 +98,19 @@ export function Num({ v }: { v: ReactNode }) {
   const alvo = typeof v === 'number' && Number.isInteger(v) ? v : null
   const [n, setN] = useState(alvo ?? 0)
   const raf = useRef(0)
+  // Sem animação (movimento reduzido ou zero): mostra o alvo direto no render; o estado só
+  // acompanha no próximo quadro, para a próxima contagem partir dele (#433).
+  const reduz = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  const direto = alvo !== null && (reduz || alvo === 0)
   useEffect(() => {
     if (alvo === null) return
-    const reduz = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduz || alvo === 0) { setN(alvo); return }
+    if (direto) { raf.current = requestAnimationFrame(() => setN(alvo)); return () => cancelAnimationFrame(raf.current) }
     const de = n, t0 = performance.now(), dur = 400
     const tick = (t: number) => { const k = Math.min(1, (t - t0) / dur); const e = 1 - Math.pow(1 - k, 3); setN(Math.round(de + (alvo - de) * e)); if (k < 1) raf.current = requestAnimationFrame(tick) }
     raf.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf.current)
   }, [alvo]) // eslint-disable-line react-hooks/exhaustive-deps
-  return <>{alvo === null ? v : n}</>
+  return <>{alvo === null ? v : direto ? alvo : n}</>
 }
 
 /** Indicador de "processando" à moda das referências (inspora 06): pequeno, monocromático,

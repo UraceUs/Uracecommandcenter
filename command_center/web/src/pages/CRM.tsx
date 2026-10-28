@@ -9,12 +9,13 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useItemNaRota } from '../api/rota'
-import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, Scrim, Spinner, statusTone, type Tone } from '../components/ui'
+import { useAuth } from '../auth/useAuth'
+import { Banner, Chip, Empty, ErrorState, Loading, Scrim, Spinner } from '../components/ui'
+import { statusTone, type Tone } from '../components/uiConst'
 import { Icon } from '../components/Icon'
 import { ago, fmtDate, fmtDateLong, fmtDateTime, fmtTime, money } from '../components/fmt'
-import { usePerguntar } from '../components/Perguntar'
-import { useToast } from '../components/Toast'
+import { usePerguntar } from '../components/usePerguntar'
+import { useToast } from '../components/useToast'
 import { TextoComVoz } from '../components/Voz'
 import { PassarParaVendas } from './Vendas'
 import { Cartao, CdItem, CdLista } from '../components/Cartao'
@@ -50,7 +51,7 @@ interface DetalheResp { detalhe: Detalhe; ao_vivo: boolean; em: string | null; a
 interface Setup { hook_url: string | null; webhook_url?: string | null; ultimo_webhook?: string | null; hook_key: boolean; bot_id: string | null; bot_secret: boolean; token: boolean; ultimo_hook: string | null; hooks_hoje: number; fila: number; falhas: number; laco_em?: string | null; laco_ciclos?: number; recibo_ativo?: boolean }
 
 /** Origem do lead com a cara do canal: o dono precisa ver de onde veio sem ler. */
-export function origemTone(s?: string | null): Tone {
+function origemTone(s?: string | null): Tone {
   const t = (s || '').toLowerCase()
   if (t.includes('insta')) return 'accent'
   if (t.includes('face') || t.includes('messenger')) return 'info'
@@ -171,7 +172,14 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
   if (d.error) return <div className="read"><ErrorState error={d.error} retry={d.reload} /></div>
   if (!l) return null
   const msgs = d.data?.mensagens || []
-  let dia = ''
+  const visiveis = msgs.filter(m => !soFav || m.starred)
+  // o separador de dia: a mensagem abre um dia novo quando a data dela difere da última data vista.
+  // Calculado antes do JSX, sem reatribuir variável dentro do map (#433).
+  const novoDia = visiveis.reduce<{ ultimo: string; sep: boolean[] }>((acc, m) => {
+    const d0 = m.at ? fmtDate(m.at) : ''
+    acc.sep.push(!!d0 && d0 !== acc.ultimo)
+    return { ultimo: d0 || acc.ultimo, sep: acc.sep }
+  }, { ultimo: '', sep: [] }).sep
   return <div className="read">
     <div className="toolbar">
       <div className="grow" style={{ minWidth: 0 }}>
@@ -207,10 +215,8 @@ function Conversa({ id, conectado, onChange, onDados }: { id: number; conectado:
     <div className="chat" style={{ flex: 1 }}>
       {msgs.length === 0 && <Empty title={tr("Sem mensagens guardadas")}>{tr("O que o lead escreveu antes do chat ser ligado fica só no Kommo. A partir de agora, cada mensagem entra aqui na hora.")}</Empty>}
       {soFav && !msgs.some(m => m.starred) && <Empty title={tr("Nenhuma mensagem favorita")}>{tr("Passe o mouse numa mensagem e clique na estrela.")}</Empty>}
-      {msgs.filter(m => !soFav || m.starred).map(m => {
-        const d0 = m.at ? fmtDate(m.at) : ''
-        const sep = d0 && d0 !== dia
-        if (d0) dia = d0
+      {visiveis.map((m, i) => {
+        const sep = novoDia[i]
         const semTexto = m.text === null || m.text === undefined
         return <Fragment key={m.id}>
           {sep && <div className="chat-day">{fmtDateLong(m.at)}</div>}

@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { useGet } from '../api/hooks'
 import { Section, Status } from './ui'
-import { useToast } from './Toast'
+import { useToast } from './useToast'
 import { fmtDate } from './fmt'
 import { tr } from '../i18n'
 

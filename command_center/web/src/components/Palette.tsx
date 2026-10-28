@@ -8,6 +8,8 @@ import { tr } from '../i18n'
 
 interface Item { group: string; label: string; hint?: string; go: () => void; tone?: 'ok' | 'warn' | 'crit' | 'neutral' | 'info' }
 
+const curta = (s: string) => s.length < 2 && !/^#?\d+$/.test(s)      // #430: o Client ID busca com 1 dígito
+
 export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => void; ask: (text: string) => void }) {
   const nav = useNavigate()
   const [q, setQ] = useState('')
@@ -16,12 +18,22 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
   const [busy, setBusy] = useState(false)
   const inp = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { if (open) { setQ(''); setRes(null); setSel(0); setTimeout(() => inp.current?.focus(), 10) } }, [open])
+  // Abriu: começa do zero; mudou a busca: limpa (curta) ou marca "buscando". Tudo no render,
+  // ao mudar a entrada, e não num effect (#433).
+  const [abertoVisto, setAbertoVisto] = useState(open)
+  const [qVista, setQVista] = useState(q)
+  if (open !== abertoVisto) {
+    setAbertoVisto(open)
+    if (open) { setQ(''); setRes(null); setSel(0); setQVista('') }
+  } else if (open && q !== qVista) {
+    setQVista(q)
+    if (curta(q.trim())) setRes(null); else setBusy(true)
+  }
+  useEffect(() => { if (open) setTimeout(() => inp.current?.focus(), 10) }, [open])
   useEffect(() => {
     if (!open) return
     const s = q.trim()
-    if (s.length < 2 && !/^#?\d+$/.test(s)) { setRes(null); return }      // #430: o Client ID busca com 1 dígito
-    setBusy(true)
+    if (curta(s)) return
     const t = setTimeout(() => {
       api.get<SearchResult>('/search' + qs({ q: s })).then(setRes).catch(() => setRes(null)).finally(() => setBusy(false))
     }, 180)
@@ -46,7 +58,8 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
     return out
   }, [res, q, nav, onClose, ask])
 
-  useEffect(() => { setSel(0) }, [items.length])
+  const [nVisto, setNVisto] = useState(items.length)
+  if (items.length !== nVisto) { setNVisto(items.length); setSel(0) }
   useEffect(() => {
     if (!open) return
     const h = (e: KeyboardEvent) => {

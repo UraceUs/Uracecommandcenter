@@ -2,9 +2,9 @@
 import { useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type { Catalog, Chassis, Engine, Part } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Empty, Section, Spinner } from '../components/ui'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { InserirNoTopo } from '../components/Inserir'
 import { tr } from '../i18n'
 
@@ -16,11 +16,13 @@ export function Linha<T extends { id: number; active: number }>({ item, campos, 
   const [edit, setEdit] = useState(false)
   const [f, setF] = useState<Record<string, string>>(Object.fromEntries(campos.map(([k]) => [k, String(item[k] ?? '')])))
   const [busy, setBusy] = useState(false)
+  // a versão da foto no endereço: muda quando sobe foto nova, não a cada render (#433)
+  const [versaoImg, setVersaoImg] = useState(() => Date.now())
   async function save() { setBusy(true); try { await api.patch(`/catalog/${kind}/${item.id}`, f); toast(tr("Salvo."), 'ok'); setEdit(false); onSaved() } catch (e) { toast((e as ApiError).message, 'crit') } finally { setBusy(false) } }
   async function toggle() { try { await api.patch(`/catalog/${kind}/${item.id}`, { active: !item.active }); onSaved() } catch (e) { toast((e as ApiError).message, 'crit') } }
-  async function img(file: File) { const fd = new FormData(); fd.append('file', file); const r = await fetch(`/ops/api/catalog/${kind}/${item.id}/image`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': csrf() } }); if (!r.ok) toast(tr("Imagem recusada."), 'crit'); else { toast(tr("Imagem salva."), 'ok'); onSaved() } }
+  async function img(file: File) { const fd = new FormData(); fd.append('file', file); const r = await fetch(`/ops/api/catalog/${kind}/${item.id}/image`, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-CSRF': csrf() } }); if (!r.ok) toast(tr("Imagem recusada."), 'crit'); else { toast(tr("Imagem salva."), 'ok'); setVersaoImg(Date.now()); onSaved() } }
   return <tr style={{ opacity: item.active ? 1 : 0.5 }}>
-    {imagem && <td>{(item as unknown as { image_path: string | null }).image_path ? <img loading="lazy" decoding="async" src={`/ops/api/catalog/${kind}/${item.id}/image?${Date.now()}`} alt="" style={{ height: 44, borderRadius: 3 }} /> : <span className="muted small">{tr("sem foto")}</span>}{can('OPERATOR') && <div><input type="file" accept="image/*" style={{ fontSize: 11, width: 120 }} onChange={e => e.target.files?.[0] && img(e.target.files[0])} /></div>}</td>}
+    {imagem && <td>{(item as unknown as { image_path: string | null }).image_path ? <img loading="lazy" decoding="async" src={`/ops/api/catalog/${kind}/${item.id}/image?${versaoImg}`} alt="" style={{ height: 44, borderRadius: 3 }} /> : <span className="muted small">{tr("sem foto")}</span>}{can('OPERATOR') && <div><input type="file" accept="image/*" style={{ fontSize: 11, width: 120 }} onChange={e => e.target.files?.[0] && img(e.target.files[0])} /></div>}</td>}
     {campos.map(([k, l]) => <td key={k}>{edit ? <input className="input" style={{ padding: '4px 8px' }} placeholder={l} value={f[k]} onChange={e => setF({ ...f, [k]: e.target.value })} /> : (String(item[k] ?? '') || <span className="muted">—</span>)}</td>)}
     <td className="nowrap">{can('OPERATOR') && (edit ? <><button className="btn sm primary" disabled={busy} onClick={save}>{busy ? <Spinner /> : tr("Salvar")}</button> <button className="btn ghost sm" onClick={() => setEdit(false)}>{tr("cancelar")}</button></> : <><button className="btn sm" onClick={() => setEdit(true)}>{tr("Editar")}</button> <button className="btn ghost sm" onClick={toggle}>{item.active ? tr("desativar") : tr("reativar")}</button></>)}</td>
   </tr>

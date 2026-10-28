@@ -1,11 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { tr } from '../i18n'
+import { Ctx, type Tom } from './useToast'
 
-/* `warn` entrou em 23/09 com o cadastro de peça: "a peça foi cadastrada, mas a foto
-   não" não é sucesso nem falha, e usar 'crit' ali assustaria por causa de uma imagem. */
-type Tom = 'ok' | 'crit' | 'warn'
 interface T { id: number; text: string; tone?: Tom }
-const Ctx = createContext<(text: string, tone?: Tom) => void>(() => {})
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [list, setList] = useState<T[]>([])
@@ -19,4 +16,3 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <div className="toast-wrap" aria-live="polite">{list.map(t => <div key={t.id} className={`toast ${t.tone || ''}`}><span className="ic" aria-hidden="true">{t.tone === 'ok' ? '✓' : t.tone === 'crit' ? '✕' : t.tone === 'warn' ? '▲' : '●'}</span><div className="grow"><div className="tt">{t.tone === 'ok' ? tr("Feito") : t.tone === 'crit' ? tr("Não deu") : t.tone === 'warn' ? tr("Quase") : tr("Aviso")}</div>{t.text}</div></div>)}</div>
   </Ctx.Provider>
 }
-export const useToast = () => useContext(Ctx)

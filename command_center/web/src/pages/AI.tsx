@@ -3,15 +3,16 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import type { AiAction, AiCommand } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
-import { Banner, Chip, Empty, ErrorState, Loading, POLICY_LABEL, PageHeader, SYS_NAME, Section, Status, Thinking } from '../components/ui'
+import { useAuth } from '../auth/useAuth'
+import { Banner, Chip, Empty, ErrorState, Loading, PageHeader, Section, Status, Thinking } from '../components/ui'
+import { POLICY_LABEL, SYS_NAME } from '../components/uiConst'
 
 const ACAO_LABEL: Record<string, string> = { qbo_criar_e_enviar_invoice: tr("Criar e enviar invoice"), qbo_criar_invoice: tr("Criar invoice"), qbo_enviar_invoice: tr("Enviar invoice"), qbo_criar_item: tr("Criar item no catálogo"), qbo_criar_cliente: tr("Criar cliente no QuickBooks"), asana_criar_do_modelo: tr("Criar tarefa (modelo oficial)"), asana_criar_tarefa: tr("Criar tarefa"), asana_comentar: tr("Comentar na tarefa"), asana_mover_para_secao: tr("Mover tarefa"), asana_mover_para_finished: tr("Mover para Finished Services"), asana_concluir: tr("Concluir tarefa"), docusign_enviar_waiver: tr("Enviar waiver"), docusign_reenviar_waiver: tr("Reenviar waiver"), docusign_anular_envelope: tr("Anular envelope"), docusign_renomear_modelo: tr("Renomear modelo"), docusign_substituir_documento_modelo: tr("Trocar PDF do modelo"), asana_criar_corrida: tr("Criar corrida (New Race)"), qbo_lembrete_invoice: tr("Lembrete de invoice"), painel_unir_clientes: tr("Unir dois clientes"), painel_varrer_cliente: tr("Varrer Gmail e DocuSign do cliente"), painel_waiver_lixeira: tr("Waiver para a lixeira"), painel_waiver_convite: tr("Convite da waiver por e-mail"), gmail_rascunho: tr("Rascunho de e-mail"), gmail_rotular: tr("Marcar e-mail") }
 const STATUS_LABEL: Record<string, string> = { PROPOSED: tr("esperando você"), APPROVED: tr("aprovada"), RUNNING: tr("executando"), DONE: tr("feita"), FAILED: tr("falhou"), REJECTED: tr("rejeitada"), BLOCKED: tr("bloqueada") }
 import { ago, fmtDateTime, fmtTime, money, safeJson } from '../components/fmt'
 import { Mic, Ouvir } from '../components/Voz'
-import { usePerguntar } from '../components/Perguntar'
-import { useToast } from '../components/Toast'
+import { usePerguntar } from '../components/usePerguntar'
+import { useToast } from '../components/useToast'
 import { Md } from '../components/Md'
 import { tr, LOCALE } from '../i18n'
 
@@ -20,7 +21,7 @@ type Args = Record<string, unknown>
 /** O que a pessoa escreveu, sem o contexto técnico que o painel cola no prompt (CLIENTE: {...},
  *  WAIVERS NO ESPELHO, O QUE O DONO JÁ ENSINOU…). Quem quiser o prompt inteiro abre "ver o que a IA recebeu". */
 const CORTES = ['\n\nO QUE O DONO JÁ ENSINOU', '\n\nCONTEXTO DO PAINEL', '\nCLIENTE: ', '\nTAREFA: ', '\nSUBTAREFAS (', '\nDESCRIÇÃO DA TAREFA', '\nWAIVERS NO ESPELHO', '\nSERVIÇOS NO ESPELHO', '\n\nFONTES DE CONTEXTO', '\n\nESTADO DO DIA', '\n\nPENDÊNCIAS ABERTAS', '\nCumpra a instrução', '\nAja NESTA tarefa']
-export function textoHumano(text: string): { eyebrow?: string; texto: string; tecnico: boolean } {
+function textoHumano(text: string): { eyebrow?: string; texto: string; tecnico: boolean } {
   let corte = text.length
   for (const c of CORTES) { const i = text.indexOf(c); if (i >= 0 && i < corte) corte = i }
   let t = text.slice(0, corte).trim()
@@ -210,10 +211,16 @@ export function AICommand() {
   const ta = useRef<HTMLTextAreaElement>(null)
   const fim = useRef<HTMLDivElement>(null)
   const load = () => api.get<Thread>(query).then(t => { setThread(t); setErr(null) }).catch(setErr)
-  useEffect(() => { setThread(null); setMaisAntigos([]); load() }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
+  // trocou a conversa: limpa no render; o effect só busca (#433)
+  const [queryVista, setQueryVista] = useState(query)
+  if (query !== queryVista) { setQueryVista(query); setThread(null); setMaisAntigos([]) }
+  useEffect(() => { load() }, [query]) // eslint-disable-line react-hooks/exhaustive-deps
   const rodando = !!thread?.commands.some(c => c.status === 'QUEUED' || c.status === 'RUNNING')
   useEffect(() => { const t = setInterval(load, rodando ? 3000 : 30000); return () => clearInterval(t) }, [query, rodando]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (loc.state?.ask) { setText(loc.state.ask); ta.current?.focus(); window.history.replaceState({}, '') } }, [loc.state])
+  // a pergunta que veio de outra tela entra no campo no render; o effect só foca e limpa o histórico (#433)
+  const [estadoVisto, setEstadoVisto] = useState<typeof loc.state | null>(null)
+  if (loc.state !== estadoVisto) { setEstadoVisto(loc.state); if (loc.state?.ask) setText(loc.state.ask) }
+  useEffect(() => { if (loc.state?.ask) { ta.current?.focus(); window.history.replaceState({}, '') } }, [loc.state])
   const n = thread?.commands.length || 0
   useEffect(() => { if (n && maisAntigos.length === 0) fim.current?.scrollIntoView({ block: 'end' }) }, [n]) // eslint-disable-line react-hooks/exhaustive-deps
   const cur = id ? Number(id) : null
