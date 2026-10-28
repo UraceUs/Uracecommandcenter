@@ -274,6 +274,9 @@ def rodar() -> list[str]:
         101, "Quero falar com uma pessoa", "PEDIDO_HUMANO"))
 
     print("\n2g. SMS e e-mail: o mesmo robô, sem Kommo, sessão por contato (20/10)")
+    global _FORA
+    _FORA = app.fora_do_horario_do_time
+    app.fora_do_horario_do_time = lambda quando=None: False     # no horário do time; o #418 testa fora dele
     vistos = []
     resp_canal = "Oi! Aqui é o Chase, da URACE.\nÉ pra você ou pra outra pessoa?"
     app._call_agent = lambda lead_id, msg, session_key=None: (
@@ -359,6 +362,31 @@ def rodar() -> list[str]:
     c = app.turno_de_canal("sms", "14075550177", "e sábado?", "Ana", False, kommo_leads=[103])
     app.SDR_DUPLICADO_MIN = janela
     check("SDR_DUPLICADO_MIN=0 desliga a trava", bool(c["mensagens"]), c)
+
+    print("\n2i. Fora do horário do time, o SMS e o e-mail levam o link da call já na primeira resposta (#418)")
+    import datetime as _dt
+    sab = _dt.datetime(2026, 10, 31, 15, 0, tzinfo=_dt.timezone.utc)      # sábado, 11h em Orlando
+    seg = _dt.datetime(2026, 11, 2, 15, 0, tzinfo=_dt.timezone.utc)       # segunda, 10h em Orlando
+    noite = _dt.datetime(2026, 10, 29, 1, 0, tzinfo=_dt.timezone.utc)     # quarta, 21h em Orlando
+    check("sábado e noite são fora do horário; segunda 10h não",
+          _FORA(sab) and _FORA(noite) and not _FORA(seg))
+    link = app.PROGRAM_LINKS["call_link"]
+    app.fora_do_horario_do_time = lambda quando=None: True
+    app._call_agent = lambda lead_id, msg, session_key=None: (
+        vistos.append((session_key, msg)) or resp_canal, textproc.extract_directives(resp_canal))
+    c = app.turno_de_canal("sms", "14075550155", "Oi, quanto custa?", "Ana", True)
+    check("o modelo sabe que é fora do horário e o objetivo é a call", "FORA DO HORÁRIO" in vistos[-1][1] and link in vistos[-1][1])
+    check("primeira resposta fora do horário termina com o link da call",
+          c["mensagens"][-1] == link and "15 minutos" in c["mensagens"][-2], c["mensagens"])
+    com_link = f"Oi! Aqui é o Chase, da URACE.\nEscolhe um horário aqui:\n{link}"
+    app._call_agent = lambda lead_id, msg, session_key=None: (com_link, textproc.extract_directives(com_link))
+    c = app.turno_de_canal("email", "bia@example.com", "How much?", "Bia", True)
+    check("o link que o modelo já pôs na primeira resposta não é cortado nem repetido",
+          sum(link in m for m in c["mensagens"]) == 1, c["mensagens"])
+    app.fora_do_horario_do_time = lambda quando=None: False
+    app._call_agent = lambda lead_id, msg, session_key=None: (com_link, textproc.extract_directives(com_link))
+    c = app.turno_de_canal("email", "caio@example.com", "How much?", "Caio", True)
+    check("no horário do time a primeira resposta segue sem link", not any(link in m for m in c["mensagens"]), c["mensagens"])
     return list(FALHAS)
 
 
