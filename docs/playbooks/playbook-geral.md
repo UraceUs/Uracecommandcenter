@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 28/10/2026 (#410, o **Editar** do card corrige nome, e-mail, telefone, piloto e nascimento; antes, #394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
+> Atualizado em 28/10/2026 (#420, a **IA do painel opera** o Command Center inteiro, como quem pediu; antes, #410, o **Editar** do card corrige nome, e-mail, telefone, piloto e nascimento; antes, #394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
 > equipe, só o serviço do plano, add-ons e a invoice das extras na hora da marcação; antes, #115, o **pacote de prova** da waiver para o advogado; antes, #117, conferir o documento da
 > waiver no balcão e o nascimento travado, e #313, o
 > cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
@@ -1276,7 +1276,7 @@ Mandar comando à IA exige papel de operador ou acima.
 | Tipo | Exemplos | O que acontece |
 |---|---|---|
 | **Ler** | QuickBooks, Asana, Gmail, DocuSign, Kommo, o painel, a web, o cérebro da empresa | faz direto |
-| **Trabalho interno** | tarefa, comentário e seção no Asana; cliente, item, invoice e estimate no QuickBooks **sem enviar**; rascunho de e-mail; marcador no Gmail | faz direto e registra como ação feita |
+| **Trabalho interno** | tarefa, comentário e seção no Asana; cliente, item, invoice e estimate no QuickBooks **sem enviar**; rascunho de e-mail; marcador no Gmail; **operar o painel** (#420): editar o card do cliente (responsável, piloto, nascimento, e-mail, telefone, status, notas), estoque, compras, agenda, checklists, Suits, vendas | faz direto e registra como ação feita |
 | **Sai da empresa ou não volta atrás** | enviar invoice, lembrete de invoice já paga ou e-mail; apagar; anular; unir cards; mudar preço do catálogo; pagamento; recorrência | **não executa**: vira um "aprovar" de um clique em **Aprovações** |
 | **Bloqueado pela política** | o que estiver como `BLOCKED` em Políticas da IA | não roda, nem com aprovação |
 
@@ -1289,6 +1289,14 @@ O **lembrete de invoice** também sai sozinho (dono, 14/10, #230): quando a IA m
 QuickBooks, lido na hora, mostra a invoice **em aberto** (com saldo), o lembrete vai sem clique, e o
 painel marca o próximo dia. Se a invoice já está paga, se não há como conferir ou se a política do
 lembrete foi apertada em Políticas da IA, volta o clique.
+
+**A IA opera o painel inteiro (#420, dono, 28/10: *"ela tem autonomia para fazer tudo ali dentro, não é só
+ler"*).** No AI Command ela usa a **mesma rota do botão**, **como a pessoa que pediu**: o papel e o cargo de
+quem pediu valem (a IA de um operador não faz o que é do gerente), a tela valida igual (ex.: o e-mail de outro
+card é recusado) e a auditoria sai no nome da pessoa. Editar e organizar rodam na hora; o que **sai para fora,
+cobra ou apaga** no painel (invoice, waiver, e-mail, Kommo, Asana, mensalidade, lixeira) vira o **aprovar** de
+um clique, e quem aprova executa com o papel dele. Login, chaves e a área do cliente ficam fora. Para desligar,
+ponha `painel_api` em `BLOCKED` em Políticas da IA. Rotina automática (sem pessoa por trás) continua só lendo o painel.
 
 Ação que não tem política própria pede confirmação. Qualquer ação com "apagar", "excluir",
 "remover" no nome tem, no mínimo, a política de "apagar qualquer coisa": o sistema erra para o
