@@ -11,7 +11,6 @@ from command_center.vitrine.conteudo import FAQ_EVENTO, FECHO_DUVIDAS, SITE
 
 RESERVAR = "/ops/portal/reserve"
 CONTATO = "/contact/"
-CARREIRA = "/career/"
 
 MAIS_TITULO = "More than a karting school. We develop drivers."
 MAIS = ("URACE is a driver development program based in Florida, created to guide young drivers through every stage of "

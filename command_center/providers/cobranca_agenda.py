@@ -47,7 +47,6 @@ from command_center.providers import agenda_sessoes as ag
 from command_center.providers import contrato
 
 TENTATIVAS = 3
-LEMBRETES = (3, 1)                    # dias antes da sessão
 MAIORIDADE = 18
 
 

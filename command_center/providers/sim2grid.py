@@ -22,8 +22,6 @@ from command_center.db import agora, atualizar, inserir, todos, um
 from command_center.providers.agenda_sessoes import FUSO
 
 DIAS_EN = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
-DIAS_CURTO = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-OCUPA = ("paga",)                       # e 'segurada' enquanto hold_until não passou
 LIMITES = {"capacity": (1, 50), "min_hours": (1, 12), "max_hours": (1, 12), "horizon_days": (1, 365),
            "min_notice_hours": (0, 24 * 30), "min_age": (1, 99)}
 

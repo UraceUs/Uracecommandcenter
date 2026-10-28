@@ -27,15 +27,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, um
 
 API = "https://api.stripe.com"
 TOLERANCIA = 300                       # segundos entre o Stripe assinar e nós recebermos
 PAISES_ENVIO = ("US", "CA", "MX", "BR", "PR")
-FL = ZoneInfo("America/New_York")
 EXPIRA_ESTOQUE_S = 31 * 60             # #309: produto em estoque, o Checkout vale 31 min (o mínimo do Stripe é 30)
 SEM_TANTO = "We don't have that many in stock right now. Please lower the quantity or send us an order request."
 
@@ -103,10 +100,6 @@ def compravel(p, variacao=None):
 
 def _variacao(p, nome):
     return next((v for v in p.get("variations") or () if " / ".join(v["attrs"]) == nome), None)
-
-
-def _fl_hoje():
-    return datetime.now(FL).date().isoformat()
 
 
 # ------------------------------------------------------------------ 1. a sessão do Checkout

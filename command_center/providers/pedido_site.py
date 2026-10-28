@@ -33,7 +33,7 @@ import os
 import re
 import secrets
 
-from command_center.db import agora, atualizar, conectar, inserir, todos, um  # noqa: F401
+from command_center.db import agora, conectar, todos, um
 from command_center.providers import sim2grid
 
 ESTADOS = ("pago", "aguardando", "falhou", "expirado", "aberto")

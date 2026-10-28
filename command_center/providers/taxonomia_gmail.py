@@ -312,7 +312,3 @@ MANUAL_SUPPORT = [
     ("Ex-Funcionários/Felipe", "Ex-Funcionários", "O que o Felipe tratou — corrida, mapa de pista, recado de voz.", 4, PENDENTE),
     ("Ex-Funcionários/Paula", "Ex-Funcionários", "O que a Paula tratou — boas-vindas e primeira ida à pista.", 2, PENDENTE),
 ]
-
-
-def por_nome_support():
-    return {n: (f, q, t, e) for n, f, q, t, e in MANUAL_SUPPORT}

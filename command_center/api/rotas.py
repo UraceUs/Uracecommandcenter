@@ -2191,7 +2191,6 @@ def context_download(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Conne
 
 
 # ============================================================ Pro Racing Drivers, mensalidade, contrato, equipamento, corridas (09/09)
-SESSOES_MES = 4                       # padrão da Academy; o card pode ter outro número (#61)
 CONTRACT_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "contracts")
 IMAGE_DIR = os.path.join(os.environ.get("URACE_DIR", os.path.expanduser("~/.urace")), "images")
 

@@ -38,7 +38,6 @@ SEDE, TRAILER = "sede", "trailer"
 # kind → como o saldo é contado. Explícito porque um dia haverá peça cara com série.
 TRACKING = {"chassi": "serie", "motor": "serie", "pneu": "quantidade", "peca": "quantidade"}
 KINDS = tuple(TRACKING)
-MOVIMENTOS = ("entrada", "saida", "ajuste", "transferencia", "contagem")
 # Status de unidade que ainda conta como "está com a gente".
 EM_CASA = ("disponivel", "em_uso", "em_servico", "emprestado")
 
