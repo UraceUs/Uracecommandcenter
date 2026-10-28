@@ -18,6 +18,7 @@ import re
 import subprocess
 import threading
 import time
+from zoneinfo import ZoneInfo
 
 import httpx
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
@@ -325,7 +326,8 @@ _RX_SESSAO = re.compile(r"^[a-z0-9-]{6,40}$")
 _playground: dict[str, dict] = {}
 
 
-def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, session_key: str) -> dict:
+def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, session_key: str,
+                     link_na_primeira: bool = False) -> dict:
     """Um turno do robô fora do Kommo: rota antes do modelo, modelo, guarda depois dele. Não escreve em
     card nenhum; quem chama decide o que fazer com a decisão (o painel de teste mostra, o canal envia)."""
     rota = sdr_ponte.rotear(texto)
@@ -367,7 +369,7 @@ def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, sessi
         if any(d.lstrip("[").startswith("escalate") or d.lstrip("[").startswith("unknown") for d in diretivas):
             saida["precisa_gente"] = True
         resposta = textproc.customer_facing(raw)
-    limpo, cortes = sdr_ponte.limpar_texto(resposta, primeira=primeira)
+    limpo, cortes = sdr_ponte.limpar_texto(resposta, primeira=primeira, link_na_primeira=link_na_primeira)
     if not limpo:
         # O modelo voltou vazio (ou a guarda cortou tudo): o lead recebe a mensagem de espera e a equipe é
         # avisada, como no Kommo (send_to_lead). Em 26/10 um SMS ficou sem resposta assim (#403).
@@ -410,6 +412,36 @@ _CONTEXTO_CANAL = {
 }
 
 
+# Dono, 28/10 (#418): o SMS e o e-mail respondem sempre, inclusive no fim de semana, "no intuito de agendar uma
+# call com o link do google calendar". Fora do horário do time (seg–sex 8h–18h, Orlando: D-2026-10-06) a resposta
+# leva o link da call, inclusive na primeira, porque ninguém do time vai pegar a conversa até a abertura.
+_ORLANDO = ZoneInfo("America/New_York")
+_CONTEXTO_FORA_DO_HORARIO = (
+    "AGORA É FORA DO HORÁRIO DO NOSSO TIME (seg–sex, 8h–18h de Orlando): ninguém do time vai responder antes da "
+    "abertura. Objetivo desta resposta: responder curto o que a pessoa perguntou e levá-la a marcar a call de 15 min "
+    "com o nosso time, com o link do calendário {link} sozinho na última linha (vale já na primeira resposta).")
+_CHAMADA_DA_CALL = {
+    "en": "Our team is back Monday to Friday, 8am to 6pm. Pick a time for a quick 15-minute call with them here:",
+    "pt": "O nosso time volta de segunda a sexta, das 8h às 18h. Escolhe aqui um horário pra uma call rápida de 15 minutos:",
+    "es": "Nuestro equipo vuelve de lunes a viernes, de 8 a 18 h. Elige aquí un horario para una llamada rápida de 15 minutos:",
+}
+
+
+def fora_do_horario_do_time(quando: datetime.datetime | None = None) -> bool:
+    agora = (quando or datetime.datetime.now(datetime.timezone.utc)).astimezone(_ORLANDO)
+    return agora.weekday() >= 5 or not 8 <= agora.hour < 18
+
+
+def _com_link_da_call(saida: dict, texto: str) -> dict:
+    """Fora do horário: se a resposta ainda não leva o link da call, ele entra no fim (dois balões)."""
+    link = PROGRAM_LINKS.get("call_link")
+    if not link or not saida["mensagens"] or any(link in m for m in saida["mensagens"]):
+        return saida
+    lang = holding.detect_language(texto)
+    saida["mensagens"] = saida["mensagens"] + [_CHAMADA_DA_CALL.get(lang, _CHAMADA_DA_CALL["en"]), link]
+    return saida
+
+
 def turno_de_canal(canal: str, contato: str, texto: str, nome: str = "", primeira: bool = True,
                    kommo_leads: list | tuple = ()) -> dict:
     """`kommo_leads`: os cards do Kommo da mesma pessoa (o painel acha pelo telefone ou e-mail). Se o robô
@@ -425,7 +457,12 @@ def turno_de_canal(canal: str, contato: str, texto: str, nome: str = "", primeir
                     "cortes": [], "mensagens": [], "precisa_gente": False,
                     "nota": f"O robô respondeu esta pessoa por {outro[0]} há {outro[1] // 60} min: não repete aqui."}
     chave = hashlib.sha256(f"{canal}:{contato.strip().lower()}".encode()).hexdigest()[:20]
-    saida = _turno_sem_kommo(texto, nome, primeira, _CONTEXTO_CANAL[canal], f"canal-{canal}-{chave}")
+    contexto, fora = _CONTEXTO_CANAL[canal], fora_do_horario_do_time() and bool(PROGRAM_LINKS.get("call_link"))
+    if fora:
+        contexto += "\n" + _CONTEXTO_FORA_DO_HORARIO.format(link=PROGRAM_LINKS["call_link"])
+    saida = _turno_sem_kommo(texto, nome, primeira, contexto, f"canal-{canal}-{chave}", link_na_primeira=fora)
+    if fora and saida.get("rota") == "responder":
+        saida = _com_link_da_call(saida, texto)
     if saida["mensagens"]:
         for lid in leads:
             state.marcar_resposta(lid, canal)

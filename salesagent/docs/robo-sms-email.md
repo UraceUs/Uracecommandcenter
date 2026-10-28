@@ -73,6 +73,13 @@ abertura do dia seguinte: logo na abertura, uma volta responde tudo. O formulár
 recebe a confirmação de sempre na hora e o follow-up do robô na abertura. Para responder sempre:
 `SDR_CANAL_HORARIO=0-24` e `SDR_CANAL_DIAS=1-7`.
 
+**Sempre, com a call fora do horário (dono, 28/10, #418).** "Sim, responda sempre no intuito de agendar uma call com
+o link do Google Calendar." No VPS: `SDR_CANAL_HORARIO=0-24` e `SDR_CANAL_DIAS=1-7` no `sdr-canais.env`. Fora do
+horário do time (seg–sex 8h–18h, Orlando) o robô responde curto e leva a pessoa à call de 15 min: o link do
+calendário sai na última linha, **inclusive na primeira resposta** (no horário, a primeira continua sem link). Se o
+modelo não puser o link, a ponte acrescenta "O nosso time volta de segunda a sexta, das 8h às 18h. Escolhe aqui um
+horário..." e o link. Para voltar ao expediente: `SDR_CANAL_HORARIO=8-18` e `SDR_CANAL_DIAS=1-5`.
+
 **Ritmo (dono, 21/10).** "Fazer por loop, horário comercial e de hora em hora, porque não parece automação quando
 leva um tempinho para responder." O robô não responde na hora: a cada hora cheia do expediente ele responde, de uma
 vez, o SMS e o e-mail que esperam; o que chega à noite sai na volta das 8h. Restart do serviço no expediente faz uma volta cerca de um minuto depois. STOP, HELP, o eco do robô e "a pessoa
@@ -106,5 +113,6 @@ Pausar, Reativar e Resolvido.
   de SMS (dado de celular não é compartilhado para marketing). Aprovação leva ~3 semanas. O Dialpad já trata
   STOP, UNSTOP e HELP sozinho. **Só ligar `SDR_CANAL_SMS` com a campanha Registered**; o e-mail não depende disso.
   **27/10 (#404):** o SMS sai pelo (407) 250-2291 na campanha CKO11QL (Registered). A campanha nova que declarava
-  resposta automática foi **parada por decisão do dono** (sem custo): ver `dialpad-10dlc-campanha.md`. Os termos de
+  resposta automática foi **parada por decisão do dono** (sem custo) e **retirada no Dialpad** (dono, 28/10): ver
+  `dialpad-10dlc-campanha.md`. Os termos de
   SMS estão em <https://ops.urace.us/legal/terms.html>.
