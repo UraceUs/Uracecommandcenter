@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { useLeitor, vibrar } from '../components/Leitor'
 import { LOCALE, tr } from '../i18n'
 
@@ -50,7 +50,10 @@ function AuditoriaDia({ data }: { data: string }) {
   const [a, setA] = useState<Auditoria | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [quem, setQuem] = useState('')
-  useEffect(() => { setA(null); setErro(null); api.get<Auditoria>(`/balcao/rapido/auditoria${qs({ data })}`).then(setA).catch(e => setErro((e as ApiError).message)) }, [data])
+  // trocou o dia: limpa no render; o effect só busca (#433)
+  const [dataVista, setDataVista] = useState(data)
+  if (data !== dataVista) { setDataVista(data); setA(null); setErro(null) }
+  useEffect(() => { api.get<Auditoria>(`/balcao/rapido/auditoria${qs({ data })}`).then(setA).catch(e => setErro((e as ApiError).message)) }, [data])
   const itens = (a?.itens || []).filter(x => !quem || x.por === quem)
   return <section className="br-aud" aria-labelledby="br-aud-h">
     <h2 id="br-aud-h" className="h3">{tr("Auditoria · {0}", diaLongo(data))}</h2>
@@ -71,13 +74,14 @@ function AuditoriaDia({ data }: { data: string }) {
 function OutroCliente({ desativado, onEscolher }: { desativado: boolean; onEscolher: (c: Achado) => void }) {
   const [q, setQ] = useState('')
   const [lista, setLista] = useState<Achado[] | null>(null)
+  // busca curta limpa a lista no próprio evento de digitar, não num effect (#433)
   useEffect(() => {
-    const t = q.trim(); if (t.length < 2) { setLista(null); return }
+    const t = q.trim(); if (t.length < 2) return
     const h = setTimeout(() => { api.get<Achado[]>(`/balcao/rapido/clientes${qs({ q: t })}`).then(setLista).catch(() => setLista([])) }, 250)
     return () => clearTimeout(h)
   }, [q])
   return <div className="br-outro">
-    <input value={q} onChange={e => setQ(e.target.value)} placeholder={tr("Outro cliente: digite o nome")} aria-label={tr("Buscar cliente pelo nome")} autoComplete="off" />
+    <input value={q} onChange={e => { setQ(e.target.value); if (e.target.value.trim().length < 2) setLista(null) }} placeholder={tr("Outro cliente: digite o nome")} aria-label={tr("Buscar cliente pelo nome")} autoComplete="off" />
     {lista && (lista.length ? <div className="br-pilotos">{lista.map(c => <button key={c.client_id} className="br-piloto" disabled={desativado} onClick={() => onEscolher(c)}>
       <b>{c.nome}</b>{c.responsavel && <small>{tr("resp. {0}", c.responsavel)}</small>}</button>)}</div>
       : <p className="small muted">{tr("Nenhum cliente com esse nome.")}</p>)}

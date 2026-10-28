@@ -10,15 +10,15 @@
  * "Quanto tem no Galpão agora" já vem com o saldo daquele local (mostrar só a soma fazia a pessoa digitar o total num
  * local e inflar o saldo). O item que já tem saldo liga sem contar. O cartão dropshipping que ainda tem ligação mostra a
  * ligação e o Desligar (senão o item ficava preso). `/site/estoque/<endereço>` abre já filtrado no produto. */
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Empty, ErrorState, Loading, Scrim, Section } from '../components/ui'
-import { usePerguntar } from '../components/Perguntar'
+import { usePerguntar } from '../components/usePerguntar'
 import { Cartao } from '../components/Cartao'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { fmtDateTime } from '../components/fmt'
 import { tr } from '../i18n'
 
@@ -74,10 +74,10 @@ export function EstoqueDoSite({ produto }: { produto?: string }) {
   const recarregar = l.reload
   // o último cartão da página filtrada pode ter saído do filtro (ligou, mudou o marcador): só quando a página
   // recarregada vem VAZIA, volta para a última página que ainda tem cartão
-  useEffect(() => {
-    const d = l.data
-    if (d && d.offset === offset && offset > 0 && !d.produtos.length) setOffset(Math.max(0, Math.floor((d.total - 1) / POR_PAGINA) * POR_PAGINA))
-  }, [l.data, offset])
+  // ajustado no render, não num effect (#433); só troca quando o destino é outra página
+  const voltarPara = l.data && l.data.offset === offset && offset > 0 && !l.data.produtos.length
+    ? Math.max(0, Math.floor((l.data.total - 1) / POR_PAGINA) * POR_PAGINA) : offset
+  if (voltarPara !== offset) setOffset(voltarPara)
 
   async function trocar(p: ProdutoEstoque) {
     const novo = p.fulfillment === 'estoque' ? 'dropshipping' : 'estoque'

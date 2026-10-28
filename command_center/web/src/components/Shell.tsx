@@ -1,10 +1,11 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { useGet, useOnline } from '../api/hooks'
 import type { Attention, Dashboard } from '../api/types'
 import { Palette } from './Palette'
-import { Chip, Loading, statusTone } from './ui'
+import { Chip, Loading } from './ui'
+import { statusTone } from './uiConst'
 import { Icon, type IconName } from './Icon'
 import { ago, initials } from './fmt'
 import { tr, LOCALE } from '../i18n'
@@ -70,7 +71,9 @@ export function Shell() {
   useOutside(menuRef, useCallback(() => setMenu('none'), []))
   // um único GET leve alimenta os contadores do menu e o sino (a cada 60 s)
   const dash = useGet<Dashboard>(box ? null : '/dashboard', 60000)   // o box não lê o painel geral (#92)
-  useEffect(() => { setSide(false); setMenu('none') }, [loc.pathname])
+  // Trocou de tela: fecha o menu lateral e o da conta, no render (#433).
+  const [rotaVista, setRotaVista] = useState(loc.pathname)
+  if (loc.pathname !== rotaVista) { setRotaVista(loc.pathname); setSide(false); setMenu('none') }
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPal(p => !p) }
@@ -91,7 +94,7 @@ export function Shell() {
   const badInt = bad.length
   const nInt = (d?.integrations || []).length
   const lastSync = (d?.last_sync || []).map(s => s.at).filter(Boolean).sort().pop() || null
-  const syncAge = lastSync ? Date.now() - new Date(lastSync).getTime() : null
+  const syncAge = lastSync ? clock.getTime() - new Date(lastSync).getTime() : null   // o relógio do topo, não Date.now() no render (#433)
   const syncTone = syncAge === null ? 'crit' : syncAge > 2 * 3600e3 ? 'warn' : 'ok'
 
   return <div className={`app${trilho ? ' rail' : ''}`}>

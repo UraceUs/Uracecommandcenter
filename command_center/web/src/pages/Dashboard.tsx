@@ -3,11 +3,13 @@ import { Link, useNavigate, useOutletContext } from 'react-router-dom'
 import { api, ApiError } from '../api/client'
 import type { Loaded } from '../api/hooks'
 import type { Dashboard as D, SyncStatus } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { AttentionList } from './Attention'
-import { Banner, ErrorState, Kpi, Loading, PageHeader, Progress, SYS_NAME, Section, Status, Strip, Thinking } from '../components/ui'
+import { Banner, ErrorState, Kpi, Loading, PageHeader, Progress, Section, Status, Strip, Thinking } from '../components/ui'
+import { SYS_NAME } from '../components/uiConst'
 import { ago, money } from '../components/fmt'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
+import { useAgora } from '../components/useAgora'
 import { tr, LOCALE } from '../i18n'
 
 export function Dashboard() {
@@ -17,11 +19,12 @@ export function Dashboard() {
   const toast = useToast()
   const [syncing, setSyncing] = useState(false)
   const [stage, setStage] = useState<string>('')
+  const agora = useAgora()
   const d = dash.data
   if (dash.error && !d) return <ErrorState error={dash.error} retry={dash.reload} />
   if (!d) return <Loading rows={6} />
   const lastSync = d.last_sync.map(s => s.at).filter(Boolean).sort().pop() || null
-  const stale = !lastSync || Date.now() - new Date(lastSync).getTime() > 2 * 3600 * 1000
+  const stale = !lastSync || agora - new Date(lastSync).getTime() > 2 * 3600 * 1000   // relógio estável, não Date.now() no render (#433)
 
   async function sync() {
     setSyncing(true)

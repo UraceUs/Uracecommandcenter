@@ -11,12 +11,13 @@
  *    rápido de alguém desistir. */
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
-import { useToast } from './Toast'
+import { useToast } from './useToast'
 import { Banner, Chip, Spinner } from './ui'
 import { tr } from '../i18n'
 
 const naTelaInicial = () => window.matchMedia('(display-mode: standalone)').matches ||
   (window.navigator as unknown as { standalone?: boolean }).standalone === true
+const semPush = () => !('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)
 const ehIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent)
 
 function base64ParaBytes(b64: string) {
@@ -27,16 +28,14 @@ function base64ParaBytes(b64: string) {
 
 export function Avisos() {
   const toast = useToast()
-  const [permissao, setPermissao] = useState<NotificationPermission | 'indisponivel'>('default')
+  // O que o navegador permite já se sabe no primeiro render; o effect só busca o que é assíncrono (#433).
+  const [permissao, setPermissao] = useState<NotificationPermission | 'indisponivel'>(() => semPush() ? 'indisponivel' : Notification.permission)
   const [assinado, setAssinado] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [servidorOk, setServidorOk] = useState<boolean | null>(null)
 
   useEffect(() => {
-    if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-      setPermissao('indisponivel'); return
-    }
-    setPermissao(Notification.permission)
+    if (semPush()) return
     navigator.serviceWorker.getRegistration().then(reg => reg?.pushManager.getSubscription()
       .then(s => setAssinado(!!s)))
     api.get<{ ativo: boolean }>('/push/chave').then(r => setServidorOk(r.ativo)).catch(() => setServidorOk(false))

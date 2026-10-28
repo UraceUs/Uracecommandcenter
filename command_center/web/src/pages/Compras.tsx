@@ -13,10 +13,10 @@ import { api, ApiError } from '../api/client'
 import { useGet } from '../api/hooks'
 import { useItemNaRota } from '../api/rota'
 import type { Client } from '../api/types'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { Chip, Empty, ErrorState, Loading, PageHeader, Scrim, Section } from '../components/ui'
 import { Icon } from '../components/Icon'
-import { useToast } from '../components/Toast'
+import { useToast } from '../components/useToast'
 import { Picker } from '../components/Unir'
 import { Cartao, CdItem, CdLista, type TomD } from '../components/Cartao'
 import { tr, LOCALE } from '../i18n'
@@ -65,7 +65,7 @@ function rotuloEvento(e: Evento): [string, 'warn' | 'info' | 'ok' | 'neutral' | 
 }
 const ultimoEvento = (c: Compra) => (c.eventos || []).length ? (c.eventos as Evento[])[(c.eventos as Evento[]).length - 1] : null
 const hostDe = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return 'link' } }
-export function linkRastreio(n: string, transp?: string | null) {
+function linkRastreio(n: string, transp?: string | null) {
   const t = (transp || '').toLowerCase(), u = n.toUpperCase()
   if (u.startsWith('1Z') || t === 'ups') return `https://www.ups.com/track?tracknum=${encodeURIComponent(n)}`
   if (t === 'fedex') return `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(n)}`
@@ -339,9 +339,12 @@ function FichaCompra({ id, gerente, locais, itens, onClose, onDone }: { id: numb
   const [ref, setRef] = useState('')
   const [previsao, setPrevisao] = useState('')
   const [indo, setIndo] = useState(false)
-  useEffect(() => {
+  // chegou a compra (ou recarregou): as quantidades a receber partem do que falta, no render (#433)
+  const [dadoVisto, setDadoVisto] = useState<Compra | null>(null)
+  if (c.data !== dadoVisto) {
+    setDadoVisto(c.data)
     if (c.data) setReceber(Object.fromEntries(c.data.linhas.map(l => [l.id, String(Math.max(0, l.qty - l.qty_received))])))
-  }, [c.data])
+  }
   const recarregar = () => { c.reload(); onDone() }
 
   async function fazer(caminho: string, corpo: unknown, ok: string) {
@@ -443,14 +446,18 @@ export function Compras() {
   const recarregar = () => { lista.reload(); resumo.reload(); pedidosAbertos.reload() }
 
   // "Comprar N pedido(s)" da tela de Pedidos chega aqui com ?pedidos=1,2
+  // A nova compra nasce no render ao ver o pedido no endereço; o effect só limpa o endereço (#433).
+  const idsPed = (sp.get('pedidos') || '').split(',').map(Number).filter(Boolean)
+  const abertosPed = pedidosAbertos.data?.pedidos
+  const chavePed = idsPed.length && gerente && abertosPed ? sp.get('pedidos') : null
+  const [pedVisto, setPedVisto] = useState<string | null>(null)
+  if (chavePed !== pedVisto) {
+    setPedVisto(chavePed)
+    if (chavePed && abertosPed) setNova(abertosPed.filter(p => idsPed.includes(p.id)).map(p => nova({ request_id: p.id, item_id: p.item_id, description: p.item_id ? '' : p.description, qty: String(p.qty) })))
+  }
   useEffect(() => {
-    const ids = (sp.get('pedidos') || '').split(',').map(Number).filter(Boolean)
-    const abertos = pedidosAbertos.data?.pedidos
-    if (ids.length && gerente && abertos) {
-      setNova(abertos.filter(p => ids.includes(p.id)).map(p => nova({ request_id: p.id, item_id: p.item_id, description: p.item_id ? '' : p.description, qty: String(p.qty) })))
-      sp.delete('pedidos'); setSp(sp, { replace: true })
-    }
-  }, [sp, setSp, gerente, pedidosAbertos.data])
+    if (chavePed) { sp.delete('pedidos'); setSp(sp, { replace: true }) }
+  }, [sp, setSp, chavePed])
 
   const compras = useMemo(() => (lista.data?.compras || []).filter(c =>
     filtro === 'abertas' ? ['rascunho', 'pedida', 'parcial'].includes(c.status) : c.status === filtro), [lista.data, filtro])

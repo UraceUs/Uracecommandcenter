@@ -3,7 +3,8 @@
  * equipe). Por piloto: as sessões do pacote usadas e livres do mês (zera no dia 1), a mensalidade do mês pelo
  * QuickBooks (paga, aberta com o link para pagar, ou ainda sem invoice), as extras do mês com a invoice delas e o
  * que está em aberto (sessões já feitas sem invoice paga). Tudo vem do servidor (`GET /plan` → `counter`). */
-import { usd, type Contador, type PlanoPiloto, type SituacaoInvoice } from './api'
+import { usd, type PlanoPiloto, type SituacaoInvoice } from './api'
+import { linhaDoMes } from './linhaDoMes'
 
 const curta = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 const mesLongo = (m: string) => new Date(m + '-15T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
@@ -13,10 +14,6 @@ export function SituacaoChip({ s }: { s: SituacaoInvoice }) {
   const [rot, tom] = s === 'paid' ? ['Paid', 'ok'] : s === 'open' ? ['Open', 'warn'] : ['Invoice on its way', 'neutral']
   return <span className={`chip ${tom}`}>{rot}</span>
 }
-
-/** A linha que o dono pediu: "This month: X of Y sessions used · Z left · resets on the 1st". */
-export const linhaDoMes = (k: Contador) =>
-  `This month: ${k.used} of ${k.sessions_per_month} session${k.sessions_per_month === 1 ? '' : 's'} used · ${k.left} left · resets on the 1st`
 
 /** O cartão de um piloto. `nivel`: o título do cartão (h2 quando é a seção da tela, h3 dentro de uma seção). */
 export function ContadorDoPlano({ plano, nome, nivel = 3 }: { plano: PlanoPiloto; nome?: string; nivel?: 2 | 3 }) {

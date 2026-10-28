@@ -87,7 +87,7 @@ export function AssinarWaiver({ conta }: { conta: Account }) {
   useEffect(() => { papi<Waivers>('GET', '/waivers').then(setSit).catch(e => setErro((e as PortalError).message)) }, [])
   useEffect(() => {
     if (sit?.enabled && meu?.enabled !== false && meu?.kind) papi<WaiverModelo>('GET', `/waivers/model/${meu.kind}`).then(setModelo).catch(e => setErro((e as PortalError).message))
-  }, [sit, meu?.kind])
+  }, [sit, meu?.kind, meu?.enabled])
   // #111: o que só a tela sabe vai para a trilha (abriu a tela, leu todas as páginas); falhar aqui não trava a assinatura
   const podeAssinar = !!(sit?.enabled && meu?.enabled !== false && meu?.kind && meu.status !== 'signed' && !meu.own_signature_required)
   const abriu = useRef(false)
