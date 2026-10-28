@@ -20,7 +20,7 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
   useEffect(() => {
     if (!open) return
     const s = q.trim()
-    if (s.length < 2) { setRes(null); return }
+    if (s.length < 2 && !/^#?\d+$/.test(s)) { setRes(null); return }      // #430: o Client ID busca com 1 dígito
     setBusy(true)
     const t = setTimeout(() => {
       api.get<SearchResult>('/search' + qs({ q: s })).then(setRes).catch(() => setRes(null)).finally(() => setBusy(false))
@@ -33,7 +33,7 @@ export function Palette({ open, onClose, ask }: { open: boolean; onClose: () => 
     const go = (p: string) => () => { onClose(); nav(p) }
     const s = q.trim()
     if (res) {
-      res.clients.forEach(c => out.push({ group: 'Clientes', label: c.name + (c.pilot_name ? tr(" · piloto {0}", c.pilot_name) : ''), hint: c.email || '', go: go(`/clients/${c.id}`), tone: c.vip ? 'warn' : undefined }))
+      res.clients.forEach(c => out.push({ group: 'Clientes', label: c.name + (c.pilot_name ? tr(" · piloto {0}", c.pilot_name) : ''), hint: `#${c.id}` + (c.email ? ` · ${c.email}` : ''), go: go(`/clients/${c.id}`), tone: c.vip ? 'warn' : undefined }))
       res.tasks.forEach(t => out.push({ group: 'Serviços', label: t.title, hint: `${t.section || ''} ${fmtDate(t.due_on)}`, go: go(t.client_id ? `/clients/${t.client_id}` : '/asana') }))
       res.waivers.forEach(w => out.push({ group: 'Waivers', label: `${w.signer_name || w.signer_email} · ${w.status}`, hint: tr("expira ") + fmtDate(w.expires_at), go: go(w.client_id ? `/clients/${w.client_id}` : '/docusign') }))
       res.emails.forEach(e => out.push({ group: 'E-mails', label: e.subject || tr("(sem assunto)"), hint: `${e.mailbox}@ · ${e.sender || ''}`, go: go(e.client_id ? `/clients/${e.client_id}` : '/gmail') }))

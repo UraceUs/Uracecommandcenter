@@ -4964,5 +4964,7 @@
 "Adicionar etiqueta": "Add label",
 "Responsável (quem paga e assina)": "Guardian (who pays and signs)",
 "vazio = o próprio responsável": "empty = the guardian themself",
-"E-mail alternativo": "Alternate e-mail"
+"E-mail alternativo": "Alternate e-mail",
+"Nome do piloto, do responsável ou o Client ID…": "Driver's or guardian's name, or the Client ID…",
+"Piloto, responsável, e-mail ou Client ID": "Driver, guardian, email or Client ID"
 }
