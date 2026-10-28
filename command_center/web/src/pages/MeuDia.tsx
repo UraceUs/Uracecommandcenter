@@ -23,7 +23,8 @@ const estadoDoServico = (st: string): [string, TomD] => st === 'completed' ? [tr
 const PERIODO: Record<string, string> = { manha: tr("Manhã"), tarde: tr("Tarde"), dia: tr("Dia todo") }
 const hojeFL = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
 const somar = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
-const rotuloData = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE(), { weekday: 'long', day: '2-digit', month: '2-digit' })
+// #442: só a primeira letra maiúscula ("Quarta-feira"); o text-transform deixava "Quarta-Feira"
+const rotuloData = (iso: string) => { const s = new Date(iso + 'T12:00:00').toLocaleDateString(LOCALE(), { weekday: 'long', day: '2-digit', month: '2-digit' }); return s.charAt(0).toUpperCase() + s.slice(1) }
 
 function BotaoCk({ c, data }: { c: Ck; data: string }) {
   const nav = useNavigate()
@@ -91,7 +92,7 @@ function Semana({ data, abrir, nav }: { data: string; abrir: (iso: string) => vo
     <div className="stack" style={{ gap: 8 }}>{Array.from({ length: 7 }, (_, i) => somar(de, i)).map(iso => {
       const r = p.data!.dias[iso]
       return <button key={iso} className={`card card-b md-semana-d${iso === hoje ? ' hoje' : ''}`} onClick={() => abrir(iso)}>
-        <h3 className="h3" style={{ margin: 0, textTransform: 'capitalize' }}>{rotuloData(iso)}{iso === hoje && <Chip tone="accent">{tr("hoje")}</Chip>}</h3>
+        <h3 className="h3" style={{ margin: 0 }}>{rotuloData(iso)}{iso === hoje && <Chip tone="accent">{tr("hoje")}</Chip>}</h3>
         {vazio(r) ? <span className="small muted">{tr("Nada marcado")}</span> : <CardsDoDia r={r} max={Infinity} />}
       </button>
     })}</div>
@@ -129,7 +130,7 @@ function Mes({ data, abrir, nav }: { data: string; abrir: (iso: string) => void;
     <h3 className="h3" style={{ margin: '14px 0 6px' }}>{tr("Próximos")}</h3>
     {!proximos.length ? <span className="small muted">{tr("Nada marcado no resto do mês.")}</span>
       : <div className="stack" style={{ gap: 8 }}>{proximos.map(iso => <button key={iso} className="card card-b md-semana-d" onClick={() => abrir(iso)}>
-        <b style={{ textTransform: 'capitalize' }}>{rotuloData(iso)}</b><Itens r={dias[iso]} /></button>)}</div>}
+        <b>{rotuloData(iso)}</b><Itens r={dias[iso]} /></button>)}</div>}
   </Section>
 }
 
@@ -180,7 +181,7 @@ export function MeuDia() {
     {vista !== 'dia' && (vista === 'semana' ? <Semana data={data} abrir={abrirDia} nav={nav} /> : <Mes data={data} abrir={abrirDia} nav={nav} />)}
     {vista === 'dia' && <><div className="row wrap" style={{ gap: 8 }}>
       <button className="btn sm ghost" aria-label={tr("Dia anterior")} onClick={() => setData(x => somar(x, -1))}>‹</button>
-      <b className="grow" style={{ textTransform: 'capitalize', textAlign: 'center' }}>{rotuloData(data)}</b>
+      <b className="grow" style={{ textAlign: 'center' }}>{rotuloData(data)}</b>
       {data !== hojeFL() && <button className="btn sm ghost" onClick={() => setData(hojeFL())}>{tr("Hoje")}</button>}
       <button className="btn sm ghost" aria-label={tr("Próximo dia")} onClick={() => setData(x => somar(x, 1))}>›</button>
     </div>

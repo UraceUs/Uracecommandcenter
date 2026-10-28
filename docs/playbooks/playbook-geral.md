@@ -573,7 +573,7 @@ Dono, 06/10: *"sim, no check-in"*. A equipe confere o documento com foto de quem
 - **Não conferiu:** registra e alerta. Aparece em **Precisa de atenção** ("o documento com foto não conferiu com a
   waiver", com o link do balcão do cliente) e **nada é bloqueado sozinho**: a equipe decide (conferir de novo, anular
   e pedir outra, ou seguir). O aviso fica no card a que a waiver vale **agora** (religada, card unido ou piloto
-  religado: vai junto). Sai da lista quando a conferência seguinte bate, e sai sozinho (fica em "mostrar ocultos",
+  religado: vai junto). Sai da lista quando a conferência seguinte bate, e sai sozinho (fica em "Mostrar ocultos",
   com o motivo) quando a waiver é anulada, ocultada, fica sem card ou deixa de valer.
 - **Nascimento travado:** com a waiver assinada no sistema **valendo**, o cliente não muda a data de nascimento do
   piloto (ela decidiu entre parental e adult e está no documento assinado). A área do cliente mostra o campo travado

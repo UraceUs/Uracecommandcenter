@@ -4868,5 +4868,21 @@
 "vazio = o próprio responsável": "empty = the guardian themself",
 "E-mail alternativo": "Alternate e-mail",
 "Nome do piloto, do responsável ou o Client ID…": "Driver's or guardian's name, or the Client ID…",
-"Piloto, responsável, e-mail ou Client ID": "Driver, guardian, email or Client ID"
+"Piloto, responsável, e-mail ou Client ID": "Driver, guardian, email or Client ID",
+"Mostrar ocultos": "Show hidden",
+"Guardar na memória da IA": "Save to the AI's memory",
+"← Voltar": "← Back",
+"Sem registros com esse filtro. Se a lista está vazia, toque em “Sincronizar” na tela Hoje.": "No records with this filter. If the list is empty, tap “Sync” on the Today screen.",
+"QuickBooks conectado. Toque em “Sincronizar” na tela Hoje para trazer as invoices.": "QuickBooks connected. Tap “Sync” on the Today screen to bring in the invoices.",
+"Passe o leitor no QR do card": "Scan the card's QR with the reader",
+"1 peça": "1 part",
+"{0} peças": "{0} parts",
+"Mostrar prateleiras vazias": "Show empty shelves",
+"Vincular ao cliente": "Link to client",
+"Nenhum evento de IA": "No AI events",
+"Quando a IA ler, propor ou executar alguma coisa, o registro aparece aqui.": "When the AI reads, proposes or runs something, the record shows up here.",
+"Nenhuma invoice espelhada. Toque em “Sincronizar” na tela Hoje.": "No mirrored invoices. Tap “Sync” on the Today screen.",
+"Nenhuma tarefa espelhada. Toque em “Sincronizar” na tela Hoje.": "No mirrored tasks. Tap “Sync” on the Today screen.",
+"Nenhuma thread na inbox espelhada. Toque em “Sincronizar” na tela Hoje.": "No mirrored inbox threads. Tap “Sync” on the Today screen.",
+"Quem perguntar de macacão e ainda não fechar entra nesta lista. Use “Novo lead” para registrar.": "Anyone who asks about a suit and hasn't closed yet goes on this list. Use “New lead” to add one."
 }

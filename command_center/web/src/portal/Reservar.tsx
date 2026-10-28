@@ -204,7 +204,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
           /* #253: sem serviço ativo no painel não é "sem data": a tela diz a verdade e dá o contato */
           : !servicos.length ? <p className="muted" style={{ margin: 0 }}>Online booking is closed right now. Please talk to us at{' '}
             <a href="mailto:support@urace.us">support@urace.us</a> or <a href="tel:+14072502291">+1 (407) 250 2291</a> and we book your session for you.</p>
-          : !abertos.length ? <p className="muted" style={{ margin: 0 }}>No dates open for booking right now. Please check back soon or contact us at support@urace.us.</p>
+          : !abertos.length ? <p className="muted" style={{ margin: 0 }}>No dates open for booking right now. Please check back soon or contact us at <a href="mailto:support@urace.us">support@urace.us</a>.</p>
           : <>
             <fieldset className="reserva-opcoes" style={{ border: 0, padding: 0, margin: 0 }}><legend className="small muted" style={{ marginBottom: 6 }}>Kart and session</legend>
               {servicos.map(x => <label key={x.id} className={`reserva-opcao${servico === x.id ? ' on' : ''}`}>

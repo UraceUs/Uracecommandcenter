@@ -702,7 +702,10 @@ def _coletar(con):
             quando = f"há {int(horas)} h" if horas < 10**5 else "nunca"
             itens.append(dict(key=_chave("crm-mudo", "crm", "webhook"), level="CRITICAL",
                               title="O chat do Kommo parou de receber mensagem",
-                              why=(f"O último aviso do Kommo chegou {quando}. Enquanto isso, mensagem de lead "
+                              # #442: "chegou nunca" não é português
+                              why=((f"O último aviso do Kommo chegou {quando}." if quando != "nunca"
+                                    else "Nenhum aviso do Kommo chegou até agora.")
+                                   + " Enquanto isso, mensagem de lead "
                                    "não entra no painel — e quem escreveu fica sem resposta."),
                               entity={"type": "crm", "id": None}, client_id=None,
                               link="/crm/chat", action="Ver a configuração do chat",

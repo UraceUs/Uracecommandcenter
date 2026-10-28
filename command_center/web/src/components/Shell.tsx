@@ -189,7 +189,7 @@ export function Shell() {
         <button className="iconbtn railbtn" aria-label={trilho ? tr("Abrir o menu") : tr("Fechar o menu")} aria-expanded={!trilho}
           title={trilho ? tr("Abrir o menu") : tr("Fechar o menu")} onClick={alternaTrilho}><Icon name="panel" /></button>
         {!box && <div className="search top-search" role="button" tabIndex={0} onClick={() => setPal(true)} onKeyDown={e => e.key === 'Enter' && setPal(true)}>
-          <Icon name="search" size={16} /><span>{tr("Buscar ou perguntar à IA…")}</span><kbd>{tr("⌘K")}</kbd>
+          <Icon name="search" size={16} /><span className="longo">{tr("Buscar ou perguntar à IA…")}</span><span className="curto">{tr("Buscar…")}</span><kbd>{tr("⌘K")}</kbd>
         </div>}
         {/* Race control: o estado da operação em cápsulas, em toda tela. Cada item leva para onde se resolve. */}
         {!box && <div className="rc" aria-label={tr("Estado da operação")}>

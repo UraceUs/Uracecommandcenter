@@ -192,8 +192,9 @@ export function Agendar({ conta }: { conta: Account }) {
       : !livres.length ? <div className="banner warn"><span className="bi">▲</span><div className="grow">Your drivers need up-to-date measurements before booking. <Link to="/portal/drivers">Update drivers</Link></div></div>
       : dias === null || planos === null ? <div className="state"><span className="spin" /></div>
       /* #253: sem serviço ativo no painel não é "sem data": a tela diz a verdade e dá o contato */
-      : !servicos.length ? <p className="muted">Online booking is closed right now. Please talk to us at <a href="mailto:support@urace.us">support@urace.us</a> and we book your session for you.</p>
-      : !temAlgo ? <p className="muted">No dates open for booking right now. Please check back soon or contact us.</p>
+      /* #442: os avisos de "sem data" no mesmo cartão do "No sessions yet", com o contato clicável */
+      : !servicos.length ? <div className="card card-b"><p className="muted" style={{ margin: 0 }}>Online booking is closed right now. Please talk to us at <a href="mailto:support@urace.us">support@urace.us</a> and we book your session for you.</p></div>
+      : !temAlgo ? <div className="card card-b"><p className="muted" style={{ margin: 0 }}>No dates open for booking right now. Please check back soon or contact us at <a href="mailto:support@urace.us">support@urace.us</a>.</p></div>
       : <div className="card card-b stack">
         {/* #253: a tela diz qual kart veio do site, e só pré-seleciona o serviço desse kart */}
         {doSite.kart && <p className="small muted" style={{ margin: 0 }}>From the site: <b>{doSite.kart}</b></p>}

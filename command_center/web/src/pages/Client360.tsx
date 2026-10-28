@@ -127,7 +127,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   return <>
     <div className="c360-h">
       <div className="who">
-        {!onClose && <div className="small"><a onClick={() => nav(-1)} style={{ cursor: 'pointer' }}>{tr("← voltar")}</a></div>}
+        {!onClose && <div className="small"><a href="#" onClick={e => { e.preventDefault(); nav(-1) }}>{tr("← Voltar")}</a></div>}
         <div className="row wrap" style={{ gap: 10 }}>
           {!!c.pro_driver && <span className="star" title={tr("Pro Racing Driver")}>★</span>}
           <h1 className="h1" style={{ fontSize: 32 }}>{c.pilot_name || c.name}</h1>
@@ -164,8 +164,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     {risco && <Banner tone="crit"><b>{tr("Serviço em")} {dias === 0 ? tr("HOJE") : tr("{0} dia(s)", dias)} {tr("sem waiver assinada.")}</b> {wBad ? tr("O e-mail {0} devolveu: corrija e reenvie.", wBad.signer_email) : wOpen ? tr("Envelope {0}; cobre a assinatura.", WAIVER_LABEL[wOpen.status!]) : tr("Nenhum envelope enviado.")}</Banner>}
     {!!c.vip && <Banner tone="info">{tr("Cliente VIP: dispensa waiver por decisão do dono (04/09/2026). Nada de cobrança automática.")}</Banner>}
     <div className="grid g5 c360-k">
-      <div className="card kpi"><div className="lbl">{tr("Próximo serviço")}</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot truncate" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : tr("nada agendado")}</div></div>
-      <div className="card kpi"><div className="lbl">{tr("Último serviço")}</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot truncate" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : tr("nenhum concluído")}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Próximo serviço")}</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot clamp2" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : tr("nada agendado")}</div></div>
+      <div className="card kpi"><div className="lbl">{tr("Último serviço")}</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot clamp2" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : tr("nenhum concluído")}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Waiver")}</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? tr("dispensada") : wOk ? tr("assinada") : wBad ? tr("devolveu") : wOpen ? WAIVER_LABEL[wOpen.status!] : tr("nenhuma")}</div><div className="foot">{wOk?.expires_at ? <>{tr("vale até")} {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>{tr("expira")} {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one />
         {!wOk && !c.vip && can('OPERATOR') && <button className="btn ghost sm" onClick={() => setTab('waivers')} title={tr("Mandar ao e-mail do card o convite para assinar a waiver")}>{tr("✉ Convite por e-mail")}</button>}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Serviços")}</div><div className="val">{abertos}<span className="of">/{vivos.length}</span></div><div className="foot">{abertos === 1 ? tr("1 aberto") : tr("{0} abertos", abertos)} · {vivos.length - abertos} {tr("concluídos")}</div></div>
@@ -427,7 +427,7 @@ function ValorERecorrencia({ id, lastAmount }: { id: number; lastAmount: number 
           <option value="">{m.extra.item_name && !m.extra_item_id ? tr("automático: {0}", m.extra.item_name) : tr("automático (sincronize o QuickBooks)")}</option>
           {todosItens.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
         </select></div>
-      <div className="field"><label>{tr("&nbsp;")}</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>{tr("Salvar mensalidade")}</button></div>
+      <div className="field"><label aria-hidden="true">{'\u00a0'}</label><button className="btn primary" disabled={salvando || !mudou} onClick={salvar}>{tr("Salvar mensalidade")}</button></div>
     </div>
     <p className="small muted" style={{ marginTop: 6 }}>{tr("Ao escolher o item, o preço de tabela entra no valor; mude se o combinado com o cliente for outro. O que estiver salvo aqui é o valor da invoice de todo dia 1.")}</p>
     <p className="small muted" style={{ marginTop: 4 }}>{tr("Sessão extra (aluno recorrente): acima das sessões do mês, a sessão marcada na área do cliente sai numa invoice do QuickBooks com este valor, sem depósito. Vazio, vale o valor do plano do site ou o mensal ÷ sessões do mês. Desde 19/10 (#340) o cliente também vê o contador do mês, e a invoice da extra sai na hora em que ele marca.")}</p>

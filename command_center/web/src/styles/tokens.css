@@ -155,7 +155,7 @@ h1,h2,h3{margin:0}
 
 /* ---------- foco: tudo que é clicável mostra onde está o teclado */
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.btn:focus-visible,.input:focus-visible,.nav a:focus-visible,.iconbtn:focus-visible,.ic:focus-visible,.lchip:focus-visible,.tabs button:focus-visible,.tcard:focus-visible,.kpi:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:focus-visible,.input:focus-visible,.nav a:focus-visible,.iconbtn:focus-visible,.ic:focus-visible,.lchip:focus-visible,.tabs button:focus-visible,.tabs a:focus-visible,.tcard:focus-visible,.kpi:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .tbl tbody tr.click:focus-visible td{background:var(--accent-wash)}
 .nav a,.tabs button,.tcard,.att,.act,.lchip,.chip,.ic,.mail .item,.mail .labels .lb,.hist .it,.strip .it,.kpi{transition:background var(--t) var(--ease),border-color var(--t) var(--ease),color var(--t) var(--ease)}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
@@ -370,6 +370,8 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .act.done{border-left:3px solid var(--ok)}
 .act.fail{border-left:3px solid var(--crit)}
 .act .decide{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* #442: com a prévia (invoice, waiver, rascunho), os botões descem para baixo dela — ao lado, espremiam a prévia a ~200 px */
+.act:has(.previa) .decide{flex-basis:100%}
 .msg.me .bub .ctx{display:block;font-family:var(--font-cond);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:4px}
 .sug{display:flex;flex-wrap:wrap;gap:8px}
 .sug button{border:1px solid var(--rule-strong);background:var(--surface);border-radius:20px;padding:5px 12px;font-size:13px;cursor:pointer;color:var(--ink-2)}
@@ -413,7 +415,7 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
 .top .search{white-space:nowrap;overflow:hidden}
 .top .search span{overflow:hidden;text-overflow:ellipsis}
 .tabs{overflow-x:auto;scrollbar-width:none}
-.tabs button{white-space:nowrap}
+.tabs button,.tabs a{white-space:nowrap}  /* #442: aba-link (Suits) quebrava "Ponte de e-mail" em três linhas */
 @media(max-width:900px){.top{padding:8px 12px}.top .search kbd{display:none}.page{padding:16px 12px 32px}.grid[style]{grid-template-columns:minmax(0,1fr)!important}.top .who .small{display:none}}
 @media(min-width:901px){.scrim{display:none}}
 

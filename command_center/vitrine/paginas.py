@@ -198,6 +198,7 @@ def _cabecalho(atual):
 
 def _rodape():
     end = C.SITE["endereco"]
+    # #442: só a 1ª letra maiúscula; o .capitalize() baixava o resto ("Inside the orlando kart center")
     redes = "".join(f'<li><a href="{e(u)}" rel="noopener">{e(n)}</a></li>' for n, u in C.SITE["redes"].items())
     nav = "".join(f'<li><a href="{e(h)}">{e(r)}</a></li>' for r, h in C.RODAPE)
     emails = "".join(f'<a href="mailto:{e(m)}">{e(m)}</a>' for m in C.SITE["emails"])
@@ -206,7 +207,7 @@ def _rodape():
     <div class="rodape-marca">
       <img src="{estatico('img/logo-footer.svg')}" alt="URACE" width="120" height="20" loading="lazy">
       <p>{e(C.SITE['slogan'])}</p>
-      <address>{e(end['rua'])}, {e(end['cidade'])}, {e(end['estado'])} {e(end['cep'])}<br>{e(end['onde'].capitalize())}</address>
+      <address>{e(end['rua'])}, {e(end['cidade'])}, {e(end['estado'])} {e(end['cep'])}<br>{e(end['onde'][:1].upper() + end['onde'][1:])}</address>
       <p><a href="tel:{e(C.SITE['telefone_e164'])}">{e(C.SITE['telefone'])}</a></p>
       <p class="emails">{emails}</p>
       <p class="muted">{e(C.SITE['horario'])}</p>
@@ -589,11 +590,12 @@ def arrive_and_drive(host, servicos=None, lead_follow=None):
 def nao_achou(host):
     """#252: a página do 404 fica fora do Google (`indexar=False`) e sempre com saída: o que a
     pessoa veio buscar está em uma destas quatro portas, não só na home."""
+    # #442: o fundo é claro; o `.btn-linha` (borda branca, feito para o hero escuro) sumia, só o 1º botão aparecia
     corpo = """
 <section class="faixa clara"><div class="largura estreita centro">
   <h1>Page not found</h1>
   <p>This address doesn't exist. Here is where to go next:</p>
-  <div class="hero-acoes centro"><a class="btn" href="/services/arrive-and-drive/">Book a session</a><a class="btn btn-linha" href="/store/">Store</a><a class="btn btn-linha" href="/services/">Our services</a><a class="btn btn-linha" href="/contact/">Contact us</a></div>
+  <div class="hero-acoes centro"><a class="btn" href="/services/arrive-and-drive/">Book a session</a><a class="btn btn-linha-escura" href="/store/">Store</a><a class="btn btn-linha-escura" href="/services/">Our services</a><a class="btn btn-linha-escura" href="/contact/">Contact us</a></div>
   <p class="small muted">Looking for something you saw before? Call or WhatsApp +1 (407) 250 2291, or <a href="/contact/">send us a message</a>.</p>
 </div></section>"""
     return layout(host=host, caminho="/404", titulo="Page not found | URACE",

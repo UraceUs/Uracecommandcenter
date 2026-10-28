@@ -649,7 +649,7 @@ export function Estoque() {
 
     {d && <>
       <div className="est-resumo">
-        <Chip tone="neutral">{d.itens.length} {tr("peças")}</Chip>
+        <Chip tone="neutral">{d.itens.length === 1 ? tr("1 peça") : tr("{0} peças", d.itens.length)}</Chip>
         {!!faltando.length && <Chip tone="warn">{faltando.length} {tr("para repor")}</Chip>}
         {!!semQtd && <Chip tone="warn" title={tr("o zero delas é 'ninguém contou', não 'acabou'")}>{semQtd} {tr("sem quantidade")}</Chip>}
         {!!deClientes.length && <Chip tone="info">{deClientes.length} {tr("com peça de cliente")}</Chip>}
@@ -671,7 +671,7 @@ export function Estoque() {
 
       <div className="row gap wrap" style={{ marginTop: 10, alignItems: 'center' }}>
         <input className="inp grow" style={{ flex: '1 1 220px' }} placeholder={tr("Buscar peça, marca, medida ou cliente")} value={busca} onChange={e => setBusca(e.target.value)} />
-        {!busca && <label className="check small"><input type="checkbox" checked={vazias} onChange={e => setVazias(e.target.checked)} /> {tr("mostrar prateleiras vazias")}</label>}
+        {!busca && <label className="check small"><input type="checkbox" checked={vazias} onChange={e => setVazias(e.target.checked)} /> {tr("Mostrar prateleiras vazias")}</label>}
       </div>
 
       {!itens.length && busca && <Empty title={tr("Nada com esse nome")} />}
