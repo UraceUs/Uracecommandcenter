@@ -788,6 +788,7 @@ def test_perfil_informado_no_painel_e_foto_do_webhook(cli, chat, monkeypatch):
 def test_foto_do_lead_vem_pelo_servidor_e_fica_em_cache(cli, chat, monkeypatch, tmp_path):
     from command_center.api import crm as _crm
     monkeypatch.setenv("URACE_DIR", str(tmp_path))
+    monkeypatch.setenv("KOMMO_TOKEN", "token-ficticio")          # #438: sem token, nada de "Bearer " vazio
     h = entra(cli, "admin@urace.us")
     cli.post(f"{B}/crm/hook?key=chave-do-hook", content=HOOK, headers={"Content-Type": "application/x-www-form-urlencoded"})
     lid = _lid("5001")
