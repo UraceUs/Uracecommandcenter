@@ -16,6 +16,7 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | "Oi" e "quanto custa" logo em seguida | espera 8 s e responde uma vez só |
 | Objeção, pronto para fechar, já compete, pede pessoa | oferece a call (ou a frase de espera) e a conversa entra em **Precisa de atenção** |
 | SMS só com STOP, PARE, UNSUBSCRIBE, CANCEL… | **não responde** (o Dialpad confirma e bloqueia o contato) e nunca mais escreve; UNSTOP devolve |
+| SMS de código curto (menos de 10 dígitos) ou de número 0800 dos EUA (800, 833, 844, 855, 866, 877, 888) | **não responde** e não vira Precisa de atenção: é serviço automático, não lead (#412) |
 | SMS só com HELP / INFO | **não responde**: o Dialpad manda a mensagem de ajuda do escritório |
 | "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
 | Cliente do painel, oportunidade com o closer, card do Kommo com tag de passagem (`escalated`, `sdr:handoff`, `sdr:agora-nao`) | **não responde**: é da equipe |

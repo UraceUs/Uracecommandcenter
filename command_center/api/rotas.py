@@ -297,6 +297,63 @@ class ClienteIn(BaseModel):
     vip: bool | None = None
     monthly_plan: str | None = None
     monthly_note: str | None = None
+    # #410 (dono, 28/10): "quando eu clico em editar no card do cliente, eu não consigo editar o nome, e-mail".
+    # None = não mexe; "" = apaga (menos o responsável, que não fica vazio).
+    name: str | None = None
+    pilot_name: str | None = None
+    pilot_dob: str | None = None
+    email: str | None = None
+    email_alt: str | None = None
+    phone: str | None = None
+    company: str | None = None
+
+
+CONTATO = ("name", "pilot_name", "pilot_dob", "email", "email_alt", "phone", "company")
+
+
+def _contato_limpo(con, cid, campos, antes):
+    """Valida e normaliza os dados de contato editados à mão (#410), no mesmo formato da sincronia.
+    E-mail que já é de outro card (fora da família de irmãos) é recusado: o caminho é Unir, nunca
+    pôr um cliente no card de outro."""
+    for k in CONTATO:
+        if k in campos:
+            campos[k] = (campos[k] or "").strip() or None
+    if "name" in campos and len(campos["name"] or "") < 2:
+        raise HTTPException(400, "O nome do responsável não pode ficar vazio.")
+    for k in ("email", "email_alt"):
+        if campos.get(k):
+            principal, _ = identidade.normaliza_email(campos[k])
+            if not principal:
+                raise HTTPException(400, f"E-mail inválido: {campos[k]}")
+            campos[k] = principal
+    if campos.get("phone"):
+        tel = identidade.normaliza_telefone(campos["phone"])
+        if not tel:
+            raise HTTPException(400, f"Telefone inválido: {campos['phone']}")
+        campos["phone"] = tel
+    if campos.get("pilot_dob"):
+        try:
+            nasc = date.fromisoformat(campos["pilot_dob"][:10])
+        except ValueError:
+            raise HTTPException(400, "Nascimento no formato AAAA-MM-DD.")
+        if nasc > date.today():
+            raise HTTPException(400, "Nascimento no futuro.")
+        campos["pilot_dob"] = nasc.isoformat()
+    for k in CONTATO:                                  # o que não mudou não entra na conta nem na auditoria
+        if k in campos and campos[k] == antes[k]:
+            campos.pop(k)
+    familia = identidade.familia(con, cid)
+    for k in ("email", "email_alt"):
+        e = campos.get(k)
+        if not e:
+            continue
+        outros = [o for o in todos(con, "SELECT id, name, pilot_name FROM clients WHERE LOWER(email)=? OR LOWER(COALESCE(email_alt,''))=?", (e, e))
+                  if o["id"] not in familia]
+        if outros:
+            o = outros[0]
+            raise HTTPException(409, f"O e-mail {e} já está no card {o['id']} ({o['pilot_name'] or o['name']}). "
+                                     "Se é a mesma pessoa, use Unir com outro card.")
+    return campos
 
 
 @r.patch("/clients/{cid}")
@@ -305,6 +362,8 @@ def client_patch(cid: int, dados: ClienteIn, request: Request, u=Depends(auth.ex
     if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
         raise HTTPException(404, "Client not found.")
     campos = {k: v for k, v in dados.model_dump().items() if v is not None}
+    antes = um(con, f"SELECT {', '.join(CONTATO)} FROM clients WHERE id=?", (cid,))
+    _contato_limpo(con, cid, campos, antes)
     if "vip" in campos:
         if not auth.pode(u["role"], "MANAGER"):
             raise HTTPException(403, "Only managers can change VIP.")
@@ -315,8 +374,11 @@ def client_patch(cid: int, dados: ClienteIn, request: Request, u=Depends(auth.ex
         return {"ok": True}
     sets = ", ".join(f"{k}=?" for k in campos)
     con.execute(f"UPDATE clients SET {sets}, updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id=?", (*campos.values(), cid))
+    detalhe = dict(campos)
+    if mudou := {k: antes[k] for k in CONTATO if k in campos}:
+        detalhe["antes"] = mudou                       # #410: o contato trocado à mão fica com o antes e o depois
     auditar(con, "client.update", f"user:{u['id']}", user_id=u["id"], entity_type="client", entity_id=cid,
-            detail=campos, ip=auth._ip(request))
+            detail=detalhe, ip=auth._ip(request))
     return {"ok": True}
 
 

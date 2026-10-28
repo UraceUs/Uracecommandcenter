@@ -6756,3 +6756,39 @@ def test_card_mostra_os_prerequisitos_da_waiver_por_provedor(servidor, navegador
         anterior = n
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
+
+
+@pytest.mark.parametrize("largura", [390, 1280])
+def test_editar_no_card_muda_nome_email_e_telefone(servidor, navegador, largura):
+    """#410, dono 28/10: "quando eu clico em editar no card do cliente, eu não consigo editar o nome, e-mail".
+    No Editar do card a equipe troca responsável, piloto, e-mail e telefone; e-mail de outro card é recusado com o aviso."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    r = pg.request.post(servidor + "/api/clients", headers=csrf,
+                        data={"name": f"Nina Editavel {largura}", "email": f"nina.antigo.{largura}@example.com", "phone": "555-555-0131"})
+    assert r.ok, r.text()
+    cid = r.json()["id"]
+    abrir(pg, servidor, f"/clients/{cid}")
+    pg.get_by_role("button", name="Editar", exact=True).click()
+    pg.get_by_label("Responsável (quem paga e assina)").fill(f"Nina Editada {largura}")
+    pg.get_by_label("Piloto", exact=True).fill(f"Davi Editado {largura}")
+    pg.get_by_label("E-mail", exact=True).fill(f"nina.novo.{largura}@example.com")
+    pg.get_by_label("Telefone").fill("(555) 555-0132")
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.get_by_role("button", name="Salvar").click()
+    pg.get_by_text("Cliente atualizado.").wait_for()
+    pg.get_by_role("heading", level=1, name=f"Davi Editado {largura}").wait_for()
+    meta = pg.locator(".c360-h .meta")
+    assert f"Nina Editada {largura}" in meta.inner_text()
+    assert pg.locator(f'.c360-h a[href="mailto:nina.novo.{largura}@example.com"]').count() == 1
+    assert pg.locator('.c360-h a[href="tel:555-555-0132"]').count() == 1
+    # o e-mail de outro card não entra: aparece o aviso para usar Unir
+    outro = pg.request.post(servidor + "/api/clients", headers=csrf, data={"name": f"Outra Pessoa {largura}", "email": f"outra.{largura}@example.com"}).json()["id"]
+    pg.get_by_role("button", name="Editar", exact=True).click()
+    pg.get_by_label("E-mail", exact=True).fill(f"outra.{largura}@example.com")
+    pg.get_by_role("button", name="Salvar").click()
+    pg.get_by_text(re.compile(rf"já está no card {outro}")).wait_for()
+    assert pg.request.get(servidor + f"/api/clients/{cid}").json()["client"]["email"] == f"nina.novo.{largura}@example.com"
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()

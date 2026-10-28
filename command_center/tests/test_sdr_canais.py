@@ -715,3 +715,23 @@ def test_email_da_lista_de_ignorados_o_robo_nao_responde(ambiente, monkeypatch):
     caixa([thread(tid="t-2", mid="m-2", de="Ana <ana@example.com>")])
     sdr_canais.ler_email(ambiente["con"])
     assert len(enviados("email")) == 1
+
+
+@pytest.mark.parametrize("numero", ["98626", "+18555550123", "+1 (800) 555-0123"])
+def test_sms_de_codigo_curto_ou_0800_o_robo_nao_responde(ambiente, monkeypatch, numero):
+    # 26/10 (#412): o robô respondeu um código curto de 5 dígitos e um (855): serviço automático, não lead
+    monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    con = ambiente["con"]
+    r = sdr_canais.sms_evento(con, sms("Your verification code is 123456", numero=numero), esperar=False)
+    c = um(con, "SELECT * FROM sdr_canal_contatos WHERE canal='sms'")
+    assert "não é lead" in r["robo"] and enviados("sms") == [] and c["precisa_gente"] == 0
+    assert um(con, "SELECT COUNT(*) AS n FROM sdr_canal_mensagens WHERE por='lead'")["n"] == 1
+    sdr_canais.responder_fila_sms(con, esperar=False, espera=0)       # a volta do lote também não responde
+    assert enviados("sms") == []
+
+
+def test_numero_automatico_so_codigo_curto_e_0800():
+    assert sdr_canais.numero_automatico("98626")
+    assert sdr_canais.numero_automatico("18554660000")
+    assert not sdr_canais.numero_automatico("14075550199")
+    assert not sdr_canais.numero_automatico("13055550145")
