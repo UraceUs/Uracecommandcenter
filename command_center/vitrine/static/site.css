@@ -167,6 +167,9 @@ html:has(.menu-cel[open]) { overflow: hidden }
 .duas { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 28px }
 @media (min-width: 860px) { .duas { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px } }
 .texto { display: grid; gap: 14px; min-width: 0; overflow-wrap: anywhere }
+/* #442: nas colunas (.duas) o título colava no texto e o 2º título ("Mission") no parágrafo de cima */
+.duas > div:not([class]):has(> h2:first-child) > * + * { margin-top: 12px }
+.duas > div:not([class]):has(> h2:first-child) > * + h2 { margin-top: 28px }
 .lede { color: var(--cinza-claro); margin-top: -10px }
 .clara .lede { color: var(--cinza) }
 
@@ -205,7 +208,7 @@ blockquote footer { color: var(--cinza-claro); font-size: .9rem; font-weight: 60
 
 .faq { display: grid; gap: 8px }
 .faq details { border: 1px solid #e3e3ea; border-radius: var(--raio); padding: 0 16px }
-.faq summary { min-height: 52px; display: flex; align-items: center; cursor: pointer; font-weight: 700 }
+.faq summary { min-height: 52px; display: flex; align-items: center; padding: 10px 0; cursor: pointer; font-weight: 700 }  /* #442: pergunta de duas linhas encostava na borda */
 .faq details p { padding-bottom: 12px; color: #3c3d50 }
 .faq .formato { margin: 0; border: 1px solid #e3e3ea; border-radius: var(--raio); padding: 14px 16px; font-weight: 700 }
 address { font-style: normal }
@@ -488,6 +491,10 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 /* formulários (contato e pedido) */
 .form-contato, .form-pedido { display: grid; gap: 12px; margin-top: 8px }
 .form-contato label, .form-pedido label { display: grid; gap: 4px; font-weight: 600; font-size: .92rem }
+/* #442: no grid, o "(optional)" caía numa linha só dele; com flex ele fica ao lado do rótulo e o campo desce inteiro */
+.form-contato label:has(> .opcional), .form-pedido label:has(> .opcional) { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .3em; row-gap: 4px }
+/* #442: o formulário de contato colava no texto de cima */
+.form-contato { margin-top: 20px }
 .opcional { font-weight: 400; color: var(--cinza) }
 .form-contato input, .form-contato select, .form-contato textarea, .form-pedido input, .form-pedido select, .form-pedido textarea {
   width: 100%; min-height: 46px; padding: 10px 12px; border: 1.5px solid #d9d9e1; border-radius: 8px; font: 400 1rem/1.4 var(--texto); color: var(--tinta); background: #fff }

@@ -647,7 +647,7 @@ ENVIADO = ('<p class="aviso-ok" role="status">Thank you! We got your message and
 
 def contact(host, assunto=None, produto=None, enviado=False):
     d = P.CONTACT
-    end = C.SITE["endereco"]
+    end = C.SITE["endereco"]  # #442: na página, só a 1ª letra de "onde" sobe (o .capitalize() baixava "Orlando Kart Center")
     opcoes = "".join(f'<option value="{e(v)}"{" selected" if v == assunto else ""}>{e(r)}</option>' for v, r in d["assuntos"])
     corpo = f"""<section class="faixa clara" aria-labelledby="h-contato"><div class="largura duas">
   <div><p class="eyebrow">{e(d['eyebrow'])}</p><h1 id="h-contato">{e(d['h1'])}</h1><p class="hero-sub-escura">{e(d['sub'])}</p>{ENVIADO if enviado else ''}
@@ -664,7 +664,7 @@ def contact(host, assunto=None, produto=None, enviado=False):
     </form></div>
   <div class="contato-lado">
     <h2>{e(d['local_titulo'])}</h2>
-    <address>{e(end['rua'])}, {e(end['cidade'])}, Florida {e(end['cep'])}<br>{e(end['onde'].capitalize())}.</address>
+    <address>{e(end['rua'])}, {e(end['cidade'])}, Florida {e(end['cep'])}<br>{e(end['onde'][:1].upper() + end['onde'][1:])}.</address>
     <p><a href="tel:{e(C.SITE['telefone_e164'])}">{e(C.SITE['telefone'])}</a><br><a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
     <p class="muted">{e(C.SITE['horario'])}</p>
     <p><a class="btn btn-sm" href="{e(C.SITE['whatsapp'])}" rel="noopener">Chat on WhatsApp</a></p>
