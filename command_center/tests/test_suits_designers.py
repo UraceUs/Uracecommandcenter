@@ -63,6 +63,18 @@ def test_o_cliente_nao_ve_nenhum_designer_da_lista(con):
     sp._guardas(pedido, "cliente", "Your design is ready for review.", cfg)
 
 
+def test_nome_curto_de_designer_so_trava_como_palavra_inteira(con):
+    """debug 29/10: o nome do designer (3 letras ou mais) era procurado como pedaço de texto: com uma designer "Ana" na lista,
+    "Hi Mariana" ou "Luciana" travavam o e-mail ao cliente. Agora é a palavra inteira; o e-mail continua por pedaço."""
+    inserir(con, "suit_designers", name="Ana", email="ana.designer@example.com", is_current=1)
+    cfg = sp.config(con)
+    pedido = um(con, "SELECT * FROM suit_orders WHERE id=?", (_pedido(con, customer_name="Mariana Ficticia"),))
+    sp._guardas(pedido, "cliente", "Hi Mariana, your design is ready. Thanks, Luciana's team.", cfg)
+    for texto in ("Ana fez a arte", "a arte da ana.", "fale com ana.designer@example.com"):
+        with pytest.raises(sp.Recusado, match="designer"):
+            sp._guardas(pedido, "cliente", texto, cfg)
+
+
 def test_email_de_qualquer_designer_da_lista_e_do_designer(con):
     _, d2 = _designers(con)
     pid = _pedido(con)
