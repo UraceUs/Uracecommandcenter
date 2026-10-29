@@ -880,6 +880,8 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .suit-ia{min-height:40px}
 .suit-liberar{margin:8px 0 0;color:var(--warn)}
 .suit-previa{max-width:min(100%,320px);max-height:220px;border-radius:10px;margin-top:10px;display:block}
+.suit-anexo{display:inline-flex;align-items:center;gap:6px;min-height:40px;margin-top:6px;overflow-wrap:anywhere}
+.suit-arquivo-nome{margin:8px 0 0;overflow-wrap:anywhere}
 .suit-dl{display:grid;grid-template-columns:minmax(0,1fr);gap:8px 16px;margin:0}
 @media (min-width:640px){.suit-dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .suit-dl div{min-width:0}.suit-dl dt{font-size:12px;color:var(--muted)}.suit-dl dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
