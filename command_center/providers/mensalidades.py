@@ -48,9 +48,15 @@ def memo_do_mes(mes):
 
 def invoice_do_mes(con, client_id, mes):
     """Invoice de mensalidade que já existe para o cliente naquele mês (espelho do QuickBooks):
-    pelo memo "[Month, AAAA]", ou emitida no mês com item/descrição de Academy."""
+    pelo memo "[Month, AAAA]", ou emitida no mês com item/descrição de Academy. A invoice de uma sessão
+    do site nunca é a mensalidade: a extra leva o item "Academy | Extra session", e o mês dela ficava
+    sem cobrança (debug 29/10; a mesma regra do contador, `contrato.mensalidades_por_mes`)."""
+    from command_center.providers import contrato
     nome_mes = MESES_EN[int(mes[5:7]) - 1]
+    das_sessoes = contrato.invoices_das_sessoes(con, client_id)
     for i in todos(con, "SELECT * FROM invoices WHERE client_id=? ORDER BY issued_on DESC", (client_id,)):
+        if das_sessoes and contrato._id_qbo(con, i["id"]) in das_sessoes:
+            continue
         memo = i.get("memo") or ""
         if re.search(rf"\[\s*{nome_mes}[,\s]+{mes[:4]}\s*\]", memo, re.I):
             return i
