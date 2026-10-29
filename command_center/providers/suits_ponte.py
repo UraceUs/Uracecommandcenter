@@ -194,6 +194,15 @@ def _guardas(pedido, papel, texto, cfg):
         for dado in (cfg.get("designer_email"), cfg.get("designer_nome")):
             if dado and len(dado) >= 3 and dado.lower() in t:
                 raise Recusado("O cliente não pode ver o nome nem o contato do designer: fale como a URACE.")
+    if papel == "fornecedor" and not pedido.get("checked_at"):
+        # debug 29/10 (regra 11, #382): o endereço do cliente, e o telefone que vai com ele, só vão ao fornecedor depois do
+        # OK da equipe nas fotos (Checked). O grupo do fornecedor no WhatsApp já recusava (`atelie_whatsapp.guardas`).
+        marcas, digitos = _marcas_do_cliente(pedido)
+        problemas = [rot for rot, m in marcas if rot == "o endereço do cliente" and m in t]
+        problemas += [rot for rot, d in digitos if d[-7:] in _digitos(texto)]
+        if problemas:
+            raise Recusado("O fornecedor só recebe " + " e ".join(dict.fromkeys(problemas)) + " depois do OK da equipe nas "
+                           "fotos (Checked): reescreva sem isso. O endereço vai pela seção Endereço ao fornecedor.")
 
 
 def destinatario(con, pedido, papel, cfg):
