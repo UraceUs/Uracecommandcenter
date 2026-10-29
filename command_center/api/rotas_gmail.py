@@ -344,9 +344,11 @@ def gmail_manual_atualizar(mailbox: str = "urace", u=Depends(auth.exige("MANAGER
     novos, saiu = [], []
     # A presença é POR CAIXA. Antes isto era um flag só: reler a support@ marcava todos
     # os marcadores da urace@ como inexistentes, porque não estavam na lista daquela caixa.
-    for l in todos(con, "SELECT id, name, mailboxes, origin FROM gmail_labels"):
+    for l in todos(con, "SELECT id, name, mailboxes, origin, in_gmail FROM gmail_labels"):
+        # Debug 29/10: o que ainda não existe no Gmail (`in_gmail=0`, como a sugestão da IA) não está em caixa nenhuma.
+        # O padrão ["urace"] é só das linhas antigas; lido na sugestão, a releitura a pulava e ela nunca entrava na triagem.
         try:
-            caixas = json.loads(l["mailboxes"] or '["urace"]')
+            caixas = json.loads(l["mailboxes"] or '["urace"]') if l["in_gmail"] else []
         except ValueError:
             caixas = ["urace"]
         tinha = mailbox in caixas

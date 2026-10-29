@@ -698,6 +698,10 @@ def mudar_etapa(con, pid, nova, user_id=None, motivo=None, por_ia=False, liberad
         extra = {"checked_at": agora(), "checked_by": user_id}
     if nova == "address_sent":
         extra = {"address_sent_at": agora()}
+    if CODIGOS.index(nova) < CODIGOS.index("checked"):
+        # debug 29/10: voltou para antes de Checked (a foto tinha defeito, o pedido reabriu): o OK das fotos deixa de
+        # valer, e com ele o endereço ao fornecedor (#382). Quem conferiu e quando continua na linha do tempo.
+        extra.update(checked_at=None, checked_by=None)
     sets = ", ".join(f"{k}=?" for k in extra)
     con.execute(f"UPDATE suit_orders SET status=?, closed=?, updated_at=?{', ' + sets if sets else ''} WHERE id=?",
                 (nova, 1 if nova in FECHADAS else 0, agora(), *extra.values(), pid))
