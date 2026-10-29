@@ -418,7 +418,26 @@ def _conta(chave, janela, maximo):
 
 
 def _estourou(ip):
-    return _conta(ip, _JANELA, _MAXIMO)
+    from command_center.api import auth
+    return _conta(auth.bloco_ip(ip), _JANELA, _MAXIMO)    # #485: no IPv6, o /64 (trocar de endereço nele não zera)
+
+
+# #485: confirmações ao visitante (contato e pedido somados) por hora, de todo mundo. Com muitos endereços de destino
+# diferentes, o teto por destino não segura; acima deste, o lead entra em Vendas e a equipe é avisada, só o e-mail ao
+# visitante não sai.
+_MAX_CONFIRMACOES_HORA = 60
+
+
+def _pode_confirmar():
+    return not _conta("confirmacoes", _JANELA_EMAIL, _MAX_CONFIRMACOES_HORA)
+
+
+def _saudacao(nome):
+    """#485: o primeiro nome só quando parece nome (letras, até 40); senão "there". O nome é texto livre e ia para
+    um e-mail da URACE (uma URL de 2.000 caracteres passava)."""
+    partes = (nome or "").split()
+    primeiro = partes[0] if partes else ""
+    return primeiro if re.fullmatch(r"(?:[^\W\d_]|['’-]){1,40}", primeiro) else "there"
 
 
 def _estourou_email(email):
@@ -522,8 +541,10 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
     _avisar_equipe(f"Site · contato: {assunto} — {c['nome']}",
                    f"{c['nome']} <{c['email']}> {c.get('telefone') or ''}\nAssunto: {assunto}\n\n{c['mensagem']}\n\n"
                    f"Vendas: https://ops.urace.us/ops/sales/{oid}")
+    if not _pode_confirmar():
+        return _responde(request, True, "/contact/?sent=1")
     confirmacao = ("We got your message — URACE",
-                   f"Hi {c['nome'].split()[0]},\n\nThanks for reaching out to URACE. We received your message about "
+                   f"Hi {_saudacao(c['nome'])},\n\nThanks for reaching out to URACE. We received your message about "
                    f"{assunto} and will reply shortly, usually within one business day.\n\nIn a hurry? Call or WhatsApp "
                    f"+1 (407) 250 2291.\n\nURACE — the Champion's Factory\nOrlando Kart Center, 10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824")
     # dono, 20/10: com o robô ligado no e-mail, é ele quem escreve o follow-up (no lugar da confirmação genérica)
@@ -594,8 +615,10 @@ async def pedido(request: Request, con: sqlite3.Connection = Depends(get_db)):
     _avisar_equipe(f"Site · pedido da loja: {desc} — {c['nome']}",
                    f"{c['nome']} <{c['email']}> {c.get('telefone') or ''}\n{desc}\nValor estimado: {paginas.usd(valor) if valor else 'a confirmar'}\n"
                    f"{c.get('mensagem') or ''}\n\nVendas: https://ops.urace.us/ops/sales/{oid}")
+    if not _pode_confirmar():
+        return _responde(request, True, volta + "?sent=1")
     _confirmar_pessoa(c["email"], "We got your order request — URACE Store",
-                      f"Hi {c['nome'].split()[0]},\n\nThanks for your order request: {desc}"
+                      f"Hi {_saudacao(c['nome'])},\n\nThanks for your order request: {desc}"
                       f"{' — ' + paginas.usd(valor) if valor else ''}.\n\nOur team will confirm availability, shipping and the total, "
                       f"and send you an invoice to pay online. Nothing has been charged.\n\nQuestions? Call or WhatsApp +1 (407) 250 2291.\n\n"
                       f"URACE — the Champion's Factory")
@@ -633,6 +656,11 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
 
     if c.get("site"):
         return RedirectResponse(volta, status_code=303)            # honeypot: um robô
+    # #485: o cookie da conta só vale vindo do site. "null" é o que o navegador manda no formulário do próprio site
+    # (a política é no-referrer); uma origem de verdade que não é a nossa é que é recusada.
+    origem = (request.headers.get("origin") or "null").strip()
+    if origem != "null" and (urlsplit(origem).hostname or "").lower() not in hosts():
+        raise HTTPException(403, "Security check failed.")
     if not p:
         return erro("Product not found.")
     if not stripe_loja.ligado():
