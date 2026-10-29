@@ -329,6 +329,15 @@ def extrair_acoes(con, command_id, texto, notas=None, consultas=None):
         if isinstance(args, dict):
             args, problemas = acoes.normalizar(nome, args, texto, _buscar_item_qbo, _buscar_cliente_qbo, con, alvo, _criar_item_qbo, notas)
         conferir = args.pop("_conferir", None) if isinstance(args, dict) else None
+        if pol != "BLOCKED":                              # a bloqueada nunca executa: fica registrada como tentativa
+            # debug 29/10: ferramenta que não existe ou campo que ela não aceita não vira cartão que falha
+            # depois do clique; o motivo vai para o dono e volta para a IA corrigir
+            args, recusa = acoes.conferir_ferramenta(nome, args, normalizada=True)
+            if recusa:
+                notas.append(f"{nome} → {alvo or descricao[:60]}: recusada, {recusa}. Nada foi proposto.")
+                achadas.append({"id": None, "action": nome, "policy": pol, "alvo": alvo, "descricao": descricao[:200],
+                                "problemas": [recusa], "recusada": True})
+                return
         assin = acoes.assinatura(nome, args, alvo)
         estado, antiga = acoes.ja_decidida(con, assin)
         if estado == "feita":
@@ -451,7 +460,7 @@ def _executa(command_id, texto, session_key, user_id, prompt=None):
                 if resultados:
                     pedido += "\n\n[Command Center] Executei as consultas que você listou (não peça de novo). RESULTADOS:\n" + "\n".join(resultados)
                 if incompletas:
-                    pedido += "".join(_ac.pedido_de_correcao(a["action"], a["problemas"]) for a in incompletas[:3])
+                    pedido += "".join(_ac.pedido_de_correcao(a["action"], a["problemas"], a.get("recusada")) for a in incompletas[:3])
                 pedido += ("\n\nAgora CONCLUA o pedido do dono: reescreva SOMENTE as linhas ACAO finais que faltam, com os campos exatos "
                            "(cliente_id e item_id numéricos, unitario com o valor dito). Se ainda faltar ler algo no QuickBooks, peça com "
                            "CONSULTA (o painel lê e te devolve); se um item não existir no catálogo, use qbo_criar_item.")
@@ -462,6 +471,8 @@ def _executa(command_id, texto, session_key, user_id, prompt=None):
                         saida = saida + "\n\n" + saida2.strip()
                     break
                 for a in incompletas:
+                    if not a.get("id"):                   # recusada na proposta: não chegou a virar cartão
+                        continue
                     atualizar(con, "ai_actions", a["id"], status="REJECTED", finished_at=agora(), result="substituída pela correção da própria IA")
                     con.execute("UPDATE approvals SET decided_at=?, decision='REJECTED', comment='corrigida' WHERE action_id=? AND decided_at IS NULL", (agora(), a["id"]))
                 consultas = []
@@ -474,7 +485,8 @@ def _executa(command_id, texto, session_key, user_id, prompt=None):
             auto = motor.executar_safe(con, command_id, user_id)
             atualizar(con, "ai_commands", command_id, status="DONE", finished_at=agora(), output=saida)
             auditar(con, "ai.command.done", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",
-                    entity_id=command_id, detail={"acoes_propostas": len(lista), "executadas_safe": auto, "corrigidas": len(incompletas), "notas": notas[:5]})
+                    entity_id=command_id, detail={"acoes_propostas": len([a for a in lista if a.get("id")]), "executadas_safe": auto,
+                                                  "corrigidas": len(incompletas), "notas": notas[:5]})
         else:
             atualizar(con, "ai_commands", command_id, status="FAILED", finished_at=agora(), error=motivo_amigavel(erro))
             auditar(con, "ai.command.failed", f"ai:{AGENTE}", user_id=user_id, entity_type="ai_command",

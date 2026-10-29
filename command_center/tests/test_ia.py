@@ -321,7 +321,9 @@ def test_normaliza_invoice_aliases_item_por_nome_e_valor_do_texto():
     assert acoes.assinatura("asana_criar_tarefa", {"nome": "David Pedalo_Urace Daily [1/1]", "vence_em": "2026-09-13"}) == "asana_criar_tarefa|david pedalo_urace daily [1/1]|2026-09-13"
 
 
-_TAREFA = 'ACAO: asana_atualizar_tarefa | David Pedalo | serviço domingo | {"projeto_gid":"1205450093098920","secao_gid":"1205141832260879","nome":"David Pedalo_Urace Daily_Using Own Kart [1/1]","vence_em":"2026-09-13"}'
+# debug 29/10: era `asana_atualizar_tarefa`, ferramenta que não existe (a mesma das ações FAILED de
+# setembro); hoje ela é recusada na proposta, então a tarefa daqui usa uma ferramenta de verdade
+_TAREFA = 'ACAO: asana_mover_para_secao | David Pedalo | serviço domingo | {"gid":"1209000000000013","secao_gid":"1205141832260879"}'
 _INVOICE_OK = 'ACAO: qbo_criar_e_enviar_invoice | Nicolas Pedalo | invoice $500 | {"cliente_id":"77","linhas":[{"item_id":"31","quantidade":1,"unitario":500,"descricao":"Using Own Kart - David Pedalo - 2026-09-13"}],"vence_em":"2026-09-13"}'
 
 
@@ -330,21 +332,21 @@ def test_nao_repete_acao_feita_e_substitui_pendente(cli):
     ia.RUNNER = lambda texto, sk: (True, "Vou criar a tarefa e a invoice de $500.\n" + _TAREFA + "\n" + _INVOICE_OK, None)
     c1 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "David Pedalo domingo, mesmo esquema"}).json()["id"])
     a1 = {a["action"]: a for a in c1["actions"]}
-    assert a1["asana_atualizar_tarefa"]["status"] == "PROPOSED" and a1["qbo_criar_e_enviar_invoice"]["status"] == "PROPOSED"
+    assert a1["asana_mover_para_secao"]["status"] == "PROPOSED" and a1["qbo_criar_e_enviar_invoice"]["status"] == "PROPOSED"
     # o dono muda algo e manda de novo: as pendentes antigas são substituídas, não duplicadas
     c2 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "waiver vale um ano, mesmo valor"}).json()["id"])
-    assert "AÇÕES JÁ PROPOSTAS HOJE" in c2["prompt"] and "#%d" % a1["asana_atualizar_tarefa"]["id"] in c2["prompt"] and c2["text"] == "waiver vale um ano, mesmo valor"
+    assert "AÇÕES JÁ PROPOSTAS HOJE" in c2["prompt"] and "#%d" % a1["asana_mover_para_secao"]["id"] in c2["prompt"] and c2["text"] == "waiver vale um ano, mesmo valor"
     a2 = {a["action"]: a for a in c2["actions"]}
     assert all(a["status"] == "PROPOSED" for a in a2.values())
     velha = cli.get(f"{B}/commands/{c1['id']}").json()["actions"]
     assert all(a["status"] == "REJECTED" and "substituída" in (a["result"] or "") for a in velha)
     assert "substitui a proposta" in c2["output"]
     # a tarefa foi aprovada e executada: não volta a ser proposta
-    con = conectar(); con.execute("UPDATE ai_actions SET status='DONE' WHERE id=?", (a2["asana_atualizar_tarefa"]["id"],)); con.commit(); con.close()
+    con = conectar(); con.execute("UPDATE ai_actions SET status='DONE' WHERE id=?", (a2["asana_mover_para_secao"]["id"],)); con.commit(); con.close()
     c3 = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "e aí?"}).json()["id"])
     acoes3 = [a["action"] for a in c3["actions"]]
-    assert "asana_atualizar_tarefa" not in acoes3 and "qbo_criar_e_enviar_invoice" in acoes3
-    assert "já aprovada/feita em #%d" % a2["asana_atualizar_tarefa"]["id"] in c3["output"]
+    assert "asana_mover_para_secao" not in acoes3 and "qbo_criar_e_enviar_invoice" in acoes3
+    assert "já aprovada/feita em #%d" % a2["asana_mover_para_secao"]["id"] in c3["output"]
     assert "FEITA" in c3["prompt"]
 
 
@@ -988,3 +990,42 @@ def test_ia_le_cliente_e_invoices_do_quickbooks_em_rodadas(cli, monkeypatch):
     assert not [a for a in c["actions"] if a["status"] == "PROPOSED"], "leitura nunca vira ação para aprovar"
     for ferramenta in ("CONSULTA:", "qbo_clientes_buscar", "qbo_invoices", "qbo_invoice ", "qbo_historico_precos"):
         assert ferramenta in ia.SUFIXO, ferramenta
+
+
+# ------------------------------------------------ debug 29/10: a proposta é conferida na hora
+def test_ferramenta_que_nao_existe_ou_argumento_errado_e_recusada_na_proposta(cli):
+    """As ações FAILED de setembro ("AttributeError: asana.asana_atualizar_tarefa não existe",
+    "asana_criar_do_modelo() got an unexpected keyword argument 'projeto_gid'"): a IA declarava,
+    virava cartão de aprovar e só falhava depois do clique. Agora a proposta com ferramenta que
+    não existe, com campo que a ferramenta não aceita ou sem o campo obrigatório é recusada na
+    hora, com o motivo para o dono e para a IA, que ganha a chance de corrigir."""
+    h = entra(cli, "admin@urace.us")
+    pedidos = []
+
+    def runner(texto, sk):
+        pedidos.append(texto)
+        if len(pedidos) == 1:
+            return True, ("Ajustei o que deu.\n"
+                          'ACAO: asana_atualizar_tarefa | 555001 | data nova | {"gid":"555001","vence_em":"2026-11-02"}\n'
+                          'ACAO: asana_renomear | 555002 | nome novo | {"gid":"555002","nome":"Piloto Ficticio_Urace Daily","projeto_gid":"1"}\n'
+                          'ACAO: asana_concluir | 555003 | concluir | {}'), None
+        return True, 'ACAO: asana_renomear | 555002 | nome novo | {"gid":"555002","nome":"Piloto Ficticio_Urace Daily"}', None
+    ia.RUNNER = runner
+    try:
+        c = espera(cli, cli.post(f"{B}/commands", headers=h, json={"text": "ajuste as tarefas do piloto fictício"}).json()["id"], timeout=8)
+    finally:
+        ia.RUNNER = runner_falso
+    acoes_ = {a["action"]: a for a in c["actions"]}
+    assert "asana_atualizar_tarefa" not in acoes_ and "asana_concluir" not in acoes_, "nada de cartão que falha no fim"
+    assert list(acoes_) == ["asana_renomear"] and acoes_["asana_renomear"]["status"] == "PROPOSED"
+    assert json.loads(acoes_["asana_renomear"]["payload"])["args"] == {"gid": "555002", "nome": "Piloto Ficticio_Urace Daily"}
+    # o motivo volta para a IA (que corrigiu o que dava) e fica na conversa para o dono
+    assert len(pedidos) == 2
+    assert "asana_atualizar_tarefa" in pedidos[1] and "não existe" in pedidos[1] and "asana_comentar" in pedidos[1]
+    assert "projeto_gid" in pedidos[1] and "asana_concluir" in pedidos[1]
+    assert "recusada" in c["output"] and "asana_atualizar_tarefa" in c["output"]
+    from command_center.api import acoes
+    assert acoes.conferir_ferramenta("asana_mover_para_finished", {"gid": "9"})[1] is None      # o açúcar SAFE continua
+    assert acoes.conferir_ferramenta("painel_unir_clientes", {"keep_id": 1, "drop_id": 2})[1] is None
+    assert "não existe" in acoes.conferir_ferramenta("dialpad_ligar", {"numero": "555-0100"})[1]
+    assert "não existe" in acoes.conferir_ferramenta("painel_api", {"metodo": "POST", "caminho": "/nada/aqui"})[1]
