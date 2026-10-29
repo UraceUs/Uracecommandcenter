@@ -956,6 +956,57 @@ def test_equipe_ve_como_conectar_o_claude(servidor, navegador):
     pg.close()
 
 
+def test_conversa_da_equipe_abre_uma_vez_e_nao_fica_recarregando(servidor, navegador):
+    """Debug 29/10: abrir uma conversa da equipe com mensagem entrava num laço. Marcar como lido avisava a lista, a lista
+    redesenhava, a conversa voltava do zero (piscando "carregando") e marcava lido de novo: centenas de pedidos por
+    segundo no celular do box. A conversa abre com uma busca e depois só pergunta o que é novo, a cada 5 s."""
+    pg = entrar(navegador, servidor, largura=390, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    cid = pg.request.post(servidor + "/api/equipe/canais", headers=csrf,
+                          data={"name": "Box sem laço", "kind": "EQUIPE", "membros": []}).json()["id"]
+    for texto in ("Corrente do kart 7 trocada", "Pneus calibrados"):
+        assert pg.request.post(servidor + f"/api/equipe/canais/{cid}/mensagens", headers=csrf, data={"text": texto}).ok
+    pedidos = []
+    pg.on("request", lambda q: pedidos.append(f"{q.method} {q.url.split('/api/')[1].split('?')[0]}")
+          if f"/api/equipe/canais/{cid}" in q.url else None)
+    pg.goto(servidor + f"/equipe/{cid}")
+    pg.locator(".chat .bub", has_text="Pneus calibrados").wait_for()
+    pg.wait_for_timeout(3000)                                  # menos que os 5 s da próxima busca
+    leituras = pedidos.count(f"GET equipe/canais/{cid}")
+    lidos = pedidos.count(f"POST equipe/canais/{cid}/lido")
+    assert leituras <= 2 and lidos <= 1, f"a conversa ficou recarregando: {leituras} leituras e {lidos} 'lido' em 3 s"
+    assert pg.locator(".chat .bub", has_text="Pneus calibrados").count() == 1
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_mensagem_enviada_na_equipe_aparece_uma_vez_so_com_a_rede_lenta(servidor, navegador):
+    """Debug 29/10: com a rede lenta, a busca de 5 s e a busca depois do envio pediam o mesmo "desde" e as duas punham a
+    mesma mensagem na tela: ela aparecia duas vezes, como se tivesse saído em dobro. A tela junta só o que ainda não tem."""
+    pg = entrar(navegador, servidor, largura=390, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    cid = pg.request.post(servidor + "/api/equipe/canais", headers=csrf,
+                          data={"name": "Box rede lenta", "kind": "EQUIPE", "membros": []}).json()["id"]
+    assert pg.request.post(servidor + f"/api/equipe/canais/{cid}/mensagens", headers=csrf, data={"text": "Bom dia, box"}).ok
+    pg.goto(servidor + f"/equipe/{cid}")
+    pg.locator(".chat .bub", has_text="Bom dia, box").wait_for()
+    # as duas próximas buscas do que é novo demoram 5,5 s para voltar (mais que o intervalo de 5 s)
+    pg.evaluate("""() => { window.__atrasar = 2; window.__voltaram = 0; const orig = window.fetch; window.fetch = async (u, o) => {
+        const lenta = (!o || !o.method || o.method === 'GET') && /\\/equipe\\/canais\\/\\d+\\?desde=[1-9]/.test(String(u)) && window.__atrasar > 0
+        if (lenta) window.__atrasar--
+        const r = await orig(u, o)
+        if (lenta) { await new Promise(ok => setTimeout(ok, 5500)); window.__voltaram++ }
+        return r } }""")
+    pg.get_by_placeholder("Escreva ou dite… Enter envia, Shift+Enter quebra a linha").fill("Kart 12 pronto")
+    pg.get_by_role("button", name="Enviar", exact=True).click()
+    pg.wait_for_function("() => window.__voltaram === 2", timeout=20000)
+    pg.wait_for_timeout(600)
+    assert pg.locator(".chat .bub", has_text="Kart 12 pronto").count() == 1, "a mensagem apareceu repetida"
+    assert pg.locator(".chat .bub", has_text="Bom dia, box").count() == 1
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 @pytest.mark.parametrize("largura", [360, 390])
 def test_area_do_cliente_escreve_tudo_do_mesmo_jeito(servidor, navegador, largura):
     """#81 (dono, 04/10: "veja as formatações que estão fora de padrão e padronize"): nome
@@ -1493,6 +1544,42 @@ def test_balcao_no_celular_cliente_guardar_digitar_peca_nova_e_confirmar(servido
     pg.close()
 
 
+def test_rascunho_do_balcao_nao_volta_para_tras_com_a_resposta_atrasada(servidor, navegador):
+    """Debug 29/10 (o mesmo padrão do #453): com o rascunho aberto, cada peça lida relê o rascunho. Duas leituras
+    seguidas com sinal fraco: a releitura da primeira chegava depois da segunda e a tela voltava para trás (1 peça
+    em vez de 2). O mecânico lia de novo e o cliente pagava 3."""
+    pg = entrar(navegador, servidor, largura=390, altura=900)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    cid = pg.request.post(servidor + "/api/clients", headers=csrf,
+                          data={"name": "Rita Rascunho Ficticia", "email": "rita.rascunho@example.com"}).json()["id"]
+    r = pg.request.post(servidor + f"/api/balcao/cliente/{cid}/rascunho/linhas", headers=csrf,
+                        data={"origem": "livre", "nome": "Solda e2e", "qty": 1, "preco": 10})
+    assert r.ok, r.text()
+    abrir(pg, servidor, f"/balcao/{cid}")
+    pg.get_by_text("Modo COBRAR com rascunho aberto: cada peça lida entra no rascunho de invoice.").wait_for()
+    # a próxima releitura do rascunho volta 2,5 s depois; as outras, na hora
+    pg.evaluate(f"""() => {{ window.__lenta = 1; window.__pend = 0; const orig = window.fetch; window.fetch = async (u, o) => {{
+        const lenta = (!o || o.method === 'GET') && String(u).endsWith('/balcao/cliente/{cid}/rascunho') && window.__lenta-- > 0
+        if (lenta) window.__pend++
+        const r = await orig(u, o)
+        if (lenta) {{ await new Promise(ok => setTimeout(ok, 2500)); window.__pend-- }}
+        return r }} }}""")
+    campo = pg.get_by_label("Peça: digite o nome ou o código")
+    campo.fill("7890000000017"); campo.press("Enter")
+    pg.get_by_text("Front bumper (e2e): no rascunho.").first.wait_for()
+    campo.fill("7890000000017"); campo.press("Enter")
+    pg.wait_for_function("() => document.querySelectorAll('.toast').length >= 2 || window.__pend === 0")
+    pg.wait_for_function("() => window.__pend === 0", timeout=15000)
+    pg.wait_for_timeout(500)                                   # a releitura atrasada já foi aplicada (ou ignorada)
+    servidor_diz = [li["qty"] for li in pg.request.get(servidor + f"/api/balcao/cliente/{cid}/rascunho").json()["rascunho"]["linhas"]
+                    if li["nome"] == "Front bumper (e2e)"]
+    assert servidor_diz == [2], servidor_diz
+    assert pg.get_by_label("Quantidade de Front bumper (e2e)").input_value() == "2", "a tela voltou para a leitura velha"
+    pg.request.post(servidor + f"/api/balcao/cliente/{cid}/rascunho/descartar", headers=csrf)
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 # ------------------------------------------------------------------ biblioteca (#88)
 @pytest.mark.parametrize("largura", [360, 1280])
 def test_biblioteca_do_gerente_com_os_historicos(servidor, navegador, largura):
@@ -1629,6 +1716,34 @@ def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegad
     pg.locator(".md-cal-d.hoje").click()                       # tocar no dia abre o dia, com os checklists
     pg.locator("article.cd", has_text="David Pedalo_Urace Daily_Arrive and Drive").get_by_role("button", name="Kart Checklist").wait_for()
     assert pg.get_by_role("button", name="Dia", exact=True).get_attribute("aria-pressed") == "true"
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_meu_dia_nao_mostra_o_dia_anterior_enquanto_o_proximo_carrega(servidor, navegador):
+    """Debug 29/10: ao passar para o dia seguinte com sinal fraco, a tela já dizia amanhã e ainda mostrava os serviços
+    e os checklists de hoje; tocar num checklist abria o de hoje com a data de amanhã. Enquanto o dia novo não chega,
+    a tela espera."""
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=800)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    hoje = pg.locator("article.cd", has_text="David Pedalo_Urace Daily_Arrive and Drive")
+    hoje.wait_for()
+    # o dia seguinte leva 2,5 s para chegar
+    pg.evaluate("""() => { window.__pend = 0; const orig = window.fetch; window.fetch = async (u, o) => {
+        const lenta = /\\/meu-dia\\?data=/.test(String(u))
+        if (lenta) window.__pend++
+        const r = await orig(u, o)
+        if (lenta) { await new Promise(ok => setTimeout(ok, 2500)); window.__pend-- }
+        return r } }""")
+    pg.get_by_role("button", name="Próximo dia").click()
+    pg.wait_for_function("() => window.__pend > 0")
+    pg.wait_for_timeout(300)
+    assert hoje.count() == 0, "a tela de amanhã ainda mostrava o serviço (e o checklist) de hoje"
+    pg.wait_for_function("() => window.__pend === 0", timeout=15000)
+    pg.get_by_role("heading", name="Serviços", level=2).wait_for()
+    assert hoje.count() == 0
+    pg.get_by_role("button", name="Dia anterior").click()
+    hoje.wait_for()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
@@ -2880,6 +2995,31 @@ def test_suits_admin_libera_para_approved_com_o_motivo(servidor, navegador, larg
     assert pg.get_by_role("button", name="Salvar nota").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+def test_suits_nota_nao_devolve_o_pedido_para_a_etapa_antiga(servidor, navegador):
+    """Debug 29/10: a etapa da nota guardava a etapa de quando a tela abriu. A IA (ou outra pessoa) mudava a etapa, a tela
+    atualizava, e a próxima nota, salva sem mexer na etapa, devolvia o pedido para a etapa antiga."""
+    pg = entrar(navegador, servidor, largura=390, altura=900)
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill("Etapa Viva Fictícia")
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name="Etapa Viva Fictícia", level=1).wait_for()
+    pid = int(re.search(r"/suits/(\d+)$", pg.url).group(1))
+    # com a tela aberta, outra pessoa (ou a IA) leva o pedido para Design Pending
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    r = pg.request.post(servidor + f"/api/suits/{pid}/notas", headers=csrf, multipart={"texto": "", "status": "design_pending"})
+    assert r.ok, r.text()
+    pg.get_by_role("switch", name=re.compile("IA neste pedido")).click()       # recarrega o pedido na hora (sem esperar 15 s)
+    pg.locator(".suit-etapas li.atual", has_text="Design Pending").wait_for()
+    pg.get_by_label("Nota", exact=True).fill("Cliente ligou: responde amanhã")
+    pg.get_by_role("button", name="Salvar nota").click()
+    pg.get_by_text("Nota salva.").wait_for()
+    assert pg.request.get(servidor + f"/api/suits/{pid}").json()["status"] == "design_pending", "a nota devolveu a etapa antiga"
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
 
