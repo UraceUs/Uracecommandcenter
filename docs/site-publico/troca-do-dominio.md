@@ -11,8 +11,13 @@ nada aqui roda sozinho. O passo a passo técnico está em `site-inteiro-2026-10-
 - [ ] No `novo.urace.us`: o banner de cookies aparece na primeira visita; **Accept** liga a medição,
       **Decline** não; **Cookie settings** no rodapé reabre o banner.
 - [ ] O balão do chat aparece e uma mensagem de teste cai no Kommo (apague o lead de teste depois).
-- [ ] No Tag Manager (`GTM-59CCNDC`), conferir que o pixel do Meta **não** está também dentro do
-      container — senão o Meta conta tudo duas vezes. (Dono.)
+- [x] Container `GTM-59CCNDC` lido em 29/10 (#497): ele **já dispara o pixel do Meta `380948601336488`** (o mesmo
+      que o plugin do WooCommerce injeta hoje, então o urace.us de hoje conta em dobro), além do GA4 `G-THWPYVX6K0`, do
+      Google Ads `AW-10814335551` e do ChatGPT Ads ("oaiq"). Portanto, na VPS: **só `SITE_GTM_ID=GTM-59CCNDC`, sem
+      `SITE_META_PIXEL_ID`** — o pixel vem pelo GTM, uma vez. HubSpot e Clarity do container ficam bloqueados pela
+      política do site. Para a agência: os gatilhos de conversão do container usam eventos do WooCommerce e do Contact
+      Form 7; no site novo os eventos são `purchase` (pedido pago) e `generate_lead` (contato e formulários); e o
+      `init` do ChatGPT Ads está com `debug: true`.
 - [ ] Reserva de ponta a ponta no `novo.urace.us`: data, kart, Lead and Follow, carrinho, conta,
       Stripe, página do pedido, e-mail.
 
