@@ -2037,6 +2037,51 @@ def test_site_novo_404_com_saida_no_celular(servidor, navegador, largura):
     pg.close()
 
 
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_site_winter_localizador_e_estimativa_no_celular(servidor, navegador, largura):
+    """#505: a /winter/ (Race the Winter 2027). O localizador acha a idade de corrida em 1º de janeiro de 2027 e acende as
+    classes da SKUSA (e a idade vai para o formulário); a estimativa é a diária do kart do painel × os dias de teste que
+    cabem na estadia; nada rola para o lado e todo alvo de toque tem ≥ 40 px."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 800}, reduced_motion="reduce")
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    pg.goto(site + "/winter/"); pg.wait_for_load_state("networkidle")
+    assert [t for n, t in _cabecalhos(pg) if n == 1] == ["Race the winter"]
+
+    # o localizador: quem nasceu em 10/06/2014 tem 12 anos de corrida em 1º/01/2027
+    pg.locator("[data-dob]").fill("2014-06-10")
+    assert pg.locator("[data-idade]").inner_text() == "12"
+    assert pg.locator(".winter-classes li.aberta strong").all_inner_texts() == ["Mini Swift", "KA100 Junior", "X30 Junior"]
+    assert pg.locator("[data-idade-campo]").input_value() == "12", "a idade vai para o formulário, à vista"
+
+    # a estimativa: 2-stroke (o padrão de 7 anos para cima) × 6 dos 18 dias de teste entre 11/01 e 14/02
+    usd = lambda v: f"${v:,.0f}" if float(v).is_integer() else f"${v:,.2f}"     # noqa: E731
+    kart = pg.locator('[data-kt][aria-pressed="true"]')
+    assert kart.get_attribute("data-kt") == "2s"
+    preco = float(kart.get_attribute("data-preco"))
+    assert pg.locator("[data-n-testes]").inner_text() == "18" and pg.locator("[data-testes-v]").inner_text() == "6"
+    assert pg.locator("[data-total]").inner_text() == usd(6 * preco)
+    shifter = pg.locator('[data-kt="shift"]')
+    shifter.click()
+    assert pg.locator("[data-total]").inner_text() == usd(6 * float(shifter.get_attribute("data-preco")))
+    # a volta em 24/01 deixa só a 1ª janela de teste (19–21/01) dentro da estadia
+    pg.locator("[data-volta]").select_option(label="Sunday 24 Jan")
+    assert pg.locator("[data-testes-v]").inner_text() == "3"
+    assert "Some weekends fall outside your stay. Stretch the dates or drop them." in pg.locator("[data-alertas]").inner_text()
+
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    menor = pg.evaluate("""() => [...document.querySelectorAll('main a, main button, header a, header summary')]
+        .filter(e => e.offsetParent !== null && !e.closest('p, li, dd, address'))
+        .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+        .filter(([h]) => h < 40)""")
+    assert not menor, menor
+    assert not erros, erros
+    pg.close()
+
+
 _ALVOS_DO_TOPO = """(sel) => [...document.querySelectorAll(sel)]
     .filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' })
     .map(e => [Math.round(e.getBoundingClientRect().height), (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 24)])

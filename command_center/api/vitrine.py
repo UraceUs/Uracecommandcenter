@@ -280,9 +280,11 @@ EDITAVEIS = tuple(c for c in dict.fromkeys([*PAGINAS, *blocos.registro()]) if c 
 
 
 def _por_blocos(caminho, host, q=None):
-    """#502: a página montada por blocos (`vitrine/pg_*.py`), com os cartões e os planos do painel."""
+    """#502: a página montada por blocos (`vitrine/pg_*.py`), com os cartões, os planos e os serviços do painel (#505: a
+    estimativa da /winter/ usa a diária de cada kart)."""
     return blocos.pagina(host, blocos.registro()[caminho],
-                         {"cartoes": _cartoes, "planos": _planos, "enviado": (q or {}).get("sent") == "1"})
+                         {"cartoes": _cartoes, "planos": _planos, "servicos": _servicos_do_site,
+                          "enviado": (q or {}).get("sent") == "1"})
 
 
 def html_da_pagina(caminho, host):
