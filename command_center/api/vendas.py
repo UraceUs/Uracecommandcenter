@@ -944,7 +944,7 @@ def _qbo(con, o, aprovado, ref=None, deposito=0.0, so_deposito=False, requestid=
         return {"cliente_qbo": None, "invoice": None, "pendente": True}
     nome, email = o["name"], o["email"]
     try:
-        busca = chamar("quickbooks", "qbo_clientes_buscar", termo=email or nome, maximo=5) or []
+        busca = chamar("quickbooks", "qbo_clientes_buscar", texto=email or nome, maximo=5) or []
         cliente = (busca[0] if busca else None)
         if not cliente:
             novo = _aplicando("quickbooks", chamar, "quickbooks", "qbo_criar_cliente", nome=nome, email=email, telefone=o["phone"])
@@ -1555,7 +1555,7 @@ def registrar_invoice(oid: int, dados: RegistrarIn, request: Request, u=Depends(
                                  "aparece no passo do QuickBooks.")
     try:                                  # só leitura: a invoice e o cliente desta venda no QuickBooks
         inv = chamar("quickbooks", "invoice_por_numero", numero=numero)
-        clientes = (chamar("quickbooks", "qbo_clientes_buscar", termo=o["email"] or o["name"], maximo=5) or []) if inv else []
+        clientes = (chamar("quickbooks", "qbo_clientes_buscar", texto=o["email"] or o["name"], maximo=5) or []) if inv else []
     except NaoConectado:
         raise HTTPException(503, "Ligue o QuickBooks para conferir (Integrações): sem conferir a invoice, nada é registrado.")
     except Exception as e:                                       # noqa: BLE001

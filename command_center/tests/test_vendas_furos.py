@@ -1237,3 +1237,40 @@ def test_liberar_que_mandou_e_caiu_registra_o_numero_e_sai_da_atencao(cli, qbo, 
     assert cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300, "confirmar": True}).status_code == 409
     assert len(qbo.invoices) == 2, "a de outra venda e a liberada: nenhuma a mais"
     assert _auditoria(oid, "sales.invoice.registered")[0]["diferente"] is True
+
+
+# ------------------------------------------------------------------ debug 29/10: o falso aceitava qualquer argumento
+def _com_a_assinatura_do_quickbooks(qbo):
+    """O `chamar` do teste com a assinatura das ferramentas de verdade: argumento com o nome errado levanta o
+    TypeError que só aparecia fora do teste (o `QBOFalso` aceita qualquer `**kw`)."""
+    import inspect
+
+    from adminai.mcp import quickbooks_mcp as q
+
+    def chamar(sistema, ferramenta, **kw):
+        inspect.signature(getattr(q, ferramenta)).bind(**kw)
+        return qbo(sistema, ferramenta, **kw)
+    return chamar
+
+
+def test_venda_busca_o_cliente_do_quickbooks_com_o_argumento_da_ferramenta(cli, qbo, monkeypatch):
+    """A venda buscava o cliente com `qbo_clientes_buscar(termo=...)`, e a ferramenta só tem `texto`: fora do teste,
+    toda invoice da venda manual (fechar, Liberar, o passo, o depósito) caía com TypeError antes de chegar ao
+    QuickBooks, e o "A invoice saiu" do gerente respondia 502 sem conferir nada."""
+    monkeypatch.setattr(vendas, "chamar", _com_a_assinatura_do_quickbooks(qbo))
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Assinatura Certa", email="assinatura@example.com", amount=500)
+    q_ = fecha(cli, h, oid)["passos"][0]
+    assert q_["passo"] == "qbo" and q_["ok"] is True, q_
+    assert len(qbo.invoices) == 1 and qbo.invoices[0]["cliente_id"] == "77"
+    # o "A invoice saiu" confere o cliente da invoice com a mesma busca
+    hg = entra(cli, "ger@urace.us")
+    oid = cria(cli, hg, name="Assinatura Caiu", email="assinaturacaiu@example.com", amount=500)
+    orig = _cai_ao_gravar(monkeypatch, "Venda fechada")
+    with pytest.raises(RuntimeError):
+        cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO})
+    monkeypatch.setattr(vendas, "_ev", orig)
+    _vence_a_marca(oid)
+    r = cli.post(f"{B}/sales/{oid}/invoice/registrar", headers=hg, json={"numero": "1002"})
+    assert r.status_code == 200, r.text
+    assert len(qbo.invoices) == 2, "nada cobrado de novo"
