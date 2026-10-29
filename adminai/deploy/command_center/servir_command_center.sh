@@ -261,6 +261,11 @@ PY
 # páginas legais, robots/sitemap e os webhooks da ponte do Kommo. O duckdns continua no ar
 # (Kommo, Dialpad, Intuit e conectores antigos batem lá até serem trocados). Só entra se o DNS
 # do nome novo já aponta para ESTE servidor: sem isso o Let's Encrypt falha à toa.
+# #462: as duas variáveis valem também quando estão só no adminai.env (onde a checklist da troca as põe);
+# a do terminal, quando existe, ganha
+_do_env() { grep -E "^$1=" "$URACE_DIR/adminai.env" 2>/dev/null | tail -n 1 | cut -d= -f2- | sed -e 's/^["'\'']//' -e 's/["'\'']$//' || true; }
+CC_DOMINIOS_EXTRAS="${CC_DOMINIOS_EXTRAS:-$(_do_env CC_DOMINIOS_EXTRAS)}"
+CC_SITE_HOSTS="${CC_SITE_HOSTS:-$(_do_env CC_SITE_HOSTS)}"
 for EXTRA in ${CC_DOMINIOS_EXTRAS:-ops.urace.us my.urace.us novo.urace.us parts.urace.us}; do
     IP_NOVO="$(getent ahostsv4 "$EXTRA" | awk 'NR==1{print $1}')"
     IP_NOSSO="$(getent ahostsv4 "$DOMINIO" | awk 'NR==1{print $1}')"
@@ -268,7 +273,7 @@ for EXTRA in ${CC_DOMINIOS_EXTRAS:-ops.urace.us my.urace.us novo.urace.us parts.
         echo "!! $EXTRA ainda não aponta para este servidor (DNS: ${IP_NOVO:-nada}; aqui: $IP_NOSSO) — pulei. Crie o registro A e rode de novo."
         continue
     fi
-    sudo EXTRA="$EXTRA" PORTA="$PORTA" CADDYFILE="$CADDYFILE" python3 - <<'PY2'
+    sudo EXTRA="$EXTRA" PORTA="$PORTA" CADDYFILE="$CADDYFILE" SITE_HOSTS="$CC_SITE_HOSTS" python3 - <<'PY2'
 import os, re
 caddyfile = os.environ.get("CADDYFILE", "/etc/caddy/Caddyfile")
 extra, porta = os.environ["EXTRA"], os.environ["PORTA"]
@@ -279,7 +284,10 @@ legal = os.environ.get("LEGAL_DIR", "/var/www/urace-legal")
 cliente = extra.split(".")[0] == "my"
 # #148: novo.urace.us é o SITE novo. O FastAPI responde tudo nele (as páginas, a agenda pública,
 # a área do cliente em /ops/portal); o Caddy só serve as páginas legais, como nos outros.
-site = extra.split(".")[0] == "novo"
+# #462: na troca do domínio, urace.us e www.urace.us também são o site (todo nome de CC_SITE_HOSTS). Antes
+# ganhavam o bloco do painel: a raiz levava ao login da equipe e as páginas davam 404 no próprio Caddy.
+site = (extra.split(".")[0] == "novo"
+        or extra.lower() in {h.strip().lower() for h in os.environ.get("SITE_HOSTS", "").split(",") if h.strip()})
 # #180: parts.urace.us é o balcão do celular e só ele. O FastAPI trava a API nesse endereço;
 # aqui só passam /ops (a tela e a API do balcão) e as páginas legais.
 balcao = extra.split(".")[0] in ("parts", "balcao")

@@ -76,8 +76,8 @@ def desenhar(pagina, host, conteudo=None, titulo=None, descricao=None, indexar=T
 
 
 def _host(request):
-    from command_center.api import vitrine
-    return sorted(vitrine.hosts())[0] if vitrine.hosts() else "novo.urace.us"
+    from command_center import enderecos
+    return enderecos.site_principal()       # #462: o principal (urace.us depois da troca), não o 1º em ordem alfabética
 
 
 def _saida(p, host, orig=False, dados=None):

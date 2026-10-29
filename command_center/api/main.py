@@ -245,6 +245,15 @@ async def _so_o_balcao(request: Request, call_next):
 
 
 @app.middleware("http")
+async def _site_principal(request: Request, call_next):
+    # #462: www. e novo. → urace.us (301). Fica por dentro do _cabecalhos: o 301 também leva HSTS e nosniff
+    destino = api_vitrine.endereco_principal(request)
+    if destino:
+        return RedirectResponse(destino, status_code=301)
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def _cabecalhos(request: Request, call_next):
     resp = await call_next(request)
     resp.headers["X-Content-Type-Options"] = "nosniff"

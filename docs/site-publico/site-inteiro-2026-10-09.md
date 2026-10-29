@@ -69,8 +69,9 @@ URLs e também com … identidade visual mesclada de Command Center com o site n
 Checklist do dia da troca, com o que conferir antes e depois: `troca-do-dominio.md`.
 
 1. DNS do `urace.us` e `www.urace.us` → IP do VPS (registro A), como foi feito com `novo.urace.us`.
-2. No VPS, em `~/.urace/adminai.env`: `CC_SITE_HOSTS=novo.urace.us,urace.us,www.urace.us` e
-   `CC_SITE_PREVIEW=0`; `CC_DOMINIOS_EXTRAS="ops.urace.us my.urace.us novo.urace.us urace.us www.urace.us"`.
+2. No VPS, em `~/.urace/adminai.env`: as quatro variáveis do bloco do dia em `troca-do-dominio.md`
+   (`CC_SITE_HOSTS`, `CC_SITE_PRINCIPAL=urace.us`, `CC_SITE_PREVIEW=0`, `CC_DOMINIOS_EXTRAS`). Corrigido em
+   29/10 (#462): a versão de 09/10 deste passo deixava o `urace.us` no bloco do painel e sem o 301 de `www.`/`novo.`.
 3. `bash adminai/deploy/command_center/servir_command_center.sh` (o Caddy pede o certificado e
    passa tudo ao FastAPI). O WordPress na Hostinger fica guardado como está.
 4. Google Search Console: enviar `https://urace.us/sitemap.xml`.

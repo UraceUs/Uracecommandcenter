@@ -47,8 +47,8 @@ def _saida(con, pid):
 
 
 def _host():
-    from command_center.api import vitrine
-    return sorted(vitrine.hosts())[0] if vitrine.hosts() else "novo.urace.us"
+    from command_center import enderecos
+    return enderecos.site_principal()       # #462: o principal (urace.us depois da troca), não o 1º em ordem alfabética
 
 
 # ------------------------------------------------------------------ ler

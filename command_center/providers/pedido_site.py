@@ -98,8 +98,8 @@ def _host_do_site(o):
     h = (o.get("origin") or "").strip().lower()
     if re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,252}", h):
         return h
-    hosts = [x.strip().lower() for x in os.environ.get("CC_SITE_HOSTS", "novo.urace.us").split(",") if x.strip()]
-    return hosts[0] if hosts else "novo.urace.us"
+    from command_center import enderecos
+    return enderecos.site_principal()
 
 
 def link(o):
