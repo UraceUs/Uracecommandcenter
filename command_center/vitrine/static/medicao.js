@@ -6,7 +6,8 @@
  * requisição sai para o Google ou para o Meta.
  *
  * O que vai para o `dataLayer`: `page_view` com o TIPO da página, o `purchase` que o servidor
- * mandou na página do pedido pago, e o `add_to_cart` que o carrinho e a agenda empurram.
+ * mandou na página do pedido pago, o `add_to_cart` que o carrinho e a agenda empurram e o `generate_lead` que o
+ * `contato.js` empurra quando um formulário de contato ou de interesse é aceito (#502: só o assunto e a página).
  * NUNCA nome, e-mail, telefone, endereço, medida ou piloto.
  *
  * #171 (dono, 15/10: "Sim, banner simples"): o Google e o Meta só carregam depois do "Accept". Sem
