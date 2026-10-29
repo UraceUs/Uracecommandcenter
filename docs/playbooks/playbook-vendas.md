@@ -896,6 +896,10 @@ sem coach **$50/h** seg–sex 7h–17h, **$75/h** seg–sex 18h–24h e **$90/h*
 - Criança: a página pede para **ligar antes** (idade, altura e requisitos); a idade mínima só aparece se o gerente
   preencher em Site › Sim2Grid.
 - O **robô de vendas** continua sem dizer preço do SIM2GRID: manda a página (regra do dono, sem mudança).
+- **Landings de campanha (#493):** `/sim2grid-from-racing-simulator-to-the-grid-form/` e `…-form-sms/` (as mesmas do
+  urace.us, uma por canal) têm um formulário de interesse em vez da reserva. Cada envio entra em **Vendas** como
+  oportunidade do SIM2GRID, com o objetivo, a sessão (com ou sem coach), o canal (`form` ou `sms`) e a campanha
+  (`utm_*`, `gclid`, `fbclid`) na nota. A equipe liga e fecha: a hora em si é paga no carrinho da página do SIM2GRID.
 - **A página no celular** (#396, dono 23/10: *"90% usa mobile · imagina vc indo ao cinema"*): é um app de cinema. A
   pessoa abre, vê a foto e a reserva na mesma tela, toca no **dia**, na **hora** (o preço e os lugares livres estão no
   botão) e em **Book** na barra de baixo: 3 toques até o carrinho. **With coach** é um interruptor. Para mandar a um
