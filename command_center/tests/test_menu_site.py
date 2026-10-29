@@ -88,7 +88,7 @@ def test_icones_conta_busca_carrinho_e_book_now_vermelho(cli):
     assert '<a class="icone busca" href="/store/#loja-s" aria-label="Search the store">' in topo
     assert re.search(r'<a class="icone carrinho-topo" href="/cart/" aria-label="Cart">.*?data-carrinho-n', topo, re.S)
     assert '<a class="btn btn-sm btn-reservar" href="/services/arrive-and-drive/#reservar">Book now</a>' in topo
-    assert 'href="/services/arrive-and-drive/#reservar">Book your race session</a>' in cli.get("/").text
+    assert 'href="/services/arrive-and-drive/#reservar">Book Arrive and Drive</a>' in cli.get("/").text   # #507
     assert 'id="loja-s"' in cli.get("/store/").text, "o ícone leva ao campo de busca que existe"
 
 

@@ -1982,7 +1982,7 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
 @pytest.mark.parametrize("largura", [390, 1280])
 def test_site_programas_fundidos_no_celular_e_no_computador(servidor, navegador, largura):
     """#254 (dono, 15/10): na página de programas ficam o Arrive and Drive e a URACE Academy — o Kart
-    School e o Professional Coaching somem dos cartões, o texto deles está em quem herdou, e o
+    School e o Professional Coaching somem das seções, o texto deles está em quem herdou, e o
     endereço antigo abre a página nova. No celular (390) e no computador (1280)."""
     site = servidor.removesuffix("/ops")
     pg = navegador.new_page(viewport={"width": largura, "height": 900})
@@ -1992,10 +1992,11 @@ def test_site_programas_fundidos_no_celular_e_no_computador(servidor, navegador,
     problemas = []
 
     pg.goto(site + "/services/"); pg.wait_for_load_state("networkidle")
-    cartoes = pg.locator(".servicos-grade .servico-card")
-    nomes = [cartoes.nth(i).locator("strong").inner_text() for i in range(cartoes.count())]
-    if nomes[:2] != ["Arrive and Drive", "URACE Academy"] or "Kart School" in nomes or "Professional Coaching" in nomes:
-        problemas.append(f"cartões: {nomes}")
+    # #507: a Programs do urace.us de 29/10 — uma seção por programa, na ordem da escada
+    nomes = [t for n, t in _cabecalhos(pg) if n == 2]
+    if nomes[:4] != ["Sim 2 Grid", "Arrive and Drive", "URACE Academy", "Racing Team"] or any(
+            "Kart School" in t or "Professional Coaching" in t for t in nomes):
+        problemas.append(f"seções: {nomes}")
 
     # o endereço antigo leva à página que herdou, com o texto aproveitado
     for antigo, fim, trecho in (("/services/kart-school/", "/academy/", "A complete racing education"),
@@ -2156,11 +2157,13 @@ def test_site_animacoes_surgem_ao_rolar_e_reduced_motion_desliga(servidor, naveg
     site = servidor.removesuffix("/ops")
     pg = navegador.new_page(viewport={"width": 390, "height": 800})
     pg.goto(site + "/"); pg.wait_for_load_state("networkidle")
-    sec = pg.locator("section[aria-labelledby='h-campeoes']")
+    sec = pg.locator("section#drivers")            # #507: os pilotos da home (Built by URACE), bem abaixo da tela
     assert "surge" in sec.get_attribute("class") and "visto" not in sec.get_attribute("class")
     assert "surge" not in pg.locator("main > section").first.get_attribute("class"), "o topo nunca espera"
     sec.scroll_into_view_if_needed()
-    pg.wait_for_function("() => document.querySelector(\"section[aria-labelledby='h-campeoes']\").classList.contains('visto')")
+    pg.wait_for_function("() => document.querySelector('section#drivers').classList.contains('visto')")
+    # #507: a home por blocos não tem mais o carrossel; ele segue nos campeões da Career
+    pg.goto(site + "/career/"); pg.wait_for_load_state("networkidle")
     fila = pg.locator(".campeoes").first
     antes = fila.evaluate("f => f.scrollLeft")
     pg.get_by_role("button", name="Next").click()

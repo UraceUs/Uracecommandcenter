@@ -144,11 +144,9 @@ html:has(.menu-cel[open]) { overflow: hidden }
 /* --------------------------------------------------------------- hero */
 .hero { position: relative; color: #fff; background: #000 center / cover no-repeat; display: grid; align-items: end; min-height: 440px }
 .hero::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.25) 0%, rgba(0,0,0,.88) 100%) }
-.hero-home { background-image: url(img/home-hero.webp); text-align: center }
 .hero-arrive { background-image: url(img/arrive-and-drive-hero.webp) }
 .hero-arrive::before { background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,.75) 100%) }
 .hero-in { position: relative; width: 100%; max-width: var(--largura); margin: 0 auto; padding: 72px 16px 40px; display: grid; gap: 14px }
-.hero-home .hero-in { justify-items: center }
 .hero-sub { color: #e2e2ea; max-width: 56ch; font-size: 1.05rem }
 .hero-acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 6px }
 .hero-acoes.centro { justify-content: center }
@@ -178,11 +176,6 @@ html:has(.menu-cel[open]) { overflow: hidden }
 .numero { display: grid; gap: 4px }
 .numero strong { font: 800 clamp(2.4rem, 7vw, 3.4rem)/1 var(--titulo); font-stretch: 125% }
 .numero span { color: var(--cinza-claro) }
-
-.servicos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px }
-.card-servico { background: var(--papel); border-radius: var(--raio); padding: 22px; display: grid; gap: 10px; align-content: start }
-.card-servico p { color: #3c3d50 }
-.card-servico .preco { color: var(--tinta); font-weight: 700 }
 
 .campeoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
 @media (min-width: 860px) { .campeoes { grid-template-columns: repeat(4, minmax(0, 1fr)) } }
@@ -304,15 +297,15 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 /* --------------------------------------------------------------- animações do urace.us (#394) */
 /* Só transform e opacity, com os tokens de duração. A sombra do cartão é uma camada (::after) que acende por
    opacidade; ela fica por cima do cartão, mas uma sombra de fora não pinta dentro da caixa, então nada some. */
-.card-servico, .cartao, .servico-card, .post-card a, .produto-card a { position: relative; transition: transform var(--dur) var(--curva) }
-.card-servico::after, .cartao::after, .servico-card::after, .post-card a::after, .produto-card a::after { content: ""; position: absolute;
+.cartao, .post-card a, .produto-card a { position: relative; transition: transform var(--dur) var(--curva) }
+.cartao::after, .post-card a::after, .produto-card a::after { content: ""; position: absolute;
   inset: 0; border-radius: inherit; box-shadow: 0 16px 34px rgba(0,0,0,.2); opacity: 0; pointer-events: none;
   transition: opacity var(--dur) var(--curva) }
 @media (hover: hover) {
-  .card-servico:hover, .cartao:hover, .servico-card:hover, .post-card a:hover, .produto-card a:hover { transform: translateY(-4px) }
-  .card-servico:hover::after, .cartao:hover::after, .servico-card:hover::after, .post-card a:hover::after, .produto-card a:hover::after { opacity: 1 }
+  .cartao:hover, .post-card a:hover, .produto-card a:hover { transform: translateY(-4px) }
+  .cartao:hover::after, .post-card a:hover::after, .produto-card a:hover::after { opacity: 1 }
 }
-.servico-card img, .post-card img, .produto-card img, .produto-card .sem-foto { border-radius: var(--raio) var(--raio) 0 0 }
+.post-card img, .produto-card img, .produto-card .sem-foto { border-radius: var(--raio) var(--raio) 0 0 }
 /* a seção surge ao rolar, uma vez: o `site.js` só marca `.surge` na seção que está abaixo da tela e tem
    IntersectionObserver; sem JS (ou com reduced-motion) nada é escondido */
 .surge { opacity: 0; transform: translateY(24px) }
@@ -332,7 +325,7 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 }
 @media (prefers-reduced-motion: reduce) {
   .surge { opacity: 1; transform: none }
-  .btn:hover, .icone:hover, .carrossel-seta:hover, .card-servico:hover, .cartao:hover, .servico-card:hover, .post-card a:hover,
+  .btn:hover, .icone:hover, .carrossel-seta:hover, .cartao:hover, .post-card a:hover,
   .produto-card a:hover { transform: none }
   .btn-reservar::after { display: none }
 }
@@ -348,7 +341,6 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .hero::before { z-index: 1 }
 .hero-in { z-index: 2 }
 .hero-servico::before { background: linear-gradient(180deg, rgba(0,0,0,.35) 0%, rgba(0,0,0,.86) 100%) }
-.hero-hub { background-image: url(img/arrive-and-drive-hero.webp) }
 .hero-sub-escura { color: var(--cinza); max-width: 60ch; font-size: 1.05rem }
 .lista { margin: 0; padding-left: 20px; display: grid; gap: 8px }
 .checks.claras li::before { color: #fff }
@@ -360,8 +352,6 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .texto h2 { margin-top: 10px }
 .texto ul, .texto ol { padding-left: 20px; display: grid; gap: 6px }
 .foto-redonda { border-radius: 14px; width: 100%; object-fit: cover; aspect-ratio: 4 / 3 }
-.fotos-duas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-content: start }
-.fotos-duas img { border-radius: var(--raio); aspect-ratio: 640 / 420; object-fit: cover; width: 100% }
 
 /* cartões de texto (benefícios, suporte, garantias) */
 .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px }
@@ -390,15 +380,7 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .plano-preco span { font-size: .85rem }
 .plano .btn { justify-self: start; margin-top: 4px }
 
-/* hub de serviços, dias do camp, etapas e degraus */
-.servicos-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px }
-.servico-card { display: grid; grid-template-rows: auto 1fr; background: var(--papel); border-radius: var(--raio); text-decoration: none; color: inherit;
-  transition: transform var(--dur) var(--curva) }
-.servico-card img { width: 100%; aspect-ratio: 640 / 400; object-fit: cover }
-.servico-txt { display: grid; gap: 6px; padding: 16px; align-content: start }
-.servico-txt strong { font: 800 1.05rem/1.2 var(--titulo); font-stretch: 125% }
-.servico-txt span { color: #3c3d50; font-size: .95rem }
-.servico-txt em { font-style: normal; font-weight: 700; color: var(--vermelho) }
+/* dias do camp, etapas e degraus */
 .dias { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px }
 .dia { background: var(--papel); border-radius: var(--raio); overflow: hidden; display: grid; gap: 8px; align-content: start; padding-bottom: 16px }
 .dia img { width: 100%; aspect-ratio: 640 / 420; object-fit: cover; margin-bottom: 6px }
@@ -1005,4 +987,25 @@ body:has(> main > .hero:first-child) main > .hero-sim:first-child .hero-in { pad
 .winter-total a:not(.btn) { color: #fff }
 @media (prefers-reduced-motion: reduce) {
   .winter-chip:active, .winter-kt:active { transform: none }
+}
+
+/* ------------------------------------------------------------ home, About e Programs por blocos (#507) */
+/* as fotos de lá vêm em proporções diferentes: na mesma fileira de cartões, a mesma altura */
+#pick-your-line .cartao img, #the-ladder .cartao img { aspect-ratio: 3 / 2; object-fit: cover }
+#pick-your-line .cartao img { object-position: 50% 0 }      /* a foto da equipe: corta embaixo, não as cabeças */
+/* os resultados da temporada (duas fotos) em meia largura no computador; os pilotos em duas colunas no celular */
+#top-step .figuras { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)) }
+#drivers .figuras { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)) }
+/* as avaliações numa fileira só no computador (quatro na home, três na About) */
+#reviews .depoimentos { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)) }
+/* o botão de contorno dos blocos (`btn-linha`) é branco: na faixa clara ele sumia */
+.clara .btn-linha { color: var(--tinta); border-color: var(--tinta) }
+/* o retrato do Italo inteiro (de lá vem em pé, 500 × 600), sem esticar */
+#about .foto-redonda { aspect-ratio: 5 / 6; max-width: 420px; justify-self: center }
+/* a About abre com o retrato do Italo (500 × 600): no celular, o rosto atrás do texto pede um véu mais escuro; no
+   computador, à direita e do tamanho dele, como no urace.us */
+.hero-bloco:has(> .hero-foto[src*="italo-da-silveira-urace-founder"])::before { background: linear-gradient(180deg, rgba(0,0,0,.62) 0%, rgba(0,0,0,.9) 100%) }
+@media (min-width: 860px) {
+  .hero-bloco:has(> .hero-foto[src*="italo-da-silveira-urace-founder"]) .hero-foto { left: auto; right: 0; width: min(40%, 500px); object-position: 50% 30% }
+  .hero-bloco:has(> .hero-foto[src*="italo-da-silveira-urace-founder"])::before { background: linear-gradient(90deg, #000 0%, #000 50%, rgba(0,0,0,.25) 75%, rgba(0,0,0,.1) 100%) }
 }

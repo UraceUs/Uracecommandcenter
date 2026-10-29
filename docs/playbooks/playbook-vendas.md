@@ -828,9 +828,10 @@ automática ligada.
 ### O que o site vende, pelo nome (#254)
 
 Dono, 15/10: *"o kart school se tornou Urace academy, e o professional coaching se tornou o arrive and
-drive"*. Na página de programas (`novo.urace.us/services/`) ficam sete: **Arrive and Drive**, **URACE
-Academy**, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events (mais
-o **SIM2GRID**, o simulador, que abre em 1/11/2026 e tem página própria, `/sim2grid-racing-simulator/`, #392).
+drive"*. A página de programas (`novo.urace.us/services/`, a *Programs* do urace.us de 29/10, #507) segue a
+escada: **Sim 2 Grid** (o simulador, que abre em 1/11/2026 e tem página própria, `/sim2grid-racing-simulator/`, #392),
+**Arrive and Drive**, **URACE Academy**, **Racing Team** e **Birthday party / Corporate Events**; o Intensive Training
+Camp, os Corporate Events e os Group Events têm página própria.
 **Kart School** e **Professional Coaching** não existem mais como programa.
 
 | O cliente pede | Venda | Página |
