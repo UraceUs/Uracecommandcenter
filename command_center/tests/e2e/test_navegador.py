@@ -2812,6 +2812,9 @@ def test_sim2grid_como_cinema_reserva_em_tres_toques(servidor, navegador, largur
         # 2 h e um solto vira outra sessão; tocar de novo tira a hora
         v.goto(site + "/sim2grid-racing-simulator/")
         v.locator(".sim-hora:not([disabled])").first.wait_for()
+        # o próximo dia aberto, com o dia inteiro livre: hoje, no fim da tarde, já não sobram 5 horas seguidas (debug 29/10)
+        v.locator(".sim-dia.aberto").nth(1).click()
+        v.locator(".sim-hora:not([disabled])").first.wait_for()
         todas = v.locator(".sim-hora")
         i = next(k for k in range(todas.count()) if todas.nth(k).is_enabled())
         for k in (i, i + 1, i + 3, i + 4):
