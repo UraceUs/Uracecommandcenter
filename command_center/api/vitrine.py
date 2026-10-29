@@ -28,7 +28,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from command_center.db import agora, auditar, get_db, inserir, transacao, um
 from command_center.providers import agenda_sessoes as ag
-from command_center.vitrine import conteudo as C, idioma, medicao, paginas
+from command_center.vitrine import blocos, conteudo as C, idioma, medicao, paginas
 from command_center.vitrine import paginas_site as ps
 
 r = APIRouter(tags=["vitrine"])
@@ -216,7 +216,7 @@ def _cartoes(pagina):
 
 
 def existe(caminho, host="novo.urace.us"):
-    if caminho in PAGINAS or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None:
+    if caminho in PAGINAS or caminho in blocos.registro() or caminho == "/cart/" or _dinamica(host, caminho, {}) is not None:
         return True
     from command_center.providers import editor_site                 # #300: as páginas novas do editor
     return caminho in (_do_banco(editor_site.caminhos_novos) or [])
@@ -276,11 +276,19 @@ def _contar_visita(request, caminho, q, resp):
 
 
 # #300: as páginas do site que o editor abre (as fixas; a loja e o blog são listas que mudam com a busca)
-EDITAVEIS = tuple(c for c in PAGINAS if c not in ("/store/", "/blog/"))
+EDITAVEIS = tuple(c for c in dict.fromkeys([*PAGINAS, *blocos.registro()]) if c not in ("/store/", "/blog/"))
+
+
+def _por_blocos(caminho, host, q=None):
+    """#502: a página montada por blocos (`vitrine/pg_*.py`), com os cartões e os planos do painel."""
+    return blocos.pagina(host, blocos.registro()[caminho],
+                         {"cartoes": _cartoes, "planos": _planos, "enviado": (q or {}).get("sent") == "1"})
 
 
 def html_da_pagina(caminho, host):
     """O HTML da página do código (o que o site mostra sem o editor), ou None quando não é página fixa."""
+    if caminho in blocos.registro():                    # #502: a página por blocos vem antes do molde antigo
+        return _por_blocos(caminho, host)
     if caminho == C.ARRIVE["caminho"]:                  # #263: o kart que está na página é o que o painel vende
         return paginas.arrive_and_drive(host, servicos=_servicos_do_site(), lead_follow=_lead_follow_do_site())
     if caminho == "/academy/":                          # #297: os cartões do painel (sem plano à venda pelo site)
@@ -309,6 +317,8 @@ def _pagina(request, caminho, host, q):
         feita = _do_editor(caminho, host)
         if feita:
             return _html(feita)
+    if caminho in blocos.registro():                    # #502: as páginas por blocos (antes do molde antigo e do 301)
+        return _html(_por_blocos(caminho, host, q))
     if caminho in (C.ARRIVE["caminho"], "/academy/", "/pro-team/", "/for-beginners/", ps.SG.CAMINHO):
         return _html(html_da_pagina(caminho, host))
     if caminho in ps.SG.FORM_CAMINHOS:                  # #493: as landings de formulário (preço das faixas do painel)
@@ -530,8 +540,10 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
         raise HTTPException(404)
     c = await _campos(request)
     # #493: a landing de formulário do SIM2GRID volta para ela mesma, e o objetivo, a sessão e o canal viram a mensagem
-    pagina = c.get("volta") if c.get("volta") in ps.SG.FORM_CAMINHOS else "/contact/"
-    if pagina != "/contact/" and not c.get("mensagem"):
+    pagina = c.get("volta") if c.get("volta") in (set(ps.SG.FORM_CAMINHOS) | blocos.voltas_de_formulario()) else "/contact/"
+    if pagina in blocos.voltas_de_formulario() and not c.get("mensagem"):
+        c["mensagem"] = f"Form on {pagina}"                # #502: o formulário de uma página por blocos, sem texto
+    if pagina in ps.SG.FORM_CAMINHOS and not c.get("mensagem"):
         c["assunto"] = "sim2grid"
         c["mensagem"] = "\n".join(f"{r}: {c[k][:200]}" for r, k in (("Goal", "goal"), ("Session", "session_type")) if c.get(k)) + \
             f"\nChannel: landing page ({ps.SG.FORM_CAMINHOS[pagina]})"
