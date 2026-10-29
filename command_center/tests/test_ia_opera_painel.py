@@ -147,6 +147,29 @@ def test_as_ferramentas_de_operar_entram_so_com_uma_pessoa(con, monkeypatch):
     assert "painel_api" in agente_sdk.instrucoes() and "Nunca diga que só consegue ler o painel" in agente_sdk.instrucoes()
 
 
+def test_a_ia_nao_aprova_a_propria_proposta_nem_muda_a_politica(con):
+    """Debug 29/10: pelo painel_api a IA chamava, como a pessoa, POST /ai/actions/{id}/approve — aprovava o próprio
+    cartão e executava o que devia esperar o clique — e PUT /policies/{acao}, que solta o que o dono travou.
+    Aprovar, recusar e mudar política são da pessoa no painel ("Administração", em rotas_ia.SO_HUMANO)."""
+    uid = _pessoa(con, "dono@urace.us", "ADMIN")
+    cmd = inserir(con, "ai_commands", user_id=uid, text="mande a invoice", session_key="s")
+    aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL",
+                  status="PROPOSED", payload=json.dumps({"args": {"id": "77"}}))
+    con.commit()
+    politica = um(con, "SELECT policy FROM action_policies WHERE action='qbo_enviar_invoice'")["policy"]
+    assert politica != "SAFE"
+    rotas = (("POST", f"/ai/actions/{aid}/approve"), ("POST", f"/ai/actions/{aid}/reject"),
+             ("PUT", "/policies/qbo_enviar_invoice"))
+    for metodo, caminho in rotas:
+        assert agente_sdk.classificar(con, "painel_api", {"metodo": metodo, "caminho": caminho}) == "bloqueada", caminho
+        with pytest.raises(ValueError, match="pessoa"):           # nem com o aprovar de um cartão
+            mcp_operar.executar_como(uid, metodo, caminho, {"policy": "SAFE"}, aprovado=True)
+    motivo = agente_sdk.Portao(cmd, user_id=uid).decidir("mcp__operar__painel_api", {"metodo": "POST", "caminho": f"/ai/actions/{aid}/approve"})
+    assert motivo and "bloqueada" in motivo
+    assert um(con, "SELECT status FROM ai_actions WHERE id=?", (aid,))["status"] == "PROPOSED"
+    assert um(con, "SELECT policy FROM action_policies WHERE action='qbo_enviar_invoice'")["policy"] == politica
+
+
 def test_lista_do_que_da_para_fazer_e_a_do_papel(con):
     op = _pessoa(con, "operador@urace.us", "OPERATOR")
     con.commit()

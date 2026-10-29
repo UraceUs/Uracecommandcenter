@@ -310,11 +310,16 @@ def caminho_seguro(caminho):
 NAO_VOLTA = re.compile(r"(^|[/_-])(merge|unir|void|anular|apagar|excluir|remover|delete)([/_-]|$)", re.I)
 # #438: o que não sai para fora nem apaga, mas não é trabalho do dia a dia da IA: atualizar o servidor (deploy).
 SO_COM_CLIQUE = re.compile(r"^/ops/api/system/update$")
+# Debug 29/10: decisão de gente SOBRE a IA. Pelo painel_api ela chamava, como a pessoa, o "Aprovar" do próprio
+# cartão (e executava o que devia esperar o clique) e o PUT da política (soltava o que o dono travou). Aprovar,
+# recusar e mudar política são da pessoa no painel ("Administração" em rotas_ia.SO_HUMANO): nem com aprovar.
+SO_GENTE = re.compile(r"^/ops/api/(ai/actions/\{[^}]+\}/(approve|reject)|policies/\{[^}]+\})$")
 
 
 def tipo_para_ia(metodo, caminho):
-    """#420: ler | fazer | aprovar — o que a IA do painel faz com esta rota. Lê e faz o trabalho interno direto;
-    o que sai para fora, cobra (o `confirma` do conector), apaga ou não volta atrás vira o cartão de aprovar."""
+    """#420: ler | fazer | aprovar | bloqueada — o que a IA do painel faz com esta rota. Lê e faz o trabalho interno
+    direto; o que sai para fora, cobra (o `confirma` do conector), apaga ou não volta atrás vira o cartão de aprovar;
+    o que é decisão de uma pessoa sobre a própria IA (SO_GENTE) a IA não faz."""
     metodo = str(metodo or "").upper()
     if metodo == "GET":
         return "ler"
@@ -323,6 +328,8 @@ def tipo_para_ia(metodo, caminho):
     except ValueError:
         return "fazer"                     # o `executar_como` recusa o caminho torto com a mensagem para a IA
     op = _operacao(metodo, caminho)
+    if op and SO_GENTE.match(op["caminho"]):
+        return "bloqueada"
     if op and (op["confirma"] or metodo == "DELETE" or NAO_VOLTA.search(op["caminho"]) or SO_COM_CLIQUE.match(op["caminho"])):
         return "aprovar"
     return "fazer"
@@ -353,6 +360,9 @@ def executar_como(user_id, metodo, caminho, corpo=None, consulta=None, aprovado=
     op = _operacao(metodo, caminho)
     if not op:
         raise ValueError(f"{metodo} {caminho} não existe no painel (veja painel_operacoes)")
+    if SO_GENTE.match(op["caminho"]):                # debug 29/10: nem pelo cartão de aprovar
+        raise ValueError("aprovar ou recusar o que a IA propõe e mudar a política são decisão de uma pessoa no "
+                         "painel: a IA não faz isso")
     if tipo_para_ia(metodo, caminho) == "aprovar" and not aprovado:
         raise ValueError("isto sai para fora, cobra ou apaga: só roda depois do aprovar de uma pessoa")
     con = conectar()
