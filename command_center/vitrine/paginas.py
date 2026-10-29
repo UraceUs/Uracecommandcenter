@@ -215,7 +215,7 @@ def _rodape():
     <nav aria-label="Footer"><h2 class="rodape-h">Navigation</h2><ul>{nav}</ul></nav>
     <div><h2 class="rodape-h">Socials</h2><ul>{redes}</ul></div>
   </div>
-  <p class="rodape-fim">© 2026 URACE | All rights reserved · <a href="/legal/privacy.html">Privacy policy</a>
+  <p class="rodape-fim">© 2026 URACE | All rights reserved · <a href="/legal/privacy.html">Privacy policy</a> · <a href="/accessibility/">Accessibility</a>
     <button type="button" class="link-cookies" data-cookies hidden>Cookie settings</button></p>
 </footer>"""
 
@@ -253,7 +253,7 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
 <link rel="canonical" href="{e(canon)}">
 <meta property="og:type" content="website"><meta property="og:title" content="{e(titulo)}">
 <meta property="og:description" content="{e(descricao)}"><meta property="og:url" content="{e(canon)}">{og_img}
-<meta property="og:site_name" content="URACE"><meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="URACE"><meta property="og:locale" content="{"pt_BR" if lang == "pt" else "en_US"}">
 <meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="{e(titulo)}">
 <meta name="twitter:description" content="{e(descricao)}">
 <meta name="theme-color" content="#0b0b0f">
