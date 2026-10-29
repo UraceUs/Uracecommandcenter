@@ -841,6 +841,26 @@ def aprovar_pelo_admin(pid: int, dados: LiberarIn, request: Request, con: sqlite
     return ver(pid, con, u)
 
 
+class EtapaAdminIn(BaseModel):
+    etapa: str
+    motivo: str
+
+
+@r.post("/{pid}/etapa-admin")
+def etapa_pelo_admin(pid: int, dados: EtapaAdminIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                     u=Depends(auth.exige("ADMIN"))):
+    """#482: o administrador move para qualquer etapa à mão (aconteceu fora do Command Center), com o motivo. A IA não
+    chama sozinha: no painel_api e no conector esta rota pede o clique (`mcp_operar.PEDE_CONFIRMACAO`)."""
+    try:
+        antes = suits.mover_pelo_admin(con, pid, dados.etapa, u["id"], dados.motivo)
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    except suits.Invalido as e:
+        raise _invalido(e)
+    _aud(con, request, u, "suit.stage.admin", pid, {"de": antes, "para": dados.etapa, "motivo": dados.motivo.strip()[:500]})
+    return ver(pid, con, u)
+
+
 class AprovacaoIn(BaseModel):
     trecho: str
     message_id: str | None = None
