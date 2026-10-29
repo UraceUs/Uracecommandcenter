@@ -22,6 +22,7 @@ from command_center.providers import suits
 
 r = APIRouter(prefix="/ops/api/suits", tags=["suits"])
 IMAGEM_MAX = 8 * 1024 * 1024
+ARQUIVO_MAX = 25 * 1024 * 1024       # #447: o arquivo da nota que não é imagem (PDF, planilha, arte, vídeo curto)
 TIPOS_IMAGEM = {"image/png", "image/jpeg", "image/webp"}
 
 
@@ -609,7 +610,7 @@ def mudar(pid: int, dados: PedidoIn, request: Request, con: sqlite3.Connection =
     return ver(pid, con, u)
 
 
-def pedir_a_ia(con, pid, u, nota_id, texto, imagem):
+def pedir_a_ia(con, pid, u, nota_id, texto, imagem, arquivo=None):
     """Leva a nota (e a imagem) ao AI Command, na conversa de quem escreveu: a IA lê o pedido,
     entende e avança. A resposta aparece aqui na nota e no AI Command."""
     from command_center.api import acoes, ia, motor
@@ -618,6 +619,8 @@ def pedir_a_ia(con, pid, u, nota_id, texto, imagem):
     pedido = (f"SUITS — pedido de macacão #{pid} ({p['title']}), etapa atual: {etapa}.\n"
               f"Nota de {u.get('name') or 'alguém da equipe'}: {texto or '(sem texto)'}\n"
               + (f"Screenshot anexado à nota: {os.path.join(pasta_imagens(), imagem)} (leia a imagem).\n" if imagem else "")
+              + (f"Arquivo anexado à nota: {os.path.join(_ponte().pasta(pid), arquivo)} (está nos arquivos do pedido).\n"
+                 if arquivo else "")
               + "Leia o pedido inteiro (suits_pedido), entenda a nota e avance o pedido: atualize os dados, as medidas e a "
                 "etapa (suits_atualizar_pedido) e registre o que fez (suits_anotar). Mensagem ao cliente ou ao designer: no "
                 "idioma do cliente, educada e comercial (ainda é venda), respeitando o que ele pediu.")
@@ -633,14 +636,25 @@ def pedir_a_ia(con, pid, u, nota_id, texto, imagem):
 
 @r.post("/{pid}/notas", status_code=201)
 async def nova_nota(pid: int, request: Request, texto: str = Form(""), status: str = Form(""), pedir_ia: bool = Form(False),
-                    imagem: UploadFile | None = File(None), con: sqlite3.Connection = Depends(get_db),
-                    u=Depends(auth.exige("OPERATOR"))):
-    """Nota em qualquer etapa, com screenshot opcional; pode mudar a etapa e pedir à IA para seguir."""
+                    imagem: UploadFile | None = File(None), arquivo: UploadFile | None = File(None),
+                    con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Nota em qualquer etapa, com um arquivo opcional; pode mudar a etapa e pedir à IA para seguir.
+    #447: `arquivo` aceita qualquer tipo — imagem segue o caminho da foto (WebP, sem EXIF, na linha do tempo); o
+    resto vai para os arquivos do pedido, sai só com sessão e sempre como download."""
     p = um(con, "SELECT id, status FROM suit_orders WHERE id=?", (pid,))
     if not p:
         raise HTTPException(404, "Pedido não encontrado.")
     texto = (texto or "").strip()
-    nome_img = None
+    nome_img = nome_arq = None
+    if arquivo is not None and (arquivo.filename or arquivo.size):
+        if (arquivo.content_type or "").lower() in TIPOS_IMAGEM:
+            imagem = arquivo
+        else:
+            dados_arq = await arquivo.read(ARQUIVO_MAX + 1)
+            if not dados_arq:
+                raise HTTPException(400, "O arquivo veio vazio.")
+            if len(dados_arq) > ARQUIVO_MAX:
+                raise HTTPException(400, "Arquivo grande demais (máximo 25 MB).")
     if status and status != p["status"]:              # #382: a etapa recusada não deixa foto solta para trás
         try:
             suits.etapa_valida(status)
@@ -661,19 +675,21 @@ async def nova_nota(pid: int, request: Request, texto: str = Form(""), status: s
         nome_img = f"pedido-{pid}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}{ext}"
         with open(os.path.join(pasta_imagens(), nome_img), "wb") as f:
             f.write(dados)
-    if not texto and not nome_img and not status:
-        raise HTTPException(400, "Escreva a nota, anexe uma imagem ou mude a etapa.")
+    if arquivo is not None and imagem is not arquivo and (arquivo.filename or arquivo.size):
+        nome_arq = _ponte().guardar_anexo(pid, arquivo.filename or "arquivo", dados_arq)
+    if not texto and not nome_img and not nome_arq and not status:
+        raise HTTPException(400, "Escreva a nota, anexe um arquivo ou mude a etapa.")
     try:
         if status and status != p["status"]:
             suits.mudar_etapa(con, pid, status, u["id"])
     except suits.Invalido as e:
         raise _invalido(e)
     nid = None
-    if texto or nome_img:
-        nid = suits.anotar(con, pid, texto, "nota", status or p["status"], nome_img, u["id"])
+    if texto or nome_img or nome_arq:
+        nid = suits.anotar(con, pid, texto, "nota", status or p["status"], nome_img, u["id"], arquivo=nome_arq)
         atualizar(con, "suit_orders", pid, updated_at=agora())
-    cid = pedir_a_ia(con, pid, u, nid, texto, nome_img) if pedir_ia and nid and not suits.ia_desligada(con, pid) else None
-    _aud(con, request, u, "suit.note", pid, {"nota": nid, "imagem": bool(nome_img), "etapa": status or None, "ia": cid})
+    cid = pedir_a_ia(con, pid, u, nid, texto, nome_img, nome_arq) if pedir_ia and nid and not suits.ia_desligada(con, pid) else None
+    _aud(con, request, u, "suit.note", pid, {"nota": nid, "imagem": bool(nome_img), "arquivo": nome_arq, "etapa": status or None, "ia": cid})
     return {"id": nid, "command_id": cid}
 
 
