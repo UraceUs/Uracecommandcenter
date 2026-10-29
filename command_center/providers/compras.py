@@ -21,7 +21,7 @@ import re
 from datetime import date
 
 from command_center.db import agora, inserir, todos, um
-from command_center.providers import estoque, prateleiras
+from command_center.providers import estoque, portal, prateleiras
 
 ErroCompra = estoque.ErroEstoque
 
@@ -202,7 +202,7 @@ def _eventos_da_mesma_caixa(con, pid, tracking, ja):
 def atrasada(c):
     """Previsão vencida e ninguém recebeu. Se a transportadora já entregou, não é atraso:
     é caixa esperando alguém dar entrada (`entregue_sem_entrada`)."""
-    return bool(c["status"] in ("pedida", "parcial") and c["expected_at"] and c["expected_at"] < date.today().isoformat()
+    return bool(c["status"] in ("pedida", "parcial") and c["expected_at"] and c["expected_at"] < portal.hoje().isoformat()
                 and c["ship_status"] != "entregue")
 
 
