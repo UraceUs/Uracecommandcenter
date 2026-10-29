@@ -357,6 +357,10 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
   const toast = useToast()
   const [texto, setTexto] = useState('')
   const [etapa, setEtapa] = useState(pedido.status)
+  // a etapa do pedido mudou fora daqui (a IA, outra pessoa, outra seção da tela): a escolha volta para a etapa de agora,
+  // no render (#433). Antes, a próxima nota salva devolvia o pedido para a etapa de quando a tela abriu (debug 29/10)
+  const [statusVisto, setStatusVisto] = useState(pedido.status)
+  if (statusVisto !== pedido.status) { setStatusVisto(pedido.status); setEtapa(pedido.status) }
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [ia, setIa] = useState(true)
   const [indo, setIndo] = useState(false)

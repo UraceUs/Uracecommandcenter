@@ -2935,6 +2935,31 @@ def test_suits_admin_libera_para_approved_com_o_motivo(servidor, navegador, larg
     pg.close()
 
 
+def test_suits_nota_nao_devolve_o_pedido_para_a_etapa_antiga(servidor, navegador):
+    """Debug 29/10: a etapa da nota guardava a etapa de quando a tela abriu. A IA (ou outra pessoa) mudava a etapa, a tela
+    atualizava, e a próxima nota, salva sem mexer na etapa, devolvia o pedido para a etapa antiga."""
+    pg = entrar(navegador, servidor, largura=390, altura=900)
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill("Etapa Viva Fictícia")
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name="Etapa Viva Fictícia", level=1).wait_for()
+    pid = int(re.search(r"/suits/(\d+)$", pg.url).group(1))
+    # com a tela aberta, outra pessoa (ou a IA) leva o pedido para Design Pending
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    r = pg.request.post(servidor + f"/api/suits/{pid}/notas", headers=csrf, multipart={"texto": "", "status": "design_pending"})
+    assert r.ok, r.text()
+    pg.get_by_role("switch", name=re.compile("IA neste pedido")).click()       # recarrega o pedido na hora (sem esperar 15 s)
+    pg.locator(".suit-etapas li.atual", has_text="Design Pending").wait_for()
+    pg.get_by_label("Nota", exact=True).fill("Cliente ligou: responde amanhã")
+    pg.get_by_role("button", name="Salvar nota").click()
+    pg.get_by_text("Nota salva.").wait_for()
+    assert pg.request.get(servidor + f"/api/suits/{pid}").json()["status"] == "design_pending", "a nota devolveu a etapa antiga"
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_suits_novo_pedido_vincula_ao_cliente_e_puxa_o_cadastro(servidor, navegador):
     """#158, dono 08/10: "Todo lugar que a gente for fazer inserção manual, sempre coloque um para vincular
     com o cliente ... para poder vincular e puxar as informações pré-definidas ali daquele cliente"."""
