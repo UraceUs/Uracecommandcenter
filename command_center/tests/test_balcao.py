@@ -255,6 +255,40 @@ def test_desfazer_devolve_ao_estoque_e_tira_da_invoice(cli):
     assert estoque.saldo(conectar(), cli.para, client_id=None) == 5
 
 
+@pytest.mark.parametrize("rota", ["leituras/{}/desfazer", "rapido/lancada/{}/desfazer"])
+def test_dois_toques_no_desfazer_devolvem_a_peca_uma_vez_so(cli, monkeypatch, rota):
+    """Debug 29/10: o "Desfazer" (o do computador e o do celular) não trava enquanto a resposta não chega. Dois toques
+    viravam dois pedidos que liam "ainda não desfeita" juntos e devolviam a peça duas vezes: dois estornos no razão e
+    o saldo errado. Os dois pedidos se encontram no meio do desfazer (a barreira): o segundo tem de esperar o primeiro
+    e ouvir "já foi desfeita"."""
+    import threading
+    prepara_peca(cli, cli.para)
+    h = entra(cli)
+    sid = lanca(cli, h, cli.para).json()["leitura"]["id"]
+    barreira, devolver = threading.Barrier(2, timeout=1.5), estoque.devolver_venda
+
+    def no_meio(*a, **k):
+        try:
+            barreira.wait()
+        except threading.BrokenBarrierError:          # sozinho: o outro pedido está esperando a vez (o certo)
+            pass
+        return devolver(*a, **k)
+    monkeypatch.setattr(estoque, "devolver_venda", no_meio)
+    codigos = []
+
+    def toque():
+        codigos.append(cli.post(f"{B}/{rota.format(sid)}", headers=h).status_code)
+    toques = [threading.Thread(target=toque) for _ in range(2)]
+    for t in toques:
+        t.start()
+    for t in toques:
+        t.join()
+    assert sorted(codigos) == [200, 400]
+    con = conectar()
+    estornos = con.execute("SELECT COUNT(*) FROM stock_moves WHERE item_id=? AND reason='estorno do balcão'", (cli.para,))
+    assert estornos.fetchone()[0] == 1 and estoque.saldo(con, cli.para, client_id=None) == 5 and estoque.conferir(con) == []
+
+
 def test_quickbooks_fora_do_ar_nao_perde_a_leitura(cli):
     prepara_peca(cli, cli.para)
     h = entra(cli)
