@@ -16,6 +16,9 @@ nada aqui roda sozinho. O passo a passo técnico está em `site-inteiro-2026-10-
 - [ ] Reserva de ponta a ponta no `novo.urace.us`: data, kart, Lead and Follow, carrinho, conta,
       Stripe, página do pedido, e-mail.
 
+- [ ] Dono revisa a **Política de Privacidade** (`/privacy/`) e os **Termos** (`/terms/`) do site (#488). Hoje o
+      urace.us não tem nenhuma das duas; o `/legal/` é do app interno (Intuit) e continua como está.
+
 ## No dia (dono)
 
 - [ ] Registro A de `urace.us` e `www.urace.us` → IP da VPS (como foi feito com `novo.urace.us`).

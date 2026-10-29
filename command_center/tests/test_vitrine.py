@@ -732,3 +732,18 @@ def test_jogo_de_rodas_otk_mxc_entrou_no_catalogo(cli):
     assert MXC in cli.get("/store/parts/?s=mxc").text
     assert f"/store/p/{MXC}/" in paginas_site.caminhos()
     assert cli.get(f"/product/{MXC}/", follow_redirects=False).headers["location"] == f"/store/p/{MXC}/"
+
+
+def test_privacidade_e_termos_sao_os_do_site(cli):
+    """#488: o "Privacy policy" levava à política do app interno (URACE Administrative AI) e o "terms" do cadastro ao
+    EULA dele. Agora o site tem os seus, e nenhum link do site aponta para o /legal/ do app."""
+    for caminho, h1, trechos in (("/privacy/", "Privacy Policy", ("Stripe", "Cookie settings", "We do not sell")),
+                                 ("/terms/", "Terms of Use and Sale", ("$95", "security deposit", "18 or older"))):
+        r = cli.get(caminho)
+        assert r.status_code == 200 and f"<h1>{h1}</h1>" in r.text
+        assert all(t in r.text for t in trechos), caminho
+        assert "Administrative AI" not in r.text
+    home = cli.get("/").text
+    assert '<a href="/privacy/">Privacy policy</a>' in home and '<a href="/terms/">Terms</a>' in home
+    assert "/legal/" not in "".join(cli.get(c).text for c in ("/", "/cart/", "/contact/"))
+    assert "/privacy/" in PAGINAS and "/terms/" in PAGINAS, "no sitemap"

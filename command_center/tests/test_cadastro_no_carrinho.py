@@ -531,11 +531,11 @@ def test_o_carrinho_tem_o_formulario_dos_dados_com_senha_confirmada_e_os_termos(
     for nome in ("name", "birth_date", "email", "phone_country", "phone", "address_line1", "city", "state", "zip",
                  "country", "piloto_eu", "piloto_nome", "accept_terms"):
         assert f'name="{nome}"' in h, nome
-    assert h.count('autocomplete="new-password"') == 2 and 'href="/legal/privacy.html"' in h
+    assert h.count('autocomplete="new-password"') == 2 and 'href="/privacy/"' in h  # #488: a política do site
     assert h.count("<h1") == 1 and 'data-ddi="+55"' in h
     assert "Create account" not in h
     # revisão do #305: os termos abrem em outra aba (o formulário não se perde); nos EUA, estado e ZIP obrigatórios
-    assert 'href="/legal/eula.html" target="_blank" rel="noopener"' in h
+    assert 'href="/terms/" target="_blank" rel="noopener"' in h
     assert 'name="state" autocomplete="address-level1" maxlength="30" placeholder="FL" required' in h
     assert h.count('class="sr cad-us"') == 2 and 'class="cad-varios" hidden' in h and "cad-varios-campos" in h
     cli.cookies.set("urace_lang", "pt")
