@@ -495,7 +495,9 @@ def waiver_do_email(con, email_id, mailbox, thread_id, texto):
     for w in todos(con, """SELECT * FROM waivers WHERE COALESCE(hidden,0)=0 AND client_id IS NOT NULL
                            ORDER BY COALESCE(completed_at, sent_at, synced_at) DESC LIMIT 200"""):
         for nome in (w["signer_name"], w["minor_name"] if "minor_name" in w.keys() else None):
-            if nome and len(nome.strip()) >= 5 and nome.strip().lower() in alvo:
+            n = _nomes_no_texto(nome).strip()
+            # debug 29/10: o nome inteiro, como palavra — "lia x" dentro de "amelia x" levava a waiver ao card errado
+            if len(n) >= 5 and re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", alvo):
                 escolhida = w
                 break
         if escolhida:
