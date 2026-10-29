@@ -1328,9 +1328,13 @@ def refazer(oid: int, passo: str, request: Request, irmao: bool = False, item_id
             if deposito:
                 f["deposito_cobrado"] = res.get("invoice") or True
             _tira_marca(f, marca)
+    # a venda fechada sem card ficou em Fechamento: com o card agora, ela é Ganho, como no fechamento (o retorno sai)
+    ganho = passo == "cliente" and o["stage"] != "GANHO"
     with transacao(con, imediata=True):   # o que saiu, a linha do tempo e a auditoria entram juntos
-        gravar_fechamento(con, oid, muda)
+        gravar_fechamento(con, oid, muda, **({"stage": "GANHO", "next_at": None} if ganho else {}))
         _ev(con, oid, PASSO_KIND[passo], f"{PASSO_PT[passo]}: refeito à mão", res, ator, 1)
+        if ganho:
+            _ev(con, oid, "stage", f"{ETAPA_PT[o['stage']]} → {ETAPA_PT['GANHO']}", None, ator, 1)
         if passo == "qbo":                # #310: o reenvio fica na auditoria, como o Liberar
             auditar(con, "sales.invoice.resend", ator, user_id=u["id"], entity_type="opportunity",
                     entity_id=oid, detail={"valor": o["amount"], "na_tabela": na_tabela, "item": ref and ref["item_id"],
