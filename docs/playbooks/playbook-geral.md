@@ -1321,8 +1321,15 @@ quem pediu valem (a IA de um operador não faz o que é do gerente), a tela vali
 card é recusado) e a auditoria sai no nome da pessoa. Editar e organizar rodam na hora; o que **sai para fora,
 cobra ou apaga** no painel (invoice, waiver, e-mail, Kommo, Asana, mensalidade, lixeira) vira o **aprovar** de
 um clique, e quem aprova executa com o papel dele. Login, chaves, o **cofre** e a área do cliente ficam fora;
-**atualizar o servidor** pela IA também pede o clique (#438). Para desligar,
+**atualizar o servidor** pela IA também pede o clique (#438). Também viram o clique (29/10) o que a regra do
+módulo reserva a uma pessoa: **ligar** pelo Dialpad, escrever ou aprovar rascunho nos **grupos do WhatsApp do
+ateliê**, **ligar conta ou driver do site ao card**, registrar à mão a **aprovação final do macacão**, **conferir
+medida** e mover o macacão para fotos recebidas, conferido ou endereço enviado. **Aprovar ou recusar o que a IA
+propõe e mudar Políticas da IA a IA nunca faz**, nem com o clique: é de você, na tela. Para desligar,
 ponha `painel_api` em `BLOCKED` em Políticas da IA. Rotina automática (sem pessoa por trás) continua só lendo o painel.
+
+Ação proposta com ferramenta que não existe, com campo que a ferramenta não aceita ou sem o campo obrigatório
+**não vira cartão** (29/10): a IA recebe o motivo e corrige, e a conversa mostra "recusada" com o porquê.
 
 Ação que não tem política própria pede confirmação. Qualquer ação com "apagar", "excluir",
 "remover" no nome tem, no mínimo, a política de "apagar qualquer coisa": o sistema erra para o

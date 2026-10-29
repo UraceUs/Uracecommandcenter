@@ -147,6 +147,61 @@ def test_as_ferramentas_de_operar_entram_so_com_uma_pessoa(con, monkeypatch):
     assert "painel_api" in agente_sdk.instrucoes() and "Nunca diga que só consegue ler o painel" in agente_sdk.instrucoes()
 
 
+def test_a_ia_nao_aprova_a_propria_proposta_nem_muda_a_politica(con):
+    """Debug 29/10: pelo painel_api a IA chamava, como a pessoa, POST /ai/actions/{id}/approve — aprovava o próprio
+    cartão e executava o que devia esperar o clique — e PUT /policies/{acao}, que solta o que o dono travou.
+    Aprovar, recusar e mudar política são da pessoa no painel ("Administração", em rotas_ia.SO_HUMANO)."""
+    uid = _pessoa(con, "dono@urace.us", "ADMIN")
+    cmd = inserir(con, "ai_commands", user_id=uid, text="mande a invoice", session_key="s")
+    aid = inserir(con, "ai_actions", command_id=cmd, action="qbo_enviar_invoice", system="qbo", policy="REQUIRES_APPROVAL",
+                  status="PROPOSED", payload=json.dumps({"args": {"id": "77"}}))
+    con.commit()
+    politica = um(con, "SELECT policy FROM action_policies WHERE action='qbo_enviar_invoice'")["policy"]
+    assert politica != "SAFE"
+    rotas = (("POST", f"/ai/actions/{aid}/approve"), ("POST", f"/ai/actions/{aid}/reject"),
+             ("PUT", "/policies/qbo_enviar_invoice"))
+    for metodo, caminho in rotas:
+        assert agente_sdk.classificar(con, "painel_api", {"metodo": metodo, "caminho": caminho}) == "bloqueada", caminho
+        with pytest.raises(ValueError, match="pessoa"):           # nem com o aprovar de um cartão
+            mcp_operar.executar_como(uid, metodo, caminho, {"policy": "SAFE"}, aprovado=True)
+    motivo = agente_sdk.Portao(cmd, user_id=uid).decidir("mcp__operar__painel_api", {"metodo": "POST", "caminho": f"/ai/actions/{aid}/approve"})
+    assert motivo and "bloqueada" in motivo
+    assert um(con, "SELECT status FROM ai_actions WHERE id=?", (aid,))["status"] == "PROPOSED"
+    assert um(con, "SELECT policy FROM action_policies WHERE action='qbo_enviar_invoice'")["policy"] == politica
+
+
+def test_o_que_a_regra_reserva_a_uma_pessoa_vira_o_aprovar(con):
+    """Debug 29/10: rotas cuja própria regra diz que são de uma pessoa rodavam direto pelo painel_api, como a pessoa
+    (e assim sem as travas que o módulo põe na IA): discar ("a IA nunca chega aqui sozinha"), escrever e aprovar
+    rascunho nos grupos do WhatsApp do ateliê (o designer passa por uma pessoa, #382), ligar conta ou driver do site
+    ao card ("uma pessoa confirma": abre o histórico do card para quem tem a conta), registrar à mão a aprovação
+    final do macacão (pela IA, só a ponte, com o e-mail do cliente), conferir medida e mover para as etapas da
+    equipe. Pela IA, agora, viram o aprovar de um clique."""
+    c = agente_sdk.classificar
+    for metodo, caminho, corpo in (("POST", "/dialpad/call", {"numero": "555-0100"}),
+                                   ("POST", "/atelie/pedidos/3/escrever", {"papel": "design", "texto": "oi"}),
+                                   ("POST", "/atelie/pedidos/3/endereco", {}),
+                                   ("POST", "/atelie/saidas/9/aprovar", {}),
+                                   ("POST", "/site/contas/4/vincular", {"client_id": 1}),
+                                   ("POST", "/site/drivers/5/vincular", {"client_id": 1}),
+                                   ("POST", "/suits/3/aprovacao", {"trecho": "aprovado"}),
+                                   ("POST", "/suits/3/medidas/estado", {"chaves": ["head"], "estado": "conferida"}),
+                                   ("PATCH", "/suits/3", {"status": "checked"})):
+        assert c(con, "painel_api", {"metodo": metodo, "caminho": caminho, "corpo": corpo}) == "aprovar", caminho
+    assert c(con, "painel_api", {"metodo": "PATCH", "caminho": "/suits/3", "corpo": {"title": "Suit Fictício"}}) == "fazer"
+    assert c(con, "painel_api", {"metodo": "POST", "caminho": "/dialpad/calls/7/handled", "corpo": {}}) == "fazer"
+    uid = _pessoa(con, "dono@urace.us", "ADMIN")
+    con.commit()
+    with pytest.raises(ValueError, match="aprovar"):
+        mcp_operar.executar_como(uid, "PATCH", "/suits/3", {"status": "checked"})
+    with pytest.raises(ValueError, match="aprovar"):
+        mcp_operar.executar_como(uid, "POST", "/suits/3/aprovacao", {"trecho": "aprovado"})
+    # pelo conector, o que sai para fora (ligação, grupo do WhatsApp) também pede a confirmação da pessoa
+    conf = {(o["metodo"], o["caminho"]): o["confirma"] for o in mcp_operar.catalogo()}
+    assert conf[("POST", "/ops/api/dialpad/call")] and conf[("POST", "/ops/api/atelie/pedidos/{pid}/escrever")]
+    assert not conf[("POST", "/ops/api/dialpad/calls/{cid}/handled")]
+
+
 def test_lista_do_que_da_para_fazer_e_a_do_papel(con):
     op = _pessoa(con, "operador@urace.us", "OPERATOR")
     con.commit()

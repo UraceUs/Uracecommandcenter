@@ -185,7 +185,10 @@ def test_ai_command_no_sdk_resolve_de_uma_vez(con, monkeypatch):
 
     def rodar(prompt, session_key, command_id=None, **kw):
         pedidos.append(prompt)
-        agente_sdk.Portao(command_id).decidir("mcp__docusign__docusign_enviar_waiver", {"email": "pai@example.com"})
+        # debug 29/10: com os campos que a ferramenta exige (sem eles o cartão não nasce mais)
+        agente_sdk.Portao(command_id).decidir("mcp__docusign__docusign_enviar_waiver", {
+            "templateId": "modelo-ficticio", "nome": "Pai Fictício", "email": "pai@example.com",
+            "idade_confirmada": True, "nome_email_conferidos": True})
         return agente_sdk.Resultado(True, "Waiver pronta para enviar: falta o seu aprovar.", subtipo="success", custo=0.3)
     monkeypatch.setattr(ia, "RUNNER", ia.runner_padrao)
     monkeypatch.setattr(ia, "motor_da_ia", lambda: "sdk")
@@ -304,3 +307,18 @@ def test_lembrete_que_saiu_sozinho_marca_o_proximo_dia(con, monkeypatch):
                 [{"type": "text", "text": '{"aplicado": true, "enviado_para": "mae@example.com"}'}])
     assert vistos == [("9065", {"aplicado": True, "enviado_para": "mae@example.com"}, "ia")]
     assert um(con, "SELECT status FROM ai_actions WHERE command_id=? AND action='qbo_lembrete_invoice'", (cid,))["status"] == "DONE"
+
+
+# ------------------------------------------------ debug 29/10: o cartão só nasce se a ferramenta aceitar
+def test_aprovar_com_argumento_errado_e_recusado_na_hora(con):
+    """O cartão de aprovar executa exatamente os argumentos que a IA mandou: sem o obrigatório ou com
+    campo que a ferramenta não tem, ele falhava só depois do clique. Agora a IA recebe o motivo na
+    hora e nenhum cartão nasce."""
+    _, cid = _comando(con)
+    p = agente_sdk.Portao(cid)
+    motivo = p.decidir("mcp__quickbooks__qbo_enviar_invoice", {"email": "cliente@example.com"})       # falta o id
+    assert motivo and "aprovação #" not in motivo and "id" in motivo
+    motivo = p.decidir("mcp__quickbooks__qbo_enviar_invoice", {"id": "77", "invoice_id": "77"})       # campo que não existe
+    assert motivo and "aprovação #" not in motivo and "invoice_id" in motivo
+    assert not todos(con, "SELECT id FROM ai_actions WHERE command_id=?", (cid,))
+    assert "aprovação #" in p.decidir("mcp__quickbooks__qbo_enviar_invoice", {"id": "77"})           # certo: o cartão nasce
