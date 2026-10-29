@@ -611,7 +611,9 @@ def sync_gmail(con, dias=None):
                               messages=t.get("mensagens"), is_inbox=1,
                               labels=json.dumps(t.get("marcadores") or [], ensure_ascii=False), synced_at=agora())
                 if eid:
-                    atualizar(con, "emails", eid["entity_id"], **campos)
+                    # o "de" é o da ÚLTIMA mensagem: a URACE respondendo (ou outro endereço) não solta do card a conversa
+                    # que o cliente ou a varredura ligaram; só remetente que é cliente religa (debug 29/10)
+                    atualizar(con, "emails", eid["entity_id"], **{k: v for k, v in campos.items() if cli or k != "client_id"})
                     rid = eid["entity_id"]
                 else:
                     rid = inserir(con, "emails", **campos)
