@@ -872,6 +872,15 @@ Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: nã
   manutenção*. Quem compra kart próprio pelo site: confirme a data de entrega do kart com o cliente.
 - **Convidado**: o passe varia de **$15 a $22** e é cobrado direto pela pista — não é da URACE.
 
+### "Book a call" no site (#508)
+
+Dono, 29/10: *"sim, pode trazer o texto"*. Como no urace.us, a Academy ("Talk to us"), o Racing Team, o Contact e as
+páginas de aniversário, corporativo e grupos têm um botão que abre a **agenda do Google da equipe**
+(`calendar.app.google/…`, o mesmo link do urace.us). A ligação marcada ali vai para a agenda, **não** para Vendas: quem
+atende cria ou atualiza a oportunidade em Vendas (origem **Site**). As avaliações do Google que essas páginas mostram são
+as três do urace.us, com o texto e o nome como estão no Google, e o link leva a todas. No Racing Team, a lista "Next rounds
+on the calendar" esconde sozinha a prova que já passou (no dia da Flórida); prova nova entra pelo desenvolvimento.
+
 ### SIM2GRID: a hora de simulador (#392)
 
 Dono, 22/10: *"sera um serviço um diferente das aulas de kart podendo agendar ate 5 pessoas para a mesma hora, o

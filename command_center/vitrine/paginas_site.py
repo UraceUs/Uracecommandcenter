@@ -9,9 +9,11 @@ import json
 import os
 import re
 from contextvars import ContextVar
+from datetime import datetime, timedelta
 from functools import lru_cache
 from html import escape as e
 from urllib.parse import quote, urlencode
+from zoneinfo import ZoneInfo
 
 from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
@@ -135,12 +137,17 @@ def _hero_foto(nome):
 def _hero(d, classe="hero-servico"):
     rot, href = d["cta"]
     foto = _hero_foto(d.get("foto"))
+    segundo = ""
+    if d.get("cta2"):                   # #508: o segundo botão do hero (o "Book a call" do urace.us), quando a página tem
+        rot2, href2 = d["cta2"]
+        fora = ' rel="noopener"' if href2.startswith("https://") else ""
+        segundo = f'<a class="btn btn-linha-branca" href="{e(href2)}"{fora}>{e(rot2)}</a>'
     return f"""<section class="hero {classe}">{foto}
   <div class="hero-in">
     {f'<p class="eyebrow">{e(d["eyebrow"])}</p>' if d.get("eyebrow") else ''}
     <h1>{e(d['h1'])}</h1>
     {f'<p class="hero-sub">{e(d["sub"])}</p>' if d.get("sub") else ''}
-    <div class="hero-acoes"><a class="btn" href="{e(href)}">{e(rot)}</a></div>
+    <div class="hero-acoes"><a class="btn" href="{e(href)}">{e(rot)}</a>{segundo}</div>
   </div>
 </section>"""
 
@@ -212,6 +219,8 @@ def servico(host, d):
   <h2 id="h-faq">Frequently Asked Questions</h2>{_faq(d['faq'])}</div></section>""")
     partes.append(_local())
     partes.append(_depoimentos(d.get("depoimentos")))
+    if d.get("avaliacoes"):             # #508: as avaliações do Google, como o urace.us de 29/10 mostra nos eventos
+        partes.append(_avaliacoes())
     partes.append(_fecho(d["fecho"], d.get("fecho_sub"), d["fecho_cta"]))
     oferta = {"@context": "https://schema.org", "@type": "Service", "name": d["h1"], "serviceType": "Kart racing program",
               "description": d["descricao"], "provider": {"@id": f"https://{host}/#business"}, "areaServed": "Orlando, FL",
@@ -293,40 +302,33 @@ def _planos_do_painel(planos):
     return html
 
 
+def _avaliacoes(titulo="Google reviews"):
+    """#508: as avaliações do Google que o urace.us mostra (texto e nome como estão lá) e o link para todas.
+    O número de avaliações não se escreve à mão: fica velho."""
+    return f"""<section class="faixa escura" aria-labelledby="h-google"><div class="largura">
+  <h2 id="h-google">{e(titulo)}</h2>
+  <div class="depoimentos">{"".join(f'<blockquote><p>{e(t)}</p><footer>{e(n)} · {e(q)}</footer></blockquote>' for n, q, t in C.AVALIACOES)}</div>
+  <p><a class="seta" href="{e(C.GOOGLE)}" rel="noopener">Read them all on Google</a></p>
+</div></section>"""
+
+
 def academy(host, planos=None, cartoes=None):
     """#297: sem plano do painel que se vende pelo site, os cartões são os do painel (`site_offers`), e só sem
-    eles a planilha de sempre."""
+    eles a planilha de sempre. #508: o texto e a ordem do urace.us de 29/10."""
     d = P.ACADEMY
-    etapas = "".join(f"""<article class="etapa-card"><img src="{estatico('img/' + f)}" alt="" width="64" height="64" loading="lazy"><h3>{e(t)}</h3><p>{e(p)}</p></article>""" for t, p, f in d["etapas"])
+    nome, texto, nota, (rot, href) = d["primeiro"]
+    primeiro = f"""<div class="planos"><article class="plano"><h3>{e(nome)}</h3><p>{e(texto)}</p>
+  <p class="plano-preco"><span>From</span><strong>{usd(preco_kart())}</strong><span>{e(nota)}</span></p>
+  <a class="btn btn-sm" href="{e(href)}">{e(rot)}</a></article></div>"""
     corpo = f"""{_hero(d)}
-<section class="faixa clara" aria-labelledby="h-mais"><div class="largura duas">
-  <div><h2 id="h-mais">{e(d['mais_titulo'])}</h2>{_ps(d['mais'])}</div>
-  <img src="{estatico('img/' + d['foto'])}" alt="URACE Academy coaching" width="800" height="600" loading="lazy" class="foto-redonda">
+<section class="faixa clara" aria-labelledby="h-curr"><div class="largura estreita">
+  <p class="eyebrow">{e(d['curriculo_rotulo'])}</p><h2 id="h-curr">{e(d['curriculo_titulo'])}</h2>{_lista(d['curriculo_itens'])}
 </div></section>
-<section class="faixa escura" aria-labelledby="h-planos"><div class="largura">
-  <h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else (_grupos_dos_cartoes(cartoes, planos) if cartoes else _planos_da_planilha(d['planos_grupos']))}
+<section class="faixa escura" aria-labelledby="h-planos" id="planos"><div class="largura">
+  <p class="eyebrow">{e(d['planos_rotulo'])}</p><h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else (_grupos_dos_cartoes(cartoes, planos) if cartoes else _planos_da_planilha(d['planos_grupos']))}
+  {primeiro}
 </div></section>
-<section class="faixa clara" aria-labelledby="h-quem"><div class="largura duas">
-  <div><h2 id="h-quem">{e(d['para_quem_titulo'])}</h2>{_lista(d['para_quem'])}</div>
-  <div><h2>{e(d['inclui_titulo'])}</h2>{_lista(d['inclui'])}
-    <h3>{e(d['trazer_titulo'])}</h3>{_lista(d['trazer'])}</div>
-</div></section>
-<section class="faixa vermelha" aria-labelledby="h-porque"><div class="largura">
-  <p class="eyebrow">Why URACE</p><h2 id="h-porque">{e(d['porque_titulo'])}</h2>{_lista(d['porque'], 'checks claras')}
-</div></section>
-<section class="faixa escura" aria-labelledby="h-curr"><div class="largura duas">
-  <div><h2 id="h-curr">Curriculum Highlights</h2><dl class="curriculo">{"".join(f"<div><dt>{e(t)}</dt><dd>{e(p)}</dd></div>" for t, p in d['curriculo'])}</dl></div>
-  <div><h2>Program Objectives</h2><ol class="passos">{"".join(f"<li>{e(o)}</li>" for o in d['objetivos'])}</ol></div>
-</div></section>
-<section class="faixa clara" aria-labelledby="h-carreira"><div class="largura estreita">
-  <h2 id="h-carreira">{e(d['carreira_titulo'])}</h2><p>{e(d['carreira_intro'])}</p>{_lista(d['carreira'])}
-  <p class="muted">{e(d['carreira_extras_intro'])}</p>{_lista(d['carreira_extras'], 'lista')}
-</div></section>
-<section class="faixa vermelha" aria-labelledby="h-caminho"><div class="largura">
-  <h2 id="h-caminho">{e(d['caminho_titulo'])}</h2>{_ps(d['caminho_texto'])}
-  <div class="etapas-grade">{etapas}</div>
-</div></section>
-{_passos(d['passos_titulo'], d['passos'])}
+{_avaliacoes()}
 <section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita"><h2 id="h-faq">Good to know</h2>{_faq(d['faq'])}</div></section>
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'], 'escura')}"""
     oferta = {"@context": "https://schema.org", "@type": "Service", "name": "URACE Academy", "serviceType": "Monthly kart driver training",
@@ -356,6 +358,39 @@ def _preco_plano(planos, qual):
     return usd(outros[0]["price"]) if outros else ""
 
 
+def _ultimo_dia(quando):
+    """O último dia de "Nov 22, 2026" ou de "Jan–Mar 2027" (o fim do mês); None quando não dá para ler."""
+    try:
+        return datetime.strptime(quando, "%b %d, %Y").date()
+    except ValueError:
+        pass
+    m = re.fullmatch(r"(?:[A-Z][a-z]{2}–)?([A-Z][a-z]{2}) (\d{4})", quando)
+    if not m:
+        return None
+    try:
+        primeiro = datetime.strptime(f"{m[1]} 1 {m[2]}", "%b %d %Y").date()
+    except ValueError:
+        return None
+    return (primeiro.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+
+
+def _proximas(calendario, hoje=None):
+    """#508: só as provas que ainda vêm, no dia da Flórida; a linha que não dá para ler fica."""
+    hoje = hoje or datetime.now(ZoneInfo("America/New_York")).date()
+    return [(q, n) for q, n in calendario if (_ultimo_dia(q) or hoje) >= hoje]
+
+
+def _calendario(d, hoje=None):
+    """As próximas provas da equipe; sem nenhuma por vir, a seção não sai."""
+    provas = _proximas(d["calendario"], hoje)
+    if not provas:
+        return ""
+    return f"""<section class="faixa clara" aria-labelledby="h-cal"><div class="largura duas">
+  <div><p class="eyebrow">{e(d['calendario_rotulo'])}</p><h2 id="h-cal">{e(d['calendario_titulo'])}</h2><p>{e(d['calendario_sub'])}</p></div>
+  <dl class="calendario">{"".join(f"<div><dt>{e(q)}</dt><dd>{e(n)}</dd></div>" for q, n in provas)}</dl>
+</div></section>"""
+
+
 def pro_team(host, planos=None, cartoes=None):
     d = P.PRO_TEAM
     # #297: as opções são os cartões do painel, quando há; {academy}/{boost} no preço viram o plano do painel
@@ -368,10 +403,8 @@ def pro_team(host, planos=None, cartoes=None):
   <div class="cartoes">{suporte}</div></div></section>
 <section class="faixa clara" aria-labelledby="h-mais"><div class="largura estreita"><h2 id="h-mais">{e(d['mais_titulo'])}</h2>{_ps(d['mais'])}</div></section>
 <section class="faixa escura" aria-labelledby="h-opcoes"><div class="largura"><h2 id="h-opcoes">{e(d['opcoes_titulo'])}</h2><p class="muted">{e(d['opcoes_sub'])}</p>{_planos(opcoes, 'team')}</div></section>
-<section class="faixa clara" aria-labelledby="h-cal"><div class="largura duas">
-  <div><h2 id="h-cal">{e(d['calendario_titulo'])}</h2><p>{e(d['calendario_sub'])}</p></div>
-  <dl class="calendario">{"".join(f"<div><dt>{e(q)}</dt><dd>{e(n)}</dd></div>" for q, n in d['calendario'])}</dl>
-</div></section>
+{_calendario(d)}
+{_avaliacoes()}
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'])}"""
     equipe = {"@context": "https://schema.org", "@type": "SportsTeam", "name": "URACE Racing Team", "sport": "Kart racing",
               "memberOf": {"@id": f"https://{host}/#business"}, "url": f"https://{host}{d['caminho']}"}
@@ -716,6 +749,7 @@ def contact(host, assunto=None, produto=None, enviado=False):
     <p><a href="tel:{e(C.SITE['telefone_e164'])}">{e(C.SITE['telefone'])}</a><br><a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
     <p class="muted">{e(C.SITE['horario'])}</p>
     <p><a class="btn btn-sm" href="{e(C.SITE['whatsapp'])}" rel="noopener">Chat on WhatsApp</a></p>
+    <p><a class="btn btn-sm btn-linha-escura" href="{e(C.LIGACAO)}" rel="noopener">Book a call</a></p>
     <p><a href="https://maps.google.com/?q={e(end['rua'].replace(' ', '+'))},+{e(end['cidade'])},+{e(end['estado'])}+{e(end['cep'])}" rel="noopener">Open in Google Maps</a></p>
   </div>
 </div></section>"""

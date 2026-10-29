@@ -1999,7 +1999,7 @@ def test_site_programas_fundidos_no_celular_e_no_computador(servidor, navegador,
         problemas.append(f"seções: {nomes}")
 
     # o endereço antigo leva à página que herdou, com o texto aproveitado
-    for antigo, fim, trecho in (("/services/kart-school/", "/academy/", "Mentorship by winning drivers"),
+    for antigo, fim, trecho in (("/services/kart-school/", "/academy/", "A complete racing education"),
                                 ("/services/professional-coaching/", "/services/arrive-and-drive/", "Lead and Follow")):
         pg.goto(site + antigo); pg.wait_for_load_state("networkidle")
         if not pg.url.endswith(fim):
@@ -2812,8 +2812,11 @@ def test_sim2grid_como_cinema_reserva_em_tres_toques(servidor, navegador, largur
         assert len(linhas) == 1 and "SIM2GRID" in linhas[0] and "(1 h)" in linhas[0], linhas
         v.evaluate("() => window.uraceCarrinho.limpar()")
         # vários horários (dono, 23/10: "precisa permitir a multi seleção de horas"): dois seguidos viram uma sessão de
-        # 2 h e um solto vira outra sessão; tocar de novo tira a hora
+        # 2 h e um solto vira outra sessão; tocar de novo tira a hora. #513: no próximo dia aberto, que tem o dia inteiro
+        # de horários (hoje, depois das 17 h, a antecedência de 2 h deixa só 4 e o teste dependia da hora em que roda)
         v.goto(site + "/sim2grid-racing-simulator/")
+        v.locator(".sim-hora:not([disabled])").first.wait_for()
+        v.locator(".sim-dia.aberto").nth(1).click()
         v.locator(".sim-hora:not([disabled])").first.wait_for()
         todas = v.locator(".sim-hora")
         i = next(k for k in range(todas.count()) if todas.nth(k).is_enabled())
