@@ -358,8 +358,11 @@ Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 | ligar/desligar a ponte e o envio automático, designer, assinatura, política | `PUT /ops/api/suits/ponte` | `{"envio_automatico": false}` | Ger. |
 | fornecedores e o modelo do e-mail ao fornecedor | `POST`/`PATCH /ops/api/suits/fornecedores…`, `PUT /ops/api/suits/modelo` | — | Ger. |
 
-**Nota com print:** a nota com imagem (screenshot para a IA entender, ou as **fotos do fornecedor** que chegaram
-pelo WhatsApp) só pelo painel, no campo "Nota" do pedido. Pelo Claude, a nota é só texto.
+**Nota com arquivo** (#447): o botão **Anexar arquivo** da nota aceita qualquer tipo, até 25 MB. Imagem (PNG, JPG,
+WEBP) vira foto na linha do tempo, comprimida e sem EXIF: o screenshot para a IA entender, ou as **fotos do fornecedor**
+que chegaram pelo WhatsApp. Outro arquivo (PDF, planilha, arte em AI/PSD, ZIP, vídeo curto) vai para os **Arquivos do
+pedido**, aparece na nota com o link e sai só com sessão, sempre como download. A IA recebe o caminho do arquivo junto
+com a nota. Só pelo painel; pelo Claude, a nota é só texto.
 
 ---
 
