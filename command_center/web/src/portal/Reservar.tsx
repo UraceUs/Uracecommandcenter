@@ -13,6 +13,7 @@ import { papi, PortalError, usd, type Account, type AgendaCfg, type Checkout, ty
 import { porNoCarrinhoDoSite } from './carrinhoSite'
 import { Aviso, Campo, Endereco, FormPiloto } from './Portal'
 import { kartSemServico, servicoPreSelecionado } from './preselecao'
+import { siteUrl } from './siteUrl'
 
 interface DiaPublico { date: string; manha: { open: boolean; spots: number }; tarde: { open: boolean; spots: number } }
 type Turno = 'manha' | 'tarde'
@@ -277,7 +278,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
             <li>Your plan is active as soon as the first month is paid and the waiver is signed. Then you book your sessions here, any time.</li>
             <li>Track fees are paid to the Orlando Kart Center.</li>
           </ul>
-          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the plan policy above</label>
+          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href={siteUrl('/terms/')} target="_blank" rel="noreferrer">terms</a> and the plan policy above</label>
           <div><button className="btn primary" disabled={!aceite || indo} onClick={reservar}>{indo ? 'Sending…' : autoSell ? `Join and pay ${usd(plano.price)}` : 'Request this plan'}</button></div>
         </>) : !passo3 || !s || !dia || !turno || !cfg ? <p className="small muted" style={{ margin: 0 }}>{comCarrinho
           ? 'You pay online in the cart (card, Apple Pay or Google Pay) and sign the waiver. Academy students book in their plan.'
@@ -296,7 +297,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
             <li>Want several days at once? <Link to="/portal/book">Book them in your account</Link>.</li>
           </ul>
           <Campo rotulo="Anything we should know?" dica="optional"><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></Campo>
-          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
+          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href={siteUrl('/terms/')} target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
           <div><button className="btn primary" disabled={!aceite || indo || !cotDia?.ok} onClick={reservar}>{indo ? 'Booking…' : 'Book this session'}</button></div>
         </> : <>
           {foraDoPlano && <div className="banner info" role="status"><span className="bi" aria-hidden="true">●</span><div className="grow">
@@ -312,7 +313,7 @@ export function Reservar({ conta, onConta }: { conta: Account | null; onConta: (
             <li>Track fees are paid to the Orlando Kart Center.</li>
           </ul>
           <Campo rotulo="Anything we should know?" dica="optional"><textarea value={nota} onChange={e => setNota(e.target.value)} maxLength={500} /></Campo>
-          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
+          <label className="check"><input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} /> I agree to the <a href={siteUrl('/terms/')} target="_blank" rel="noreferrer">terms</a> and the booking policy above</label>
           {viaCarrinho
             ? <div><button className="btn primary" disabled={!aceite} onClick={porNoCarrinho}>Add to cart · {usd(s.price + deposito)}</button>
               <p className="small muted" style={{ margin: '6px 0 0' }}>You pay in the cart with card, Apple Pay or Google Pay.</p></div>
@@ -380,7 +381,7 @@ function CriarConta({ onConta }: { onConta: (a: Account) => void }) {
     </div>
     <Endereco f={f} set={setF} />
     <label className="check"><input type="checkbox" checked={f.i_am_driver} onChange={muda('i_am_driver')} /> I am also a driver (I will drive the kart myself)</label>
-    <label className="check"><input type="checkbox" checked={f.accept_terms} onChange={muda('accept_terms')} /> I accept the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the <a href="/legal/privacy.html" target="_blank" rel="noreferrer">privacy policy</a></label>
+    <label className="check"><input type="checkbox" checked={f.accept_terms} onChange={muda('accept_terms')} /> I accept the <a href={siteUrl('/terms/')} target="_blank" rel="noreferrer">terms</a> and the <a href={siteUrl('/privacy/')} target="_blank" rel="noreferrer">privacy policy</a></label>
     <div><button className="btn primary" disabled={indo}>{indo ? 'Creating…' : 'Create account and continue'}</button></div>
   </form>
 }

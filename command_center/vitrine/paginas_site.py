@@ -687,6 +687,24 @@ def accessibility(host):
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo, schemas=(_negocio(host),))
 
 
+def _legal(host, d):
+    """#488: a Política de Privacidade e os Termos do site, com o mesmo desenho do resto (h1, seções h2)."""
+    secoes = "".join(f"<h2>{e(t)}</h2>{_ps(ps_)}" for t, ps_ in d["secoes"])
+    corpo = f"""<section class="faixa clara"><div class="largura estreita texto">
+  <h1>{e(d['h1'])}</h1>{_ps(d['intro'])}{secoes}
+</div></section>"""
+    return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
+                  schemas=(_negocio(host), _trilha(host, (d["h1"], d["caminho"]))))
+
+
+def privacy(host):
+    return _legal(host, P.PRIVACY)
+
+
+def terms(host):
+    return _legal(host, P.TERMS)
+
+
 # ------------------------------------------------------------------ blog
 CAPA_PADRAO = (1200, 675)
 
@@ -1316,7 +1334,7 @@ def _cadastro_no_carrinho(T):
           <label>{T("Create a password", "Crie uma senha")}{obrig}<input name="password" type="password" autocomplete="new-password" minlength="8" required maxlength="200"></label>
           <label>{T("Confirm the password", "Confirme a senha")}{obrig}<input name="password2" type="password" autocomplete="new-password" minlength="8" required maxlength="200"></label>
           <p class="small muted">{T("At least 8 characters.", "Pelo menos 8 caracteres.")}</p>
-          <label class="opcao cad-termos"><input type="checkbox" name="accept_terms"> <span>{T("I accept the", "Aceito os")} <a href="/legal/eula.html" target="_blank" rel="noopener">{T("terms", "termos")}</a> {T("and the", "e a")} <a href="/legal/privacy.html" target="_blank" rel="noopener">{T("privacy policy", "política de privacidade")}</a></span></label>
+          <label class="opcao cad-termos"><input type="checkbox" name="accept_terms"> <span>{T("I accept the", "Aceito os")} <a href="/terms/" target="_blank" rel="noopener">{T("terms", "termos")}</a> {T("and the", "e a")} <a href="/privacy/" target="_blank" rel="noopener">{T("privacy policy", "política de privacidade")}</a></span></label>
         </form>"""
 
 

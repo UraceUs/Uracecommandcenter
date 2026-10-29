@@ -228,7 +228,7 @@ function Cadastro({ onEntrou }: { onEntrou: (a: Account) => void }) {
       <h2 className="h2">Contact and address</h2>
       <Endereco f={f} set={setF} />
       <label className="check"><input type="checkbox" checked={f.i_am_driver} onChange={muda('i_am_driver')} /> I am also a driver (I will drive the kart myself)</label>
-      <label className="check"><input type="checkbox" checked={f.accept_terms} onChange={muda('accept_terms')} /> I accept the <a href="/legal/eula.html" target="_blank" rel="noreferrer">terms</a> and the <a href="/legal/privacy.html" target="_blank" rel="noreferrer">privacy policy</a></label>
+      <label className="check"><input type="checkbox" checked={f.accept_terms} onChange={muda('accept_terms')} /> I accept the <a href={siteUrl('/terms/')} target="_blank" rel="noreferrer">terms</a> and the <a href={siteUrl('/privacy/')} target="_blank" rel="noreferrer">privacy policy</a></label>
       <button className="btn primary block" disabled={indo}>{indo ? 'Creating…' : 'Create account'}</button>
       <p className="small" style={{ margin: 0 }}>Already have an account? <Link to="/portal">Sign in</Link></p>
     </form>
@@ -573,7 +573,7 @@ export function PortalApp() {
     <TopoSite />
     <main className="reserva-main"><Suspense fallback={<div className="state"><span className="spin" /></div>}>
       <ConviteWaiverPagina token={decodeURIComponent(convite[1])} /></Suspense></main>
-    <footer className="portal-rodape small">URACE.US INC · Orlando, FL · <a href={siteUrl('/')}>urace.us</a> · <a href="/legal/privacy.html">Privacy policy</a></footer>
+    <footer className="portal-rodape small">URACE.US INC · Orlando, FL · <a href={siteUrl('/')}>urace.us</a> · <a href={siteUrl('/privacy/')}>Privacy policy</a></footer>
   </div>
   if (conta === undefined) return <div className="portal"><div className="state" style={{ minHeight: '60vh' }}><span className="spin" /></div></div>
   // #164: a reserva do site é a mesma tela com ou sem conta (entrar ali dentro não desmonta o que já foi escolhido)
@@ -581,7 +581,7 @@ export function PortalApp() {
     <TopoSite>{conta ? <Link className="btn sm" to="/portal/dashboard">My account</Link> : <Link className="btn sm" to="/portal">Sign in</Link>}</TopoSite>
     <main className="reserva-main"><Suspense fallback={<div className="state"><span className="spin" /></div>}>
       <Reservar conta={conta} onConta={a => setConta(a)} /></Suspense></main>
-    <footer className="portal-rodape small">URACE.US INC · Orlando, FL · <a href={siteUrl('/')}>urace.us</a> · <a href="/legal/privacy.html">Privacy policy</a></footer>
+    <footer className="portal-rodape small">URACE.US INC · Orlando, FL · <a href={siteUrl('/')}>urace.us</a> · <a href={siteUrl('/privacy/')}>Privacy policy</a></footer>
   </div>
   if (!conta) return <Routes>
     <Route index element={<Entrar onEntrou={entrou} />} />

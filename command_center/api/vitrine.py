@@ -61,6 +61,8 @@ PAGINAS = {
     "/career/": ps.career,
     "/about/": ps.about,
     "/accessibility/": ps.accessibility,
+    "/privacy/": ps.privacy,                             # #488: a política e os termos do site (não os do app interno)
+    "/terms/": ps.terms,
     "/blog/": ps.blog,
     "/store/": ps.store,
 }
