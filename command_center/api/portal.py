@@ -35,18 +35,14 @@ MAX_CADASTROS_POR_HORA = 10
 # #305: toda conta nova manda um e-mail com a marca da URACE; um teto geral por hora para ele não virar canal de spam
 # espalhado por muitas conexões (um dia normal tem poucas contas novas)
 MAX_CADASTROS_GLOBAL_HORA = 100
+# #485: senha errada para um e-mail, vinda de qualquer lugar, travava o login do dono dele. Agora o bloqueio de 5 é por
+# conexão e por e-mail na mesma conexão; o e-mail sozinho só trava com muitas falhas (tentativa espalhada).
+MAX_FALHAS_EMAIL_GERAL = 50
 
 
 def _chave_cadastro(ip):
     """A chave do limite por conexão. IPv6: o bloco /64 (uma casa recebe um /64 inteiro)."""
-    import ipaddress
-    try:
-        a = ipaddress.ip_address(ip)
-        if a.version == 6:
-            ip = f"{ipaddress.ip_network(f'{ip}/64', strict=False).network_address}/64"
-    except ValueError:
-        pass
-    return f"portal-signup:{ip}"
+    return f"portal-signup:{auth.bloco_ip(ip)}"
 
 
 def limite_de_cadastro(con, ip):
@@ -175,9 +171,11 @@ class LoginIn(BaseModel):
 @r.post("/login")
 def entrar(dados: LoginIn, request: Request, response: Response, con: sqlite3.Connection = Depends(get_db)):
     email = (dados.email or "").strip().lower()
-    ip = auth._ip(request)
-    chaves = (f"portal-ip:{ip}", f"portal-email:{email}")
-    if any(auth._falhas_recentes(con, k) >= auth.MAX_FALHAS for k in chaves):
+    conexao = auth.bloco_ip(auth._ip(request))
+    geral = f"portal-email:{email}"
+    chaves = (f"portal-ip:{conexao}", f"portal-email:{email}|{conexao}", geral)
+    if (any(auth._falhas_recentes(con, k) >= auth.MAX_FALHAS for k in chaves[:2])
+            or auth._falhas_recentes(con, geral) >= MAX_FALHAS_EMAIL_GERAL):
         raise HTTPException(429, "Too many attempts. Try again in a few minutes.")
     c = um(con, "SELECT id, pw_salt, pw_hash, active FROM portal_accounts WHERE email=?", (email,))
     ok = bool(c and c["active"] and auth.confere_senha(dados.password or "", c["pw_salt"], c["pw_hash"]))
