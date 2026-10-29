@@ -40,7 +40,7 @@ from command_center.api import auth
 from command_center.api.main import app
 from command_center.db import aplicar_schema, conectar, todos, um
 from command_center.providers import blog, imagem
-from command_center.vitrine import conteudo, html_seguro, paginas_site
+from command_center.vitrine import html_seguro, paginas_site, pg_home
 
 SENHA = "pista-molhada-7"
 B = "/ops/api/site/blog"
@@ -568,15 +568,19 @@ def test_entrada_absurda_da_4xx_nunca_500(amb):
 
 def test_home_sem_artigo_no_ar_nao_mostra_a_faixa_do_blog(amb):
     painel, site, con = amb
-    titulo, sub = conteudo.HOME["blog_titulo"], conteudo.HOME["blog_sub"]
+    # #507: a home por blocos — a faixa do blog é o bloco `posts` (o título dele tem o id `h-b<n>`)
+    blocos_home = pg_home.HOME["blocos"]
+    n = next(i for i, b in enumerate(blocos_home) if b["tipo"] == "posts")
+    titulo, sub = blocos_home[n]["titulo"], blocos_home[n]["eyebrow"]
+    faixa, fim = f'id="h-b{n}"', f'id="h-b{len(blocos_home) - 1}"'      # a do blog e a última (o "Box, box")
     home = site.get("/").text
-    assert 'id="h-blog"' in home and titulo in home and home.count('class="post-card"') == 3
+    assert faixa in home and titulo in home and home.count('class="post-card"') == 3
     adm = _entra(painel, ADM)
     for p in ARQUIVO:
         assert painel.post(f"{B}/{p['id']}/despublicar", headers=adm, json={"confirmar": True}).status_code == 200
     home = site.get("/").text
-    assert 'id="h-blog"' not in home and sub not in home and 'class="posts-grade"' not in home
-    assert home.count("<h1") == 1 and 'id="h-duvidas"' in home, "o resto da home fica"
+    assert faixa not in home and sub not in home and 'class="posts-grade"' not in home
+    assert home.count("<h1") == 1 and fim in home, "o resto da home fica"
 
 
 def _png_liso(largura, altura):

@@ -183,7 +183,7 @@ def test_cartao_novo_aparece_e_o_preco_do_kart_e_o_do_painel_ao_vivo(loja):  # n
     html = cli.get("/for-beginners/").text
     assert "Sim 2 Grid" in html and "See the sim" in html
     assert html.count("<span>Starting at</span><strong>$650</strong>") == 2, "o Arrive & Drive e o novo, com o preço do painel"
-    assert "Starting at $650" in cli.get("/services/").text, "o hub também"
+    assert "From $650" in cli.get("/").text, "a home também (#507: a Programs de 29/10 não mostra o preço do kart)"
     assert "$650 per racing participant" in cli.get("/services/birthday-party/").text, "e o Investment dos eventos"
     assert "$719" not in cli.get("/services/birthday-party/").text
 

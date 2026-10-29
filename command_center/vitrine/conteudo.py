@@ -9,7 +9,6 @@ O que fica diferente do site atual, de propósito:
 - remarcação com **24 horas** de antecedência e a taxa de US$ 95 (dono, 08/10; o site atual ainda
   diz 48 h em parte das páginas);
 - idade dos karts: a do produto (Baby 4–7, 4-stroke 7+, 2-stroke 7+, Adult Shifter 14+; dono, 08/10);
-- o depoimento do Ken McKay sai sem a frase do pagamento da invoice (dado de cliente);
 - o nome da marca sai sempre "URACE" (o site atual alterna Urace, URace e URrace);
 - preço de serviço não é texto fixo: vem do sistema (`KARTS`, os planos do painel) ou não aparece.
 """
@@ -190,35 +189,6 @@ DEPOIMENTOS_EVENTOS = (
     ("Daniel M., Team Leader", "Best corporate outing we’ve done! Everyone’s still talking about it weeks later."),
 )
 
-# "Built by URACE": os depoimentos da home e do About, na ordem do site atual.
-DEPOIMENTOS = (
-    ("Ken McKay", None,
-     "Hello Jeyson, My son Henryk and I enjoyed the experience. I was impressed with the business from mechanics to "
-     "coaching. I wish my son would have not been so timid. He made a breakthrough in the last session; only wish we had "
-     "another day or two. We will definitely keep an eye on the team and be interested in future training with the team. "
-     "We are looking forward to Italo’s report. […] Thank you and all the best."),
-    ("Leo Portnov", None, "Hi Jeyson, today was great. Italo is awesome. Sean is looking forward to tomorrow. Thanks for everything."),
-    ("Aaron Benoit", "SKUSA X30",
-     "I’ve had the pleasure of learning from Italo since I was a rookie. Through coaching, data review, and lead/follow "
-     "sessions, my on track skills have improved significantly. Italo also does a great job helping with soft skills — "
-     "kart set-up or driver promotion. Whether you’re an experienced driver or newbie, Italo’s personality and knowledge "
-     "make URACE a great choice."),
-    ("Zack Skolnick", "Serial Entrepreneur",
-     "I’ve been around the racing industry for awhile now and very impressed with my URACE Suit! Not only is the quality "
-     "of material top notch but so is Italo and his team’s customer service. To anyone looking for a custom suit, go talk "
-     "to URACE!"),
-    ("Steve Collins", None,
-     "I have been impressed by the thoroughness Italo uses. He gives instruction and then sends the driver on track with a "
-     "GoPro. He reviews the video turn by turn with the driver giving feedback. I’m seeing results. My son is improving "
-     "while mastering the techniques to be safe and fast."),
-)
-
-SOBRE = ("Racing has been our passion for generations! Our kart racing story started 26+ years ago in Brazil. Team "
-         "principal Italo Silveira began by racing karts, winning numerous Brazilian regional and national championships. "
-         "A successful professional car racing career followed in the internationally recognized Brazilian stock car "
-         "series. In 2016, Italo moved to Florida and launched URACE, a karting team, to pass along his extensive knowledge "
-         "and passion to young drivers.")
-
 GRUPOS = ("Team Up for a Turbo-Charged Experience! Bring your crew and get ready for an unforgettable adventure! Our "
           "high-speed racing kart experience is perfect for corporate events, birthday parties, and group outings. "
           "Challenge your colleagues or friends to a thrilling competition, reaching speeds of over 50mph on our "
@@ -226,66 +196,6 @@ GRUPOS = ("Team Up for a Turbo-Charged Experience! Bring your crew and get ready
 
 FECHO_DUVIDAS = ("Do you still have questions?",
                  "Contact our team by clicking the button below to get all the information about our products and services.")
-
-# ------------------------------------------------------------------ home (urace.us/)
-HOME = {
-    "titulo": "Kart Racing School & Driver Training in Orlando | URACE",
-    "descricao": ("Learn real kart racing with professional coaching in Orlando. URACE develops beginners and competitive "
-                  "drivers through its Kart Academy, coaching and race team."),
-    "h1": "The Champions Factory",
-    "sub": ("We are a race team in Orlando that runs its own drivers — simulator to grid. We do not sell seat time. We find "
-            "where your tenths are, show you the trace, and tell you straight whether the next step is worth your money."),
-    "foto": "home-hero.webp",
-    "metodo": ("Five years old or fifty. Same method.",
-               "A kid in a Baby Kart and a grown man in a Shifter get the same session: data pulled after every run, onboard "
-               "gone through corner by corner, and a coach who names the two things costing you time — not twenty."),
-    "eventos": ("Birthdays, Corporate Events, Groups & Social Gatherings",
-                "Real race karts on a real circuit, run like a race weekend: practice, grid order, timed final, results on "
-                "a sheet at the end. Nobody goes home arguing about who won."),
-    "eventos_links": (("Birthdays", "/services/birthday-party/"), ("Corporate Events", "/services/corporate-events/"),
-                      ("Groups & Social Gatherings", "/services/group-events/")),
-    "escada": ("The ladder ends on our grid",
-               "Sim 2 Grid. Arrive and Drive. URACE Academy. URACE Racing Team. Four steps, one team. Nobody skips to the "
-               "top and nobody buys their way in — your coach tells you when you are ready, and not before."),
-    "numeros": (("+300", "Drivers Trained by Italo and URACE Since 2004"),
-                ("+500", "Race Wins Since 2004 by Drivers Trained by Italo and URACE")),
-    # (nome, o que o site atual diz de cada um); Alexander Savage e Alexander Jacoby saem sem texto no site atual
-    "campeoes": (("Enzo Vidmontiene", "Multi National race winner"),
-                 ("Leonardo Escorpioni", "Multi National race winner - currently racing USF200 Pro"),
-                 ("Emmo Fittipaldi", "Son of the three-time Formula 1 world champion Emerson Fittipaldi. He currently runs at Eurocup3."),
-                 ("Alexander Savage", ""), ("Alexander Jacoby", "")),
-    "fotos_campeoes": ("piloto-1.webp", "piloto-2.webp", "piloto-3.webp", "piloto-4.webp"),
-    "treino": ("Our teaching method includes data analysis, onboard video study, and explanation of the theories "
-               "involved in all the driving aspects we discuss. We ensure that drivers not only do what they are "
-               "told to do, but also understand why they need to do it. We believe that understanding the process "
-               "makes the difference.",
-               "Personalized coaching with a dedicated professional coach, designed to accelerate driver development "
-               "through structured training, advanced telemetry, technical analysis, and precise driving corrections. "
-               "Each session focuses on building correct technique, consistency, and confidence on track. Ideal for "
-               "drivers who want to train with purpose, evolve continuously, and reduce lap times with a "
-               "high-performance approach."),
-    # o preço do Arrive and Drive sai de KARTS (o mesmo da página e da reserva), não daqui
-    "servicos": (
-        {"nome": "Arrive and Drive", "texto": ("Taxes and fees not included. Track access fee (Orlando Kart Center) is "
-                                               "required and separate from this price. Rescheduling: requests made at least "
-                                               "24 hours before your session will be accommodated based on availability. "
-                                               "Sessions missed without notice may be forfeited."),
-         "link": "/services/arrive-and-drive/", "preco_kart": True},
-        {"nome": "Professional Team", "texto": ("The only team that is capable of helping beginners to get to the top in one "
-                                                 "season, our professional driver development program includes data analysis. "
-                                                 "Our teaching method includes data analysis, on-board video study and "
-                                                 "explanation of the theories involved in all the driving aspects we discuss."),
-         "link": "/pro-team/"},
-        {"nome": "Group events", "texto": GRUPOS, "link": "/services/group-events/"},
-    ),
-    "depoimentos_titulo": "Built by URACE",
-    "depoimentos_sub": "Check out testimonials from parents and drivers",
-    "depoimentos": DEPOIMENTOS,
-    "sobre": SOBRE,
-    "blog_titulo": "Our Contents",
-    "blog_sub": "Check out the blog:",
-    "fecho": FECHO_DUVIDAS,
-}
 
 # ------------------------------------- Arrive and Drive (urace.us/services/arrive-and-drive/ e o produto 4787)
 # #254 (dono, 15/10): *"o professional coaching se tornou o arrive and drive"* — o texto que fazia sentido da
