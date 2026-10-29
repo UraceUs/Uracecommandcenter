@@ -53,6 +53,11 @@ HOSTS_GA = ("https://www.google-analytics.com", "https://*.google-analytics.com"
             "https://analytics.google.com", "https://*.analytics.google.com")
 HOST_FB_JS = "https://connect.facebook.net"
 HOST_FB = "https://www.facebook.com"
+# #497: o pixel do ChatGPT Ads (OpenAI) é uma tag do container do GTM ("oaiq"), com anúncios ativos. Abre só com o GTM e,
+# como o resto, só depois do Accept (o GTM inteiro espera o consentimento). HubSpot e Clarity, também no container, ficam
+# de fora: sem conta em uso (dono, 29/10: "nao sei dizer"; nada no e-mail da URACE).
+HOST_OPENAI_JS = "https://bzrcdn.openai.com"
+HOST_OPENAI = "https://*.openai.com"
 # #170: o chat do Kommo. Medido de verdade (15/10, Chromium carregando o widget do urace.us de hoje): o botão
 # vem do gso.kommo.com, o formulário do forms.kommo.com, o mensageiro do piper.amocrm.com e a conversa por
 # WebSocket no lc-en.kommo.com. Só isso abre, e só quando o chat está configurado.
@@ -185,6 +190,9 @@ def csp_hosts():
         partes["img-src"] = [HOST_GTM, *HOSTS_GA]
         partes["connect-src"] = [HOST_GTM, *HOSTS_GA]
         partes["frame-src"] = [HOST_GTM]             # o `noscript` do GTM é um iframe
+        partes["script-src"].append(HOST_OPENAI_JS)
+        partes["img-src"].append(HOST_OPENAI)
+        partes["connect-src"].append(HOST_OPENAI)
     if pixel_id() or gtm_id():
         # o pixel entra direto (SITE_META_PIXEL_ID) ou como tag dentro do container do GTM:
         # nos dois casos o navegador busca o fbevents.js no connect.facebook.net

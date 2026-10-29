@@ -119,13 +119,15 @@ def test_com_a_variavel_a_pagina_leva_a_medicao_e_a_politica_abre_o_minimo(cli, 
     assert "style=" not in r.text
     assert 'data-cookies hidden>Cookie settings</button>' in r.text, "o rodapé deixa mudar a escolha"
     pol = r.headers["content-security-policy"]
-    assert "script-src 'self' https://www.googletagmanager.com https://connect.facebook.net;" in pol
+    # #497: o ChatGPT Ads (tag "oaiq" do container) entra com o GTM; HubSpot e Clarity, não
+    assert "script-src 'self' https://www.googletagmanager.com https://bzrcdn.openai.com https://connect.facebook.net;" in pol
+    assert "hs-scripts.com" not in pol and "clarity.ms" not in pol
     assert "frame-src https://www.googletagmanager.com" in pol
     assert "'unsafe-inline'" not in pol and "'unsafe-eval'" not in pol and "*" not in pol.replace("https://*.", "")
     # o que NÃO abriu: nada além dos hosts do Google e do Meta
     hosts = set(re.findall(r"https://[^\s;]+", pol))
     assert hosts <= {"https://checkout.stripe.com", medicao.HOST_GTM, medicao.HOST_FB, medicao.HOST_FB_JS,
-                     *medicao.HOSTS_GA}, hosts
+                     *medicao.HOSTS_GA, medicao.HOST_OPENAI_JS, medicao.HOST_OPENAI}, hosts
 
 
 def test_so_o_pixel_nao_abre_o_google(cli, monkeypatch):
