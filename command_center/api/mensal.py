@@ -71,6 +71,8 @@ def _cliente_qbo(con, c):
             achados = providers.chamar("quickbooks", "qbo_clientes_buscar", texto=email)
         except providers.NaoConectado:
             raise HTTPException(503, "QuickBooks não está conectado.")
+        except Exception as e:      # respondeu com erro (token vencido, Intuit fora do ar): sem conferir, nada; a tela diz
+            raise HTTPException(502, f"QuickBooks com erro: {str(e)[:200]}")
         exatos = [x for x in achados if (x.get("email") or "") == email.lower()]
         if len(exatos) == 1:
             return exatos[0]["id"], f"e-mail {email}"
@@ -96,6 +98,8 @@ def _recorrencias_qbo(con, c):
         lista = providers.chamar("quickbooks", "qbo_recorrencias", cliente_id=qbo_id)
     except providers.NaoConectado:
         raise HTTPException(503, "QuickBooks não está conectado: não dá para conferir se já existe recorrência.")
+    except Exception as e:          # respondeu com erro: também não dá para conferir
+        raise HTTPException(502, f"QuickBooks com erro: não dá para conferir se já existe recorrência ({str(e)[:200]}).")
     ligadas = {x["qbo_id"]: x for x in todos(con, "SELECT id, client_id, qbo_id FROM monthly_recurring "
                                                    "WHERE qbo_id IS NOT NULL AND status='active'")}
     for x in lista:
