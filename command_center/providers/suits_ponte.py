@@ -752,7 +752,9 @@ def _pedidos_do_fornecedor(con, assunto):
     achados = set()
     for p in todos(con, "SELECT id, title, driver_name FROM suit_orders WHERE closed=0 AND discarded_at IS NULL ORDER BY id DESC"):
         for nome in (p["title"], p["driver_name"]):
-            if nome and len(nome) >= 4 and nome.lower() in a:
+            n = (nome or "").strip().lower()
+            # debug 29/10: o nome inteiro, como palavra — "ana fict" dentro de "ana ficticia" é o suit de outro cliente
+            if len(n) >= 4 and re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", a):
                 achados.add(p["id"])
     return achados
 
