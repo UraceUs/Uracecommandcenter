@@ -24,7 +24,8 @@ Os blocos (`tipo`):
 - ``videos``: eyebrow, titulo, intro, itens [(titulo, url)]
 - ``definicoes``: eyebrow, titulo, intro, itens [(termo, descrição)]
 - ``faq``: eyebrow, titulo, intro, itens [(pergunta, resposta | (parágrafos,))] — vira FAQPage no JSON-LD
-- ``formulario``: eyebrow, titulo, texto, assunto, enviar, mensagem (rótulo do campo de texto, opcional), nota, obrigado
+- ``formulario``: eyebrow, titulo, texto, assunto, enviar, mensagem (rótulo do campo de texto, opcional), nota, obrigado,
+  extras (HTML de campos a mais, do código: cada `name="x_<nome>"` entra na nota da oportunidade, uma linha por campo)
   (o caminho de uma página registrada: depois de enviar, a pessoa vai para lá — a campanha conta a conversão pela URL)
 - ``contador``: eyebrow, titulo, texto, alvo (ISO 8601 com fuso), rotulo (o que acontece na data)
 - ``cta``: titulo, texto, ctas
@@ -300,7 +301,7 @@ def _formulario(b, i, host, ctx):
     <label>Full name<input name="nome" required autocomplete="name" maxlength="120"></label>
     <label>Email<input name="email" type="email" required autocomplete="email" maxlength="160"></label>
     <label>Phone<input name="telefone" type="tel" autocomplete="tel" maxlength="40"></label>
-    {mensagem}
+    {b.get("extras") or ""}{mensagem}
     <label class="escondido" aria-hidden="true">Leave this empty<input name="site" tabindex="-1" autocomplete="off"></label>
     <button class="btn btn-cheio" type="submit">{e(b.get('enviar') or 'Send')}</button>
     <p class="small muted">{inline(b.get('nota') or 'By sending this form, you agree to be contacted by the URACE team about your inquiry.')}</p>

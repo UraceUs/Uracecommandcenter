@@ -543,8 +543,12 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
     pagina = c.get("volta") if c.get("volta") in (set(ps.SG.FORM_CAMINHOS) | blocos.voltas_de_formulario()) else "/contact/"
     # #502: o formulário com página de obrigado vai para ela (a campanha conta a conversão pela URL); só caminho registrado
     ok = c["obrigado"] if c.get("obrigado") in blocos.obrigados() else pagina + "?sent=1"
-    if pagina in blocos.voltas_de_formulario() and not c.get("mensagem"):
-        c["mensagem"] = f"Form on {pagina}"                # #502: o formulário de uma página por blocos, sem texto
+    if pagina in blocos.voltas_de_formulario():
+        # #502: os campos extras do formulário de uma página por blocos (`x_<nome>`: datas, categoria, fins de semana)
+        # entram na mensagem, um por linha — no máximo 20, cada um com até 300 caracteres
+        extras = [f"{k[2:].replace('_', ' ').capitalize()}: {v[:300]}" for k, v in c.items()
+                  if k.startswith("x_") and re.fullmatch(r"x_[a-z0-9_]{1,40}", k) and v][:20]
+        c["mensagem"] = "\n".join([*([c["mensagem"]] if c.get("mensagem") else []), *extras]) or f"Form on {pagina}"
     if pagina in ps.SG.FORM_CAMINHOS and not c.get("mensagem"):
         c["assunto"] = "sim2grid"
         c["mensagem"] = "\n".join(f"{r}: {c[k][:200]}" for r, k in (("Goal", "goal"), ("Session", "session_type")) if c.get(k)) + \

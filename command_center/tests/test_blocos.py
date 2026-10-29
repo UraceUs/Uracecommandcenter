@@ -185,3 +185,15 @@ def test_obrigado_fora_do_site_nao_desenha():
     d = {**EXEMPLO, "blocos": EXEMPLO["blocos"][:1] + [{"tipo": "formulario", "obrigado": "https://outro.example/"}]}
     with pytest.raises(blocos.ErroBloco):
         blocos.corpo("novo.urace.us", d)
+
+
+def test_campos_extras_do_formulario_entram_na_nota(cli):
+    """#502: o formulário de uma página por blocos leva campos a mais (`x_*`), que viram linhas da nota em Vendas."""
+    r = cli.post("/ops/api/vitrine/contato", json={"nome": "Davi Rocha", "email": "davi@example.com", "volta": "/exemplo-lp/",
+                                                  "x_arrive": "2027-01-10", "x_race_weekends": "R1-2, R3-4", "X_FORA": "nao",
+                                                  "x_<script>": "nao", "mensagem": "Two drivers"})
+    assert r.json() == {"ok": True}
+    con = conectar(); aplicar_schema(con)
+    nota = con.execute("SELECT notes FROM opportunities").fetchone()["notes"]
+    assert "Two drivers\nArrive: 2027-01-10\nRace weekends: R1-2, R3-4" in nota
+    assert "FORA" not in nota and "script" not in nota
