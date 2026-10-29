@@ -4894,5 +4894,13 @@
 "Nenhuma invoice espelhada. Toque em “Sincronizar” na tela Hoje.": "No mirrored invoices. Tap “Sync” on the Today screen.",
 "Nenhuma tarefa espelhada. Toque em “Sincronizar” na tela Hoje.": "No mirrored tasks. Tap “Sync” on the Today screen.",
 "Nenhuma thread na inbox espelhada. Toque em “Sincronizar” na tela Hoje.": "No mirrored inbox threads. Tap “Sync” on the Today screen.",
-"Quem perguntar de macacão e ainda não fechar entra nesta lista. Use “Novo lead” para registrar.": "Anyone who asks about a suit and hasn't closed yet goes on this list. Use “New lead” to add one."
+"Quem perguntar de macacão e ainda não fechar entra nesta lista. Use “Novo lead” para registrar.": "Anyone who asks about a suit and hasn't closed yet goes on this list. Use “New lead” to add one.",
+"Agora": "Now",
+"Card do cliente #{0} ↗": "Client card #{0} ↗",
+"Entrega": "Delivery",
+"Etapas": "Stages",
+"Filtrar a linha do tempo": "Filter the timeline",
+"Medidas e design": "Measurements and design",
+"Produção": "Production",
+"{0} · {1} de {2}": "{0} · {1} of {2}"
 }

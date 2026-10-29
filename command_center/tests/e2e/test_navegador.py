@@ -6907,3 +6907,35 @@ def test_pesquisar_cliente_pelo_client_id_e_abrir_o_card(servidor, navegador, la
     pg.get_by_role("heading", level=1, name=f"Leo Pelo Id {largura}").wait_for()
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_card_do_pedido_de_suits_no_desenho_aprovado(servidor, navegador, largura):
+    """#464, dono 29/10: "do jeito que tava no artefato ... aplicado com urgência". O pedido mostra as 4 fases, o
+    quadro Agora com o próximo passo, a linha do tempo por dia com filtro, e o pedido ao lado (uma coluna no celular)."""
+    pg = entrar(navegador, servidor, largura=largura, altura=900)
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill(f"Ana Desenho {largura}")
+    dlg.get_by_label("E-mail", exact=True).fill(f"ana.desenho.{largura}@example.com")
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name=f"Ana Desenho {largura}", level=1).wait_for()
+    fases = pg.locator(".suit-fases > li")
+    assert fases.count() == 4
+    assert "Medidas e design" in pg.locator(".suit-fases li.atual").inner_text()
+    pg.get_by_role("heading", level=2, name=re.compile("^Agora")).wait_for()
+    assert pg.locator(".suit-agora .suit-proxima").inner_text().strip()
+    pg.get_by_label("Nota", exact=True).fill("Nota de teste do desenho")
+    pg.get_by_label("Pedir à IA para seguir daqui").uncheck()
+    pg.get_by_role("button", name="Salvar nota").click()
+    pg.get_by_text("Nota salva.").wait_for()
+    pg.locator(".suit-dia").first.wait_for()
+    pg.locator(".suit-filtros").get_by_role("button", name=re.compile("^Notas")).click()
+    assert all(c == "k-nota" for c in pg.locator(".suit-tempo > li").evaluate_all("xs => xs.map(x => x.className)"))
+    pg.get_by_text("Nota de teste do desenho").first.wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()

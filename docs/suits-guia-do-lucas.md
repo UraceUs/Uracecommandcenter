@@ -42,6 +42,19 @@ As três listas usam o cartão do painel inteiro (o "padrão D", playbook geral,
 - **Fornecedores:** *atual* em verde em cima, se tem FIA, **quantos pedidos** no bloco grande, os dados (contato,
   valor, frete, prazo…) na lista e **Editar** (gerente).
 
+### A página de um pedido (#464)
+
+- Em cima, as **4 fases**: *Medidas e design* (Standby → Design Under Client Review), *Aprovação* (Approved),
+  *Produção* (enviado ao fornecedor → Checked) e *Entrega* (endereço → Delivered). A fase atual diz a etapa e
+  quantas faltam nela ("Design Pending · 3 de 4"); passar o dedo/mouse mostra as etapas da fase. Com o pedido
+  ligado a um cliente, aparece **Card do cliente #n ↗**.
+- **Agora**: o próximo passo do pedido, numa frase.
+- No computador, duas colunas: à esquerda Agora, **Nova nota**, a aprovação final, os e-mails preparados e a
+  **linha do tempo**; à direita o pedido e o cliente, as medidas, o design, as conversas ligadas (ponte de e-mail,
+  WhatsApp, fornecedor) e "Como estava no Asana". No celular, tudo numa coluna.
+- A **linha do tempo** vem do mais novo para o mais antigo, **separada por dia**, com filtro **Tudo · Notas ·
+  E-mails · WhatsApp · Etapas · IA** (o número ao lado é quantos de cada).
+
 ---
 
 ## 2. Conectar o Claude ao painel (uma vez)

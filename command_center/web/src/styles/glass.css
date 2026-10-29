@@ -1342,3 +1342,16 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .prereq .prereq-m{flex:none;width:16px;font-weight:700}
 .prereq li.ok .prereq-m{color:var(--ok)}
 .prereq li.falta .prereq-m{color:var(--warn)}
+/* #464: o card do pedido de Suits no desenho aprovado */
+@media (min-width:720px){.suit-fases{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.suit-fases li{align-items:flex-start}
+.suit-fases li .f{display:flex;flex-direction:column;gap:2px;min-width:0;overflow-wrap:anywhere}
+.suit-agora{border-left:4px solid var(--brand)}
+.suit-agora .k{font-family:var(--font-cond);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.suit-agora .h2{margin:0}.suit-agora .suit-proxima{margin:6px 0 0;font-size:15px}
+.suit-filtros{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.suit-filtros .btn{min-height:40px}
+.suit-dia{font-family:var(--font-cond);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);margin:10px 0 4px}
+.suit-g{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px;align-items:start}
+.suit-col{display:grid;gap:12px;min-width:0}
+@media(max-width:900px){.suit-g{grid-template-columns:minmax(0,1fr)}}
