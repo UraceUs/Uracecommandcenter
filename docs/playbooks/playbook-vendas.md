@@ -109,6 +109,13 @@ ACEITAR         invoice (serviço + depósito, se o serviço pede) e waiver saem
 CONFIRMADA      sozinha, quando a invoice está paga e a waiver em dia
 ```
 
+**Teto de 3 sem pagar** (#491, dono, 29/10: *"quem nao tem plano assinado paga normalmente"*): a conta **sem plano
+assinado** (sem contrato mensal no card, sem plano do site e fora do Pro Team) tem no máximo **3 sessões futuras
+esperando pagamento** pela área do cliente. A 4ª aparece para o cliente como *"You already have 3 sessions waiting
+for payment…"* e pede para pagar as que já marcou ou ligar. Pagou uma (a invoice do QuickBooks consta paga), abre
+vaga para outra. Quem tem plano ou é do Pro Team não tem teto. Se um cliente ligar querendo marcar mais, a equipe
+marca pelo painel normalmente.
+
 E o **carrinho do site** (#236, seção 5.1), que já chega pago:
 
 ```

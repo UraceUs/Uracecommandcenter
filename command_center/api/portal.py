@@ -436,6 +436,32 @@ class AgendarIn(BaseModel):
     avulsa: bool = False                     # #355: "Book as a regular session" — fica com o nome do serviço
 
 
+# #491 (dono, 29/10: "quem nao tem plano assinado paga normalmente"): sem plano, a marcação continua pagando como sempre
+# (carrinho com Stripe no site, invoice do QuickBooks na área do cliente), mas a conta não segura mais que isto de vagas
+# futuras esperando pagamento — antes, uma conta com vários pilotos travava a agenda inteira sem pagar nada.
+MAX_ESPERANDO_PAGAMENTO = 3
+MSG_ESPERANDO = ("You already have {n} sessions waiting for payment. Please pay for them first (the links are in your "
+                 "account), or call us at +1 (407) 250 2291 to book more.")
+
+
+def _tem_plano(con, conta, driver_id):
+    """O card do piloto (ou o da conta) tem plano assinado: contrato mensal, plano do site ou Pro Team."""
+    from command_center.providers import contrato
+    p = um(con, "SELECT client_id FROM portal_pilots WHERE id=? AND account_id=?", (driver_id, conta)) if driver_id else None
+    card = (p or {}).get("client_id") or (um(con, "SELECT client_id FROM portal_accounts WHERE id=?", (conta,)) or {}).get("client_id")
+    return bool(card and (contrato.tem_contrato(con, card) or contrato.e_pro(con, card)))
+
+
+def _conferir_teto(con, conta, driver_id, novas=1):
+    if _tem_plano(con, conta, driver_id):
+        return
+    hoje = ag._agora_fl().date().isoformat()
+    n = um(con, """SELECT COUNT(*) AS n FROM bookings WHERE account_id=? AND status='pendente' AND paid_at IS NULL
+                     AND date>=? AND COALESCE(coverage,'')<>'plano'""", (conta, hoje))["n"]
+    if n + novas > MAX_ESPERANDO_PAGAMENTO:
+        raise HTTPException(429, MSG_ESPERANDO.format(n=n))
+
+
 def _vender(bid):
     """Venda automática (#164) fora da resposta: o QuickBooks e o DocuSign levam alguns segundos, e a
     tela de acompanhamento mostra cada etapa chegando."""
@@ -453,6 +479,7 @@ def _vender(bid):
 def agendar(dados: AgendarIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
             con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import agenda_lote
+    _conferir_teto(con, cid, dados.driver_id)                # #491
     try:
         with transacao(con):                  # duas pessoas na última vaga: só uma leva
             nome = None
@@ -575,6 +602,7 @@ def marcar_lote(dados: LoteIn, request: Request, tarefas: BackgroundTasks, cid=D
                 con: sqlite3.Connection = Depends(get_db)):
     """O pedido de vários dias: ou entram todos, ou nenhum. A cotação mudou desde que o cliente viu: 409."""
     from command_center.providers import agenda_lote, venda_site
+    _conferir_teto(con, cid, dados.driver_id, len(dados.slots))      # #491
     try:
         with transacao(con):
             gid, ids = agenda_lote.marcar(con, cid, dados.driver_id, dados.service_id, [x.model_dump() for x in dados.slots],
