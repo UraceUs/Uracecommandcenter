@@ -51,3 +51,10 @@ def test_abrir_conversa_longa_traz_as_mensagens_mais_novas(cli):
     assert d["mensagens"][-1]["text"] == "mensagem 320"
     # quem já viu até aqui pede só o que é novo: nada
     assert cli.get(f"{B}/equipe/canais/{cid}?desde={ultimo}", headers=h).json()["mensagens"] == []
+
+
+def test_csrf_com_acento_no_painel_e_recusado_com_403_e_nao_com_erro_500(cli):
+    """Debug 29/10: o mesmo da área do cliente, no painel da equipe — o cabeçalho de segurança com acento dava 500."""
+    entra(cli, "chefe@urace.us")
+    r = cli.post(f"{B}/equipe/canais", headers={"X-CSRF": "é".encode("utf-8")}, json={"name": "Pista"})
+    assert r.status_code == 403

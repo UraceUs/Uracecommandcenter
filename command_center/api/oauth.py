@@ -348,7 +348,7 @@ def decidir(request: Request, con: sqlite3.Connection = Depends(get_db),
     if not sessao:
         raise HTTPException(401, "sua sessão expirou; entre de novo e repita a autorização")
     esperado = request.cookies.get(auth.COOKIE_CSRF) or ""
-    if not esperado or not hmac.compare_digest(csrf or "", esperado):
+    if not esperado or not hmac.compare_digest((csrf or "").encode("utf-8", "replace"), esperado.encode("utf-8", "replace")):
         raise HTTPException(403, "pedido sem a marca de segurança do formulário")
     # `sessao_valida` devolve a linha da SESSÃO: ali `id` é o id da sessão, e quem manda
     # é `user_id`. Confundir os dois gravava o id errado no código de autorização — a
