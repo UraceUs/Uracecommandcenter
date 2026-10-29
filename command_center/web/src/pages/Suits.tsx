@@ -6,7 +6,7 @@
  * template". O que vivia no projeto SUITS do Asana (pedidos, leads e fornecedores) vem para cá.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet, usePaginado } from '../api/hooks'
 import type { Client } from '../api/types'
@@ -93,7 +93,7 @@ const tomD = (t: string): TomD => t === 'accent' ? 'info' : (t as TomD)
 function EtapaChip({ meta, s }: { meta: Meta | null; s: string }) { return <Chip tone={TOM[s] || 'neutral'}>{nomeEtapa(meta, s)}</Chip> }
 
 /* ============================================================ a aba */
-const ABAS: [string, string][] = [['', tr("Pedidos")], ['leads', tr("Leads")], ['fornecedores', tr("Fornecedores")], ['ponte', tr("Ponte de e-mail")], ['whatsapp', 'WhatsApp'], ['modelo', tr("E-mail ao fornecedor")]]
+const ABAS: [string, string][] = [['', tr("Pedidos")], ['leads', tr("Leads")], ['contatos', tr("Contatos")], ['ponte', tr("Ponte de e-mail")], ['whatsapp', 'WhatsApp'], ['modelo', tr("E-mail ao fornecedor")]]
 
 export function Suits() {
   const { aba = '' } = useParams()
@@ -125,7 +125,8 @@ export function Suits() {
       className={() => (aba === path ? 'on' : '')}>{rot}{path === 'leads' && resumo.data ? <span className="count">{resumo.data.leads}</span> : null}</NavLink>)}</nav>
     {meta.error ? <div className="card"><ErrorState error={meta.error} retry={meta.reload} /></div>
       : aba === 'leads' ? <Leads />
-      : aba === 'fornecedores' ? <><Fornecedores /><Designers /></>
+      : aba === 'contatos' ? <Contatos />
+      : aba === 'fornecedores' ? <Navigate to="/suits/contatos" replace />
       : aba === 'modelo' ? <Modelo />
       : aba === 'ponte' ? <Ponte />
       : aba === 'whatsapp' ? <WhatsApp />
@@ -267,9 +268,9 @@ export function SuitPedido() {
       </div>
       <div className="suit-col">
         <Cliente pedido={d} onDone={p.reload} />
+        <PonteDoPedido pedido={d} onDone={p.reload} />
         <Medidas meta={meta.data} pedido={d} onDone={p.reload} />
         <Design meta={meta.data} pedido={d} onDone={p.reload} />
-        <PonteDoPedido pedido={d} onDone={p.reload} />
         <WhatsAppDoPedido pedido={d} onDone={p.reload} />
         <EmailFornecedor pedido={d} onDone={p.reload} />
         <EnderecoFornecedor pedido={d} onDone={p.reload} />
@@ -676,12 +677,11 @@ function Ponte() {
       <div className="suit-form">
         <label className="check suit-ia"><input type="checkbox" disabled={!gerente} checked={cfg.ponte_ligada === '1'} onChange={e => set('ponte_ligada', e.target.checked ? '1' : '0')} /> {tr("Ponte ligada")}</label>
         <label className="check suit-ia"><input type="checkbox" disabled={!gerente} checked={auto} onChange={e => set('envio_automatico', e.target.checked ? '1' : '0')} /> {tr("Envio automático (sem aprovação)")}</label>
-        <label className="fld"><span>{tr("Designer (nome)")}</span><input disabled={!gerente} value={cfg.designer_nome} onChange={e => set('designer_nome', e.target.value)} placeholder={tr("Mateus")} /></label>
-        <label className="fld"><span>{tr("E-mail do designer")}</span><input disabled={!gerente} type="email" value={cfg.designer_email} onChange={e => set('designer_email', e.target.value)} /></label>
       </div>
       <label className="fld"><span>{tr("Boas-vindas (referência; a IA adapta ao idioma e ao pedido)")}</span><textarea disabled={!gerente} rows={9} value={cfg.boas_vindas} onChange={e => set('boas_vindas', e.target.value)} /></label>
       <label className="fld"><span>{tr("Política dos macacões (a IA segue e explica ao cliente; conflito vem para a equipe)")}</span><textarea disabled={!gerente} rows={6} value={cfg.politica} onChange={e => set('politica', e.target.value)} /></label>
       <label className="fld"><span>{tr("Assinatura")}</span><textarea disabled={!gerente} rows={5} value={cfg.assinatura} onChange={e => set('assinatura', e.target.value)} /></label>
+      <p className="small">{tr("Designers e fornecedores, com o e-mail fixo e o contexto para a IA, ficam na aba")} <Link to="/suits/contatos">{tr("Contatos")}</Link>.</p>
       {gerente && ed && <div className="row gap"><button className="btn ghost" onClick={() => setEd(null)}>{tr("Cancelar")}</button><button className="btn primary" disabled={indo === 'salvar'} onClick={salvar}>{tr("Salvar")}</button></div>}
     </Section>
     <Section title={tr("Manual de medidas (PDF)")}>
@@ -899,7 +899,7 @@ function Leads() {
 
 /* ============================================================ fornecedores */
 const CAMPOS_FORN: [keyof Fornecedor, string][] = [['contact', tr("Contato")], ['email', tr("E-mail")], ['phone', tr("Telefone")], ['status', tr("Situação")],
-  ['price', tr("Valor por macacão")], ['shipping', tr("Frete")], ['payment', tr("Pagamento")], ['lead_time', tr("Prazo")], ['comments', tr("Comentários")]]
+  ['price', tr("Valor por macacão")], ['shipping', tr("Frete")], ['payment', tr("Pagamento")], ['lead_time', tr("Prazo")], ['comments', tr("Contexto para a IA")]]
 
 function Fornecedores() {
   const { can } = useAuth()
@@ -915,6 +915,7 @@ function Fornecedores() {
     } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   return <Section title={tr("Fornecedores")} count={lista.data?.length} right={can('MANAGER') && <button className="btn sm" onClick={() => setEd({})}><Icon name="plus" size={14} /> {tr("Novo")}</button>}>
+    <p className="small muted">{tr("Na Ponte de e-mail de cada pedido você escolhe o fornecedor; o e-mail e o contexto vêm daqui. O atual vale para o pedido sem escolha.")}</p>
     {lista.error ? <ErrorState error={lista.error} retry={lista.reload} /> : !lista.data ? <Loading /> : !lista.data.length ? <Empty title={tr("Nenhum fornecedor")}>{tr("Importe do Asana ou cadastre.")}</Empty>
       : <div className="cd-grade">{lista.data.map(f => <Cartao key={f.id} id={`forn-${f.id}`} estado={f.is_current ? tr("atual") : (f.status || tr("fornecedor"))} tom={f.is_current ? 'ok' : 'neutral'}
           avatar={f.name} avatarTom="azul" nome={f.name} sub={[f.has_fia === 1 ? tr("FIA") : f.has_fia === 0 ? tr("sem FIA") : null]}
@@ -934,6 +935,12 @@ function Fornecedores() {
   </Section>
 }
 
+/** #490 (dono, 29/10: "cria uma aba com contatos dentro da Alpha Line onde tenha os fornecedores e designer"): os dois
+ *  cadastros que a Ponte de e-mail do pedido usa, com o e-mail fixo e o contexto para a IA. */
+function Contatos() {
+  return <><Fornecedores /><Designers /></>
+}
+
 /** #481 (dono, 29/10: "designer 1, designer 2, designer 3, com os endereços de e-mail fixos"): a lista que a Ponte de
  *  e-mail do pedido usa. O atual vale para o pedido que não escolheu outro. */
 function Designers() {
@@ -950,19 +957,19 @@ function Designers() {
     } catch (e) { toast((e as ApiError).message, 'crit') }
   }
   return <Section title={tr("Designers")} count={lista.data?.length} right={can('MANAGER') && <button className="btn sm" onClick={() => setEd({})}><Icon name="plus" size={14} /> {tr("Novo")}</button>}>
-    <p className="small muted">{tr("Na Ponte de e-mail de cada pedido você escolhe o designer; o e-mail vem daqui. O atual vale para o pedido sem escolha. O cliente nunca vê nome nem e-mail de designer.")}</p>
+    <p className="small muted">{tr("Na Ponte de e-mail de cada pedido você escolhe o designer; o e-mail e o contexto vêm daqui. O atual vale para o pedido sem escolha. O cliente nunca vê nome nem e-mail de designer.")}</p>
     {lista.error ? <ErrorState error={lista.error} retry={lista.reload} /> : !lista.data ? <Loading /> : !lista.data.length ? <Empty title={tr("Nenhum designer")}>{tr("Cadastre o primeiro.")}</Empty>
       : <div className="cd-grade">{lista.data.map(d => <Cartao key={d.id} id={`designer-${d.id}`} estado={d.is_current ? tr("atual") : tr("designer")} tom={d.is_current ? 'ok' : 'neutral'}
           avatar={d.name} avatarTom="azul" nome={d.name} sub={[d.email]} grande={d.pedidos} detalhe={tr("Pedidos")}
           acoes={can('MANAGER') ? <button className="btn" onClick={() => setEd({ ...d })}><Icon name="pencil" size={14} /> {tr("Editar")}</button> : null}>
-          {d.notes ? <CdLista><CdItem tom="neutral" valor={d.notes}>{tr("Notas")}</CdItem></CdLista> : null}
+          {d.notes ? <CdLista><CdItem tom="neutral" valor={d.notes}>{tr("Contexto para a IA")}</CdItem></CdLista> : null}
         </Cartao>)}</div>}
     {ed && <Scrim onMouseDown={() => setEd(null)}><div className="modal" style={{ maxWidth: 520 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={tr("Designer")}>
       <h3>{ed.id ? tr("Editar {0}", ed.name) : tr("Novo designer")}</h3>
       <div className="suit-form">
         <label className="fld"><span>{tr("Nome")}</span><input value={ed.name || ''} onChange={e => setEd(x => ({ ...x, name: e.target.value }))} /></label>
         <label className="fld"><span>{tr("E-mail")}</span><input type="email" inputMode="email" value={ed.email || ''} onChange={e => setEd(x => ({ ...x, email: e.target.value }))} /></label>
-        <label className="fld"><span>{tr("Notas")}</span><input value={ed.notes || ''} onChange={e => setEd(x => ({ ...x, notes: e.target.value }))} /></label></div>
+        <label className="fld"><span>{tr("Contexto para a IA (o que ele faz, como falar com ele, idioma)")}</span><textarea rows={4} value={ed.notes || ''} onChange={e => setEd(x => ({ ...x, notes: e.target.value }))} /></label></div>
       <label className="check"><input type="checkbox" checked={!!ed.is_current} onChange={e => setEd(x => ({ ...x, is_current: e.target.checked ? 1 : 0 }))} /> {tr("É o designer atual (vale para o pedido sem escolha)")}</label>
       <div className="modal-foot"><button className="btn ghost" onClick={() => setEd(null)}>{tr("Cancelar")}</button><button className="btn primary" onClick={salvar}>{tr("Salvar")}</button></div>
     </div></Scrim>}
