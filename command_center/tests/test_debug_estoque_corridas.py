@@ -75,3 +75,14 @@ def test_mecanico_nao_ve_o_valor_dos_avisos_da_loja(cli):
     assert cli.get(f"/ops/api/compras/{pid}", headers=h).json()["eventos"][0]["amount"] == 1234.5
 
 
+def test_compra_atrasada_usa_o_dia_da_florida(con, monkeypatch):
+    """Previsão de hoje (na Flórida) não é atraso, mesmo que o relógio do servidor (UTC) já esteja no dia seguinte."""
+    hoje = date.today()
+    monkeypatch.setattr(portal, "hoje", lambda: hoje - timedelta(days=1))
+    pid = compras.criar_compra(con, None, [{"description": "Pneus", "qty": 4}], pedir=True,
+                               expected_at=(hoje - timedelta(days=1)).isoformat())
+    assert not compras.compra(con, pid)["atrasada"]
+    monkeypatch.setattr(portal, "hoje", lambda: hoje)
+    assert compras.compra(con, pid)["atrasada"]
+
+
