@@ -396,6 +396,34 @@ def test_sem_quickbooks_a_tela_sabe_que_nao_conferiu(cli, monkeypatch):
     assert v["conectado"] is False and "não está conectado" in v["erro"]
 
 
+def test_quickbooks_com_erro_a_tela_sabe_que_nao_conferiu_e_nada_vira_500(cli, monkeypatch):
+    """Debug 29/10: só o "não conectado" virava resposta. O QuickBooks que responde com erro — o refresh token vencido ou
+    revogado (vale 100 dias), a Intuit fora do ar — subia como exceção: a aba Mensalidade do card, o Criar recorrência
+    e o Vincular davam 500, sem dizer por quê. Sem conferir, nada é criado, e a tela diz o motivo."""
+    from mcp_stdio import ErroFerramenta
+    c = conectar()
+    sem_invoice = inserir(c, "clients", name="Tina Erro", email="tina.erro@example.com", status="ACTIVE", source="manual",
+                          monthly_amount=400, monthly_item_id="7")
+    com_invoice = inserir(c, "clients", name="Caio Erro", email="caio.erro@example.com", status="ACTIVE", source="manual",
+                          monthly_amount=400, monthly_item_id="7")
+    inserir(c, "invoices", client_id=com_invoice, doc_number="3901", amount=400, balance=0, status="paid",
+            issued_on="2026-09-01", customer_ref="4901")
+    c.close()
+
+    def erro(*a, **k):
+        raise ErroFerramenta("refresh token do QuickBooks expirou ou foi revogado (vale 100 dias). Refazer o consentimento.")
+    monkeypatch.setattr(providers, "chamar", erro)
+    h = entra(cli, "ger@urace.us")
+    for cid in (sem_invoice, com_invoice):        # a busca do cliente no QuickBooks e a das recorrências dele
+        v = cli.get(f"/ops/api/clients/{cid}/mensal/qbo", headers=h)
+        assert v.status_code == 200 and v.json()["conectado"] is False and "refresh token" in v.json()["erro"], v.text
+        r = cli.post(f"/ops/api/clients/{cid}/mensal/recorrencia", headers=h, json={"meses": 6})
+        assert r.status_code == 502 and "refresh token" in r.json()["detail"], r.text
+        r = cli.post(f"/ops/api/clients/{cid}/mensal/vincular", headers=h, json={"qbo_id": "700"})
+        assert r.status_code == 502 and "refresh token" in r.json()["detail"], r.text
+    assert not todos(conectar(), "SELECT id FROM monthly_recurring WHERE client_id IN (?,?)", (sem_invoice, com_invoice))
+
+
 def test_dia_1_respeita_a_recorrencia_vinculada_sem_fim(con):
     enzo = _cliente(con, "Enzo Kartian", monthly_plan="Academy 4 stroke")
     inserir(con, "monthly_recurring", client_id=enzo, qbo_id="555", amount=2756.9, item_id="7", months=0,

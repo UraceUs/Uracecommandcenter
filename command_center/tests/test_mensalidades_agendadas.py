@@ -115,3 +115,54 @@ def test_sem_cliente_no_quickbooks_falha_sem_enviar(con):
     _agenda(con, cid, meses=1)
     ms.enviar_devidas(con, fl("2026-11-01T01:00"), lambda **kw: pytest.fail("enviou sem cliente"))
     assert "não encontrado no QuickBooks" in um(con, "SELECT error FROM monthly_invoices")["error"]
+
+
+def test_invoice_da_sessao_extra_do_site_nao_e_a_mensalidade_do_mes(con):
+    """Debug 29/10: a extra marcada no site (#314/#340) sai com o item "Academy | Extra session" no QuickBooks. No mês
+    em que ela foi emitida, a mensalidade agendada achava que "já existia" (item com Academy) e o mês nascia "enviada"
+    com o número da extra: a mensalidade daquele mês nunca era cobrada. A invoice de uma sessão do site nunca é a
+    mensalidade (a mesma regra do contador do card, `contrato.mensalidades_por_mes`)."""
+    cid = _cliente(con)
+    conta = inserir(con, "portal_accounts", email="joe.kartian@example.com", pw_salt="x", pw_hash="x", name="Joseph Kartian",
+                    birth_date="1980-01-01", terms_accepted_at="2026-09-30T00:00:00Z", client_id=cid)
+    pil = inserir(con, "portal_pilots", account_id=conta, name="Enzo", client_id=cid)
+    inserir(con, "bookings", account_id=conta, pilot_id=pil, date="2026-11-05", period="manha", status="confirmada",
+            coverage="extra", charge_kind="invoice", price=689.23, qbo_invoice_id="5501", invoice_doc="URACE-0040")
+    iid = inserir(con, "invoices", client_id=cid, doc_number="URACE-0040", amount=689.23, balance=689.23, status="open",
+                  issued_on="2026-11-03", customer_ref="485", memo="URACE extra session: 11/05/2026 (morning).")
+    inserir(con, "invoice_lines", invoice_id=iid, line_no=1, item_name="Academy | Extra session (beyond monthly 4)",
+            description="Extra session (Academy 4 stroke) · 11/05/2026 (morning)", amount=689.23)
+    con.execute("INSERT INTO entity_links (entity_type, entity_id, system, external_id) VALUES ('invoice', ?, 'quickbooks', '5501')",
+                (iid,))
+    assert ms.invoice_do_mes(con, cid, "2026-11") is None
+    _agenda(con, cid, meses=1)                         # o gerente agenda no meio do mês, começando neste
+    assert um(con, "SELECT status FROM monthly_invoices WHERE month='2026-11'")["status"] == "a_enviar"
+    enviados = []
+
+    def enviar(**kw):
+        enviados.append(kw)
+        return {"aplicado": True, "id": "9", "numero": "URACE-0041", "enviado": True}
+    ms.enviar_devidas(con, fl("2026-11-10T09:00"), enviar)
+    m = um(con, "SELECT * FROM monthly_invoices WHERE month='2026-11'")
+    assert len(enviados) == 1 and (m["status"], m["doc_number"]) == ("enviada", "URACE-0041")
+
+
+@pytest.mark.parametrize("erro", ["desligado", "fora do ar"])
+def test_quickbooks_sem_resposta_ao_achar_o_cliente_nao_derruba_a_rodada(con, monkeypatch, erro):
+    """Debug 29/10: o cliente do QuickBooks era procurado fora da proteção da rodada. Card sem invoice no espelho (o
+    aluno novo) e o QuickBooks desligado ou com erro: `enviar_devidas` levantava, o mês ficava "a_enviar" sem motivo
+    e o laço do autosync parava ali a cada 15 min (a cobrança da agenda, a loja, os avisos e o Asana não rodavam)."""
+    from command_center import providers
+    cid = inserir(con, "clients", name="Nova Aluna", pilot_name="Bia", email="nova.aluna@example.com", status="ACTIVE",
+                  source="manual")
+    _agenda(con, cid, meses=1)
+
+    def chamar(sistema, ferramenta, **kw):
+        if erro == "desligado":
+            raise providers.NaoConectado("sem refresh token do QuickBooks")
+        raise RuntimeError("sem conexão com o QuickBooks: timed out")
+    monkeypatch.setattr(providers, "chamar", chamar)
+    feitas = ms.enviar_devidas(con, fl("2026-11-01T01:00"), lambda **kw: pytest.fail("enviou sem o cliente do QuickBooks"))
+    m = um(con, "SELECT * FROM monthly_invoices")
+    assert feitas == [(m["id"], "falhou")] and (m["status"], m["attempts"]) == ("falhou", 1)
+    assert "QuickBooks" in m["error"]

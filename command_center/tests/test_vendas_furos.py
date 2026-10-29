@@ -332,6 +332,55 @@ def test_fechamento_cria_o_card_do_irmao_e_nunca_poe_no_card_do_outro(cli):
     assert r.json()["client_id"] == theo
 
 
+def test_card_criado_pelo_passo_depois_do_fechamento_vira_ganho(cli):
+    """Debug 29/10: o fechamento sem card fica em Fechamento (Ganho é a venda fechada com o card). Quando o card nascia
+    depois, pelo botão do passo (o "É irmão" do #204, ou o "tentar de novo"), a venda ficava em Fechamento para
+    sempre: o retorno de antes do fechamento continuava na agenda e, vencido, em Precisa de atenção."""
+    con = conectar()
+    try:
+        inserir(con, "clients", name="Vera Lima", pilot_name="Ana Lima", email="vera.lima@example.com",
+                status="ACTIVE", source="asana")
+        con.commit()
+    finally:
+        con.close()
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Vera Lima", email="vera.lima@example.com", pilot_name="Rui Lima")
+    r = cli.post(f"{B}/sales/{oid}/next", headers=h, json={"quando": "2020-01-02T15:00:00Z", "o_que": "ligar para fechar"})
+    assert r.status_code == 200
+    so_cliente = {"cliente": True, "qbo": False, "waiver": False, "asana": False, "kommo": False}
+    assert cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": so_cliente}).json()["etapa"] == "FECHAMENTO"
+    r = cli.post(f"{B}/sales/{oid}/step/cliente?irmao=true", headers=h)
+    assert r.status_code == 200, r.text
+    o = cli.get(f"{B}/sales/{oid}", headers=h).json()["oportunidade"]
+    assert o["client_id"] == r.json()["resultado"]["client_id"]
+    assert (o["stage"], o["next_at"]) == ("GANHO", None)
+    assert oid not in [x["id"] for x in cli.get(f"{B}/sales/agenda", headers=h).json()["retornos"]], \
+        "o retorno de antes do fechamento saiu da agenda"
+
+
+def test_tarefa_do_painel_criada_no_fechamento_fica_com_a_data(cli):
+    """Debug 29/10: a tarefa personalizada "no painel" do fechamento vira o próximo passo da venda (data e texto), e a
+    gravação final do fechamento escrevia por cima: no Ganho apagava a data, no Fechamento voltava à data lida antes das
+    tarefas. Ficava só o texto, sem data — o lembrete nunca aparecia, e o passo dizia "tarefa em painel"."""
+    h = entra(cli, "closer@urace.us")
+    tarefa = [{"titulo": "Mandar o vídeo de boas-vindas", "onde": "painel", "quando": "2030-02-10"}]
+    # Ganho (o card nasce): o retorno de antes do fechamento sai, a tarefa fica
+    oid = cria(cli, h, name="Tarefa No Ganho", email="tarefa.ganho@example.com")
+    r = cli.post(f"{B}/sales/{oid}/next", headers=h, json={"quando": "2020-01-02T15:00:00Z", "o_que": "ligar para fechar"})
+    assert r.status_code == 200
+    passos = {"cliente": True, "qbo": False, "waiver": False, "asana": False, "kommo": False}
+    r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": passos, "extras": tarefa})
+    assert r.status_code == 200 and r.json()["etapa"] == "GANHO", r.text
+    o = cli.get(f"{B}/sales/{oid}", headers=h).json()["oportunidade"]
+    assert (o["next_at"], o["next_what"]) == ("2030-02-10T12:00:00Z", "Mandar o vídeo de boas-vindas")
+    # Fechamento (sem card) e sem retorno: a tarefa é o próximo passo, com a data
+    oid = cria(cli, h, name="Tarefa No Fechamento", email="tarefa.fecha@example.com")
+    r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": dict(passos, cliente=False), "extras": tarefa})
+    assert r.status_code == 200 and r.json()["etapa"] == "FECHAMENTO", r.text
+    o = cli.get(f"{B}/sales/{oid}", headers=h).json()["oportunidade"]
+    assert (o["next_at"], o["next_what"]) == ("2030-02-10T12:00:00Z", "Mandar o vídeo de boas-vindas")
+
+
 # ------------------------------------------------------------------ 7: retorno vencido em Atenção
 def test_retorno_de_venda_vencido_aparece_em_precisa_de_atencao(cli):
     h = entra(cli, "closer@urace.us")
@@ -1188,3 +1237,78 @@ def test_liberar_que_mandou_e_caiu_registra_o_numero_e_sai_da_atencao(cli, qbo, 
     assert cli.post(f"{B}/sales/{oid}/invoice/liberar", headers=hg, json={"valor": 300, "confirmar": True}).status_code == 409
     assert len(qbo.invoices) == 2, "a de outra venda e a liberada: nenhuma a mais"
     assert _auditoria(oid, "sales.invoice.registered")[0]["diferente"] is True
+
+
+# ------------------------------------------------------------------ debug 29/10: o falso aceitava qualquer argumento
+def _com_a_assinatura_do_quickbooks(qbo):
+    """O `chamar` do teste com a assinatura das ferramentas de verdade: argumento com o nome errado levanta o
+    TypeError que só aparecia fora do teste (o `QBOFalso` aceita qualquer `**kw`)."""
+    import inspect
+
+    from adminai.mcp import quickbooks_mcp as q
+
+    def chamar(sistema, ferramenta, **kw):
+        inspect.signature(getattr(q, ferramenta)).bind(**kw)
+        return qbo(sistema, ferramenta, **kw)
+    return chamar
+
+
+def test_venda_busca_o_cliente_do_quickbooks_com_o_argumento_da_ferramenta(cli, qbo, monkeypatch):
+    """A venda buscava o cliente com `qbo_clientes_buscar(termo=...)`, e a ferramenta só tem `texto`: fora do teste,
+    toda invoice da venda manual (fechar, Liberar, o passo, o depósito) caía com TypeError antes de chegar ao
+    QuickBooks, e o "A invoice saiu" do gerente respondia 502 sem conferir nada."""
+    monkeypatch.setattr(vendas, "chamar", _com_a_assinatura_do_quickbooks(qbo))
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Assinatura Certa", email="assinatura@example.com", amount=500)
+    q_ = fecha(cli, h, oid)["passos"][0]
+    assert q_["passo"] == "qbo" and q_["ok"] is True, q_
+    assert len(qbo.invoices) == 1 and qbo.invoices[0]["cliente_id"] == "77"
+    # o "A invoice saiu" confere o cliente da invoice com a mesma busca
+    hg = entra(cli, "ger@urace.us")
+    oid = cria(cli, hg, name="Assinatura Caiu", email="assinaturacaiu@example.com", amount=500)
+    orig = _cai_ao_gravar(monkeypatch, "Venda fechada")
+    with pytest.raises(RuntimeError):
+        cli.post(f"{B}/sales/{oid}/close", headers=hg, json={"passos": SO_QBO})
+    monkeypatch.setattr(vendas, "_ev", orig)
+    _vence_a_marca(oid)
+    r = cli.post(f"{B}/sales/{oid}/invoice/registrar", headers=hg, json={"numero": "1002"})
+    assert r.status_code == 200, r.text
+    assert len(qbo.invoices) == 2, "nada cobrado de novo"
+
+
+class QBONomeParecido(QBOFalso):
+    """Como o QuickBooks de verdade, a busca sem e-mail é por pedaço do nome (`DisplayName like '%...%'`)."""
+
+    def __init__(self, clientes):
+        super().__init__()
+        self.clientes, self.criados = clientes, []
+
+    def __call__(self, sistema, ferramenta, **kw):
+        if ferramenta == "qbo_clientes_buscar":
+            t = kw["texto"].strip().lower()
+            achados = [c for c in self.clientes if (t == c.get("email") if "@" in t else t in c["nome"].lower())]
+            return achados[:kw.get("maximo", 20)]
+        if ferramenta == "qbo_criar_cliente":
+            self.criados.append({"id": str(900 + len(self.criados)), "nome": kw["nome"], "email": kw.get("email")})
+            return self.criados[-1]
+        return super().__call__(sistema, ferramenta, **kw)
+
+
+def test_venda_sem_email_nao_cobra_o_cliente_do_quickbooks_de_nome_parecido(cli, monkeypatch):
+    """Sem e-mail na venda, a busca do cliente no QuickBooks é por pedaço do nome: "Maria Exemplo" acha "Ana Maria
+    Exemplo Souza", e a venda pegava o primeiro achado — a invoice ia para outra pessoa (e para o e-mail dela).
+    Só o nome inteiro igual é o mesmo cliente; senão, o cliente é criado (o QuickBooks recusa se houver parecido)."""
+    falso = QBONomeParecido([{"id": "81", "nome": "Ana Maria Exemplo Souza", "email": "anamaria@example.com"},
+                             {"id": "82", "nome": "Lia Exemplo", "email": None}])
+    monkeypatch.setattr(vendas, "chamar", falso)
+    monkeypatch.setattr(vendas, "_aplicando", lambda sistema, fn, *a, **kw: fn(*a, **kw))
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Maria Exemplo", email=None, phone="+1 407 555 0150", amount=500)
+    q_ = fecha(cli, h, oid)["passos"][0]
+    assert q_["ok"] is True, q_
+    assert falso.invoices[0]["cliente_id"] != "81", "a invoice foi para outra pessoa"
+    assert [c["nome"] for c in falso.criados] == ["Maria Exemplo"] and falso.invoices[0]["cliente_id"] == "900"
+    # o nome inteiro igual (sem diferença de caixa) é o mesmo cliente: nada é criado
+    oid = cria(cli, h, name="lia exemplo", email=None, phone="+1 407 555 0151", amount=500)
+    assert fecha(cli, h, oid)["passos"][0]["ok"] is True
+    assert falso.invoices[-1]["cliente_id"] == "82" and len(falso.criados) == 1
