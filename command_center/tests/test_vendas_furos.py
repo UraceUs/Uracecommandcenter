@@ -1274,3 +1274,41 @@ def test_venda_busca_o_cliente_do_quickbooks_com_o_argumento_da_ferramenta(cli, 
     r = cli.post(f"{B}/sales/{oid}/invoice/registrar", headers=hg, json={"numero": "1002"})
     assert r.status_code == 200, r.text
     assert len(qbo.invoices) == 2, "nada cobrado de novo"
+
+
+class QBONomeParecido(QBOFalso):
+    """Como o QuickBooks de verdade, a busca sem e-mail é por pedaço do nome (`DisplayName like '%...%'`)."""
+
+    def __init__(self, clientes):
+        super().__init__()
+        self.clientes, self.criados = clientes, []
+
+    def __call__(self, sistema, ferramenta, **kw):
+        if ferramenta == "qbo_clientes_buscar":
+            t = kw["texto"].strip().lower()
+            achados = [c for c in self.clientes if (t == c.get("email") if "@" in t else t in c["nome"].lower())]
+            return achados[:kw.get("maximo", 20)]
+        if ferramenta == "qbo_criar_cliente":
+            self.criados.append({"id": str(900 + len(self.criados)), "nome": kw["nome"], "email": kw.get("email")})
+            return self.criados[-1]
+        return super().__call__(sistema, ferramenta, **kw)
+
+
+def test_venda_sem_email_nao_cobra_o_cliente_do_quickbooks_de_nome_parecido(cli, monkeypatch):
+    """Sem e-mail na venda, a busca do cliente no QuickBooks é por pedaço do nome: "Maria Exemplo" acha "Ana Maria
+    Exemplo Souza", e a venda pegava o primeiro achado — a invoice ia para outra pessoa (e para o e-mail dela).
+    Só o nome inteiro igual é o mesmo cliente; senão, o cliente é criado (o QuickBooks recusa se houver parecido)."""
+    falso = QBONomeParecido([{"id": "81", "nome": "Ana Maria Exemplo Souza", "email": "anamaria@example.com"},
+                             {"id": "82", "nome": "Lia Exemplo", "email": None}])
+    monkeypatch.setattr(vendas, "chamar", falso)
+    monkeypatch.setattr(vendas, "_aplicando", lambda sistema, fn, *a, **kw: fn(*a, **kw))
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Maria Exemplo", email=None, phone="+1 407 555 0150", amount=500)
+    q_ = fecha(cli, h, oid)["passos"][0]
+    assert q_["ok"] is True, q_
+    assert falso.invoices[0]["cliente_id"] != "81", "a invoice foi para outra pessoa"
+    assert [c["nome"] for c in falso.criados] == ["Maria Exemplo"] and falso.invoices[0]["cliente_id"] == "900"
+    # o nome inteiro igual (sem diferença de caixa) é o mesmo cliente: nada é criado
+    oid = cria(cli, h, name="lia exemplo", email=None, phone="+1 407 555 0151", amount=500)
+    assert fecha(cli, h, oid)["passos"][0]["ok"] is True
+    assert falso.invoices[-1]["cliente_id"] == "82" and len(falso.criados) == 1

@@ -933,6 +933,18 @@ class NadaSaiu(RuntimeError):
     nada_saiu = True
 
 
+def clientes_qbo_da_venda(o):
+    """Os clientes do QuickBooks que são o responsável desta venda: pelo e-mail (a busca do QuickBooks é exata)
+    ou, sem e-mail, só o de nome inteiro igual. A busca por nome é por pedaço ("Maria Exemplo" acha "Ana Maria
+    Exemplo Souza"): pegar o primeiro achado mandava a invoice para outra pessoa (debug 29/10)."""
+    from command_center.providers import identidade
+    busca = chamar("quickbooks", "qbo_clientes_buscar", texto=o["email"] or o["name"], maximo=5) or []
+    if o["email"]:
+        return busca
+    k = identidade.chave_exata(o["name"])
+    return [c for c in busca if k and identidade.chave_exata(c.get("nome") or "") == k]
+
+
 def _qbo(con, o, aprovado, ref=None, deposito=0.0, so_deposito=False, requestid=None):
     """Cliente no QuickBooks (se não existe) e invoice criada + enviada: o serviço pelo item do
     catálogo e, quando o serviço pede, o depósito na mesma linha "Security deposit" da venda
@@ -944,7 +956,7 @@ def _qbo(con, o, aprovado, ref=None, deposito=0.0, so_deposito=False, requestid=
         return {"cliente_qbo": None, "invoice": None, "pendente": True}
     nome, email = o["name"], o["email"]
     try:
-        busca = chamar("quickbooks", "qbo_clientes_buscar", texto=email or nome, maximo=5) or []
+        busca = clientes_qbo_da_venda(o)
         cliente = (busca[0] if busca else None)
         if not cliente:
             novo = _aplicando("quickbooks", chamar, "quickbooks", "qbo_criar_cliente", nome=nome, email=email, telefone=o["phone"])
@@ -1555,7 +1567,7 @@ def registrar_invoice(oid: int, dados: RegistrarIn, request: Request, u=Depends(
                                  "aparece no passo do QuickBooks.")
     try:                                  # só leitura: a invoice e o cliente desta venda no QuickBooks
         inv = chamar("quickbooks", "invoice_por_numero", numero=numero)
-        clientes = (chamar("quickbooks", "qbo_clientes_buscar", texto=o["email"] or o["name"], maximo=5) or []) if inv else []
+        clientes = clientes_qbo_da_venda(o) if inv else []
     except NaoConectado:
         raise HTTPException(503, "Ligue o QuickBooks para conferir (Integrações): sem conferir a invoice, nada é registrado.")
     except Exception as e:                                       # noqa: BLE001
