@@ -52,18 +52,23 @@ def devidas(con, agora_local=None):
 # ------------------------------------------------------------ sondagem
 def sondar(con, sistemas=None, por="system"):
     """Uma chamada real por sistema; grava o estado. É o 'Verificar agora' e a rotina."""
-    from command_center.providers import SISTEMAS, recarregar, saude
+    from command_center.providers import SEM_SINCRONIA, SISTEMAS, recarregar, saude
     recarregar()
     saida = {}
     for s in (sistemas or SISTEMAS):
         st, det = saude(s)
-        # a sondagem não apaga o detalhe da última sincronia (conversas, filtro…): entra ao lado, em "sondagem"
+        # a sondagem não apaga o detalhe da última sincronia (conversas, filtro…): entra ao lado, em "sondagem".
+        # Sempre ao lado: gravada no topo, a sondagem seguinte a guardava como se fosse da sincronia, e o backup
+        # mostrou a falha do Drive de 16/10 até 29/10. Sem sincronia (backup), o detalhe é a sondagem, inteira.
         atual = um(con, "SELECT detail FROM integrations WHERE system=?", (s,)) or {}
         try:
             antigo = json.loads(atual.get("detail") or "{}")
         except ValueError:
             antigo = {}
-        detalhe = {**{k: v for k, v in antigo.items() if k != "sondagem"}, "sondagem": det} if antigo else det
+        if s in SEM_SINCRONIA:
+            detalhe = det
+        else:
+            detalhe = {**{k: v for k, v in antigo.items() if k != "sondagem"}, "sondagem": det}
         con.execute("UPDATE integrations SET status=?, last_attempt_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), "
                     "last_success_at=CASE WHEN ? IN ('CONNECTED','DEGRADED') THEN strftime('%Y-%m-%dT%H:%M:%fZ','now') ELSE last_success_at END, "
                     "last_error=CASE WHEN ? IN ('ERROR','DISCONNECTED') THEN ? ELSE NULL END, detail=? WHERE system=?",
