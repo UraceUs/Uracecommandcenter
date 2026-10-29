@@ -773,7 +773,10 @@ def candidatos_duplicados(con, para=None):
                 continue
             for na in _nomes(a):
                 for nb in _nomes(b):
-                    if chave_exata(na) != chave_exata(nb) and parecido(na, nb) and (a["id"], b["id"]) not in vistos:
+                    # a mesma trava dos pares por contato: irmãos e drivers diferentes do site não viram par que o
+                    # Unir recusa e que ficava para sempre na lista (debug 29/10)
+                    if chave_exata(na) != chave_exata(nb) and parecido(na, nb) and (a["id"], b["id"]) not in vistos \
+                            and not nao_unir(con, a["id"], b["id"]):
                         vistos.add((a["id"], b["id"]))
                         pares.append({"a": a, "b": b, "why": f"nomes quase iguais: '{na}' × '{nb}'"})
     return pares[:200]
