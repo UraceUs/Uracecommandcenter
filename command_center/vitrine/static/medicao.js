@@ -133,7 +133,7 @@
     b.setAttribute('aria-label', 'Cookies')
     var p = document.createElement('p')
     p.appendChild(document.createTextNode('We use cookies to measure our ads and improve the site. '))
-    var a = document.createElement('a'); a.href = '/legal/privacy.html'; a.textContent = 'Privacy policy'
+    var a = document.createElement('a'); a.href = '/privacy/'; a.textContent = 'Privacy policy'
     p.appendChild(a)
     var acoes = document.createElement('div'); acoes.className = 'consentimento-acoes'
     var nao = document.createElement('button'); nao.type = 'button'; nao.className = 'btn btn-sm btn-linha-escura'; nao.textContent = 'Decline'

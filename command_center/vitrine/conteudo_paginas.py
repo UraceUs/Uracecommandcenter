@@ -455,4 +455,134 @@ ACCESSIBILITY = {
     "data": "This statement was created on 15 April 2026 using the W3C Accessibility Statement Generator Tool.",
 }
 
-PAGINAS = (ACADEMY, PRO_TEAM, BEGINNERS, CAREER, ABOUT, CONTACT, ACCESSIBILITY)
+# ------------------------------------------------------------------ Privacidade e Termos do site (#488)
+# O "Privacy policy" do site levava ao documento do app interno (URACE Administrative AI, feito para a Intuit) e o
+# "I accept the terms" do cadastro, ao EULA desse app; o urace.us de hoje não tem política nenhuma. Estes textos
+# dizem só o que o site faz (o código: conta, piloto, carrinho, Stripe, medição com consentimento, chat do Kommo,
+# QuickBooks, e-mail pelo Gmail) e repetem as regras já publicadas nas páginas de serviço. O dono revisa antes da troca.
+ATUALIZADO = "October 29, 2026"
+
+PRIVACY = {
+    "caminho": "/privacy/",
+    "titulo": "Privacy Policy | URACE",
+    "descricao": ("How URACE (URACE.US INC, Orlando, FL) collects, uses and protects the information you share on urace.us: "
+                  "your account, drivers, bookings, store orders, payments and cookies."),
+    "h1": "Privacy Policy",
+    "intro": ("This policy explains what information URACE.US INC (\u201cURACE\u201d, \u201cwe\u201d) collects through this "
+              "website and our customer area, how we use it and the choices you have. It covers urace.us and the URACE "
+              "customer area. Questions: write to support@urace.us or call +1 (407) 250 2291.",),
+    "secoes": (
+        ("Information you give us", (
+            "Account: your full name, email address, password (stored only as a protected hash, never in plain text), "
+            "date of birth, phone number and mailing address. The account holder must be 18 or older.",
+            "Drivers: the name, date of birth and, when needed for equipment and racewear, the body measurements and sizes "
+            "of each driver you add, including children you are responsible for.",
+            "Bookings and orders: the sessions, dates, products, options and delivery details you choose, the shipping "
+            "address you give at checkout and any notes or messages you send us.",
+            "Contact and order request forms: your name, email, phone and message.",
+            "Waivers: the participation waiver you sign for each driver, with the date and time of the signature.",
+        )),
+        ("Payments", (
+            "Online payments are processed by Stripe on a secure Stripe page. We do not see or store your full card "
+            "number; we receive the payment status, the amount and the name, email and address you give Stripe. "
+            "Invoices and receipts are kept in our accounting system (QuickBooks).",
+        )),
+        ("Cookies and similar technologies", (
+            "Essential: cookies that keep you signed in and protect your forms (session and security cookies), remember "
+            "your language and keep your cart and campaign source in your browser. The site does not work without them.",
+            "Measurement and advertising: Google Tag Manager / Google Analytics and the Meta Pixel load only after you "
+            "choose Accept in the cookie banner. Decline keeps them off. You can change your choice at any time with "
+            "\u201cCookie settings\u201d at the bottom of every page.",
+            "Chat: the chat window is provided by Kommo, our customer messaging system, and may set its own cookies when "
+            "it loads.",
+        )),
+        ("How we use your information", (
+            "To create and run your account, schedule your sessions, prepare karts and equipment, process payments, "
+            "deliver or hand over store orders, send confirmations, receipts and reminders, answer your messages, keep "
+            "the required waivers and records, and keep the site secure (for example, limiting repeated attempts).",
+            "With your consent to measurement cookies, to understand how the site is used and to measure our advertising.",
+            "We do not sell your personal information.",
+        )),
+        ("Who we share it with", (
+            "Only with the service providers that run these tasks for us: Stripe (payments), Intuit QuickBooks "
+            "(invoices and receipts), Google (email delivery and, with your consent, analytics), Meta (advertising "
+            "measurement, with your consent), Kommo (chat and customer messages) and Asana (scheduling our team). They "
+            "process the information to provide their service to us. We may also disclose information when required by "
+            "law.",
+        )),
+        ("Your choices and rights", (
+            "You can see and update your account and drivers in the customer area. To request a copy of your information, "
+            "a correction or the deletion of your account, write to support@urace.us. We may keep records that the law "
+            "or our accounting requires, such as payments, invoices and signed waivers.",
+        )),
+        ("Security", (
+            "The site uses HTTPS, passwords are stored as protected hashes, and access to customer information is "
+            "restricted to the URACE team members who need it. No system is perfectly secure; if you think your account "
+            "was accessed by someone else, change your password and contact us.",
+        )),
+        ("Children", (
+            "Accounts are opened and managed by adults. A parent or guardian adds a child as a driver and gives the "
+            "information needed for the activity.",
+        )),
+        ("Changes to this policy", (
+            f"We will post any change on this page with a new date. Last updated: {ATUALIZADO}.",
+        )),
+    ),
+}
+
+TERMS = {
+    "caminho": "/terms/",
+    "titulo": "Terms of Use and Sale | URACE",
+    "descricao": ("The terms for using urace.us and buying URACE sessions, programs and store products: accounts, payments, "
+                  "deposits, rescheduling, refunds, safety and waivers."),
+    "h1": "Terms of Use and Sale",
+    "intro": ("These terms apply when you use urace.us or the URACE customer area and when you book or buy from URACE.US INC "
+              "(\u201cURACE\u201d). By creating an account or completing a purchase you agree to them. Each service page "
+              "may add details for that service.",),
+    "secoes": (
+        ("Your account", (
+            "The account holder must be 18 or older and gives true information for themselves and for each driver they add. "
+            "Keep your password private; you are responsible for the bookings and purchases made with your account.",
+        )),
+        ("Prices and payment", (
+            "Prices are in US dollars and are the ones shown when you check out. Online payments are made through Stripe. "
+            "A booking is confirmed when the payment is completed and the required waiver is signed.",
+        )),
+        ("Security deposit and damages", (
+            "Where a service shows a refundable security deposit, it is charged with the booking to cover potential crash "
+            "damage and track fees, and it is fully refunded at the end of the event when there are no incidents or "
+            "damages to the kart.",
+            "Damage to the kart caused by a crash, going off track or an aggressive driving style is billed to you for the "
+            "cost of repair, regardless of fault. Mechanical failures not caused by the driver are covered by URACE.",
+        )),
+        ("Refunds and rescheduling", (
+            "Our services require planning, preparation, coordination and transportation to the track, so we do not offer "
+            "refunds. Rescheduling is available with a minimum notice of 24 hours. With less than 24 hours' notice, a flat "
+            "fee of $95 is charged, and a Driver Pass, when required, is charged additionally.",
+            "Track fees charged directly by the circuit are separate from URACE prices.",
+        )),
+        ("Monthly programs", (
+            "Monthly programs renew month by month until cancelled with 30 days written notice, unless your contract says "
+            "otherwise.",
+        )),
+        ("Store orders", (
+            "Store products are sold as described on the product page, while in stock. Shipping, when chosen, is confirmed "
+            "by our team. For questions about sizes, availability or a custom order, contact us before buying.",
+        )),
+        ("Safety and waiver", (
+            "Racing is a high-risk activity. Each driver must have a signed participation waiver before driving. Children "
+            "under 10 years old must be accompanied by an adult. Follow the instructions of the URACE team and the track at "
+            "all times.",
+        )),
+        ("Using the site", (
+            "Do not misuse the site, try to access accounts or information that are not yours, or interfere with its "
+            "operation. Content and photos on this site belong to URACE or are used with permission.",
+        )),
+        ("Contact", (
+            "URACE.US INC · 10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824 · +1 (407) 250 2291 · support@urace.us.",
+            f"Last updated: {ATUALIZADO}.",
+        )),
+    ),
+}
+
+PAGINAS = (ACADEMY, PRO_TEAM, BEGINNERS, CAREER, ABOUT, CONTACT, ACCESSIBILITY, PRIVACY, TERMS)
