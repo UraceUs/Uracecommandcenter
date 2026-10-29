@@ -393,20 +393,40 @@ Clientes (`/ops/clients`) tem **um card por pessoa**, do serviço mais recente p
 antigo. **Ativo** é quem teve serviço nos últimos 6 meses. O **piloto** aparece em destaque; o
 **responsável** (quem paga e assina) fica ao lado.
 
-Dentro do card (`/ops/clients/<n>`), as abas:
+Dentro do card (`/ops/clients/<n>`), logo abaixo dos números (próximo serviço, último serviço, serviços e em
+aberto), vem o quadro **Dados do cliente** (#460): piloto e irmãos, nascimento e idade (menor em destaque),
+**classe** (a do card ou, sem ela, a do tamanho do chassi), **waiver** (com o link **ver waivers**, que abre a aba, e o
+**✉ Convite por e-mail** quando não há assinada), **responsável** e **parentesco** (o do card ou o da waiver), e-mail,
+telefone, Client ID, **tamanhos** (macacão, capacete, luva, sapato) e **medidas** em polegadas/libras com o métrico ao
+lado. As medidas vêm da área do cliente; a equipe corrige em **Editar dados** (parentesco, classe e "Medidas e
+tamanhos"), e o quadro diz de onde veio cada uma. Plano mensal, etapa e empresa ficam em **Plano e origem**.
+
+Depois vêm as abas, nesta ordem:
 
 | Aba | O que tem |
 |---|---|
-| Linha do tempo | serviço, waiver enviada/assinada, ação da IA, invoice |
+| Linha do tempo | **por visita**: o serviço com as subtarefas, o checklist do box, o **último comentário do Asana** e as **peças do balcão daquele dia**; **Abrir o serviço** (operador+) leva ao card do serviço e **Anotar neste serviço** grava um comentário na tarefa do Asana com o seu nome. Também waiver enviada/assinada, ação da IA, invoice |
+| Serviços | as tarefas do Asana do cliente (o nome abre o card do serviço): **Renomear** (operador+), **Mover** (gerente+) |
+| Waivers | os envelopes do DocuSign e as assinadas no sistema, com o PDF assinado; no topo, o switch **Waiver: fluxo deste card** (DocuSign ou nativa, abaixo) e o **Convite da waiver por e-mail** (abaixo). A assinada no sistema tem **Anular** (gerente+, abaixo) |
+| E-mails | os e-mails ligados ao card |
 | Mensalidade e contrato | plano mensal e contrato da Academy (valor: gerente+). #314: também o **valor** e o **item do QuickBooks** da sessão extra (acima do pacote do mês); vazio, vale o do plano ou o mensal ÷ sessões. #340: **"O que o cliente vê"** — o contador do mês (usadas de Y, livres, zera no dia 1), a mensalidade do mês pelo QuickBooks (paga, aberta, sem invoice), as extras do mês e o **em aberto** (sessões já feitas sem invoice paga, com quais sessões e quais invoices). O cliente vê o mesmo contador no Dashboard e em Book sessions. **Piloto pro sem mensalidade** (★ Pro e Mensalidade vazia): aviso no topo do card e em Precisa de atenção — preencha sessões por mês, valor mensal e o Plano mensal (o kart); até lá ele não vai para o carrinho e nenhuma invoice sai pelo preço da tabela. #355: o aluno do plano (e o pro em montagem) marca **"Training Day X/Y"** (a próxima sessão do pacote no mês: "Training Day 2/4"; acima do pacote, "Training Day · extra $X"; sem Mensalidade, só "Training Day") em vez da lista do Arrive and Drive, e o agendamento fica com esse nome em Agendamentos, Asana e e-mails. Detalhes no [playbook de vendas](playbook-vendas.md), "Piloto pro" |
 | ★ Equipamento e ★ Corridas | só para Pro Racing Driver |
 | Peças | o QR que o mecânico lê no balcão e as peças do cliente |
 | Conta no site | a conta da área do cliente ligada ao card |
-| Serviços | as tarefas do Asana do cliente: **Renomear** (operador+), **Mover** (gerente+) |
-| Waivers | os envelopes do DocuSign e as assinadas no sistema, com o PDF assinado; no topo, o switch **Waiver: fluxo deste card** (DocuSign ou nativa, abaixo) e o **Convite da waiver por e-mail** (abaixo). A assinada no sistema tem **Anular** (gerente+, abaixo) |
-| E-mails | os e-mails ligados ao card |
 | Invoices | só gerente e administrador (para os outros, aparece 🔒) |
 | IA | o que a IA propôs para este cliente |
+
+### O card do serviço (#460)
+
+`/ops/servicos/<n>` é a tarefa do Asana dentro do Command Center, igual ao Asana (o espelho do #455): descrição,
+subtarefas, comentários e anexos, e ao lado o **cliente** (idade, classe, waiver e tamanhos), as **peças do balcão do
+dia** (valor só para gerente+), o **checklist do box** e os campos do Asana. Abre pela linha do tempo do card do
+cliente, pela aba Serviços e pelo **Abrir o card do serviço** da tarefa na tela Asana (operador+).
+- **Anotar** grava um comentário na tarefa do Asana, com o seu nome na frente ("Nome (Command Center): …"), e o
+  card relê na hora.
+- **Concluir** numa subtarefa aberta conclui no Asana. Não existe desconcluir por aqui.
+- Tarefa do ADM URACE ou de "Matt tasks" é recusada (a regra do Asana continua valendo).
+- **↻ Atualizar do Asana** relê a tarefa na hora; **Asana ↗** abre a tarefa lá.
 
 O box vê o card **sem valores**: não aparecem mensalidade, corridas, conta no site, e-mails,
 invoices nem IA.

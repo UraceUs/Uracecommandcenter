@@ -93,8 +93,16 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
         return f"{d[8:10]}/{d[5:7]}/{d[:4]}" if d and len(d) >= 10 else (d or "")
     tl = []
     for t in tarefas:
+        # #460: a visita mostra o último comentário do espelho do Asana, quantos há e o checklist do box
+        ult = um(con, """SELECT author, text, created_at, (SELECT COUNT(*) FROM task_comments x WHERE x.task_id=c.task_id AND x.gone_at IS NULL) AS n
+                         FROM task_comments c WHERE task_id=? AND gone_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1""", (t["id"],))
+        ck = um(con, """SELECT COUNT(*) AS n, SUM(CASE WHEN r.status='completo' THEN 1 ELSE 0 END) AS feitos FROM checklist_runs r
+                        WHERE r.task_id=?""", (t["id"],))
         tl.append({"at": t["due_on"], "kind": "SERVICE", "title": t["title"], "status": "deleted" if t["deleted_at"] else t["status"], "entity": {"type": "task", "id": t["id"]},
-                   "detail": f"{t['section'] or ''}" + (f" · subtarefas {t['subtasks_done'] or 0}/{t['subtasks_total']}" if t.get("subtasks_total") else ""), "links": t["links"]})
+                   "detail": f"{t['section'] or ''}" + (f" · subtarefas {t['subtasks_done'] or 0}/{t['subtasks_total']}" if t.get("subtasks_total") else ""), "links": t["links"],
+                   "servico": {"subtarefas": [t["subtasks_done"] or 0, t["subtasks_total"] or 0], "comentarios": ult["n"] if ult else 0,
+                               "ultimo_comentario": {"quem": ult["author"], "texto": (ult["text"] or "")[:280], "quando": ult["created_at"]} if ult else None,
+                               "checklists": [ck["feitos"] or 0, ck["n"]] if ck and ck["n"] else None}})
     for w in waivers:
         tl.append({"at": (w["sent_at"] or "")[:10], "kind": "WAIVER_SENT", "title": f"Waiver {w['template']} → {w['signer_name']}", "status": w["status"], "entity": {"type": "waiver", "id": w["id"]},
                    "detail": w.get("signer_email"), "links": w["links"]})
@@ -121,7 +129,15 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
                    "links": [{"system": "site", "external_id": str(ev["order_id"]), "deep_link": ev["link"]}] if ev["link"] else []})
     tl.sort(key=lambda x: x["at"] or "", reverse=True)
     ultimo = next((t for t in tarefas if t["status"] == "completed" and t["due_on"]), None)
-    return {"client": c, "irmaos": identidade.irmaos(con, cid), "links": _links(con, "client", cid), "tasks": tarefas, "waivers": waivers,
+    # #460: as peças do balcão de cada dia, para a visita (o valor só para quem vê o financeiro)
+    pecas = {}
+    for pi in todos(con, "SELECT id, service_date, status, doc_number, total FROM parts_invoices WHERE client_id=? AND status!='anulada'", (cid,)):
+        itens = todos(con, """SELECT COALESCE(i.name, 'peça') AS nome, SUM(sc.qty) AS qtd FROM stock_charges sc LEFT JOIN stock_items i ON i.id=sc.item_id
+                              WHERE sc.parts_invoice_id=? GROUP BY nome ORDER BY nome""", (pi["id"],))
+        pecas.setdefault(pi["service_date"], []).append({"id": pi["id"], "status": pi["status"], "doc": pi["doc_number"],
+                                                         "total": pi["total"] if fin else None, "itens": itens})
+    c = dict(c, dados=dados_do_cliente(con, c))
+    return {"client": c, "pecas_por_dia": pecas, "irmaos": identidade.irmaos(con, cid), "links": _links(con, "client", cid), "tasks": tarefas, "waivers": waivers,
             "emails": emails, "invoices": invoices, "ai_actions": acoes, "timeline": tl, "last_service": ultimo,
             "open_balance": (sum((i["balance"] or 0) for i in invoices) if invoices else None),
             "stages": todos(con, "SELECT code, label FROM client_stages ORDER BY ord")}
@@ -143,9 +159,58 @@ class ClienteIn(BaseModel):
     email_alt: str | None = None
     phone: str | None = None
     company: str | None = None
+    # #460: "Dados do cliente" — parentesco, classe e as medidas conferidas pela equipe. "" apaga.
+    relationship: str | None = None
+    racing_class: str | None = None
+    measures: dict | None = None
 
 
 CONTATO = ("name", "pilot_name", "pilot_dob", "email", "email_alt", "phone", "company")
+CLASSES = ("Mini", "Micro", "Cadet", "Junior", "Senior", "Shifter", "Masters")
+
+
+def _dados_limpos(campos, u):
+    """#460: parentesco (texto curto), classe (da lista) e medidas (as mesmas chaves e faixas da área do cliente)."""
+    if "relationship" in campos:
+        campos["relationship"] = " ".join(campos["relationship"].split())[:40] or None
+    if "racing_class" in campos:
+        cl = campos["racing_class"].strip()
+        if cl and cl not in CLASSES:
+            raise HTTPException(400, f"Classe inválida: use {', '.join(CLASSES)}.")
+        campos["racing_class"] = cl or None
+    if "measures" in campos:
+        from command_center.providers import portal
+        try:
+            m = portal.medidas(campos["measures"])
+        except portal.ErroPortal as e:
+            raise HTTPException(400, str(e))
+        campos.update(measures=json.dumps(m) if m else None, measures_at=agora(), measures_by=u["id"])
+
+
+def dados_do_cliente(con, c):
+    """#460: o "Dados do cliente" do card. Medidas: as da área do cliente, com o que a equipe conferiu por cima;
+    parentesco: o do card, senão o da última waiver assinada pela área do cliente; classe: a do card, senão a do chassi."""
+    site = um(con, """SELECT measures, measures_updated_at FROM portal_pilots WHERE client_id=? AND measures IS NOT NULL
+                      ORDER BY measures_updated_at DESC LIMIT 1""", (c["id"],))
+    medidas = dict(json.loads(site["measures"]) if site and site["measures"] else {})
+    equipe = json.loads(c["measures"]) if c.get("measures") else {}
+    medidas.update(equipe)
+    fonte = []
+    if site and site["measures"]:
+        fonte.append({"de": "site", "em": site["measures_updated_at"]})
+    if equipe:
+        fonte.append({"de": "equipe", "em": c.get("measures_at")})
+    parentesco, de = c.get("relationship"), "card"
+    if not parentesco:
+        w = um(con, """SELECT signer_relationship FROM waiver_reviews WHERE client_id=? AND signer_relationship IS NOT NULL
+                       AND used_at IS NOT NULL ORDER BY used_at DESC LIMIT 1""", (c["id"],))
+        parentesco, de = (w["signer_relationship"], "waiver") if w else (None, None)
+    classe, classe_de = c.get("racing_class"), "card"
+    if not classe and c.get("chassis_id"):
+        ch = um(con, "SELECT size FROM catalog_chassis WHERE id=?", (c["chassis_id"],))
+        classe, classe_de = (ch["size"], "chassi") if ch and ch["size"] else (None, None)
+    return {"medidas": medidas, "medidas_fonte": fonte, "parentesco": parentesco, "parentesco_de": de if parentesco else None,
+            "classe": classe, "classe_de": classe_de if classe else None, "classes": list(CLASSES)}
 
 
 def _contato_limpo(con, cid, campos, antes):
@@ -201,6 +266,7 @@ def client_patch(cid: int, dados: ClienteIn, request: Request, u=Depends(auth.ex
     campos = {k: v for k, v in dados.model_dump().items() if v is not None}
     antes = um(con, f"SELECT {', '.join(CONTATO)} FROM clients WHERE id=?", (cid,))
     _contato_limpo(con, cid, campos, antes)
+    _dados_limpos(campos, u)
     if "vip" in campos:
         if not auth.pode(u["role"], "MANAGER"):
             raise HTTPException(403, "Only managers can change VIP.")

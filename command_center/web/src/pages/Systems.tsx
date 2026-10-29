@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet } from '../api/hooks'
-import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, Waiver } from '../api/types'
+import type { Client, Email, GmailLabel, GmailMessage, Integration, Invoice, QboSummary, Task, TaskDetail, Waiver } from '../api/types'
 import { useAuth } from '../auth/useAuth'
 import { Banner, Chip, Dots, Empty, ErrorState, Loading, PageHeader, Progress, Scrim, Section, Spinner, Status, SysLink } from '../components/ui'
 import { WAIVER_LABEL } from '../components/uiConst'
@@ -107,15 +107,6 @@ function Quadro({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void })
     </div> })}</div></div>)}</div>
 }
 
-interface TaskDetail {
-  connected: boolean; reason?: string; gid?: string
-  task?: { notas?: string | null; link?: string | null; campos?: Record<string, string> | null; responsavel?: string | null; secao?: string | null
-    criada_em?: string; modificada_em?: string; subtarefas_lista?: { gid: string; nome: string; concluida: boolean; vence_em: string | null }[] }
-  comments?: { quando: string; quem: string | null; texto: string | null }[]
-  attachments?: { gid: string; nome: string | null; origem: string | null; quando: string | null; download: string | null }[]
-  /** #455: o detalhe vem do espelho do Asana; `aviso` quando o Asana não respondeu a "Atualizar do Asana" */
-  espelho?: { em: string | null; erro?: string | null; aviso?: string | null }
-}
 function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
   const nav = useNavigate()
   const { can } = useAuth()
@@ -159,7 +150,7 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
       <Section title={tr("Comentários")} count={det.data.comments?.length} tight>{!det.data.comments?.length ? <Empty>{tr("Nenhum comentário.")}</Empty> : <div>{det.data.comments.map((c, i) => <div key={i} className="att"><div className="lv LOW" /><div className="grow"><div className="small muted"><b>{c.quem || '?'}</b> · {fmtDateTime(c.quando)}</div><div style={{ whiteSpace: 'pre-wrap' }}>{c.texto}</div></div></div>)}</div>}</Section>
     </>}
     {can('OPERATOR') && <InstruirTarefa t={t} onClose={onClose} />}
-    <div className="row"><TaskLink t={t} /></div>
+    <div className="row"><TaskLink t={t} />{can('OPERATOR') && <button className="btn sm" onClick={() => { onClose(); nav(`/servicos/${t.id}`) }}>{tr("Abrir o card do serviço")}</button>}</div>
   </div></Scrim>
 }
 
