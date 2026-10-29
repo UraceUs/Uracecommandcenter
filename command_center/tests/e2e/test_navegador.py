@@ -2735,6 +2735,13 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     foto.scroll_into_view_if_needed()
     pg.wait_for_function("() => { const i = document.querySelector('.suit-tempo img.suit-img'); return i && i.complete && i.naturalWidth > 0 }")
     pg.locator(".suit-etapas li.atual", has_text="Awaiting Measurements").wait_for()
+    # #447 (dono, 29/10): "anexar qualquer tipo de arquivo" — o PDF vai para os arquivos do pedido, com o link na nota
+    pdf = tmp_path / f"ficha-{largura}.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n% ficha ficticia\n")
+    pg.get_by_label("Anexar arquivo").set_input_files(str(pdf))
+    pg.get_by_text(f"ficha-{largura}.pdf", exact=True).wait_for()
+    pg.get_by_role("button", name="Salvar nota").click()
+    pg.get_by_role("link", name=f"ficha-{largura}.pdf").first.wait_for()
     pg.get_by_role("button", name="Preencher").click()
     pg.get_by_label("1 – Head circumference").fill("59")
     pg.get_by_role("button", name="Salvar medidas").click()

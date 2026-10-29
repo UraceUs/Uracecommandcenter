@@ -671,15 +671,15 @@ def detalhe(con, pid):
                         "ultimo_erro": p.pop("bridge_last_error", None), "ultimo_erro_em": p.pop("bridge_last_error_at", None),
                         "modo": p.pop("bridge_last_mode", None)}
     p["notas"] = [dict(n) for n in todos(con, """SELECT n.id, n.status, n.kind, n.text, n.image_path IS NOT NULL AS tem_imagem,
-                                                        n.command_id, n.created_at, u.name AS autor
+                                                        n.file_name AS arquivo, n.command_id, n.created_at, u.name AS autor
                                                  FROM suit_notes n LEFT JOIN users u ON u.id=n.user_id
                                                  WHERE n.order_id=? ORDER BY n.id""", (pid,))]
     return p
 
 
-def anotar(con, pid, texto=None, kind="nota", status=None, imagem=None, user_id=None, command_id=None):
+def anotar(con, pid, texto=None, kind="nota", status=None, imagem=None, user_id=None, command_id=None, arquivo=None):
     return inserir(con, "suit_notes", order_id=pid, status=status, kind=kind, text=(texto or None) and texto[:4000],
-                   image_path=imagem, user_id=user_id, command_id=command_id)
+                   image_path=imagem, user_id=user_id, command_id=command_id, file_name=arquivo)
 
 
 def mudar_etapa(con, pid, nova, user_id=None, motivo=None, por_ia=False):
