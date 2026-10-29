@@ -490,8 +490,8 @@ PRIVACY = {
         ("Cookies and similar technologies", (
             "Essential: cookies that keep you signed in and protect your forms (session and security cookies), remember "
             "your language and keep your cart and campaign source in your browser. The site does not work without them.",
-            "Measurement and advertising: Google Tag Manager / Google Analytics and the Meta Pixel load only after you "
-            "choose Accept in the cookie banner. Decline keeps them off. You can change your choice at any time with "
+            "Measurement and advertising: Google Tag Manager / Google Analytics, the Meta Pixel and the OpenAI (ChatGPT) "
+            "ads pixel load only after you choose Accept in the cookie banner. Decline keeps them off. You can change your choice at any time with "
             "\u201cCookie settings\u201d at the bottom of every page.",
             "Chat: the chat window is provided by Kommo, our customer messaging system, and may set its own cookies when "
             "it loads.",
@@ -506,7 +506,7 @@ PRIVACY = {
         ("Who we share it with", (
             "Only with the service providers that run these tasks for us: Stripe (payments), Intuit QuickBooks "
             "(invoices and receipts), Google (email delivery and, with your consent, analytics), Meta (advertising "
-            "measurement, with your consent), Kommo (chat and customer messages) and Asana (scheduling our team). They "
+            "measurement, with your consent), OpenAI (ChatGPT advertising measurement, with your consent), Kommo (chat and customer messages) and Asana (scheduling our team). They "
             "process the information to provide their service to us. We may also disclose information when required by "
             "law.",
         )),
