@@ -39,7 +39,7 @@ As três listas usam o cartão do painel inteiro (o "padrão D", playbook geral,
   teste), **IA desligada** e quantas **notas** ele tem. Toque em qualquer lugar do cartão para abrir o pedido.
 - **Leads:** a situação (*aberto*, *virou pedido*, *perdido*), o nome, o e-mail e o telefone, a nota; embaixo,
   **Virar pedido** (azul), **Perdido**, **Card do cliente** e **Ver pedido**.
-- **Contatos** (#490): os **fornecedores** e os **designers**, cada um com o e-mail fixo e o **Contexto para a IA** (o que
+- **Contatos** (#495): os **fornecedores** e os **designers**, cada um com o e-mail fixo e o **Contexto para a IA** (o que
   ele faz, como falar com ele), que vai junto para a IA em cada pedido. O endereço antigo `/suits/fornecedores` leva para cá.
   Nos fornecedores: *atual* em verde em cima, se tem FIA, **quantos pedidos** no bloco grande, os dados (contato,
   valor, frete, prazo…) na lista e **Editar** (gerente).

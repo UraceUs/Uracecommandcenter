@@ -137,7 +137,7 @@ def fornecedor_do_pedido(con, pedido):
 
 
 def _contexto_dos_contatos(con, pedido, dp):
-    """#490 (dono, 29/10: "já com os contextos"): quem são o designer e o fornecedor deste pedido, com o contexto que a
+    """#495 (dono, 29/10: "já com os contextos"): quem são o designer e o fornecedor deste pedido, com o contexto que a
     equipe escreveu no cadastro — a IA sabe com quem fala sem precisar perguntar."""
     linhas = []
     if dp.get("nome") or dp.get("email"):

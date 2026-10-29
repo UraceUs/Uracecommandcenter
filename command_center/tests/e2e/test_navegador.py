@@ -3011,7 +3011,7 @@ def test_suits_ponte_comeca_em_simulacao_e_guarda_o_designer(servidor, navegador
     pg = entrar(navegador, servidor, largura=390, altura=900)
     abrir(pg, servidor, "/suits/ponte")
     pg.get_by_text("Em simulação:").wait_for()
-    # #490 (dono, 29/10: "cria uma aba com contatos dentro da Alpha Line onde tenha os fornecedores e designer"): a Ponte
+    # #495 (dono, 29/10: "cria uma aba com contatos dentro da Alpha Line onde tenha os fornecedores e designer"): a Ponte
     # leva à aba Contatos, com os designers e os fornecedores (e-mail fixo e contexto para a IA)
     assert pg.get_by_label("E-mail do designer").count() == 0          # o campo de um designer só saiu da Ponte
     pg.get_by_role("link", name="Contatos", exact=True).last.click()

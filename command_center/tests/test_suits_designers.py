@@ -153,7 +153,7 @@ def test_puxar_com_gmail_fora_vira_aviso_e_nao_erro(cli, monkeypatch):
 
 
 def test_a_ia_recebe_o_designer_e_o_fornecedor_do_pedido_com_o_contexto(con):
-    """#490 (dono, 29/10: "já com os contextos"): o prompt da ponte diz quem são o designer e o fornecedor deste pedido."""
+    """#495 (dono, 29/10: "já com os contextos"): o prompt da ponte diz quem são o designer e o fornecedor deste pedido."""
     _, d2 = _designers(con)
     con.execute("UPDATE suit_designers SET notes='entrega a arte em 48 h' WHERE id=?", (d2,))
     f = inserir(con, "suit_suppliers", name="Ateliê Fictício", contact="Ana Ateliê", email="atelie@example.com",

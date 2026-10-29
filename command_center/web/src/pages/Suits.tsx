@@ -935,7 +935,7 @@ function Fornecedores() {
   </Section>
 }
 
-/** #490 (dono, 29/10: "cria uma aba com contatos dentro da Alpha Line onde tenha os fornecedores e designer"): os dois
+/** #495 (dono, 29/10: "cria uma aba com contatos dentro da Alpha Line onde tenha os fornecedores e designer"): os dois
  *  cadastros que a Ponte de e-mail do pedido usa, com o e-mail fixo e o contexto para a IA. */
 function Contatos() {
   return <><Fornecedores /><Designers /></>
