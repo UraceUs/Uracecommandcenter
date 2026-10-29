@@ -96,7 +96,8 @@ def conta_do_cookie(request, con):
 
 def csrf_ok(request):
     c, h = request.cookies.get(COOKIE_CSRF, ""), request.headers.get("x-csrf", "")
-    return bool(c) and hmac.compare_digest(c, h)
+    # em bytes: `compare_digest` com texto só aceita ASCII, e um cabeçalho com acento dava erro 500 em vez de 403
+    return bool(c) and hmac.compare_digest(c.encode("utf-8", "replace"), h.encode("utf-8", "replace"))
 
 
 def cliente_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):

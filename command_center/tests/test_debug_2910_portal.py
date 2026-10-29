@@ -68,3 +68,7 @@ def test_conta_de_outro_pais_que_e_o_proprio_piloto_nasce_inteira(tmp_path, monk
         eu = r.json()
         assert [d["is_self"] for d in eu["drivers"]] == [True] and eu["drivers"][0]["phone"] == eu["phone"]
 
+
+def test_csrf_com_acento_e_recusado_com_403_e_nao_com_erro_500(cli):
+    r = cli.patch(f"{P}/me", headers={"X-CSRF": "é".encode("utf-8")}, json={"city": "Orlando"})
+    assert r.status_code == 403
