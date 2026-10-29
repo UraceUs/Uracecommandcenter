@@ -44,7 +44,7 @@ METODOS = ("GET", "POST", "PATCH", "PUT", "DELETE")
 PEDE_CONFIRMACAO = re.compile(
     r"invoice|waiver|docusign|qbo|quickbooks|gmail|email|enviar|send|lembrete|reminder|kommo|/crm/|whatsapp|"
     r"recorrencia|mensal|fechar|close|step/|cobr|deposit|pagamento|payment|asana|tasks|agendamentos/|"
-    r"aprovar-admin|"              # #448: liberar o Suits sem a aprovação escrita é clique do administrador, nunca da IA sozinha
+    r"aprovar-admin|etapa-admin|"  # #448, #482: liberar o Suits sem a aprovação escrita é clique do administrador, nunca da IA sozinha
     # debug 29/10: também saem para fora, e o nome da rota não dizia: a ligação do Dialpad para o cliente e o que
     # vai aos grupos do WhatsApp do ateliê (escrever, o endereço ao fornecedor, aprovar o rascunho)
     r"dialpad/call$|atelie/pedidos/[^/]+/(escrever|endereco)$|atelie/saidas/[^/]+/aprovar$", re.I)

@@ -485,16 +485,18 @@ def checar_transicao(atual, nova):
 
 def checar_etapa(con, pid, nova, por_ia=False, liberado_pelo_admin=False):
     """O que impede ir para `nova` (Invalido com o motivo): a tabela de transições e as travas do #382.
-    #448: `liberado_pelo_admin` solta só a trava da aprovação escrita, e só para Approved — vem da rota de ADMIN
-    (`liberar_aprovado`), nunca da IA; o envio ao fornecedor continua pedindo a aprovação registrada."""
+    #482 (dono, 29/10: "libera essas travas. Quando acontecer algo que não for pelo Command Center ... eu tenho que
+    conseguir colocar na etapa de produção"): `liberado_pelo_admin` solta a ordem das etapas e as travas — vem só da
+    rota de ADMIN (`mover_pelo_admin`), com o motivo, nunca da IA."""
+    if liberado_pelo_admin and not por_ia:
+        return
     p = um(con, "SELECT * FROM suit_orders WHERE id=?", (int(pid),)) or {}
     if p:
         checar_transicao(p["status"], nova)
     if nova in SO_DA_EQUIPE and por_ia:
         raise Invalido("fotos recebidas, conferido e endereço enviado são da equipe (as fotos chegam pelo WhatsApp): "
                        "a IA não muda para essas etapas")
-    solto = liberado_pelo_admin and nova == "approved" and not por_ia
-    if nova in PRECISAM_DE_APROVACAO and not solto and not aprovacao_valida(con, pid):
+    if nova in PRECISAM_DE_APROVACAO and not aprovacao_valida(con, pid):
         e = estado_aprovacao(con, pid)
         raise Invalido("Sem a aprovação final escrita do cliente, válida para a arte e as medidas de agora, o pedido não vai "
                        f"para {dict((x[0], x[1]) for x in ETAPAS)[nova]}"
@@ -710,22 +712,33 @@ def mudar_etapa(con, pid, nova, user_id=None, motivo=None, por_ia=False, liberad
     return True
 
 
-def liberar_aprovado(con, pid, user_id, motivo):
-    """#448 (dono, 29/10): "mover para aprovado com o nível de admin pra cima". O administrador leva o pedido a
-    Approved sem a aprovação final escrita registrada, com o motivo na linha do tempo. A transição continua valendo."""
+def mover_pelo_admin(con, pid, nova, user_id, motivo):
+    """#482 (dono, 29/10): o que aconteceu fora do Command Center (aprovou mostrando, já foi para a produção) entra à
+    mão: o administrador leva o pedido a qualquer etapa, sem a ordem das etapas e sem as travas, com o motivo na linha
+    do tempo. As datas da etapa (enviado, conferido, endereço) são gravadas como no caminho normal. Devolve a etapa
+    de antes."""
+    etapa_valida(nova)
     motivo = re.sub(r"\s+", " ", motivo or "").strip()
     if len(motivo) < 5:
-        raise Invalido("Escreva o motivo de liberar sem a aprovação escrita do cliente (ex.: aprovou por WhatsApp).")
+        raise Invalido("Escreva o motivo de mover à mão (ex.: aprovou pessoalmente; já foi para a produção pelo WhatsApp).")
     p = um(con, "SELECT status, discarded_at FROM suit_orders WHERE id=?", (int(pid),))
     if not p:
         raise LookupError("Pedido não encontrado.")
     if p["discarded_at"]:
         raise Invalido("pedido descartado: não é pedido de macacão")
-    if p["status"] == "approved":
-        raise Invalido("O pedido já está em Approved.")
+    if p["status"] == nova:
+        raise Invalido(f"O pedido já está em {dict((x[0], x[1]) for x in ETAPAS)[nova]}.")
+    sem = nova in PRECISAM_DE_APROVACAO and not aprovacao_valida(con, pid)
+    texto = ("liberado pelo administrador sem a aprovação final escrita registrada: " if sem
+             else "movido à mão pelo administrador: ") + motivo[:500]
+    mudar_etapa(con, int(pid), nova, user_id, texto, liberado_pelo_admin=True)
+    return p["status"]
+
+
+def liberar_aprovado(con, pid, user_id, motivo):
+    """#448 (dono, 29/10): "mover para aprovado com o nível de admin pra cima". Hoje é um caso do `mover_pelo_admin`."""
     sem = not aprovacao_valida(con, pid)
-    texto = ("liberado pelo administrador sem a aprovação final escrita registrada: " if sem else "pelo administrador: ") + motivo[:500]
-    mudar_etapa(con, int(pid), "approved", user_id, texto, liberado_pelo_admin=True)
+    mover_pelo_admin(con, pid, "approved", user_id, motivo)
     return sem
 
 
