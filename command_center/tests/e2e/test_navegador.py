@@ -1544,6 +1544,42 @@ def test_balcao_no_celular_cliente_guardar_digitar_peca_nova_e_confirmar(servido
     pg.close()
 
 
+def test_rascunho_do_balcao_nao_volta_para_tras_com_a_resposta_atrasada(servidor, navegador):
+    """Debug 29/10 (o mesmo padrão do #453): com o rascunho aberto, cada peça lida relê o rascunho. Duas leituras
+    seguidas com sinal fraco: a releitura da primeira chegava depois da segunda e a tela voltava para trás (1 peça
+    em vez de 2). O mecânico lia de novo e o cliente pagava 3."""
+    pg = entrar(navegador, servidor, largura=390, altura=900)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    cid = pg.request.post(servidor + "/api/clients", headers=csrf,
+                          data={"name": "Rita Rascunho Ficticia", "email": "rita.rascunho@example.com"}).json()["id"]
+    r = pg.request.post(servidor + f"/api/balcao/cliente/{cid}/rascunho/linhas", headers=csrf,
+                        data={"origem": "livre", "nome": "Solda e2e", "qty": 1, "preco": 10})
+    assert r.ok, r.text()
+    abrir(pg, servidor, f"/balcao/{cid}")
+    pg.get_by_text("Modo COBRAR com rascunho aberto: cada peça lida entra no rascunho de invoice.").wait_for()
+    # a próxima releitura do rascunho volta 2,5 s depois; as outras, na hora
+    pg.evaluate(f"""() => {{ window.__lenta = 1; window.__pend = 0; const orig = window.fetch; window.fetch = async (u, o) => {{
+        const lenta = (!o || o.method === 'GET') && String(u).endsWith('/balcao/cliente/{cid}/rascunho') && window.__lenta-- > 0
+        if (lenta) window.__pend++
+        const r = await orig(u, o)
+        if (lenta) {{ await new Promise(ok => setTimeout(ok, 2500)); window.__pend-- }}
+        return r }} }}""")
+    campo = pg.get_by_label("Peça: digite o nome ou o código")
+    campo.fill("7890000000017"); campo.press("Enter")
+    pg.get_by_text("Front bumper (e2e): no rascunho.").first.wait_for()
+    campo.fill("7890000000017"); campo.press("Enter")
+    pg.wait_for_function("() => document.querySelectorAll('.toast').length >= 2 || window.__pend === 0")
+    pg.wait_for_function("() => window.__pend === 0", timeout=15000)
+    pg.wait_for_timeout(500)                                   # a releitura atrasada já foi aplicada (ou ignorada)
+    servidor_diz = [li["qty"] for li in pg.request.get(servidor + f"/api/balcao/cliente/{cid}/rascunho").json()["rascunho"]["linhas"]
+                    if li["nome"] == "Front bumper (e2e)"]
+    assert servidor_diz == [2], servidor_diz
+    assert pg.get_by_label("Quantidade de Front bumper (e2e)").input_value() == "2", "a tela voltou para a leitura velha"
+    pg.request.post(servidor + f"/api/balcao/cliente/{cid}/rascunho/descartar", headers=csrf)
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 # ------------------------------------------------------------------ biblioteca (#88)
 @pytest.mark.parametrize("largura", [360, 1280])
 def test_biblioteca_do_gerente_com_os_historicos(servidor, navegador, largura):
