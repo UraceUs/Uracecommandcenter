@@ -13,7 +13,7 @@ Dono, 08/10: *"Stripe Checkout"* para a loja própria; 09/10: *"tbm tenho a cont
 | Volta para o obrigado, que também confere a sessão no Stripe (se o webhook atrasar, nada se perde) e mostra a página do pedido (#245) | `/store/thanks/?session_id=…` (noindex, fora do sitemap) |
 | O link pessoal do pedido (#245): um estado para cada evento do Stripe, e-mail com o link no confirmado depois, no não passou e no expirado; "Try again"/"Restore cart" recalculam preço e vaga | `/order/<id>-<selo HMAC>/` (chave em `~/.urace/pedidos.key`, criada na primeira vez; noindex, `no-store`) |
 | Desistiu: nada cobrado, botão de volta ao produto e "Ask a question" | `/store/cancelled/?p=<slug>` |
-| O Stripe avisa, com assinatura conferida; cada evento entra uma vez só | `POST /ops/api/stripe/webhook` |
+| O Stripe avisa, com assinatura conferida; cada evento entra uma vez só. #483: só vende se a sessão for a do pedido (ou trouxer `metadata.pedido` igual) e o valor cobrado, em USD, for o do pedido; senão o pedido não muda e a auditoria registra `store.payment.mismatch` | `POST /ops/api/stripe/webhook` |
 
 Pago → **oportunidade em Vendas** (origem Site) com produto, valor pago, entrega e endereço:
 - **GANHO** e ligada ao card quando o e-mail **e** o nome do pagamento batem com um card;
