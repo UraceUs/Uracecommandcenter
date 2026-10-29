@@ -63,6 +63,12 @@ def _aplicando(fn, *a, **kw):
         ctx.aplicar = None
 
 
+def _segredo_igual(esperado, enviado):
+    """Compara em tempo constante, em bytes: `compare_digest` com texto só aceita ASCII, e uma chave com acento
+    na URL derrubava o hook em 500 em vez de recusar com 403."""
+    return hmac.compare_digest(esperado.encode("utf-8"), (enviado or "").encode("utf-8", "surrogateescape"))
+
+
 def _erro(e):
     if isinstance(e, NaoConectado):
         return HTTPException(503, f"Kommo não conectado: {e}")
@@ -778,7 +784,7 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
     Autenticação: ?key= igual a KOMMO_HOOK_KEY (o widget não manda header). Se
     KOMMO_BOT_SECRET existir, o JWT descartável do bot também é conferido."""
     chave = _chave_hook()
-    if not chave or not hmac.compare_digest(chave, key or ""):
+    if not chave or not _segredo_igual(chave, key):
         auditar(con, "crm.hook.recusado", "kommo", detail={"motivo": "sem chave configurada" if not chave else "chave não bate",
                                                          "ip": auth._ip(request)})
         con.commit()
@@ -965,7 +971,7 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
     segredo = os.environ.get("KOMMO_WEBHOOK_SECRET", "")
     chave = _chave_hook()
     enviado = request.headers.get("x-urace-secret") or request.query_params.get("secret") or request.query_params.get("key") or ""
-    ok = (segredo and hmac.compare_digest(segredo, enviado)) or (chave and hmac.compare_digest(chave, enviado))
+    ok = (segredo and _segredo_igual(segredo, enviado)) or (chave and _segredo_igual(chave, enviado))
     if not ok:
         raise HTTPException(403, "Forbidden.")
     bruto = await request.body()
