@@ -667,8 +667,7 @@ def test_nenhum_texto_que_se_escreve_fica_dentro_de_bloco_de_dado(amb):
             travas[caminho] = travas.get(caminho, set()) | set(re.findall(r'data-ed-trava="([a-z]+)"', m))
             assert not [f.texto for f in ed._analisar(s)[0] if ed.PRECO.search(f.texto)], (caminho, i)
         assert p.n > 0 and not p.ruins, (caminho, p.ruins)
-    # #507: a home por blocos — o preço do painel (`plano-preco`) e o blog; as avaliações do Google entram com a #508
-    assert {"precos", "blog"} <= travas["/"] and "pessoas" in travas["/services/birthday-party/"]
+    assert {"precos", "blog", "pessoas"} <= travas["/"]                 # #507: o preço por blocos é `plano-preco`
     assert {"reserva", "precos"} <= travas["/services/arrive-and-drive/"]
     m = ed.marcar_original('<section><form action="/x/"><p>Send it</p></form><p>Say hi</p></section>', 0)
     assert '<form data-ed-trava="formulario"' in m and "<p>Send it</p>" in m and '<p data-ed-t="p.0:' in m, m
@@ -763,14 +762,14 @@ def test_faixa_se_acha_pela_ancora_quando_o_banco_tira_uma_faixa(amb, monkeypatc
     anc = ed.ancoras(fx)
     # #507: a home por blocos — a âncora de cada faixa é o título dela (`h-b<n>`, n = o bloco)
     blocos_home = pg_home.HOME["blocos"]
-    h_blog, h_videos = (f"h-b{next(i for i, b in enumerate(blocos_home) if b['tipo'] == t)}" for t in ("posts", "videos"))
+    h_blog, h_depo = (f"h-b{next(i for i, b in enumerate(blocos_home) if b['tipo'] == t)}" for t in ("posts", "depoimentos"))
     i_blog, i_fim = anc.index(h_blog), len(fx) - 1
     assert i_fim > i_blog and [x["ancora"] for x in itens] == anc, "a página aberta guarda a âncora de cada faixa"
     k_fim = next(f.chave for f in ed._analisar(fx[i_fim])[0] if f.tag == "h2")
     k_blog = next(f.chave for f in ed._analisar(fx[i_blog])[0] if f.tag == "h2")
-    i_videos = anc.index(h_videos)                               # uma faixa de cima, que fica escondida
+    i_depo = anc.index(h_depo)
     itens = _com_textos(_com_textos(itens, i_fim, {k_fim: "Still curious? Ask us"}), i_blog, {k_blog: "Fresh from the track"})
-    itens = [{**x, "oculto": True} if x["indice"] == i_videos else x for x in itens]
+    itens = [{**x, "oculto": True} if x["indice"] == i_depo else x for x in itens]
     assert _salvar(painel, h, pid, conteudo={"itens": itens}).json()["erros"] == {}
     assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
     assert "Still curious? Ask us" in site.get("/").text and "Fresh from the track" in site.get("/").text
@@ -779,7 +778,7 @@ def test_faixa_se_acha_pela_ancora_quando_o_banco_tira_uma_faixa(amb, monkeypatc
     assert len(_faixas("/")) == len(fx) - 1
     html = site.get("/").text
     assert "Still curious? Ask us" in html and "Fresh from the track" not in html, "a troca segue a faixa dela"
-    assert f'aria-labelledby="{h_videos}"' not in html, "a faixa escondida continua escondida"
+    assert f'aria-labelledby="{h_depo}"' not in html, "a faixa escondida continua escondida"
     s = painel.get(f"/ops/api/site/editor/paginas/{pid}", headers=h).json()
     blog_item = next(x for x in s["pagina"]["draft"]["itens"] if x["ancora"] == h_blog)
     assert blog_item["indice"] == -1 and s["orfaos"] == {blog_item["id"]: [k_blog]}

@@ -4,6 +4,7 @@ import json
 import os
 import re
 from datetime import datetime, timezone
+from html import escape
 
 import pytest
 
@@ -14,7 +15,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from command_center.api import vitrine  # noqa: E402
 from command_center.api.main import app  # noqa: E402
-from command_center.vitrine import blocos, editor as ed, pg_home  # noqa: E402
+from command_center.vitrine import blocos, conteudo as C, editor as ed, pg_home  # noqa: E402
 
 SITE = "https://novo.urace.us"
 TRES = ("/", "/about/", "/services/")
@@ -55,7 +56,7 @@ def test_as_tres_paginas_sao_as_do_urace_us_de_29_10(cli):
     assert "<h1>The Champions Factory</h1>" in home.text
     assert _titulos(home.text) == ["On the top step", "Pick your line", "Where are you on track?",
                                    "Built around your level, not a template.", "Built by URACE", "Four steps. One team.",
-                                   "Onboard: watch the method", "I’ve raced. I’ve won. I know the way.",
+                                   "Straight from the paddock", "Onboard: watch the method", "I’ve raced. I’ve won. I know the way.",
                                    "Read before you race", "Group events", "Box, box. Let’s talk."]
     texto = _texto(home.text)
     # (sem nome de piloto aqui: o repositório é público; o nome publicado fica só no conteúdo do site, `vitrine/`)
@@ -104,6 +105,18 @@ def test_preco_so_do_painel_e_nenhum_escrito(cli, monkeypatch):
     assert "What it will cost" in servicos and "$1,800" in servicos and "Apply for a place" in servicos, "os cartões do painel"
 
 
+def test_avaliacoes_do_google_sao_as_da_508_sem_nota_escrita(cli):
+    """As avaliações do Google vêm de `conteudo.AVALIACOES` (#508: uma fonte só, o texto e o nome como estão lá); na home
+    vai também o quarto depoimento de lá. A nota e o número de avaliações não se escrevem (ficam velhos)."""
+    for c, n in (("/", len(C.AVALIACOES) + 1), ("/about/", len(C.AVALIACOES))):
+        main = _main(cli.get(c).text)
+        assert main.count("<blockquote>") == n, c
+        for nome, quem, texto in C.AVALIACOES:
+            assert f"<footer>{escape(nome)} · {escape(quem)}</footer>" in main, (c, nome)
+            assert texto in _texto(cli.get(c).text), (c, nome)
+    assert pg_home.AARON[2] in _texto(cli.get("/").text) and pg_home.AARON[2] not in _texto(cli.get("/about/").text)
+
+
 def test_programs_nao_traz_de_volta_o_que_o_dono_ja_mudou(cli):
     """Remarcação com 24 h, idades dos karts de 08/10, a reserva do site (não o carrinho do WooCommerce), Kart School e
     Professional Coaching (#254) e o "Until then you cannot book" do Sim2Grid (#392)."""
@@ -127,8 +140,9 @@ def test_links_sao_os_do_site_novo_e_todos_abrem(cli):
                  "/services/group-events/", "/sim2grid-racing-simulator/", "/professional-kart-team-racing-team/",
                  "/kart-training-packages/", pg_home.AD_RESERVA, "/about/", "/services/", "/contact/", "/blog/"):
         assert novo in todos, novo
-    assert {"/kart-lessons-for-beginners/", pg_home.CONVERSA} <= set(hrefs["/services/"])
-    assert pg_home.CONVERSA_HOME in hrefs["/"] and pg_home.CONVERSA in hrefs["/about/"]
+    assert {"/kart-lessons-for-beginners/", C.LIGACAO} <= set(hrefs["/services/"])
+    assert pg_home.CONVERSA_HOME in hrefs["/"] and C.LIGACAO in hrefs["/about/"]
+    assert C.GOOGLE in hrefs["/"] and C.GOOGLE in hrefs["/about/"], "Read them all on Google"
     assert "https://www.youtube.com/watch?v=xMwAP1xlruc" in hrefs["/"], "vídeo é link (nada de player de fora)"
     for h in sorted(x.split("#")[0] for x in todos if x.startswith("/")):
         r = cli.get(h, follow_redirects=False)

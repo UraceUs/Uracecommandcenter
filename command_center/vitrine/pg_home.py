@@ -8,7 +8,9 @@ O que fica diferente, de propósito:
   "$2,756.90 / month" da Academy (home e About) não batem com a Rate Card nem com o painel: saem sem número. Na Programs,
   o "What it will cost" do Sim2Grid são os programas do painel (Site › Cartões das páginas, `sim2grid`); os outros
   valores de lá (taxas, depósito, passes da pista) não têm fonte no painel e ficam de fora;
-- a nota e o número de avaliações do Google ("4.9", "38 reviews") não se escrevem à mão: ficam velhos;
+- as avaliações do Google são as de `conteudo.AVALIACOES` (#508, o texto e o nome como estão lá), com o link para todas;
+  a nota e o número de avaliações ("4.9", "38 reviews") não se escrevem à mão: ficam velhos;
+- os três vídeos de "Straight from the paddock" (mp4 do WordPress) e a faixa dos parceiros ainda não têm bloco;
 - vídeo do YouTube é link (a política do site não deixa player de fora);
 - o que o texto de lá ainda diz e o dono já mudou fica de fora da Programs: remarcação com 48 h (vale 24 h, dono 08/10),
   as idades dos karts (dono, 08/10), o passo a passo do carrinho do WooCommerce (a reserva é a do site), os nomes Kart
@@ -22,12 +24,11 @@ Drive levam, até as landings entrarem, à página do Arrive and Drive (`AD_EXPE
 from datetime import datetime, timezone
 
 from command_center.vitrine import blocos
-from command_center.vitrine.conteudo import FECHO_DUVIDAS, GRUPOS, TRACK
+from command_center.vitrine.conteudo import AVALIACOES, FECHO_DUVIDAS, GOOGLE, GRUPOS, LIGACAO, TRACK
 from command_center.vitrine.paginas import _marca
 
-# o "Talk to us" da About e o "Book a 15-min call" da Programs (no urace.us, a agenda da conversa com a equipe); o "Book
-# a call" da home de lá é outra agenda
-CONVERSA = "https://calendar.app.google/KBbHhXjoRMS6sbHv8"
+# o "Talk to us" da About e o "Book a 15-min call" da Programs são a `conteudo.LIGACAO`; o "Book a call" da home de lá
+# é outra agenda
 CONVERSA_HOME = "https://calendar.app.google/whLkkpp82fUzsfvT8"
 # as landings do Arrive and Drive (#506): /arrive-and-drive-karting-experience/ e /arrive-and-drive-karting-booking/
 AD_EXPERIENCIA = "/services/arrive-and-drive/"
@@ -46,6 +47,10 @@ ITALO = "italo-da-silveira-urace-founder.webp"
 TOPO = ("P1 + P3 · Bushnell, Florida", "Frankie Iadevaia wins Saturday, podium Sunday. The whole crew on the grid.")
 JACKSONVILLE_P1 = ("P1 · FLKC Rounds 7 & 8 · Jacksonville", "Frankie Iadevaia, URACE program driver. October 2026.")
 SIM_ABRE = "Opens 1 Nov 2026"
+# o quarto depoimento da home de lá (não é do Google): o começo do depoimento do Aaron Benoit
+AARON = ("Aaron Benoit", "SKUSA X30 Senior race winner",
+         "I’ve had the pleasure of learning from Italo since I was a rookie. Through coaching, data review, and lead/follow "
+         "sessions, my on track skills have improved significantly.")
 
 
 # ------------------------------------------------------------------ "Pick your line": a Winter, quando existir
@@ -177,6 +182,9 @@ HOME = {
                         "data and video after every run, race-weekend coaching and trackside support."),
               "link": ("Talk to the team", "/professional-kart-team-racing-team/")}],
          "ctas": [("Plan your career, from here to F1, IndyCar or NASCAR", "/career/")]},
+        # lá, esta faixa tem também três vídeos (mp4 do WordPress), que a política do site não toca
+        {"tipo": "depoimentos", "titulo": "Straight from the paddock", "itens": [*AVALIACOES, AARON],
+         "link": ("Read them all on Google", GOOGLE)},
         {"tipo": "videos", "eyebrow": "URACE Shorts", "titulo": "Onboard: watch the method", "itens": [
             ("URACE Karting Team Orlando", "https://www.youtube.com/watch?v=44IvXhh2T9o"),
             ("Watch Lando’s story", "https://www.youtube.com/watch?v=piaonkkc-yQ"),
@@ -216,7 +224,7 @@ ABOUT = {
                  "principal Italo da Silveira raced karts, won Brazilian regional and national championships and went on "
                  "to a professional career in the Brazilian stock car series. In 2016 he moved to Florida and launched "
                  "URACE to pass that knowledge on to young drivers."),
-         "ctas": [("Meet the Racing Team", "/professional-kart-team-racing-team/"), ("Talk to us", CONVERSA)],
+         "ctas": [("Meet the Racing Team", "/professional-kart-team-racing-team/"), ("Talk to us", LIGACAO)],
          "foto": ITALO, "alt": "Italo da Silveira, URACE founder and team principal"},
         # a de lá tem um quarto número, "4.9 · On Google, 38 reviews": a nota não se escreve à mão
         {"tipo": "numeros", "eyebrow": "The method", "titulo": "Same standard. Different plan.",
@@ -231,6 +239,8 @@ ABOUT = {
              "titulo": TOPO[0], "legenda": TOPO[1]},
             {"foto": JACKSONVILLE, "alt": "Frankie Iadevaia in his URACE suit, Jacksonville",
              "titulo": JACKSONVILLE_P1[0], "legenda": JACKSONVILLE_P1[1]}]},
+        {"tipo": "depoimentos", "eyebrow": "Google reviews", "ancora": "reviews", "itens": list(AVALIACOES),
+         "link": ("Read them all on Google", GOOGLE)},
         {"tipo": "cartoes", "eyebrow": "Where to start", "titulo": "Find your step", "ancora": "find-your-step",
          "intro": "Four steps, one team. Your coach tells you when you are ready for the next one.",
          "itens": [
@@ -329,7 +339,7 @@ PROGRAMS = {
                         "Beyond the driving itself, every Academy driver gets a career specialist who helps plan the path "
                         "forward — from which categories and tracks make sense next, to how the Racing Team and competitive "
                         "racing fit into the picture."],
-         "ctas": [("Join URACE", "/kart-training-packages/"), ("Talk to Our Career Specialist", CONVERSA)],
+         "ctas": [("Join URACE", "/kart-training-packages/"), ("Talk to Our Career Specialist", LIGACAO)],
          "foto": "group-482139-1.webp", "alt": "URACE Academy"},
         {"tipo": "faq", "ancora": "urace-academy-details", "fundo": "escura", "itens": [
             ("Why motorsport builds champions", (
@@ -360,7 +370,7 @@ PROGRAMS = {
                 "compete under the URACE banner on the path toward the main leagues of the sport.",
                 "We're also building a racing simulator program, launching soon, to give Academy and Racing Team drivers "
                 "extra seat time between track days without the cost of extra track sessions.",
-                f"Not sure where your driver fits on that path? [Talk to Our Career Specialist]({CONVERSA}) and we'll map it "
+                f"Not sure where your driver fits on that path? [Talk to Our Career Specialist]({LIGACAO}) and we'll map it "
                 "out with you.")),
             ("Career planning, specialists & add-on services", (
                 "Every Academy family works with a career specialist, not just a coach. That means real planning behind the "
@@ -402,7 +412,7 @@ PROGRAMS = {
          "texto": ("Tell us who the driver is and whether they have been in a race kart before. That one answer decides "
                    "everything else — and we will tell you honestly which of these is your starting point, even if it is "
                    "the cheapest one."),
-         "ctas": [("Book a 15-min call", CONVERSA)]},
+         "ctas": [("Book a 15-min call", LIGACAO)]},
         {"tipo": "cta", "titulo": FECHO_DUVIDAS[0], "texto": FECHO_DUVIDAS[1], "ctas": [("Get in touch", "/contact/")]},
     ],
 }
