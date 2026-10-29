@@ -168,6 +168,47 @@ def test_a_sondagem_poe_o_backup_na_tela_sistemas(banco):
     assert i and i["status"] == "DEGRADED" and "Drive" in (i["last_error"] or i["detail"])
 
 
+def test_a_sondagem_de_hoje_tira_a_falha_de_ontem_do_detalhe(banco):
+    """29/10, produção: Sistemas mostrava em "problemas"/"motivo" a falha do Drive de 16/10, já corrigida, com a
+    sondagem do dia dizendo local e Drive ok. A primeira sondagem gravou o resultado no topo do detalhe e as
+    seguintes o guardavam como se fosse o detalhe de uma sincronia, que o backup não tem."""
+    from command_center.api import agenda
+    p = backup_banco.fazer(banco, aplicar=True)
+    backup_banco.gravar_estado("local", True, arquivo=os.path.basename(p["destino"]), tamanho=1, clientes=1)
+    backup_banco.gravar_estado("drive", False, erro="URL can't contain control characters")
+    con = conectar()
+    agenda.sondar(con, ["backup"])
+    backup_banco.gravar_estado("drive", True, arquivo="x.enc", tamanho=1, clientes=1, chave=cifra.impressao())
+    agenda.sondar(con, ["backup"])
+    i = um(con, "SELECT * FROM integrations WHERE system='backup'")
+    con.close()
+    det = json.loads(i["detail"])
+    assert i["status"] == "CONNECTED" and det["problemas"] == [] and "motivo" not in det, det
+    assert "control characters" not in i["detail"], "a falha de ontem não fica no detalhe de hoje"
+
+
+def test_a_sondagem_nao_guarda_a_sondagem_anterior_como_se_fosse_a_sincronia(banco, monkeypatch):
+    """O mesmo buraco nos sistemas que sincronizam, enquanto a sincronia ainda não gravou detalhe (deploy novo,
+    sincronia quebrada): o erro da primeira sondagem ficava no topo depois que o sistema voltou."""
+    from command_center.api import agenda
+    from command_center import providers
+    respostas = iter([("ERROR", {"motivo": "HTTP 401 do teste"}), ("CONNECTED", {"conta": "Conta de teste"})])
+    monkeypatch.setattr(providers, "saude", lambda s: next(respostas))
+    monkeypatch.setattr(providers, "recarregar", lambda: None)
+    con = conectar()
+    agenda.sondar(con, ["kommo"])
+    agenda.sondar(con, ["kommo"])
+    det = json.loads(um(con, "SELECT detail FROM integrations WHERE system='kommo'")["detail"])
+    # a sincronia grava o dela; a sondagem seguinte entra ao lado e não apaga o da sincronia
+    con.execute("UPDATE integrations SET detail=? WHERE system='kommo'", (json.dumps({"conversas": 3}),))
+    monkeypatch.setattr(providers, "saude", lambda s: ("CONNECTED", {"conta": "Conta de teste"}))
+    agenda.sondar(con, ["kommo"])
+    depois = json.loads(um(con, "SELECT detail FROM integrations WHERE system='kommo'")["detail"])
+    con.close()
+    assert "HTTP 401" not in json.dumps(det) and det["sondagem"] == {"conta": "Conta de teste"}, det
+    assert depois == {"conversas": 3, "sondagem": {"conta": "Conta de teste"}}, depois
+
+
 # ------------------------------------------------------------------ restaurar de verdade
 def test_restaurar_do_drive_devolve_os_clientes(banco, drive):
     """O passo a passo do playbook: baixar do Drive, decifrar, conferir e pôr no lugar."""
