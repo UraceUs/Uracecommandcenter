@@ -345,8 +345,9 @@ def test_contador_e_em_aberto_nao_misturam_o_card_do_irmao(amb):
     m = _mes(-1)
     inserir(con, "bookings", account_id=conta, pilot_id=pid2, date=f"{m}-04", period="manha", status="confirmada",
             coverage="extra", charge_kind="invoice", price=689.23, qbo_invoice_id="901", invoice_doc="URACE-901", invoice_total=689.23)
-    inserir(con, "bookings", account_id=conta, pilot_id=pid2, date=f"{_mes()}-28", period="manha", status="pendente",
-            coverage="plano", price=0)
+    # #451: "ainda não feita" é hoje (na Flórida), sempre no mês corrente; o dia 28 fixo já tinha passado do 29 ao 31
+    inserir(con, "bookings", account_id=conta, pilot_id=pid2, date=ag._agora_fl().date().isoformat(), period="manha",
+            status="pendente", coverage="plano", price=0)
     a = contrato.em_aberto(con, amb["card"])
     assert a["count"] == 0 and not a["invoices"], "a extra do irmão não é do card do Theo"
     k = contrato.contador(con, amb["card"])
