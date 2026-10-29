@@ -97,4 +97,8 @@ def test_buy_now_vindo_de_outro_site_e_recusado(amb):  # noqa: F811
                  headers={"Origin": "https://outro.example"}, follow_redirects=False)
     assert r.status_code == 403
     assert con.execute("SELECT COUNT(*) FROM store_orders").fetchone()[0] == 0
-    assert _comprar(cli, p).status_code == 303, "do próprio site (ou sem Origin) continua comprando"
+    assert _comprar(cli, p).status_code == 303, "sem Origin continua comprando"
+    # o navegador manda "null" no formulário do próprio site (Referrer-Policy: no-referrer): tem que comprar
+    r = cli.post("/ops/api/vitrine/checkout", data={"produto": p["slug"], "quantidade": "1", "entrega": "retirada"},
+                 headers={"Origin": "null"}, follow_redirects=False)
+    assert r.status_code == 303 and "checkout.stripe.com" in r.headers["location"]

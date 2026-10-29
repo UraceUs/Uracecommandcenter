@@ -654,9 +654,11 @@ async def checkout(request: Request, con: sqlite3.Connection = Depends(get_db)):
 
     if c.get("site"):
         return RedirectResponse(volta, status_code=303)            # honeypot: um robô
-    origem = request.headers.get("origin")
-    if origem is not None and (urlsplit(origem).hostname or "").lower() not in hosts():
-        raise HTTPException(403, "Security check failed.")           # #485: o cookie da conta só vale vindo do site
+    # #485: o cookie da conta só vale vindo do site. "null" é o que o navegador manda no formulário do próprio site
+    # (a política é no-referrer); uma origem de verdade que não é a nossa é que é recusada.
+    origem = (request.headers.get("origin") or "null").strip()
+    if origem != "null" and (urlsplit(origem).hostname or "").lower() not in hosts():
+        raise HTTPException(403, "Security check failed.")
     if not p:
         return erro("Product not found.")
     if not stripe_loja.ligado():
