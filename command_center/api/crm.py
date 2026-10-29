@@ -308,8 +308,12 @@ def mover(lid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("OPER
                          dados.pipeline_id or l["pipeline_id"])
     except Exception as e:
         raise _erro(e)
+    # a coluna do quadro vem do nome, da ordem e do funil guardados: sem levar os três junto, o lead movido fica na
+    # coluna certa com a ordem da etapa de antes (e o nome do funil de antes) até a próxima sincronia
     atualizar(con, "crm_leads", lid, stage_id=str(dados.stage_id), stage_name=res.get("etapa") or l["stage_name"],
-              pipeline_id=dados.pipeline_id or l["pipeline_id"], synced_at=agora())
+              stage_order=res["ordem"] if res.get("ordem") is not None else l["stage_order"],
+              pipeline_id=dados.pipeline_id or l["pipeline_id"], pipeline_name=res.get("funil") or l["pipeline_name"],
+              synced_at=agora())
     auditar(con, "crm.stage", f"user:{u['id']}", user_id=u["id"], entity_type="crm_lead", entity_id=lid,
             detail={"de": l["stage_name"], "para": res.get("etapa") or dados.stage_id}, ip=auth._ip(request))
     con.commit()

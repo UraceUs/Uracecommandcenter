@@ -32,3 +32,25 @@ def test_chave_com_acento_no_hook_e_no_webhook_e_recusada_sem_erro(cli, monkeypa
     assert cli.post(f"{B}/crm/webhook?key=chav%C3%A9", json={"lead_id": "1", "text": "oi"}).status_code == 403
     assert cli.post(f"{B}/crm/webhook", json={"lead_id": "1", "text": "oi"},
                     headers={"X-Urace-Secret": "segredo".encode("latin-1") + b"\xe9"}).status_code == 403
+
+
+class KommoOutroFunil:
+    def mover_etapa_humano(self, lead_id, etapa_id, funil_id=None):
+        return {"aplicado": True, "lead_id": lead_id, "etapa_id": etapa_id, "etapa": "Won", "funil": "Pós-venda", "ordem": 7}
+
+
+def test_mover_de_etapa_atualiza_funil_e_ordem_da_coluna(cli, monkeypatch):
+    monkeypatch.setattr(crm, "modulo", lambda s: KommoOutroFunil())
+    con = conectar()
+    lid = inserir(con, "crm_leads", external_id="7001", name="Lead fictício", pipeline_id="1", pipeline_name="Vendas",
+                  stage_id="10", stage_name="Entrada", stage_order=1, synced_at="2026-01-01T00:00:00Z")
+    con.close()
+    assert cli.post(B + "/auth/login", json={"email": "op@urace.us", "password": SENHA}).status_code == 200
+    h = {"X-CSRF": cli.cookies.get("cc_csrf")}
+    assert cli.post(f"{B}/crm/leads/{lid}/stage", headers=h, json={"stage_id": "20", "pipeline_id": "2"}).status_code == 200
+    con = conectar()
+    try:
+        l = um(con, "SELECT pipeline_id, pipeline_name, stage_name, stage_order FROM crm_leads WHERE id=?", (lid,))
+    finally:
+        con.close()
+    assert (l["pipeline_id"], l["pipeline_name"], l["stage_name"], l["stage_order"]) == ("2", "Pós-venda", "Won", 7)
