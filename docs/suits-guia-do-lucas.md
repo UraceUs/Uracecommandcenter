@@ -213,6 +213,15 @@ foram abertos por engano pela versão antiga da ponte, só por causa do marcador
 
 ## 6. A ponte de e-mail (a IA trabalhando sozinha)
 
+**Designers, fornecedores e as conversas do pedido (#481).** Em **Suits › Fornecedores** ficam os fornecedores e, logo
+abaixo, os **designers** (nome e e-mail fixo; o gerente cadastra; um é o **atual**). Na **Ponte de e-mail** de cada
+pedido você vê o e-mail do cliente e **escolhe o designer e o fornecedor** numa lista — o e-mail vem do cadastro
+("vai para …"); sem escolha, vale o atual. **Puxar conversas do Gmail** procura e liga as conversas que faltam: com o
+cliente (pelo e-mail dele, a que fala de macacão), com o designer (a que cita "#número do pedido") e com o fornecedor
+(a que traz o nome do piloto no assunto). Na primeira vez que o pedido abre sem a conversa do cliente, ele procura
+sozinho. Só lê o Gmail: nada sai. A ponte reconhece e-mail de **qualquer** designer da lista, e o cliente nunca vê
+nome nem e-mail de nenhum deles.
+
 A cada 15 minutos a ponte lê o Gmail `urace@urace.us` e, para cada novidade, chama a IA do
 painel com o pedido e o e-mail (anexos baixados para a pasta do pedido):
 

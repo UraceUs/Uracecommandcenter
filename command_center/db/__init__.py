@@ -277,6 +277,7 @@ MIGRACOES = [
     ("suit_orders", "bridge_last_mode", "TEXT"),          # simulacao | real
     # #382 (Mio): pedido de TESTE — nunca manda e-mail real (vira nota de simulação), não entra nas contagens nem na Atenção
     ("suit_orders", "is_test", "INTEGER NOT NULL DEFAULT 0"),
+    ("suit_orders", "designer_id", "INTEGER REFERENCES suit_designers(id)"),       # #481: o designer deste pedido
     # 13/10 — dono (#206): "Escaneou, selecionou o cliente, já finaliza. Não tem essa de ter que confirmar
     # depois". A leitura do celular vai direto para a OS; só o que não pode ir fica pendente, com o motivo.
     ("counter_pending", "motivo", "TEXT"),

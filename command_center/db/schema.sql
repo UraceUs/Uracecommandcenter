@@ -2245,6 +2245,18 @@ CREATE TABLE IF NOT EXISTS suit_suppliers (
   updated_at   TEXT
 );
 
+-- #481 (dono, 29/10: "designer 1, designer 2, designer 3, com os endereços de e-mail fixos ... eu seleciono qual que é
+-- o nome do designer nessa parte aí do ponte de e-mail"): os designers da Alpha Line, como os fornecedores.
+CREATE TABLE IF NOT EXISTS suit_designers (
+  id           INTEGER PRIMARY KEY,
+  name         TEXT NOT NULL,
+  email        TEXT,
+  notes        TEXT,
+  is_current   INTEGER NOT NULL DEFAULT 0,  -- o designer padrão: vale para o pedido que não escolheu outro
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+  updated_at   TEXT
+);
+
 CREATE TABLE IF NOT EXISTS suit_orders (
   id           INTEGER PRIMARY KEY,
   title        TEXT NOT NULL,             -- como aparece na lista (no Asana, o nome da tarefa)

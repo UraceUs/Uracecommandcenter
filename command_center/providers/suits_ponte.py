@@ -89,7 +89,44 @@ def config(con):
     for r in todos(con, "SELECT key, value FROM suit_settings"):
         if r["key"] in c:
             c[r["key"]] = r["value"] if r["value"] is not None else ""
+    c["_designers"] = todos_os_designers(con, c)
     return c
+
+
+# ------------------------------------------------------------------ designers (#481)
+def semear_designers(con):
+    """O designer que estava na configuração da ponte vira o primeiro da lista (o padrão), uma vez só."""
+    if um(con, "SELECT 1 AS x FROM suit_designers LIMIT 1"):
+        return
+    c = dict(PADROES)
+    for r in todos(con, "SELECT key, value FROM suit_settings WHERE key IN ('designer_nome', 'designer_email')"):
+        c[r["key"]] = r["value"] or ""
+    if (c.get("designer_email") or "").strip():
+        inserir(con, "suit_designers", name=(c.get("designer_nome") or "Designer").strip(), email=c["designer_email"].strip(),
+                is_current=1, updated_at=agora())
+
+
+def todos_os_designers(con, cfg):
+    """Todos os designers que a ponte conhece (a lista e o da configuração antiga): o cliente não vê nenhum deles,
+    e e-mail de qualquer um deles é e-mail de designer."""
+    lista = [{"id": r["id"], "nome": r["name"], "email": (r["email"] or "").strip().lower() or None}
+             for r in todos(con, "SELECT id, name, email FROM suit_designers ORDER BY is_current DESC, name")]
+    email = (cfg.get("designer_email") or "").strip().lower()
+    if email and email not in {d["email"] for d in lista}:
+        lista.append({"id": None, "nome": cfg.get("designer_nome") or "", "email": email})
+    return lista
+
+
+def designer_do_pedido(con, pedido, cfg=None):
+    """O designer escolhido no pedido; sem escolha, o padrão da lista; sem lista, o da configuração antiga."""
+    r = None
+    if pedido and pedido.get("designer_id"):
+        r = um(con, "SELECT id, name, email FROM suit_designers WHERE id=?", (pedido["designer_id"],))
+    r = r or um(con, "SELECT id, name, email FROM suit_designers WHERE is_current=1 ORDER BY id LIMIT 1")
+    if r:
+        return {"id": r["id"], "nome": r["name"], "email": (r["email"] or "").strip() or None}
+    cfg = cfg or config(con)
+    return {"id": None, "nome": cfg.get("designer_nome") or None, "email": (cfg.get("designer_email") or "").strip() or None}
 
 
 def salvar_config(con, dados, uid=None):
@@ -191,7 +228,10 @@ def _guardas(pedido, papel, texto, cfg):
             raise Recusado("O designer não pode receber " + ", ".join(dict.fromkeys(problemas)) + ". Reescreva só com o design "
                            f"e o número do pedido (Suits #{pedido['id']}).")
     if papel == "cliente":
-        for dado in (cfg.get("designer_email"), cfg.get("designer_nome")):
+        dados = [cfg.get("designer_email"), cfg.get("designer_nome")]
+        for d in cfg.get("_designers") or []:
+            dados += [d.get("email"), d.get("nome")]
+        for dado in dados:
             if dado and len(dado) >= 3 and dado.lower() in t:
                 raise Recusado("O cliente não pode ver o nome nem o contato do designer: fale como a URACE.")
     if papel == "fornecedor" and not pedido.get("checked_at"):
@@ -209,7 +249,7 @@ def destinatario(con, pedido, papel, cfg):
     if papel == "cliente":
         return pedido.get("customer_email")
     if papel == "designer":
-        return cfg.get("designer_email") or None
+        return designer_do_pedido(con, pedido, cfg)["email"]
     if papel == "fornecedor":
         f = um(con, "SELECT email FROM suit_suppliers WHERE id=?", (pedido["supplier_id"],)) if pedido.get("supplier_id") \
             else um(con, "SELECT email FROM suit_suppliers WHERE is_current=1")
@@ -239,13 +279,15 @@ def _arquivos(pid, nomes):
 
 def _marcas_do_designer(cfg):
     m = []
-    email = (cfg.get("designer_email") or "").strip().lower()
-    if email:
-        m += [email, email.split("@")[0]]
-    nome = (cfg.get("designer_nome") or "").strip().lower()
-    if len(nome) >= 3:
-        m.append(nome)
-    return [x for x in m if len(x) >= 3]
+    pares = [(cfg.get("designer_email"), cfg.get("designer_nome"))] + [(d.get("email"), d.get("nome")) for d in cfg.get("_designers") or []]
+    for email, nome in pares:
+        email = (email or "").strip().lower()
+        if email:
+            m += [email, email.split("@")[0]]
+        nome = (nome or "").strip().lower()
+        if len(nome) >= 3:
+            m.append(nome)
+    return list(dict.fromkeys(x for x in m if len(x) >= 3))
 
 
 LIMPAVEIS = {"image/jpeg": "JPEG", "image/png": "PNG", "image/webp": "WEBP"}
@@ -802,8 +844,8 @@ def conversas_novas(con, gm, ignoradas=None):
         if not _nosso(r["e"]) and not robo(_email_de(r["e"])):      # #195: a URACE e robô nunca são "o cliente"
             clientes.setdefault(r["e"], set()).add(r["id"])
     consultas = ["label:Suits newer_than:3d"]
-    if cfg.get("designer_email"):
-        consultas.append(f"from:{cfg['designer_email']} newer_than:3d")
+    designers = {d["email"] for d in cfg.get("_designers") or [] if d.get("email")}       # #481: qualquer designer da lista
+    consultas += [f"from:{d} newer_than:3d" for d in sorted(designers)]
     emails = sorted(clientes)
     for i in range(0, len(emails), 15):
         consultas.append("from:(" + " OR ".join(emails[i:i + 15]) + ") newer_than:3d")
@@ -829,7 +871,7 @@ def conversas_novas(con, gm, ignoradas=None):
                 if pid and not um(con, "SELECT gmail_thread_fornecedor FROM suit_orders WHERE id=?", (pid,))["gmail_thread_fornecedor"]:
                     con.execute("UPDATE suit_orders SET gmail_thread_fornecedor=? WHERE id=?", (th, pid))
                 eventos.append({"tipo": "fornecedor", "pedido_id": pid, "thread_id": th, "mensagens": novas})
-            elif cfg.get("designer_email") and de == cfg["designer_email"].lower():
+            elif de in designers:
                 # debug 29/10: o número inteiro (\b) — a cor "#1A1A1A" não é o pedido #1 de outro cliente
                 ids = {int(x) for x in re.findall(r"#\s?(\d+)\b", assunto + " " + (novas[-1].get("corpo") or "")[:500])}
                 ids = {x for x in ids if um(con, "SELECT 1 AS x FROM suit_orders WHERE id=? AND discarded_at IS NULL", (x,))}
@@ -859,6 +901,69 @@ def conversas_novas(con, gm, ignoradas=None):
                 eventos.append({"tipo": "marcador", "pedido_id": None, "thread_id": th, "mensagens": novas, "historico": msgs,
                                 "remetente": {"nome": _nome_de(novas[-1].get("de")) or None, "email": de or None}})
     return eventos
+
+
+def achar_conversas(con, pid, gm=None):
+    """#481 (dono, 29/10: "eu preciso que já venha a conversa com o cliente, venha com o e-mail do cliente, ele puxa de
+    lá"): procura no Gmail e liga ao pedido as conversas que ainda faltam — com o cliente (pelo e-mail dele, a que fala
+    de macacão), com o designer do pedido (a que cita "#<pedido>") e com o fornecedor (a que traz o nome do piloto no
+    assunto). Só preenche o que está vazio; conversa que já é de outro pedido não entra. Nada sai: só lê."""
+    p = um(con, "SELECT * FROM suit_orders WHERE id=?", (int(pid),))
+    if not p:
+        raise LookupError("Pedido não encontrado.")
+    if p.get("discarded_at"):
+        raise Recusado("pedido descartado (não é pedido de macacão)")
+    from command_center.providers import suits
+    if gm is None:
+        from command_center.providers import modulo
+        gm = modulo("gmail")
+    cfg = config(con)
+    outras = {r["t"] for r in todos(con, """SELECT gmail_thread_cliente AS t FROM suit_orders WHERE id<>? AND gmail_thread_cliente IS NOT NULL
+                                             UNION SELECT gmail_thread_designer FROM suit_orders WHERE id<>? AND gmail_thread_designer IS NOT NULL
+                                             UNION SELECT gmail_thread_fornecedor FROM suit_orders WHERE id<>? AND gmail_thread_fornecedor IS NOT NULL""",
+                                    (p["id"], p["id"], p["id"]))}
+
+    def primeira(email, serve):
+        for t in (gm.gmail_buscar(CONTA, f"(from:{email} OR to:{email})", so_inbox=False, maximo=10).get("threads") or []):
+            th = t["thread_id"]
+            if th in outras:
+                continue
+            if serve(gm.mensagens_da_thread(CONTA, th)["mensagens"]):
+                return th
+        return None
+
+    nomes = [n.strip().lower() for n in (p.get("driver_name"), p.get("customer_name"), p.get("title")) if n and len(n.strip()) >= 4]
+    def do_fornecedor(msgs):
+        a = " ".join((m.get("assunto") or "") for m in msgs).lower()
+        return any(re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", a) for n in nomes)
+
+    def do_designer(msgs):
+        texto = " ".join((m.get("assunto") or "") + " " + (m.get("corpo") or "")[:2000] for m in msgs)
+        return re.search(r"#\s?" + str(p["id"]) + r"\b", texto) is not None
+
+    procura = []
+    email_cli = _email_de(p.get("customer_email"))
+    if not p.get("gmail_thread_cliente") and email_cli and not _nosso(email_cli) and not robo(email_cli):
+        procura.append(("gmail_thread_cliente", "cliente", email_cli, fala_de_suit))
+    d = designer_do_pedido(con, p, cfg)
+    if not p.get("gmail_thread_designer") and d["email"]:
+        procura.append(("gmail_thread_designer", "designer", d["email"].lower(), do_designer))
+    f = um(con, "SELECT email FROM suit_suppliers WHERE id=?", (p["supplier_id"],)) if p.get("supplier_id") \
+        else um(con, "SELECT email FROM suit_suppliers WHERE is_current=1")
+    if not p.get("gmail_thread_fornecedor") and f and f["email"] and nomes:
+        procura.append(("gmail_thread_fornecedor", "fornecedor", f["email"].strip().lower(), do_fornecedor))
+    achadas = {}
+    for coluna, papel, email, serve in procura:
+        th = primeira(email, serve)
+        if th:
+            con.execute(f"UPDATE suit_orders SET {coluna}=? WHERE id=? AND {coluna} IS NULL", (th, p["id"]))
+            achadas[papel] = th
+    if achadas:
+        suits.anotar(con, p["id"], "Conversas ligadas pelo Gmail: " + ", ".join(achadas) + ".", "nota", p["status"])
+    faltam = [papel for coluna, papel, *_ in [("gmail_thread_cliente", "cliente"), ("gmail_thread_designer", "designer"),
+                                              ("gmail_thread_fornecedor", "fornecedor")]
+              if not p.get(coluna) and papel not in achadas]
+    return {"ligadas": achadas, "faltam": faltam}
 
 
 def baixar_anexos(gm, pid, msg):
@@ -941,7 +1046,9 @@ def prompt(con, ev, cfg, anexos_baixados):
     if ev.get("historico"):
         historico = "\nCONVERSA ANTERIOR (contexto):\n" + "\n".join(
             f"- {m.get('de')} · {m.get('data')}: {(m.get('corpo') or '')[:800]}" for m in ev["historico"] if m not in ev["mensagens"])
-    designer = cfg.get("designer_nome") or "o designer"
+    dp = designer_do_pedido(con, um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,)), cfg) if pid else \
+        designer_do_pedido(con, None, cfg)
+    designer = dp["nome"] or "o designer"
     alvo = f"no pedido Suits #{pid}" if pid else "no pedido desta pessoa (o que ela já tem, pelo e-mail dela, ou o que você criar)"
     return (f"[PONTE DE E-MAIL DOS SUITS] Você é o meio de campo entre o cliente, {designer} e o fornecedor, no lugar da equipe "
             "(processo: 10_PROCESSOS/Pedido de macacão.md). "
@@ -957,7 +1064,7 @@ def prompt(con, ev, cfg, anexos_baixados):
               "fabricante: nunca diga ao cliente quem desenha nem quem fabrica, nem repasse texto, assinatura ou conversa dele. "
               "Na dúvida (reclamação, reembolso, cancelamento, troca, mudança de preço, conflito com a política, algo estranho), "
               "não responda: suits_precisa_humano com o motivo. No fim, se houver pedido, suits_anotar com o que fez em uma linha."
-            + ("" if cfg.get("designer_email") else "\nO e-mail do designer ainda não foi configurado: se precisar falar com ele, "
+            + ("" if dp["email"] else "\nO e-mail do designer ainda não foi configurado: se precisar falar com ele, "
                "use suits_precisa_humano dizendo o que mandaria.")
             + _grupos_do_atelie()
             + f"\n\nPOLÍTICA DOS MACACÕES (do dono):\n{cfg['politica']}"
