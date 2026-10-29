@@ -2852,7 +2852,7 @@ def test_suits_descarta_o_que_nao_e_pedido_e_restaura(servidor, navegador, largu
 @pytest.mark.parametrize("largura", [360, 1280])
 def test_suits_admin_libera_para_approved_com_o_motivo(servidor, navegador, largura):
     """#448 (dono, 29/10): "mover para aprovado com o nível de admin pra cima" — sem a aprovação escrita registrada,
-    o administrador libera com o motivo escrito na nota."""
+    o administrador libera com o motivo escrito na nota. #482: e leva a qualquer etapa à mão (In Production)."""
     pg = entrar(navegador, servidor, email="italo@urace.us", largura=largura, altura=900)     # o ADMIN do teste
     abrir(pg, servidor, "/suits")
     pg.get_by_role("button", name="Registrar novo pedido").click()
@@ -2862,14 +2862,21 @@ def test_suits_admin_libera_para_approved_com_o_motivo(servidor, navegador, larg
     pg.get_by_role("heading", name=f"Liberado Fictício {largura}", level=1).wait_for()
     pg.get_by_label("Pedir à IA para seguir daqui").uncheck()
     pg.get_by_label("Etapa", exact=True).select_option("approved")
-    pg.get_by_text(re.compile("Como administrador, você libera para Approved")).wait_for()
-    pg.get_by_role("button", name="Liberar para Approved").click()
+    pg.get_by_text(re.compile("Como administrador, você move à mão")).wait_for()
+    pg.get_by_role("button", name="Mover à mão para Approved").click()
     pg.get_by_text(re.compile("Escreva na nota o motivo")).wait_for()          # sem motivo, não libera
     pg.get_by_label("Nota", exact=True).fill("cliente aprovou por WhatsApp")
-    pg.get_by_role("button", name="Liberar para Approved").click()
-    pg.get_by_text("Pedido liberado para Approved.").wait_for()
+    pg.get_by_role("button", name="Mover à mão para Approved").click()
+    pg.get_by_text("Pedido movido para Approved.").wait_for()
     pg.locator(".suit-etapas li.atual", has_text="Approved").wait_for()
     pg.get_by_text(re.compile("liberado pelo administrador sem a aprovação final escrita registrada: cliente aprovou")).first.wait_for()
+    # #482 (dono, 29/10): "já foi aprovado pelo cliente, fora de e-mail ... eu tenho que conseguir colocar na etapa de produção"
+    pg.get_by_label("Etapa", exact=True).select_option("in_production")
+    pg.get_by_label("Nota", exact=True).fill("já foi para a produção pelo WhatsApp do ateliê")
+    pg.get_by_role("button", name="Mover à mão para In Production").click()
+    pg.get_by_text("Pedido movido para In Production.").wait_for()
+    pg.locator(".suit-etapas li.atual", has_text="In Production").wait_for()
+    pg.get_by_text(re.compile("movido à mão pelo administrador: já foi para a produção")).first.wait_for()
     assert pg.get_by_role("button", name="Salvar nota").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
