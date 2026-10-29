@@ -155,7 +155,7 @@ class CompraIn(BaseModel):
 @r.post("", status_code=201)
 def criar(dados: CompraIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             pid = compras.criar_compra(con, u["id"], [l.model_dump() for l in dados.linhas], supplier=dados.supplier,
                                        reference=dados.reference, expected_at=dados.expected_at, notes=dados.notes,
                                        pedir=dados.pedir)
@@ -186,7 +186,7 @@ def pedida(pid: int, dados: PedidaIn, request: Request, con: sqlite3.Connection 
 @r.post("/{pid}/cancelar")
 def cancelar(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             compras.cancelar_compra(con, pid)
             _aud(con, request, u, "purchase.cancel", pid, {})
     except compras.ErroCompra as e:
@@ -199,7 +199,7 @@ def adicionar(pid: int, dados: list[LinhaIn], request: Request, con: sqlite3.Con
               u=Depends(auth.exige("MANAGER"))):
     """Itens numa compra que já existe (a que nasceu de um e-mail vem sem itens)."""
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             ids = compras.adicionar_linhas(con, pid, [l.model_dump() for l in dados])
             _aud(con, request, u, "purchase.lines", pid, {"linhas": len(ids)})
     except compras.ErroCompra as e:
@@ -216,7 +216,7 @@ def ligar(pid: int, dados: LigarIn, request: Request, con: sqlite3.Connection = 
           u=Depends(auth.exige("MANAGER"))):
     """Os pedidos da equipe entram nesta compra: quem pediu passa a ver o envio."""
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             ids = compras.ligar_pedidos(con, pid, dados.request_ids)
             _aud(con, request, u, "purchase.link_requests", pid, {"pedidos": dados.request_ids})
     except compras.ErroCompra as e:
@@ -228,7 +228,7 @@ def ligar(pid: int, dados: LigarIn, request: Request, con: sqlite3.Connection = 
 def concluir(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
     """Fecha sem dar entrada no estoque: serviço, passe de pista, ferramenta que já foi para o uso."""
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             compras.concluir(con, pid)
             _aud(con, request, u, "purchase.close", pid, {})
     except compras.ErroCompra as e:
@@ -252,7 +252,7 @@ def receber(pid: int, dados: ReceberIn, request: Request, con: sqlite3.Connectio
             u=Depends(auth.exige("OPERATOR"))):
     """Tudo ou nada: se uma linha não serve, nada entra no estoque."""
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):       # o saldo lido e o gravado são o mesmo
             res = compras.receber(con, pid, [i.model_dump() for i in dados.itens], por=u["id"], local=dados.local)
             _aud(con, request, u, "purchase.receive", pid, {"local": dados.local, **res})
     except compras.ErroCompra as e:

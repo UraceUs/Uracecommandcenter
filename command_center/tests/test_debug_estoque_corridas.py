@@ -1,5 +1,6 @@
 """Debug 29/10 — estoque, compras e corridas: defeitos achados na revisão, cada um com o teste que o prova."""
 import os
+import sqlite3
 import tempfile
 from datetime import date, datetime, timedelta
 
@@ -94,3 +95,38 @@ def test_corrida_de_hoje_na_florida_segue_no_calendario(con, monkeypatch):
                   due_on=ontem_utc.isoformat())
     sync.sincronizar_corridas(con)
     assert um(con, "SELECT active FROM races WHERE task_id=?", (tid,))["active"] == 1
+
+
+def _intruso_tenta_gravar(monkeypatch, iid):
+    """Entre a leitura do saldo e a gravação do novo, outra requisição tenta gravar: devolve o que aconteceu com ela."""
+    visto = {}
+    real = estoque._linha_saldo
+
+    def espiada(*a, **k):
+        r = real(*a, **k)
+        if "bloqueado" not in visto:
+            c2 = conectar()
+            c2.execute("PRAGMA busy_timeout = 0")
+            try:
+                c2.execute("UPDATE stock_levels SET qty = qty + 1 WHERE item_id=?", (iid,))
+                visto["bloqueado"] = False
+            except sqlite3.OperationalError:
+                visto["bloqueado"] = True
+            finally:
+                c2.close()
+        return r
+    monkeypatch.setattr(estoque, "_linha_saldo", espiada)
+    return visto
+
+
+@pytest.mark.parametrize("rota,corpo", [("entrada", {"qty": 1}), ("saida", {"qty": 1}), ("transferir", {"qty": 1, "para": "trailer"}),
+                                        ("contar", {"qty": 3}), ("ajustar", {"qty": 1, "motivo": "teste"})])
+def test_lancamento_de_estoque_trava_a_escrita_desde_a_leitura_do_saldo(cli, monkeypatch, rota, corpo):
+    """Dois mecânicos lançando a mesma peça juntos: sem a trava, os dois liam 5 e gravavam 4 e 6 — o saldo perdia um
+    lançamento e o razão deixava de bater. A rota tem de segurar a escrita desde a leitura (como o Balcão já faz)."""
+    h = entra(cli, "ger@urace.us")
+    iid = cli.post("/ops/api/estoque/item", headers=h, data={"name": f"Corrente {rota}", "category": "hardware", "qty": "5"}).json()["id"]
+    visto = _intruso_tenta_gravar(monkeypatch, iid)
+    r = cli.post(f"/ops/api/estoque/{rota}", headers=h, json={"item_id": iid, **corpo})
+    assert r.status_code == 200, r.text
+    assert visto.get("bloqueado") is True, "outra requisição conseguiu gravar no meio do lançamento"
