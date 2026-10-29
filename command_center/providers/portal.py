@@ -221,7 +221,7 @@ def criar_conta(con, dados, pw_salt, pw_hash):
     if dados.get("i_am_driver"):
         # o próprio responsável como piloto: nasce sem medidas — o painel pede para completar
         criar_piloto(con, cid, {"name": nome, "birth_date": nasc.isoformat(), "is_self": True,
-                                "email": email, "phone": novo["phone"]}, completo=False)
+                                "email": email, "phone": novo["phone"], "phone_country": codigo}, completo=False)
     return cid
 
 
@@ -342,7 +342,7 @@ def _dados_piloto(d, parcial=False):
     if "email" in d:
         s["email"] = email_valido(d["email"]) if (d["email"] or "").strip() else None
     if "phone" in d:
-        s["phone"] = telefone(d["phone"])
+        s["phone"] = telefone(d["phone"], d.get("phone_country") or "+1")      # o piloto de outro país: o código do país dele
     if "notes" in d:                                   # na tela: "Karting experience"
         s["notes"] = _texto(d["notes"], 1000)
     if "social" in d:

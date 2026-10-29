@@ -55,3 +55,16 @@ def test_id_enorme_na_url_ou_no_corpo_nao_vira_erro_500(cli):
             ruins.append((metodo, url, r.status_code))
     assert not ruins
 
+
+def test_conta_de_outro_pais_que_e_o_proprio_piloto_nasce_inteira(tmp_path, monkeypatch):
+    monkeypatch.setenv("CC_DB_PATH", str(tmp_path / "cc2.sqlite"))
+    monkeypatch.setenv("URACE_DIR", str(tmp_path))
+    c = conectar(); aplicar_schema(c); c.close()
+    with TestClient(app, base_url="https://cc.test", raise_server_exceptions=False) as t:
+        corpo = {**CONTA, "email": "ana@example.com", "phone_country": "+55", "phone": "11 99955 0132", "country": "BR",
+                 "zip": "01000-000", "state": "SP", "i_am_driver": True}
+        r = t.post(f"{P}/signup", json=corpo)
+        assert r.status_code == 201, r.text
+        eu = r.json()
+        assert [d["is_self"] for d in eu["drivers"]] == [True] and eu["drivers"][0]["phone"] == eu["phone"]
+
