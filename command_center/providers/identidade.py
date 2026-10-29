@@ -526,24 +526,41 @@ LIGACOES_SOLTAVEIS = ("tasks", "waivers", "emails", "invoices", "calendar_events
 LIGACOES_OBRIGATORIAS = ("race_invites", "contracts", "waiver_invites")   # #135: o convite vai junto e o link morre (o selo é do card antigo)
 
 
+class ErroUniao(ValueError):
+    """O card que sai tem algo que o outro já tem e só cabe um por card: a união espera uma pessoa decidir."""
+
+
+# o que só existe um por card (índice único com client_id): o motivo que a pessoa lê quando os dois têm
+_UM_POR_CARD = {"counter_drafts": "um rascunho aberto no balcão (feche um deles antes de unir)",
+                "monthly_invoices": "a mensalidade do mesmo mês (cancele a repetida antes de unir)"}
+
+
+def _tabelas_do_cliente(con):
+    """Toda tabela cujo client_id aponta para clients. A união leva todas: a lista feita à mão em 10/09 ficou para
+    trás (ligação, mensalidade, balcão, estoque, pedidos do site, Suits…) e o card que saía batia na chave
+    estrangeira com a união pela metade (debug 29/10)."""
+    return [t for (t,) in con.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            if any(f[2] == "clients" and f[3] == "client_id" for f in con.execute(f"PRAGMA foreign_key_list({t})"))]
+
+
 def _repontar(con, de_id, para_id):
     """Passa tudo do cliente `de_id` para `para_id` (união). Devolve o que COLIDIU.
 
     Convite de corrida e contrato têm UNIQUE(race_id, client_id): quando os dois cards
     estão na mesma corrida, o do perdedor não cabe. Antes era apagado em silêncio —
     junto com status e orçamento. Agora volta daqui e é guardado em `client_merges`
-    (revisão adversarial de 22/09)."""
+    (revisão adversarial de 22/09). Nas outras tabelas o que não cabe não se apaga:
+    levanta ErroUniao e a união não acontece."""
     orfaos = {}
-    for t in LIGACOES_SOLTAVEIS + LIGACOES_OBRIGATORIAS:
-        try:
-            con.execute(f"UPDATE OR IGNORE {t} SET client_id=? WHERE client_id=?", (para_id, de_id))
-            if t in LIGACOES_OBRIGATORIAS:
-                sobrou = todos(con, f"SELECT * FROM {t} WHERE client_id=?", (de_id,))
-                if sobrou:
-                    orfaos[t] = sobrou
-                    con.execute(f"DELETE FROM {t} WHERE client_id=?", (de_id,))
-        except Exception:
-            pass
+    for t in _tabelas_do_cliente(con):
+        con.execute(f"UPDATE OR IGNORE {t} SET client_id=? WHERE client_id=?", (para_id, de_id))
+        sobrou = todos(con, f"SELECT * FROM {t} WHERE client_id=?", (de_id,))
+        if not sobrou:
+            continue
+        if t not in LIGACOES_OBRIGATORIAS:
+            raise ErroUniao(f"os dois cards têm {_UM_POR_CARD.get(t, f'o mesmo registro em {t}')}")
+        orfaos[t] = sobrou
+        con.execute(f"DELETE FROM {t} WHERE client_id=?", (de_id,))
     return orfaos
 
 
@@ -645,12 +662,27 @@ def nao_unir(con, a_id, b_id):
 
 def unir(con, keep_id, drop_id, por, motivo):
     """Um card só: tudo do duplicado passa para o principal; o duplicado sai do espelho.
-    Devolve False quando não une (mesmo card, card que não existe, ou `nao_unir`)."""
+    Devolve False quando não une (mesmo card, card que não existe, ou `nao_unir`); levanta ErroUniao
+    quando o que sai tem algo que só cabe um por card. Tudo ou nada: falha no meio não deixa card pela
+    metade (debug 29/10: as tarefas já tinham ido e o registro da união já estava gravado)."""
     if keep_id == drop_id:
         return False
     k = um(con, "SELECT * FROM clients WHERE id=?", (keep_id,)); d = um(con, "SELECT * FROM clients WHERE id=?", (drop_id,))
     if not k or not d or nao_unir(con, keep_id, drop_id):
         return False
+    con.execute("SAVEPOINT unir")
+    try:
+        _unir(con, k, d, por, motivo)
+    except BaseException:
+        con.execute("ROLLBACK TO unir")
+        con.execute("RELEASE unir")
+        raise
+    con.execute("RELEASE unir")
+    return True
+
+
+def _unir(con, k, d, por, motivo):
+    keep_id, drop_id = k["id"], d["id"]
     orfaos = _repontar(con, drop_id, keep_id)
     con.execute("UPDATE OR IGNORE entity_links SET entity_id=? WHERE entity_type='client' AND entity_id=?", (str(keep_id), str(drop_id)))
     con.execute("DELETE FROM entity_links WHERE entity_type='client' AND entity_id=?", (str(drop_id),))
@@ -674,12 +706,16 @@ def unir(con, keep_id, drop_id, por, motivo):
     # a família que começava no card que sai passa a começar no que fica (#204)
     con.execute("UPDATE clients SET sibling_of=? WHERE sibling_of=?", (campos.get("sibling_of") or k["sibling_of"] or keep_id, drop_id))
     con.execute("DELETE FROM clients WHERE id=?", (drop_id,))
-    return True
 
 
 def deduplicar(con, por="sync"):
     """Une o que é certamente a mesma pessoa: mesmo e-mail, mesmo telefone,
     ou nome normalizado idêntico. Devolve quantos uniu."""
+    def _une(keep_id, drop_id, motivo):
+        try:
+            return bool(unir(con, keep_id, drop_id, por, motivo))
+        except ErroUniao:
+            return False                # só une com uma pessoa decidindo: fica na lista de duplicados
     n = 0
     for chave, sql in (("email", "SELECT LOWER(email) AS k, GROUP_CONCAT(id) AS ids FROM clients "
                                  f"WHERE email IS NOT NULL AND email<>'' AND kind<>'{SEPARADO}' "
@@ -687,14 +723,14 @@ def deduplicar(con, por="sync"):
         for g in todos(con, sql):
             ids = sorted(int(i) for i in g["ids"].split(","))
             for dup in ids[1:]:
-                n += bool(unir(con, ids[0], dup, por, f"mesmo {chave}: {g['k']}"))
+                n += _une(ids[0], dup, f"mesmo {chave}: {g['k']}")
     vistos = {}
     for c in todos(con, "SELECT id, phone FROM clients WHERE phone IS NOT NULL AND kind<>? ORDER BY id", (SEPARADO,)):
         t = so_digitos(c["phone"])
         if not t:
             continue
         if t in vistos and um(con, "SELECT id FROM clients WHERE id=?", (vistos[t],)) and not nao_unir(con, vistos[t], c["id"]):
-            n += bool(unir(con, vistos[t], c["id"], por, f"mesmo telefone: {t}"))
+            n += _une(vistos[t], c["id"], f"mesmo telefone: {t}")
         else:
             vistos[t] = c["id"]
     # Nome igual só une quando é NOME INTEIRO (2+ palavras). Primeiro nome sozinho não
@@ -711,7 +747,7 @@ def deduplicar(con, por="sync"):
             alvo = um(con, "SELECT * FROM clients WHERE id=?", (vistos[k],)) if k in vistos else None
             if alvo and vistos[k] != c["id"] and not e_balde(alvo) and um(con, "SELECT id FROM clients WHERE id=?", (c["id"],)) \
                     and not nao_unir(con, vistos[k], c["id"]):
-                n += bool(unir(con, vistos[k], c["id"], por, f"mesmo nome: {k}"))
+                n += _une(vistos[k], c["id"], f"mesmo nome: {k}")
                 break
             vistos.setdefault(k, c["id"])
     return n
