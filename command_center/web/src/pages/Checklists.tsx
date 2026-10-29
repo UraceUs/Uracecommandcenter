@@ -32,7 +32,7 @@ function grupos<T extends { grupo: string | null }>(itens: T[]) {
   return out
 }
 
-function Foto({ runId, item, aberto, onRun }: { runId: number; item: RunItem; aberto: boolean; onRun: (r: Run) => void }) {
+function Foto({ runId, item, aberto, aplicar }: { runId: number; item: RunItem; aberto: boolean; aplicar: (p: Promise<Run>) => Promise<Run> }) {
   const toast = useToast()
   const camera = useRef<HTMLInputElement>(null)
   const galeria = useRef<HTMLInputElement>(null)
@@ -40,7 +40,7 @@ function Foto({ runId, item, aberto, onRun }: { runId: number; item: RunItem; ab
   async function enviar(f: File | undefined) {
     if (!f) return
     setIndo(true)
-    try { const fd = new FormData(); fd.append('arquivo', f); onRun(await api.postForm<Run>(`/checklists/runs/${runId}/itens/${item.id}/foto`, fd)); toast(tr("Foto salva."), 'ok') }
+    try { const fd = new FormData(); fd.append('arquivo', f); await aplicar(api.postForm<Run>(`/checklists/runs/${runId}/itens/${item.id}/foto`, fd)); toast(tr("Foto salva."), 'ok') }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   return <div className="row wrap" style={{ gap: 6 }}>
@@ -63,15 +63,33 @@ export function Checklist() {
   const [run, setRun] = useState<Run | null>(null)
   const r = run && String(run.id) === runId ? run : l.data
   const [indo, setIndo] = useState(false)
+  // #453: marcar e subir foto podem se cruzar (sinal fraco). A resposta mais velha que chega por último não devolve a
+  // tela para trás; quando houve cruzamento, a tela relê o checklist no fim, como o servidor guardou.
+  const voo = useRef({ emVoo: 0, ultimo: 0, cruzou: false })
   if (l.error && !r) return <ErrorState error={l.error} retry={l.reload} />
   if (!r) return <Loading />
   const aberto = r.status === 'aberto'
+  async function aplicar(p: Promise<Run>) {
+    const v = voo.current
+    const n = ++v.ultimo
+    if (++v.emVoo > 1) v.cruzou = true
+    try {
+      const novo = await p
+      if (n === v.ultimo) setRun(novo)
+      return novo
+    } finally {
+      if (--v.emVoo === 0 && v.cruzou) {
+        v.cruzou = false
+        api.get<Run>(`/checklists/runs/${runId}`).then(setRun).catch(() => l.reload())
+      }
+    }
+  }
   async function marcar(i: RunItem) {
     const antes = r!
     // marca na hora (o mecânico está com luva, no sol): se o servidor recusar, volta
     setRun({ ...antes, itens: antes.itens.map(x => x.id === i.id ? { ...x, done: i.done ? 0 : 1 } : x) })
-    try { setRun(await api.post<Run>(`/checklists/runs/${antes.id}/itens/${i.id}`, { done: !i.done })) }
-    catch (e) { setRun(antes); toast((e as ApiError).message, 'crit') }
+    try { await aplicar(api.post<Run>(`/checklists/runs/${antes.id}/itens/${i.id}`, { done: !i.done })) }
+    catch (e) { if (voo.current.emVoo === 0) setRun(antes); toast((e as ApiError).message, 'crit') }
   }
   async function concluir() {
     setIndo(true)
@@ -89,7 +107,7 @@ export function Checklist() {
         <label className="check ck-marca grow"><input type="checkbox" checked={!!i.done} disabled={!aberto} onChange={() => marcar(i)} />
           <span>{i.text}{!!i.photo_required && <Chip tone={i.fotos.length ? 'ok' : 'warn'}>{tr("foto obrigatória")}</Chip>}
             {i.por && i.done ? <span className="small muted"> · {i.por}</span> : null}</span></label>
-        <Foto runId={r.id} item={i} aberto={aberto} onRun={setRun} />
+        <Foto runId={r.id} item={i} aberto={aberto} aplicar={aplicar} />
       </div>)}</div></div>
     </section>)}
     {aberto && <div className="stack" style={{ gap: 8 }}>
