@@ -877,6 +877,9 @@ assim como tinhamos no urace.us"*. Em toda página do site:
   teclado (Tab até a setinha e Enter; Esc fecha). Sobre a foto do topo a barra é transparente; ao rolar, fica escura.
 - **Celular:** o ☰ abre o menu em tela cheia; cada grupo abre e fecha no toque. Conta e busca da loja ficam no fim da lista.
 - **Our Services** saiu do topo e continua no rodapé e nas páginas. Nenhum link de antes sumiu do site.
+- **Powered by e parceiros** (#511): antes do rodapé, em toda página, a faixa do urace.us de 29/10 com o logo do
+  Orlando Kart Center e os parceiros (ILX Group, AZ Car Rental, CANOTOPS e Allure Global Events), sem link. Parceiro que
+  entra ou sai muda pelo desenvolvimento (`conteudo.PARCEIROS`, com o logo em `static/img`).
 - **Animações:** botão sobe 2 px e cartão sobe 4 px com sombra (mouse em cima); as seções surgem ao rolar, uma vez;
   os campeões da home são um carrossel no celular (arrastar ou as setas ‹ ›); o "Book now" pulsa de leve três vezes
   e para. Quem pediu ao celular/computador **menos movimento** (prefers-reduced-motion) vê tudo parado e à mostra.
