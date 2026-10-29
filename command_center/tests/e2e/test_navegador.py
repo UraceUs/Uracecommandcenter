@@ -1998,7 +1998,7 @@ def test_site_programas_fundidos_no_celular_e_no_computador(servidor, navegador,
         problemas.append(f"cartões: {nomes}")
 
     # o endereço antigo leva à página que herdou, com o texto aproveitado
-    for antigo, fim, trecho in (("/services/kart-school/", "/academy/", "Mentorship by winning drivers"),
+    for antigo, fim, trecho in (("/services/kart-school/", "/academy/", "A complete racing education"),
                                 ("/services/professional-coaching/", "/services/arrive-and-drive/", "Lead and Follow")):
         pg.goto(site + antigo); pg.wait_for_load_state("networkidle")
         if not pg.url.endswith(fim):
