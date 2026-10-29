@@ -41,7 +41,8 @@ export function Servico() {
 
   async function agir(chave: string, fazer: () => Promise<TaskDetail>, ok: string) {
     setOcupado(chave)
-    try { setDet(await fazer()); toast(ok, 'ok') }
+    // o topo (título, status, coluna) vem do card inteiro: relê junto, senão fica o de antes da escrita (debug 29/10)
+    try { setDet(await fazer()); reload(); toast(ok, 'ok') }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setOcupado(null) }
   }
   const atualizar = () => agir('asana', () => api.get<TaskDetail>(`/tasks/${tid}/detail?atualizar=1`), tr("Relido do Asana."))
