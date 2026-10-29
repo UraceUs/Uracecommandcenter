@@ -483,15 +483,18 @@ def checar_transicao(atual, nova):
         raise Invalido(f"De {nome.get(atual, atual)} o pedido não vai para {nome[nova]}. Dá para ir para: {destinos}.")
 
 
-def checar_etapa(con, pid, nova, por_ia=False):
-    """O que impede ir para `nova` (Invalido com o motivo): a tabela de transições e as travas do #382."""
+def checar_etapa(con, pid, nova, por_ia=False, liberado_pelo_admin=False):
+    """O que impede ir para `nova` (Invalido com o motivo): a tabela de transições e as travas do #382.
+    #448: `liberado_pelo_admin` solta só a trava da aprovação escrita, e só para Approved — vem da rota de ADMIN
+    (`liberar_aprovado`), nunca da IA; o envio ao fornecedor continua pedindo a aprovação registrada."""
     p = um(con, "SELECT * FROM suit_orders WHERE id=?", (int(pid),)) or {}
     if p:
         checar_transicao(p["status"], nova)
     if nova in SO_DA_EQUIPE and por_ia:
         raise Invalido("fotos recebidas, conferido e endereço enviado são da equipe (as fotos chegam pelo WhatsApp): "
                        "a IA não muda para essas etapas")
-    if nova in PRECISAM_DE_APROVACAO and not aprovacao_valida(con, pid):
+    solto = liberado_pelo_admin and nova == "approved" and not por_ia
+    if nova in PRECISAM_DE_APROVACAO and not solto and not aprovacao_valida(con, pid):
         e = estado_aprovacao(con, pid)
         raise Invalido("Sem a aprovação final escrita do cliente, válida para a arte e as medidas de agora, o pedido não vai "
                        f"para {dict((x[0], x[1]) for x in ETAPAS)[nova]}"
@@ -682,14 +685,14 @@ def anotar(con, pid, texto=None, kind="nota", status=None, imagem=None, user_id=
                    image_path=imagem, user_id=user_id, command_id=command_id)
 
 
-def mudar_etapa(con, pid, nova, user_id=None, motivo=None, por_ia=False):
+def mudar_etapa(con, pid, nova, user_id=None, motivo=None, por_ia=False, liberado_pelo_admin=False):
     """Troca a etapa e deixa o rastro na linha do tempo. Entregue/cancelado fecham o pedido.
     As travas do #382 (`checar_etapa`) valem para quem chamar: a tela, a nota, a IA."""
     etapa_valida(nova)
     p = um(con, "SELECT status FROM suit_orders WHERE id=?", (pid,))
     if not p or p["status"] == nova:
         return False
-    checar_etapa(con, pid, nova, por_ia)
+    checar_etapa(con, pid, nova, por_ia, liberado_pelo_admin)
     extra = {"sent_to_supplier_at": agora()} if nova == "sent_to_supplier" else {}
     if nova == "checked":
         extra = {"checked_at": agora(), "checked_by": user_id}
@@ -701,6 +704,25 @@ def mudar_etapa(con, pid, nova, user_id=None, motivo=None, por_ia=False):
     nome = dict((e[0], e[1]) for e in ETAPAS)
     anotar(con, pid, f"{nome[p['status']]} → {nome[nova]}" + (f": {motivo}" if motivo else ""), "etapa", nova, user_id=user_id)
     return True
+
+
+def liberar_aprovado(con, pid, user_id, motivo):
+    """#448 (dono, 29/10): "mover para aprovado com o nível de admin pra cima". O administrador leva o pedido a
+    Approved sem a aprovação final escrita registrada, com o motivo na linha do tempo. A transição continua valendo."""
+    motivo = re.sub(r"\s+", " ", motivo or "").strip()
+    if len(motivo) < 5:
+        raise Invalido("Escreva o motivo de liberar sem a aprovação escrita do cliente (ex.: aprovou por WhatsApp).")
+    p = um(con, "SELECT status, discarded_at FROM suit_orders WHERE id=?", (int(pid),))
+    if not p:
+        raise LookupError("Pedido não encontrado.")
+    if p["discarded_at"]:
+        raise Invalido("pedido descartado: não é pedido de macacão")
+    if p["status"] == "approved":
+        raise Invalido("O pedido já está em Approved.")
+    sem = not aprovacao_valida(con, pid)
+    texto = ("liberado pelo administrador sem a aprovação final escrita registrada: " if sem else "pelo administrador: ") + motivo[:500]
+    mudar_etapa(con, int(pid), "approved", user_id, texto, liberado_pelo_admin=True)
+    return sem
 
 
 PROXIMA = {
