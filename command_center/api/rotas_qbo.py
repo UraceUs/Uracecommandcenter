@@ -1,44 +1,65 @@
 """Rotas do QuickBooks e do detalhe do Asana (#436: saíram do rotas.py, sem mudar rota):
-invoices, lembretes de cobrança, resumo do QBO; detalhe da tarefa ao vivo.
+invoices, lembretes de cobrança, resumo do QBO; detalhe da tarefa, do espelho do Asana (#455).
 """
 import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from command_center.api import auth
 from command_center.api.cache_api import paginar
 from command_center.api.rotas import BASE, _links
 from command_center.db import auditar, get_db, todos, um
-from command_center.providers import NaoConectado, chamar
+from command_center.providers import NaoConectado, chamar, espelho_asana
 
 r = APIRouter(prefix=BASE)
 
 
-# ================================================================ Asana: detalhe ao vivo
+# ================================================================ Asana: o espelho da tarefa (#455)
 @r.get("/tasks/{tid}/detail")
-def task_detail(tid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
-    """Descrição, campos, subtarefas, anexos e comentários — ao vivo do Asana. Só leitura."""
-    t = um(con, "SELECT * FROM tasks WHERE id=?", (tid,))
+def task_detail(tid: int, atualizar: bool = False, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """Descrição, campos, subtarefas, anexos e comentários da tarefa — do espelho do Asana (#455), que a sincronia
+    mantém igual ao Asana. `atualizar=1` ("Atualizar do Asana") relê na hora; a tarefa nunca espelhada também.
+    Com o Asana fora, o espelho continua aparecendo, com o aviso."""
+    t = um(con, "SELECT id, mirrored_at FROM tasks WHERE id=?", (tid,))
     if not t:
         raise HTTPException(404, "Task not found.")
-    l = um(con, "SELECT external_id FROM entity_links WHERE entity_type='task' AND entity_id=? AND system='asana'", (tid,))
-    if not l:
+    gid = espelho_asana.gid_da_tarefa(con, tid)
+    if not gid:
         return {"connected": False, "reason": "tarefa sem vínculo com o Asana"}
-    gid = l["external_id"]
+    aviso = None
+    if atualizar or not t["mirrored_at"]:
+        try:
+            espelho_asana.espelhar(con, tid, gid)
+            con.commit()
+        except NaoConectado as e:
+            if not t["mirrored_at"]:
+                return {"connected": False, "reason": str(e)}
+            aviso = f"Asana fora agora ({str(e)[:120]}): mostrando o espelho"
+        except Exception as e:
+            if not t["mirrored_at"]:
+                raise HTTPException(502, f"Asana: {str(e)[:300]}")
+            aviso = f"Asana não respondeu ({str(e)[:120]}): mostrando o espelho"
+    saida = espelho_asana.detalhe(con, tid, BASE)
+    saida["espelho"]["aviso"] = aviso
+    return saida
+
+
+@r.get("/tasks/{tid}/anexos/{agid}")
+def task_anexo(tid: int, agid: str, u=Depends(auth.usuario_atual), con: sqlite3.Connection = Depends(get_db)):
+    """#455: abre o anexo do espelho. O link de download do Asana expira, então ele é pedido na hora."""
+    if not um(con, "SELECT 1 AS x FROM task_attachments WHERE task_id=? AND gid=?", (tid, agid)):
+        raise HTTPException(404, "Anexo não encontrado nesta tarefa.")
     try:
-        full = chamar("asana", "asana_tarefa", gid=gid)
-        saida = {"connected": True, "gid": gid, "task": full}
-        for chave, ferramenta in (("comments", "asana_comentarios"), ("attachments", "asana_anexos")):
-            try:
-                saida[chave] = chamar("asana", ferramenta, gid=gid)
-            except Exception as e:
-                saida[chave] = []; saida[chave + "_error"] = str(e)[:200]
-        return saida
+        link = chamar("asana", "anexo_link", gid=agid).get("download")
     except NaoConectado as e:
-        return {"connected": False, "reason": str(e)}
+        raise HTTPException(503, f"Asana não conectado: {e}")
     except Exception as e:
         raise HTTPException(502, f"Asana: {str(e)[:300]}")
+    if not link or not str(link).startswith("https://"):
+        raise HTTPException(404, "O Asana não deu link para este anexo.")
+    return RedirectResponse(link, status_code=302, headers={"Cache-Control": "no-store"})
 
 
 # ============================================================ QuickBooks (financeiro: MANAGER+)

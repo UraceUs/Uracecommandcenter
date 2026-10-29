@@ -60,7 +60,17 @@ def tarefa(cid, titulo, secao, status, quando, feitas=None, total=12, gid=None):
     return t
 
 t_david = tarefa(david, "David Pedalo_Urace Daily_Using Own Kart [1/1]", "SUNDAY", "open", d(3), 0, 12, "1218352906747605")
-tarefa(brian, "Bryan Sapata_Academy_2 stroke [3/4]", "SATURDAY", "open", d(2), 4, 12, "8880001")
+t_bryan = tarefa(brian, "Bryan Sapata_Academy_2 stroke [3/4]", "SATURDAY", "open", d(2), 4, 12, "8880001")
+# #455: um serviço já espelhado do Asana (descrição, subtarefas, comentário, anexo), como a sincronia deixaria
+con.execute("UPDATE tasks SET notes=?, asana_created_at=?, asana_modified_at=?, mirrored_at=? WHERE id=?",
+            ("Driver's name: Bryan Sapata\nKart: próprio (2 stroke)", "2026-10-01T12:00:00Z", "2026-10-28T12:00:00Z",
+             "2026-10-29T12:00:00Z", t_bryan))
+inserir(con, "task_subtasks", task_id=t_bryan, gid="e2e-s1", name="Signed waiver?", completed=1, sort=0)
+inserir(con, "task_subtasks", task_id=t_bryan, gid="e2e-s2", name="Kart ready", completed=0, sort=1)
+inserir(con, "task_comments", task_id=t_bryan, gid="e2e-c1", author="Coach Ficticio", text="Melhor volta 41.2: trabalhar a curva 3.",
+        created_at="2026-10-28T12:00:00Z")
+inserir(con, "task_attachments", task_id=t_bryan, gid="e2e-a1", name="volta-rapida.mp4", host="asana", size=1000,
+        created_at="2026-10-28T12:00:00Z")
 tarefa(brian, "Bryan Sapata_Academy_2 stroke [2/4]", "Finished Services", "completed", d(-14), 12, 12, "8880002")
 tarefa(brian, "Bryan Sapata_Academy_2 stroke [1/4]", "Finished Services", "completed", d(-28), 12, 12, "8880003")
 t_vencida = tarefa(theo, "Théo Mendes_Urace Daily_2 stroke [1/1]", "SATURDAY", "open", d(-5), 9, 12, "8880004")

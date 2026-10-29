@@ -18,7 +18,7 @@ from datetime import datetime
 
 from command_center.db import agora, atualizar, auditar, inserir, todos, um
 from command_center.providers import NaoConectado, REPO, chamar
-from command_center.providers import agenda_asana, identidade
+from command_center.providers import agenda_asana, espelho_asana, identidade
 
 # fonte: skills/urace-asana/SKILL.md — colunas do U-RACE
 PROJETO_URACE = "1205450093098920"
@@ -318,6 +318,14 @@ def conferir_sumidas(con, inicio, limite=MAX_CONFERIR):
     return marcadas
 
 
+def _no_espelho(con, fila, tid, gid, full):
+    """#455: a tarefa lida por inteiro já vai para o espelho (descrição e subtarefas, sem chamada a mais); se mudou
+    no Asana, entra na fila dos comentários e anexos."""
+    espelho_asana.gravar(con, tid, full)
+    if espelho_asana.precisa(con, tid, full.get("modificada_em")):
+        fila.append((tid, gid, full))
+
+
 def sync_asana(con):
     """Espelha o quadro U-RACE inteiro (menos "Matt tasks").
 
@@ -327,6 +335,7 @@ def sync_asana(con):
     """
     inicio = agora()
     novos = tarefas = 0
+    fila = []                     # #455: (tarefa, gid, tarefa inteira lida ou None) para o espelho completo
     try:
         secoes = chamar("asana", "asana_secoes", projeto_gid=PROJETO_URACE)
         for sec in secoes:
@@ -351,13 +360,17 @@ def sync_asana(con):
                     campos = dict(title=t.get("nome"), subtasks_total=t.get("subtarefas"), **comum)
                     if ja and ja["client_id"]:
                         campos.pop("subtasks_total")          # o resumo não sabe quantas estão feitas; mantém o lido
-                    _grava_tarefa(con, t["gid"], campos)
+                    tid, _ = _grava_tarefa(con, t["gid"], campos)
+                    if espelho_asana.precisa(con, tid, t.get("modificada_em")):
+                        fila.append((tid, t["gid"], None))
                     tarefas += 1
                     continue
                 bk = agenda_asana.agendamento_da_tarefa(con, t["gid"])
                 if bk:                     # #67: tarefa de agendamento do site — o card é o do driver, não o da descrição
-                    _grava_tarefa(con, t["gid"], dict(client_id=bk["card"], client_by="human" if bk["card"] else None,
-                                                     title=t.get("nome"), **comum))
+                    tid, _ = _grava_tarefa(con, t["gid"], dict(client_id=bk["card"], client_by="human" if bk["card"] else None,
+                                                               title=t.get("nome"), **comum))
+                    if espelho_asana.precisa(con, tid, t.get("modificada_em")):
+                        fila.append((tid, t["gid"], None))
                     tarefas += 1
                     continue
                 full = chamar("asana", "asana_tarefa", gid=t["gid"])
@@ -367,9 +380,10 @@ def sync_asana(con):
                 resp = _nome_valido(d["responsavel"]) or piloto
                 subs = full.get("subtarefas_lista") or []
                 if not resp:                                   # corrida, evento, coisa: tarefa sem cliente
-                    _grava_tarefa(con, t["gid"], dict(client_id=None, title=full.get("nome"), subtasks_total=len(subs),
-                                                     subtasks_done=sum(1 for x in subs if x.get("concluida")),
-                                                     **_resp_da_descricao(d), **comum))
+                    tid, _ = _grava_tarefa(con, t["gid"], dict(client_id=None, title=full.get("nome"), subtasks_total=len(subs),
+                                                               subtasks_done=sum(1 for x in subs if x.get("concluida")),
+                                                               **_resp_da_descricao(d), **comum))
+                    _no_espelho(con, fila, tid, t["gid"], full)
                     tarefas += 1
                     continue
                 cid, novo = _upsert_cliente(con, resp, d["email"], d["telefone"],
@@ -377,11 +391,14 @@ def sync_asana(con):
                                             d["nascimento"], email_alt=d.get("email_alt"))
                 novos += novo
                 _liga(con, "client", cid, "asana", t["gid"], ASANA_LINK.format(proj=PROJETO_URACE, gid=t["gid"]))
-                _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"),
-                                                 subtasks_total=len(subs),
-                                                 subtasks_done=sum(1 for s in subs if s.get("concluida")),
-                                                 **_resp_da_descricao(d), **comum))
+                tid, _ = _grava_tarefa(con, t["gid"], dict(client_id=cid, title=full.get("nome"),
+                                                           subtasks_total=len(subs),
+                                                           subtasks_done=sum(1 for s in subs if s.get("concluida")),
+                                                           **_resp_da_descricao(d), **comum))
+                _no_espelho(con, fila, tid, t["gid"], full)
                 tarefas += 1
+        # #455: o espelho completo (comentários, anexos e o que mudou nas colunas de resumo), com teto por rodada
+        espelho = espelho_asana.rodada(con, fila, chamar_fn=chamar)
         # tarefa que sumiu do quadro: o Asana diz se foi excluída (404) — dono, 14/10 (#227)
         sumidas = conferir_sumidas(con, inicio)
         # coluna RACES vira a lista de corridas (para convidar os Pro Racing Drivers)
@@ -397,9 +414,10 @@ def sync_asana(con):
         identidade.limpar_nomes_de_servico(con)
         unidos = identidade.deduplicar(con, por="sync")
         identidade.recalcular_status(con)
-        _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos, {unidos} unidos, {limpos} não-clientes removidos, {sumidas} excluídas no Asana", inicio)
+        _marca(con, "asana", True, tarefas, f"{tarefas} tarefas em {len(secoes)} colunas, {novos} clientes novos, {unidos} unidos, {limpos} não-clientes removidos, {sumidas} excluídas no Asana, "
+               f"{espelho['espelhadas']} espelhadas por inteiro ({espelho['na_fila']} na fila)" + (f" — {espelho['parou']}" if espelho["parou"] else ""), inicio)
         return {"ok": True, "tarefas": tarefas, "clientes_novos": novos, "colunas": len(secoes), "unidos": unidos, "removidos": limpos,
-                "excluidas_no_asana": sumidas}
+                "excluidas_no_asana": sumidas, "espelho": espelho}
     except NaoConectado as e:
         _marca(con, "asana", False, 0, f"não conectado: {e}", inicio, desconectado=True)
         return {"ok": False, "motivo": "not connected"}

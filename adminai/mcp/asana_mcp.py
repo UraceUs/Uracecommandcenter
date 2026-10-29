@@ -58,7 +58,7 @@ CAMPOS_TAREFA = ("gid,name,completed,completed_at,due_on,due_at,notes,permalink_
                  "memberships.section.gid,memberships.section.name,"
                  "custom_fields.name,custom_fields.type,custom_fields.display_value,"
                  "num_subtasks,modified_at,created_at")
-CAMPOS_LISTA = ("gid,name,completed,due_on,assignee.name,num_subtasks,"
+CAMPOS_LISTA = ("gid,name,completed,due_on,assignee.name,num_subtasks,modified_at,"
                 "memberships.section.name,custom_fields.name,custom_fields.display_value")
 
 
@@ -182,6 +182,7 @@ def _resumo_tarefa(t):
                                    for m in t.get("memberships", [])})) or None,
         "subtarefas": t.get("num_subtasks"),
         "campos": cfs or None,
+        "modificada_em": t.get("modified_at"),       # #455: o espelho só relê o que mudou
     }
 
 
@@ -250,15 +251,19 @@ def asana_buscar(projeto_gid, texto, incluir_concluidas=False):
     {"gid": {"type": "string"}}, ["gid"])
 def asana_tarefa(gid):
     t = _ler_tarefa(gid)
-    subs = _req(f"/tasks/{gid}/subtasks?opt_fields=gid,name,completed,due_on&limit=100")["data"]
+    # #455: paginado — o espelho precisa de todas, não só das 100 primeiras
+    subs = _paginar(f"/tasks/{gid}/subtasks", {"opt_fields": "gid,name,completed,completed_at,due_on,assignee.name"}, limite=1000)
     r = _resumo_tarefa(t)
     r.update({
         "notas": t.get("notes"), "link": t.get("permalink_url"),
         "projetos": [(m.get("project") or {}).get("name") for m in t.get("memberships", [])],
         "pai": (t.get("parent") or {}).get("name"),
         "criada_em": t.get("created_at"), "modificada_em": t.get("modified_at"),
+        "concluida_em": t.get("completed_at"),
         "subtarefas_lista": [{"gid": s["gid"], "nome": s["name"],
-                              "concluida": s["completed"], "vence_em": s.get("due_on")}
+                              "concluida": s["completed"], "vence_em": s.get("due_on"),
+                              "concluida_em": s.get("completed_at"),
+                              "responsavel": (s.get("assignee") or {}).get("name")}
                              for s in subs],
     })
     return r
@@ -269,9 +274,10 @@ def asana_tarefa(gid):
     "Comentários (stories de comentário) de uma tarefa, do mais antigo ao mais novo.",
     {"gid": {"type": "string"}}, ["gid"])
 def asana_comentarios(gid):
-    st = _req(f"/tasks/{gid}/stories?opt_fields=created_at,created_by.name,text,type,"
-              f"resource_subtype&limit=100")["data"]
-    return [{"quando": s["created_at"], "quem": (s.get("created_by") or {}).get("name"),
+    # #455: paginado — as stories vêm da mais antiga para a mais nova, e as de sistema (campo mudou, moveu de
+    # coluna) ocupavam as 100 primeiras: o comentário novo de uma tarefa movimentada não aparecia
+    st = _paginar(f"/tasks/{gid}/stories", {"opt_fields": "created_at,created_by.name,text,type,resource_subtype"}, limite=5000)
+    return [{"gid": s.get("gid"), "quando": s["created_at"], "quem": (s.get("created_by") or {}).get("name"),
              "texto": s.get("text")}
             for s in st if s.get("resource_subtype") == "comment_added"]
 
@@ -283,7 +289,15 @@ def asana_comentarios(gid):
 def asana_anexos(gid):
     a = _req(f"/tasks/{gid}/attachments?opt_fields=name,download_url,created_at,host,size")["data"]
     return [{"gid": x["gid"], "nome": x.get("name"), "origem": x.get("host"),
-             "quando": x.get("created_at"), "download": x.get("download_url")} for x in a]
+             "quando": x.get("created_at"), "download": x.get("download_url"), "tamanho": x.get("size")} for x in a]
+
+
+def anexo_link(gid):
+    """#455: o link de download do Asana expira; o painel pede um novo na hora de abrir o anexo.
+    Só leitura e fora das ferramentas da IA (não é @srv.ferramenta)."""
+    a = _req(f"/attachments/{gid}?opt_fields=name,download_url,view_url,permanent_url,host")["data"]
+    return {"gid": a.get("gid") or gid, "nome": a.get("name"), "origem": a.get("host"),
+            "download": a.get("download_url") or a.get("view_url") or a.get("permanent_url")}
 
 
 # ----------------------------------------------------------- ESCRITA
