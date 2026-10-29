@@ -261,3 +261,16 @@ def test_comentarios_paginados_com_gid_e_link_do_anexo_com_reserva(monkeypatch):
     monkeypatch.setattr(a, "_req", lambda caminho, **k: {"data": {"gid": "9", "name": "foto.png", "download_url": None,
                                                                   "view_url": "https://app.asana.com/app/asana/-/get_asset?x=1", "host": "asana"}})
     assert a.anexo_link("9")["download"] == "https://app.asana.com/app/asana/-/get_asset?x=1"
+
+
+def test_listas_nao_levam_a_descricao_so_o_detalhe(cli, con, monkeypatch):
+    """#457: a lista de tarefas e o card do cliente mandavam a descrição inteira de cada tarefa (178 mil caracteres
+    para 136 tarefas em produção). A descrição vai só no detalhe."""
+    _, tid = _espelhado(con, monkeypatch)
+    lista = cli.get(B + "/tasks", params={"status": "all"}).json()
+    assert lista and all("notes" not in t for t in lista)
+    cid = um(con, "SELECT client_id FROM tasks WHERE id=?", (tid,))["client_id"]
+    card = cli.get(B + f"/clients/{cid}").json()
+    assert card["tasks"] and all("notes" not in t for t in card["tasks"])
+    monkeypatch.setattr(espelho_asana, "chamar", _nao_chama)
+    assert cli.get(B + f"/tasks/{tid}/detail").json()["task"]["notas"].startswith("Driver's name")
