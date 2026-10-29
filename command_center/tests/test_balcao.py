@@ -136,6 +136,22 @@ def test_codigo_novo_cadastra_peca_e_o_gerente_cria_o_item_no_quickbooks(cli):
     assert nome == "criar_item" and kw["categoria_id"] == "c1" and kw["preco"] == 45
 
 
+def test_codigo_recusado_nao_deixa_peca_orfa_nem_preco_mudado(cli):
+    """Debug 29/10: cadastrar o código de uma peça nova gravava a peça e depois o código. Código recusado (já é de
+    outra peça, ou ilegível) respondia 400, mas a peça nova ficava na prateleira, sem código (a conexão é autocommit:
+    o rollback não desfazia nada), e cada nova tentativa criava outra. O preço do gerente também ficava mudado."""
+    cod = prepara_peca(cli, cli.para)                 # o código da embalagem já é do para-choque
+    h = entra(cli)
+    antes = conectar().execute("SELECT COUNT(*) FROM stock_items").fetchone()[0]
+    for codigo in (cod, "x"):
+        r = cli.post(f"{B}/codigos", json={"codigo": codigo, "nome": "Chain 219 (teste)", "category": "hardware"}, headers=h)
+        assert r.status_code == 400, r.text
+    assert conectar().execute("SELECT COUNT(*) FROM stock_items").fetchone()[0] == antes, "nenhuma peça órfã"
+    hg = entra(cli, "ger@urace.us")
+    assert cli.post(f"{B}/codigos", json={"codigo": cod, "item_id": cli.pneu, "price": 45}, headers=hg).status_code == 400
+    assert estoque.item(conectar(), cli.pneu)["price"] is None, "sem o código, o preço também não muda"
+
+
 def test_etiqueta_urace_para_peca_sem_codigo(cli):
     h = entra(cli)
     assert cli.post(f"{B}/itens/{cli.pneu}/codigo-urace", headers=h).json()["codigo"] == f"URC{cli.pneu:06d}"
@@ -237,6 +253,40 @@ def test_desfazer_devolve_ao_estoque_e_tira_da_invoice(cli):
     assert cli.qbo.chamadas[-1][1]["linhas"] == [], "sem linha: a invoice é anulada no QuickBooks"
     assert um(conectar(), "SELECT status FROM parts_invoices")["status"] == "anulada"
     assert estoque.saldo(conectar(), cli.para, client_id=None) == 5
+
+
+@pytest.mark.parametrize("rota", ["leituras/{}/desfazer", "rapido/lancada/{}/desfazer"])
+def test_dois_toques_no_desfazer_devolvem_a_peca_uma_vez_so(cli, monkeypatch, rota):
+    """Debug 29/10: o "Desfazer" (o do computador e o do celular) não trava enquanto a resposta não chega. Dois toques
+    viravam dois pedidos que liam "ainda não desfeita" juntos e devolviam a peça duas vezes: dois estornos no razão e
+    o saldo errado. Os dois pedidos se encontram no meio do desfazer (a barreira): o segundo tem de esperar o primeiro
+    e ouvir "já foi desfeita"."""
+    import threading
+    prepara_peca(cli, cli.para)
+    h = entra(cli)
+    sid = lanca(cli, h, cli.para).json()["leitura"]["id"]
+    barreira, devolver = threading.Barrier(2, timeout=1.5), estoque.devolver_venda
+
+    def no_meio(*a, **k):
+        try:
+            barreira.wait()
+        except threading.BrokenBarrierError:          # sozinho: o outro pedido está esperando a vez (o certo)
+            pass
+        return devolver(*a, **k)
+    monkeypatch.setattr(estoque, "devolver_venda", no_meio)
+    codigos = []
+
+    def toque():
+        codigos.append(cli.post(f"{B}/{rota.format(sid)}", headers=h).status_code)
+    toques = [threading.Thread(target=toque) for _ in range(2)]
+    for t in toques:
+        t.start()
+    for t in toques:
+        t.join()
+    assert sorted(codigos) == [200, 400]
+    con = conectar()
+    estornos = con.execute("SELECT COUNT(*) FROM stock_moves WHERE item_id=? AND reason='estorno do balcão'", (cli.para,))
+    assert estornos.fetchone()[0] == 1 and estoque.saldo(con, cli.para, client_id=None) == 5 and estoque.conferir(con) == []
 
 
 def test_quickbooks_fora_do_ar_nao_perde_a_leitura(cli):
@@ -365,6 +415,55 @@ def test_invoice_aberta_aparece_em_precisa_de_atencao_ate_ser_enviada(cli):
     assert a and a[0]["title"] == "1 invoice(s) de peças para enviar" and "Leo Santos" in a[0]["facts"][0][0]
     cli.post(f"{B}/invoices/{pid}/enviar", headers=hg)
     assert not pendencia()
+
+
+def test_invoice_que_nao_subiu_fica_na_fila_e_na_atencao_com_o_total_das_pecas(cli):
+    """Debug 29/10: a primeira subida da invoice de peças falhou (QuickBooks fora do ar). O total ficava 0, e a fila
+    "para enviar" e "Precisa de atenção" (que olham total > 0) não mostravam a invoice: a peça usada só seria cobrada
+    se alguém abrisse aquele card de novo. O total é o das linhas daqui, suba ou não; a que tem erro fica na fila."""
+    prepara_peca(cli, cli.para)
+    h = entra(cli)
+    cli.qbo.falhar = "HTTP 503 em POST /invoice"
+    r = lanca(cli, h, cli.para).json()
+    sid, inv = r["leitura"]["id"], r["invoices"][0]
+    assert inv["qbo_error"] and inv["total"] == 89.5
+    hg = entra(cli, "ger@urace.us")
+
+    def fila():
+        return cli.get(f"{B}/invoices", headers=hg).json()
+
+    def pendencia():
+        return [a for a in cli.get("/ops/api/needs-attention").json() if a["entity"]["type"] == "parts_invoice"]
+    assert fila()["total"] == 1 and fila()["itens"][0]["id"] == inv["id"]
+    a = pendencia()
+    assert a and a[0]["level"] == "HIGH" and a[0]["facts"][0][1] == "US$ 89.50 · erro"
+    # subiu; depois o desfazer da única peça não conseguiu anular lá: sem linha, mas a fila continua mostrando o erro
+    cli.qbo.falhar = None
+    assert cli.post(f"{B}/invoices/{inv['id']}/sincronizar", headers=hg).json()["qbo_invoice_id"] == "inv-1"
+    cli.qbo.falhar = "HTTP 503 em POST /invoice"
+    h = entra(cli)
+    assert cli.post(f"{B}/leituras/{sid}/desfazer", headers=h).status_code == 200
+    hg = entra(cli, "ger@urace.us")
+    assert fila()["total"] == 1 and fila()["itens"][0]["qbo_error"] and pendencia()
+
+
+def test_peca_do_cobrar_nao_fica_tambem_a_cobrar_na_proxima_invoice(cli):
+    """Debug 29/10: a peça lida no COBRAR já está na invoice de peças do dia. Com o QuickBooks fora na hora, ela ficava
+    também "a cobrar" ("Cobrar peças do estoque" em Precisa de atenção, e a IA mandando pôr na próxima invoice do
+    cliente), e o "Tentar de novo" da invoice de peças cobrava a mesma peça outra vez."""
+    from command_center.api import atencao
+    prepara_peca(cli, cli.para)
+    h = entra(cli)
+    cli.qbo.falhar = "HTTP 503 em POST /invoice"
+    inv = lanca(cli, h, cli.para).json()["invoices"][0]
+    assert [l["name"] for l in inv["linhas"]] == ["Front bumper Tony Kart"], "a peça está na invoice de peças"
+    con = conectar()
+    assert estoque.cobrancas(con, cli.leo) == [], "e não fica a cobrar numa outra invoice"
+    assert not [i for i in atencao.coletar(con) if i["key"].startswith("estoque-cobrar")]
+    cli.qbo.falhar = None
+    hg = entra(cli, "ger@urace.us")
+    r = cli.post(f"{B}/invoices/{inv['id']}/sincronizar", headers=hg).json()
+    assert r["qbo_invoice_id"] == "inv-1" and [l["name"] for l in r["linhas"]] == ["Front bumper Tony Kart"]
 
 
 # ------------------------------------------------------------------ as duas vias no balcão (dono, 06/10)

@@ -397,7 +397,9 @@ def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, c
                                                      by_user_id=por, notes="balcão")
         pinv_id = _invoice_do_dia(con, client_id, data or hoje(), por)["id"]   # #180: a da data da leitura
         charge_id = estoque.registrar_cobranca(con, it["id"], client_id, qty, move_id=move, by_user_id=por, notes="balcão")
-        atualizar(con, "stock_charges", charge_id, parts_invoice_id=pinv_id)
+        # a cobrança nasce dentro da invoice de peças do dia: nunca fica "a cobrar" para outra invoice (a atenção
+        # "Cobrar peças do estoque", a IA), senão a peça sai cobrada duas vezes quando a de peças não sobe na hora
+        atualizar(con, "stock_charges", charge_id, parts_invoice_id=pinv_id, status="invoiced")
     elif modo == "guardar":
         estoque.entrada(con, it["id"], qty=qty, para=loc, client_id=client_id, reason="guardado do cliente",
                         by_user_id=por, source="balcao", notes="balcão")
@@ -477,6 +479,9 @@ def sincronizar_qbo(con, pinv_id):
         return um(con, "SELECT * FROM parts_invoices WHERE id=?", (p["id"],))
     corpo = [{"item_id": l["qbo_item_id"], "quantidade": l["qty"], "unitario": l["unit_price"],
               "descricao": l["name"] + (f" · {l['sku']}" if l["sku"] else "")} for l in ls]
+    # o total é o das linhas daqui, e vale também quando a subida falha: com 0, a invoice que não subiu sumia da fila
+    # "para enviar" e de "Precisa de atenção", e a peça só era cobrada se alguém abrisse o card de novo (debug 29/10)
+    total = round(sum(float(l["qty"]) * float(l["unit_price"]) for l in ls), 2)
     try:
         cliente = cliente_qbo(con, p["client_id"])
         if not cliente:
@@ -484,12 +489,11 @@ def sincronizar_qbo(con, pinv_id):
         r = _qbo().invoice_pecas_sistema(cliente_id=cliente, linhas=corpo, memo=memo(con, p), data=p["service_date"],
                                          invoice_id=p["qbo_invoice_id"])
     except NaoConectado:
-        atualizar(con, "parts_invoices", p["id"], qbo_error="QuickBooks não está conectado")
+        atualizar(con, "parts_invoices", p["id"], total=total, qbo_error="QuickBooks não está conectado")
         return um(con, "SELECT * FROM parts_invoices WHERE id=?", (p["id"],))
     except Exception as e:                                       # noqa: BLE001 — vai para a tela
-        atualizar(con, "parts_invoices", p["id"], qbo_error=str(e)[:400])
+        atualizar(con, "parts_invoices", p["id"], total=total, qbo_error=str(e)[:400])
         return um(con, "SELECT * FROM parts_invoices WHERE id=?", (p["id"],))
-    total = round(sum(float(l["qty"]) * float(l["unit_price"]) for l in ls), 2)
     atualizar(con, "parts_invoices", p["id"], qbo_invoice_id=str(r.get("id") or p["qbo_invoice_id"]),
               doc_number=r.get("numero") or p["doc_number"], total=total, qbo_error=None, qbo_synced_at=agora(),
               status="anulada" if r.get("anulada") else "aberta")
@@ -596,8 +600,10 @@ def _guardando(con, client_id):
 
 
 def a_enviar(con, limit=50, offset=0):
-    """As invoices de peças abertas, para alguém apertar "Enviar" (a paga no cartão sai da fila)."""
-    total = um(con, "SELECT COUNT(*) AS n FROM parts_invoices WHERE status='aberta' AND total>0 AND paid_at IS NULL")["n"]
-    itens = todos(con, """SELECT * FROM parts_invoices WHERE status='aberta' AND total>0 AND paid_at IS NULL
-                          ORDER BY service_date, id LIMIT ? OFFSET ?""", (limit, offset))
+    """As invoices de peças abertas, para alguém apertar "Enviar" (a paga no cartão sai da fila). A que o QuickBooks
+    recusou fica, com o erro e o "Tentar de novo", mesmo sem linha: aí é a anulação lá que não aconteceu."""
+    onde = "status='aberta' AND paid_at IS NULL AND (total>0 OR qbo_error IS NOT NULL)"
+    total = um(con, f"SELECT COUNT(*) AS n FROM parts_invoices WHERE {onde}")["n"]
+    itens = todos(con, f"""SELECT * FROM parts_invoices WHERE {onde}
+                           ORDER BY service_date, id LIMIT ? OFFSET ?""", (limit, offset))
     return {"itens": [invoice_publica(con, p) for p in itens], "total": total, "limit": limit, "offset": offset}

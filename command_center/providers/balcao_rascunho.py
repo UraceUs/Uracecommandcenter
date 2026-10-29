@@ -437,9 +437,11 @@ def _sai_do_estoque(con, d, li, qty, por, pid=None):
                                                                "falta": falta, "client_id": d["client_id"]})
     ch = estoque.registrar_cobranca(con, li["item_id"], d["client_id"], qty, move_id=move, by_user_id=por,
                                     notes=f"balcão: rascunho #{d['id']}")
-    campos = {"unit_price": li["unit_price"]}                   # o preço da linha, não o da ficha
+    # o preço da linha, não o da ficha; e a cobrança já é da invoice do rascunho: nunca fica "a cobrar" para outra
+    # (a atenção, a IA) enquanto o QuickBooks não responde. Se a invoice não sair, `_devolver_ao_estoque` a dispensa.
+    campos = {"unit_price": li["unit_price"], "status": "invoiced"}
     if pid:
-        campos.update(status="invoiced", parts_invoice_id=pid)
+        campos["parts_invoice_id"] = pid
     atualizar(con, "stock_charges", ch, **campos)
     atualizar(con, "counter_draft_lines", li["id"], move_id=move, charge_id=ch)
 
