@@ -31,7 +31,8 @@ Os blocos (`tipo`):
 - ``cta``: titulo, texto, ctas
 - ``posts``: eyebrow, titulo, intro, n — os artigos no ar (do banco)
 - ``cartoes_painel``: eyebrow, titulo, intro, pagina — os cartões de Site › Cartões das páginas (academy, pro-team…)
-- ``funcao``: render — `render(host, ctx) -> html` para o que só uma página tem (a calculadora da Winter)
+- ``funcao``: render — `render(host, ctx) -> html` para o que só uma página tem (a calculadora da Winter). O `ctx` da rota
+  traz `cartoes(pagina)`, `planos()` e `servicos()` (os do painel; None com o banco fora), `caminho` e `enviado`
 
 Todo bloco aceita ``fundo`` (clara, escura, vermelha) e ``ancora`` (o `id` da seção, para link `#ancora`).
 

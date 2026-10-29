@@ -13,14 +13,14 @@ Dono, 29/10: *"sim, pode trazer o texto e recriar a winter"*. O texto é o da p�
 - o contato direto da equipe sai pelo formulário e pela agenda do Lucas (o telefone da página de hoje não entra no
   repositório público, #244).
 
-Três trechos que o urace.us de hoje esconde (`display:none`) entram, porque a lista da #505 os pede: "We bring everything
-/ The work nobody sees / The long game", "The season on one page" e o "Next step". O "What that is worth" fica de fora.
+O que o urace.us de hoje esconde (`display:none`) fica de fora, como lá: "We bring everything / The work nobody sees / The
+long game", "The season on one page" (07), o "Next step" e o "What that is worth"; a numeração dos capítulos segue a de lá.
 """
 from datetime import date, timedelta
 
 from command_center.vitrine import blocos
 from command_center.vitrine.blocos import e, img, inline
-from command_center.vitrine.paginas import usd
+from command_center.vitrine.paginas import _karts_do_painel, usd
 
 CAMINHO = "/winter/"
 ALVO = "2027-01-15T08:00:00-05:00"                                  # lights out, SKUSA Winter R1: 15 Jan 2027, 8:00 am ET
@@ -291,21 +291,20 @@ def _escolha(b, i, host, ctx):
     return _secao(b, i, miolo, "winter-escolha")
 
 
-def _karts_com_preco():
+def _karts_com_preco(servicos):
     """Os karts da estimativa com a diária do PAINEL: o serviço ativo de cada kart do Arrive and Drive (#263), pela mesma
-    regra da página dele (`paginas._karts_do_painel`). Kart sem serviço ativo (ou com dois) sai da estimativa; banco fora,
-    a página cai no preço de sempre do site (`conteudo.KARTS`), como o Arrive and Drive."""
-    from command_center.api.vitrine import _servicos_do_site       # a rota importa este módulo: só na hora
-    from command_center.vitrine.paginas import _karts_do_painel
+    regra da página dele (`paginas._karts_do_painel`). `servicos` são os do painel, que a rota passa no contexto
+    (`api.vitrine._servicos_do_site`). Kart sem serviço ativo (ou com dois) sai da estimativa; banco fora (None), a página
+    cai no preço de sempre do site (`conteudo.KARTS`), como o Arrive and Drive."""
     precos = {k["nome"].lower(): (sv["price"] if sv else k["preco"])
-              for k, sv in _karts_do_painel(_servicos_do_site()) if not k.get("proprio")}
+              for k, sv in _karts_do_painel(servicos) if not k.get("proprio")}
     return [(k, precos[k["chave"].lower()]) for k in KARTS_DA_ESTIMATIVA if k["chave"].lower() in precos]
 
 
 def _estimativa(b, i, host, ctx):
     """"What it costs": a diária do kart do painel × os dias de teste que cabem na estadia do plano (o `winter.js` faz a
     conta; o número nunca é texto da página). O fim de semana de corrida e as opções: "quoted per event / separately"."""
-    karts = _karts_com_preco()
+    karts = _karts_com_preco(ctx["servicos"]() if ctx.get("servicos") else None)
     marcado = "2s" if any(k["kt"] == "2s" for k, _p in karts) else (karts[0][0]["kt"] if karts else None)
     botoes = "".join(
         f'<button type="button" class="winter-kt" data-kt="{k["kt"]}" data-preco="{preco:g}" data-nome="{e(k["nome"])}" '
@@ -465,18 +464,6 @@ WINTER = {
                     ("arrive-drive-first-corner.webp", "A URACE kart through the first corner", "Race day at Orlando Kart Center."),
                     ("banner-topo-lp-urace-1.webp", "URACE karts on track",
                      "Trackside, every session. The same people from first test to last round.")))),
-        {"tipo": "cartoes", "rotulo_secao": "The crew", "itens": [
-            {"rotulo": "At the event", "titulo": "We bring everything",
-             "texto": "You fly in, the driver drives, we handle the rest. The same structure at local, regional and national events.",
-             "lista": ["Kart and engine", "Spares package", "Tent and hospitality", "Mechanic and engineer",
-                       "A coach on the driver all weekend"]},
-            {"rotulo": "Between events", "titulo": "The work nobody sees",
-             "texto": "Why four rounds on one circuit beat four rounds on four tracks.",
-             "lista": ["Testing at Orlando Kart Center", "Data and onboard review", "Set-up carried round to round",
-                       "Physical and race-craft work"]},
-            {"rotulo": "The driver", "titulo": "The long game",
-             "texto": "The win is the driver who flies home in March. Not one result in January.",
-             "lista": ["One class, chosen properly", "Four international rounds", "A record that travels"]}]},
         _funcao(_escolha, fundo="escura", ancora="decision", eyebrow="04 · Our call", titulo="The engine call is ours",
                 intro="Three championships, three engines. We pick the package. That’s our job.",
                 motores_titulo="Engine package · our call", motores=MOTORES,
@@ -537,22 +524,6 @@ WINTER = {
                  "[Victoria & Albert’s](https://www.google.com/maps/search/?api=1&query=Victoria+%26+Albert%27s%2C+Disney%27s"
                  "+Grand+Floridian) · 1 star · Disney’s Grand Floridian",
                  "Plus 14 Bib Gourmand picks across the city. We book the table."]}]},
-        {"tipo": "definicoes", "ancora": "next", "eyebrow": "07 · Technical data", "titulo": "The season on one page", "itens": [
-            ("Base", "Orlando Kart Center · 10724 Cosmonaut Blvd, Orlando, Florida 32824"),
-            ("Season window", "January to March 2027"),
-            ("Home rounds", "SKUSA Winter Series R1–2 · 15–17 Jan · R3–4 · 12–14 Feb · IAME"),
-            ("Optional", "Florida Winter Tour (ROK) · Rotax Winter Trophy (dates to confirm) · FLKC Florida Open"),
-            ("Testing windows", "19–21 Jan · 25–28 Jan · 1–11 Feb"),
-            ("At the event", "Kart, engine, spares, tent, mechanic, engineer, coach on the driver"),
-            ("Between events", "Testing, data and onboard review, set-up carried round to round"),
-            ("Off track", "Base camp, concierge, athletic camp, mental performance, restaurant bookings")]},
-        {"tipo": "passos", "eyebrow": "Next step", "titulo": "Send three things. We build the real calendar.",
-         "intro": ("With these we lock the class, the testing days, the entries and the first meeting with the head coach. "
-                   "Send an onboard too: the coach reviews it before you land."),
-         "itens": [("Date of birth.", "It sets the racing age on 1 January."),
-                   ("Weight in full gear.", "It decides the class as much as age does."),
-                   ("The dates of your stay in Florida.", ())],
-         "ctas": [("Build your winter", "#build")]},
         _funcao(_estimativa, fundo="escura", ancora="price", eyebrow="08 · Estimate", titulo="What it costs",
                 intro="Built from your plan above. An estimate, not a quote: the final number comes once class and dates are locked.",
                 kart_titulo="Kart & equipment", testes_titulo="Testing days with the crew",

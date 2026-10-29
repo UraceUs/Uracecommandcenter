@@ -164,3 +164,14 @@ def test_contato_da_equipe_sem_telefone_alem_do_principal(cli):
     assert set(re.findall(r'href="tel:([^"]+)"', html)) <= {conteudo.SITE["telefone_e164"]}
     assert 'href="mailto:lucas@urace.us"' in html
     assert 'href="https://calendar.app.google/whLkkpp82fUzsfvT8" rel="noopener"' in html
+
+
+def test_o_que_o_urace_us_de_hoje_esconde_fica_de_fora(cli):
+    """No urace.us de 29/10 estes trechos estão com `display:none`: o dono tirou da página, então aqui também não saem."""
+    html = cli.get("/winter/").text
+    for trecho in ("We bring everything", "The work nobody sees", "The long game", "The season on one page",
+                   "Send three things", "What that is worth"):
+        assert trecho not in html, trecho
+    # o que lá está à mostra continua
+    for trecho in ("Snow stops racing. Orlando doesn", "Your race weekends", "The engine call is ours", "What it costs"):
+        assert trecho in html, trecho
