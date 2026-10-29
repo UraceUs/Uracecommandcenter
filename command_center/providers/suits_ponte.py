@@ -328,6 +328,22 @@ def _vetor_sem_metadados(nome, dados):
     return re.sub(rb"(?m)^%%(?:For|Creator|Title|Author|CreationDate):[^\r\n]*[\r\n]*", b"", dados)
 
 
+def _texto_do_pdf(nome, dados):
+    """O texto das páginas, quando o arquivo é PDF (o .ai de hoje também é). Debug 29/10: no PDF de verdade o conteúdo
+    vem comprimido, e procurar o e-mail ou o nome do cliente nos bytes crus não achava nada. Sem acento, minúsculo e
+    com os espaços juntos, como as marcas. Não deu para ler o texto: o arquivo não sai (revisão do Mio, #382)."""
+    import io
+    if b"%PDF" not in dados[:1024]:
+        return ""
+    try:
+        from pypdf import PdfReader
+        texto = " ".join(pg.extract_text() or "" for pg in PdfReader(io.BytesIO(dados)).pages)
+    except Exception as e:
+        raise Recusado(f"não deu para ler o texto de {nome} ({type(e).__name__}) e conferir que não tem dado do cliente: "
+                       "o arquivo não sai. Peça o PDF exportado de novo.")
+    return _sem_acento(re.sub(r"\s+", " ", texto).lower())
+
+
 def limpar_para_designer(arquivos, pedido):
     """#382 (C): o que vai ao designer sai sem metadados, e o arquivo que ainda contenha o e-mail, o telefone, o
     endereço ou o nome completo do cliente não sai. O nome do arquivo com o nome ou o e-mail do cliente é trocado."""
@@ -342,8 +358,9 @@ def limpar_para_designer(arquivos, pedido):
         if any(_sem_acento(m) in nome_baixo or m in nome.lower() for _, m in marcas):
             nome = f"Suits-{pedido['id']}-ref-{i}{os.path.splitext(nome)[1].lower()}"
         baixo = dados.lower()
-        achou = [rot for rot, m in marcas if m.encode() in baixo]
-        achou += [rot for rot, d in digitos if d.encode() in dados]
+        texto = _texto_do_pdf(nome, dados)               # o PDF guarda o texto comprimido: os bytes crus não bastam
+        achou = [rot for rot, m in marcas if m.encode() in baixo or (texto and _sem_acento(m) in texto)]
+        achou += [rot for rot, d in digitos if d.encode() in dados or (texto and d in re.sub(r"[\s().+-]", "", texto))]
         if achou:
             raise Recusado(f"o arquivo {nome} contém {', '.join(dict.fromkeys(achou))}: não vai ao designer. Use um arquivo "
                            "só com o design.")
