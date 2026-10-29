@@ -50,3 +50,15 @@ def _selo_de_teste(_pasta_do_selo, monkeypatch):
     selo_teste.guardar_o_real()
     monkeypatch.setenv("CC_WAIVER_SEAL_DIR", _pasta_do_selo)
     monkeypatch.setattr(selo_waiver, "_carimbadores", lambda: [("urn:test:tsa-falsa", selo_teste.tsa())])
+
+
+@pytest.fixture(autouse=True)
+def _limites_do_site_zerados():
+    """#485 guarda na memória do processo quantos envios cada IP/e-mail fez nos formulários do site. Entre testes isso
+    vazava: conforme a divisão do CI em partes, um teste anterior gastava o limite de um e-mail e o seguinte levava
+    400 (debug 29/10). Cada teste começa com os limites zerados."""
+    import sys
+    vitrine = sys.modules.get("command_center.api.vitrine")
+    if vitrine is not None:
+        vitrine._envios.clear()
+    yield

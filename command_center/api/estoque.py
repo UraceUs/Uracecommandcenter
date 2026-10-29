@@ -198,13 +198,13 @@ def rota_contar(dados: ContarIn, request: Request, con: sqlite3.Connection = Dep
     """Contagem física. **Só mexe no item contado** — o que não veio no pedido fica como
     está, porque contagem parcial que zera o resto some com o estoque inteiro."""
     try:
-        res = estoque.contar(con, dados.item_id, dados.qty, onde=dados.local, client_id=dados.client_id,
-                             by_user_id=u["id"], notes=dados.nota)
+        with transacao(con, imediata=True):       # ler o saldo e gravar o novo sem ninguém no meio
+            res = estoque.contar(con, dados.item_id, dados.qty, onde=dados.local, client_id=dados.client_id,
+                                 by_user_id=u["id"], notes=dados.nota)
+            _auditar(con, request, u, "stock.count", dados.item_id,
+                     {"qty": dados.qty, "local": dados.local, "client_id": dados.client_id, **res})
     except estoque.ErroEstoque as e:
         raise _erro(e)
-    _auditar(con, request, u, "stock.count", dados.item_id,
-             {"qty": dados.qty, "local": dados.local, "client_id": dados.client_id, **res})
-    con.commit()
     return res
 
 
@@ -233,7 +233,7 @@ def rota_contagem(dados: ContagemIn, request: Request, con: sqlite3.Connection =
     # A conexão é autocommit: sem BEGIN explícito, cada contar() já estaria gravado quando
     # a linha ruim aparecesse, e o "tudo ou nada" seria só promessa.
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             for linha in dados.itens:
                 it = estoque.item(con, linha.item_id)
                 res = estoque.contar(con, linha.item_id, linha.qty, onde=dados.local,
@@ -297,13 +297,13 @@ def rota_ligar_sku(item_id: int, dados: SkuIn, request: Request, con: sqlite3.Co
 def rota_entrada(dados: MoverIn, request: Request, con: sqlite3.Connection = Depends(get_db),
                  u=Depends(auth.exige("OPERATOR"))):
     try:
-        res = estoque.entrada(con, dados.item_id, qty=dados.qty, serial=dados.serial,
-                              para=dados.local, client_id=dados.client_id,
-                              reason=dados.motivo, by_user_id=u["id"], notes=dados.nota)
+        with transacao(con, imediata=True):       # dois lançamentos ao mesmo tempo não podem se atropelar no saldo
+            res = estoque.entrada(con, dados.item_id, qty=dados.qty, serial=dados.serial,
+                                  para=dados.local, client_id=dados.client_id,
+                                  reason=dados.motivo, by_user_id=u["id"], notes=dados.nota)
+            _auditar(con, request, u, "stock.in", dados.item_id, {**dados.model_dump(), **res})
     except estoque.ErroEstoque as e:
         raise _erro(e)
-    _auditar(con, request, u, "stock.in", dados.item_id, {**dados.model_dump(), **res})
-    con.commit()
     return res
 
 
@@ -316,9 +316,13 @@ def rota_saida(dados: MoverIn, request: Request, con: sqlite3.Connection = Depen
     # Peça DA URACE usada no kart de um cliente vira cobrança dele (dono, 29/09: o preço final
     # "vai entrar na invoice daquele cliente que usar aquela peça"). Peça que já era do cliente
     # não se cobra: é dele.
-    cobra = bool(dados.para_cliente_id) and not dados.client_id
+    dono = dados.client_id
+    if dados.unit_id:                  # ficha individual: o dono é o da unidade, não o que veio no pedido
+        un = um(con, "SELECT client_id FROM stock_units WHERE id=? AND item_id=?", (dados.unit_id, dados.item_id))
+        dono = un["client_id"] if un else dono
+    cobra = bool(dados.para_cliente_id) and not dono
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             res = estoque.saida(con, dados.item_id, qty=dados.qty, unit_id=dados.unit_id,
                                 de=dados.local, client_id=dados.client_id,
                                 para_cliente_id=dados.para_cliente_id,
@@ -339,13 +343,13 @@ def rota_saida(dados: MoverIn, request: Request, con: sqlite3.Connection = Depen
 def rota_transferir(dados: MoverIn, request: Request, con: sqlite3.Connection = Depends(get_db),
                     u=Depends(auth.exige("OPERATOR"))):
     try:
-        res = estoque.transferir(con, dados.item_id, qty=dados.qty, unit_id=dados.unit_id,
-                                 de=dados.local, para=dados.para or estoque.TRAILER,
-                                 client_id=dados.client_id, by_user_id=u["id"], notes=dados.nota)
+        with transacao(con, imediata=True):       # sai de um local e entra no outro: ou os dois, ou nenhum
+            res = estoque.transferir(con, dados.item_id, qty=dados.qty, unit_id=dados.unit_id,
+                                     de=dados.local, para=dados.para or estoque.TRAILER,
+                                     client_id=dados.client_id, by_user_id=u["id"], notes=dados.nota)
+            _auditar(con, request, u, "stock.move", dados.item_id, {**dados.model_dump(), **res})
     except estoque.ErroEstoque as e:
         raise _erro(e)
-    _auditar(con, request, u, "stock.move", dados.item_id, {**dados.model_dump(), **res})
-    con.commit()
     return res
 
 
@@ -355,13 +359,13 @@ def rota_ajustar(dados: MoverIn, request: Request, con: sqlite3.Connection = Dep
     """Ajuste é de gerente e **exige motivo** — ajuste sem motivo é como um estoque
     deixa de bater sem ninguém perceber."""
     try:
-        res = estoque.ajustar(con, dados.item_id, dados.qty or 0, onde=dados.local,
-                              client_id=dados.client_id, reason=dados.motivo,
-                              by_user_id=u["id"], notes=dados.nota)
+        with transacao(con, imediata=True):
+            res = estoque.ajustar(con, dados.item_id, dados.qty or 0, onde=dados.local,
+                                  client_id=dados.client_id, reason=dados.motivo,
+                                  by_user_id=u["id"], notes=dados.nota)
+            _auditar(con, request, u, "stock.adjust", dados.item_id, {**dados.model_dump(), **res})
     except estoque.ErroEstoque as e:
         raise _erro(e)
-    _auditar(con, request, u, "stock.adjust", dados.item_id, {**dados.model_dump(), **res})
-    con.commit()
     return res
 
 
@@ -407,7 +411,7 @@ async def rota_criar_item(request: Request, con: sqlite3.Connection = Depends(ge
     # Tudo numa transação: peça cadastrada pela metade (ficha sem a quantidade, ou com
     # dois dos três números de série) é pior do que peça nenhuma — ninguém percebe.
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             iid = estoque.criar_item(con, kind, name, sku=sku or None, unit=unit,
                                      min_qty=min_qty, notes=notes, category=category,
                                      subcategory=subcategory, size=size, cost=cost,
@@ -521,7 +525,7 @@ def rota_assinalar(dados: DonoIn, request: Request, con: sqlite3.Connection = De
     """Assinalar peça da URACE para um cliente — o pneu dele guardado com a gente.
     É do mecânico: é ele quem separa na prateleira, e o histórico diz quem fez."""
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             res = estoque.trocar_dono(con, dados.item_id, para_cliente_id=dados.client_id, qty=dados.qty,
                                       unit_id=dados.unit_id, onde=dados.local, by_user_id=u["id"],
                                       notes=dados.nota)
@@ -537,7 +541,7 @@ def rota_devolver(dados: DonoIn, request: Request, con: sqlite3.Connection = Dep
     """A peça do cliente volta a ser da URACE (assinalada por engano, ou ele vendeu para
     nós). É do **gerente**: transforma o que era dos outros em algo que a casa pode vender."""
     try:
-        with transacao(con):
+        with transacao(con, imediata=True):
             res = estoque.trocar_dono(con, dados.item_id, de_cliente_id=dados.client_id, qty=dados.qty,
                                       unit_id=dados.unit_id, onde=dados.local, by_user_id=u["id"],
                                       notes=dados.nota)
