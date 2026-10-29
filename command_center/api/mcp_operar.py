@@ -44,7 +44,10 @@ METODOS = ("GET", "POST", "PATCH", "PUT", "DELETE")
 PEDE_CONFIRMACAO = re.compile(
     r"invoice|waiver|docusign|qbo|quickbooks|gmail|email|enviar|send|lembrete|reminder|kommo|/crm/|whatsapp|"
     r"recorrencia|mensal|fechar|close|step/|cobr|deposit|pagamento|payment|asana|tasks|agendamentos/|"
-    r"aprovar-admin", re.I)        # #448: liberar o Suits sem a aprovação escrita é clique do administrador, nunca da IA sozinha
+    r"aprovar-admin|"              # #448: liberar o Suits sem a aprovação escrita é clique do administrador, nunca da IA sozinha
+    # debug 29/10: também saem para fora, e o nome da rota não dizia: a ligação do Dialpad para o cliente e o que
+    # vai aos grupos do WhatsApp do ateliê (escrever, o endereço ao fornecedor, aprovar o rascunho)
+    r"dialpad/call$|atelie/pedidos/[^/]+/(escrever|endereco)$|atelie/saidas/[^/]+/aprovar$", re.I)
 
 
 def _papel_da_rota(dep):
@@ -314,12 +317,26 @@ SO_COM_CLIQUE = re.compile(r"^/ops/api/system/update$")
 # cartão (e executava o que devia esperar o clique) e o PUT da política (soltava o que o dono travou). Aprovar,
 # recusar e mudar política são da pessoa no painel ("Administração" em rotas_ia.SO_HUMANO): nem com aprovar.
 SO_GENTE = re.compile(r"^/ops/api/(ai/actions/\{[^}]+\}/(approve|reject)|policies/\{[^}]+\})$")
+# Debug 29/10: rota cuja própria regra diz que é de uma pessoa rodava direto pelo painel_api, como a pessoa, e assim
+# sem a trava que o módulo põe na IA: ligar conta ou driver do site ao card ("uma pessoa confirma": abre o histórico
+# do card para quem tem a conta), registrar à mão a aprovação final do macacão (pela IA, só a ponte, com o e-mail do
+# cliente) e conferir medida (a IA só marca suspeita). Pela IA viram o aprovar de um clique: quem clica é a pessoa.
+DE_UMA_PESSOA = re.compile(r"^/ops/api/(site/(contas|drivers)/\{[^}]+\}/vincular|suits/\{[^}]+\}/(aprovacao|medidas/estado))$")
 
 
-def tipo_para_ia(metodo, caminho):
+def _etapa_da_equipe(metodo, op, corpo):
+    """Mudar o macacão para as etapas que são da equipe (fotos recebidas, conferido, endereço enviado): o
+    `suits.checar_etapa` recusa pela IA, e pelo painel_api ela chegava como a pessoa."""
+    if metodo != "PATCH" or op["caminho"] != "/ops/api/suits/{pid}" or not isinstance(corpo, dict):
+        return False
+    from command_center.providers import suits
+    return corpo.get("status") in suits.SO_DA_EQUIPE
+
+
+def tipo_para_ia(metodo, caminho, corpo=None):
     """#420: ler | fazer | aprovar | bloqueada — o que a IA do painel faz com esta rota. Lê e faz o trabalho interno
-    direto; o que sai para fora, cobra (o `confirma` do conector), apaga ou não volta atrás vira o cartão de aprovar;
-    o que é decisão de uma pessoa sobre a própria IA (SO_GENTE) a IA não faz."""
+    direto; o que sai para fora, cobra (o `confirma` do conector), apaga, não volta atrás ou é de uma pessoa vira o
+    cartão de aprovar; o que é decisão de uma pessoa sobre a própria IA (SO_GENTE) a IA não faz."""
     metodo = str(metodo or "").upper()
     if metodo == "GET":
         return "ler"
@@ -330,7 +347,8 @@ def tipo_para_ia(metodo, caminho):
     op = _operacao(metodo, caminho)
     if op and SO_GENTE.match(op["caminho"]):
         return "bloqueada"
-    if op and (op["confirma"] or metodo == "DELETE" or NAO_VOLTA.search(op["caminho"]) or SO_COM_CLIQUE.match(op["caminho"])):
+    if op and (op["confirma"] or metodo == "DELETE" or NAO_VOLTA.search(op["caminho"]) or SO_COM_CLIQUE.match(op["caminho"])
+               or DE_UMA_PESSOA.match(op["caminho"]) or _etapa_da_equipe(metodo, op, corpo)):
         return "aprovar"
     return "fazer"
 
@@ -363,7 +381,7 @@ def executar_como(user_id, metodo, caminho, corpo=None, consulta=None, aprovado=
     if SO_GENTE.match(op["caminho"]):                # debug 29/10: nem pelo cartão de aprovar
         raise ValueError("aprovar ou recusar o que a IA propõe e mudar a política são decisão de uma pessoa no "
                          "painel: a IA não faz isso")
-    if tipo_para_ia(metodo, caminho) == "aprovar" and not aprovado:
+    if tipo_para_ia(metodo, caminho, corpo) == "aprovar" and not aprovado:
         raise ValueError("isto sai para fora, cobra ou apaga: só roda depois do aprovar de uma pessoa")
     con = conectar()
     try:

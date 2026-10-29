@@ -139,7 +139,7 @@ def classificar(con, nome, args=None):
             g = um(con, "SELECT policy FROM action_policies WHERE action='apagar_qualquer_coisa'")
             if g and g["policy"] == "BLOCKED":
                 return "bloqueada"
-        return mcp_operar.tipo_para_ia(a.get("metodo"), a.get("caminho"))
+        return mcp_operar.tipo_para_ia(a.get("metodo"), a.get("caminho"), a.get("corpo"))
     if nome in AUTOMATICAS and pol == "SAFE":
         return "fazer"
     if args is not None and lembrete_em_aberto(con, nome, args):
