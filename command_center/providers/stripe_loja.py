@@ -200,9 +200,28 @@ def assinatura_ok(corpo: bytes, cabecalho: str, segredo: str, agora_ts=None) -> 
 
 def _pedido_da_sessao(con, s):
     o = um(con, "SELECT * FROM store_orders WHERE stripe_session_id=?", (s.get("id"),))
-    if not o and str(s.get("client_reference_id") or "").isdigit():
-        o = um(con, "SELECT * FROM store_orders WHERE id=? AND stripe_session_id IS NULL", (int(s["client_reference_id"]),))
+    ref = str(s.get("client_reference_id") or "")
+    # #483: pelo número só quando a sessão é nossa (as nossas levam `metadata.pedido`). Um Payment Link da mesma conta
+    # aceita `?client_reference_id=` na URL e marcaria como pago um pedido cuja sessão não chegou a ser criada.
+    if not o and ref.isdigit() and str((s.get("metadata") or {}).get("pedido") or "") == ref:
+        o = um(con, "SELECT * FROM store_orders WHERE id=? AND stripe_session_id IS NULL", (int(ref),))
     return o
+
+
+def valor_confere(o, s):
+    """#483: o que o Stripe cobrou é o valor do pedido, em dólar (até 2 centavos de arredondamento entre as linhas).
+    O Stripe sempre manda `amount_total` e `currency` na sessão; o que não veio não é conferido."""
+    if s.get("currency") is not None and str(s["currency"]).lower() != "usd":
+        return False
+    if s.get("amount_total") is not None and abs(int(s["amount_total"]) - round(float(o["amount"]) * 100)) > 2:
+        return False
+    return True
+
+
+def _divergente(con, o, s, origem):
+    auditar(con, "store.payment.mismatch", "stripe", entity_type="store_order", entity_id=o["id"],
+            detail={"origem": origem, "sessao": s.get("id"), "cobrado": s.get("amount_total"), "moeda": s.get("currency"),
+                    "pedido": round(float(o["amount"]) * 100)})
 
 
 def _registrar_sessao(con, o, s, status):
@@ -276,6 +295,10 @@ def _efeito(con, eid, tipo, s):
         atualizar_evento(con, eid, None, "sem pedido")
         return "sem pedido", None
     novo = status_da_sessao(s, tipo)
+    if novo == "pago" and o["status"] != "pago" and not valor_confere(o, s):
+        _divergente(con, o, s, "webhook")             # #483: não vende; a equipe vê na auditoria
+        atualizar_evento(con, eid, o["id"], "valor divergente")
+        return "divergente", None
     era = o["status"]
     o = _registrar_sessao(con, o, s, novo)
     atualizar_evento(con, eid, o["id"], novo)
@@ -303,6 +326,10 @@ def conferir_sessao(con, session_id, http=None):
         return o, False
     s = (http or _http)("GET", f"/v1/checkout/sessions/{urllib.parse.quote(session_id)}")
     novo = status_da_sessao(s, conferindo=True)
+    if novo == "pago" and not valor_confere(o, s):
+        _divergente(con, o, s, "obrigado")            # #483
+        con.commit()
+        return o, False
     if novo != "pago":
         o = _registrar_sessao(con, o, s, novo if o["status"] == "aberto" else o["status"])
         if o["status"] in ("aguardando", "expirado"):           # #248: o webhook avisa; se ele atrasar, fica na fila
