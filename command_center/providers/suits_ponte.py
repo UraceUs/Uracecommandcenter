@@ -804,7 +804,8 @@ def conversas_novas(con, gm, ignoradas=None):
                     con.execute("UPDATE suit_orders SET gmail_thread_fornecedor=? WHERE id=?", (th, pid))
                 eventos.append({"tipo": "fornecedor", "pedido_id": pid, "thread_id": th, "mensagens": novas})
             elif cfg.get("designer_email") and de == cfg["designer_email"].lower():
-                ids = {int(x) for x in re.findall(r"#\s?(\d+)", assunto + " " + (novas[-1].get("corpo") or "")[:500])}
+                # debug 29/10: o número inteiro (\b) — a cor "#1A1A1A" não é o pedido #1 de outro cliente
+                ids = {int(x) for x in re.findall(r"#\s?(\d+)\b", assunto + " " + (novas[-1].get("corpo") or "")[:500])}
                 ids = {x for x in ids if um(con, "SELECT 1 AS x FROM suit_orders WHERE id=? AND discarded_at IS NULL", (x,))}
                 if len(ids) > 1:
                     _ambiguo(con, novas, th, ids, "e-mail do designer")
