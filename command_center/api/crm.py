@@ -63,6 +63,12 @@ def _aplicando(fn, *a, **kw):
         ctx.aplicar = None
 
 
+def _segredo_igual(esperado, enviado):
+    """Compara em tempo constante, em bytes: `compare_digest` com texto só aceita ASCII, e uma chave com acento
+    na URL derrubava o hook em 500 em vez de recusar com 403."""
+    return hmac.compare_digest(esperado.encode("utf-8"), (enviado or "").encode("utf-8", "surrogateescape"))
+
+
 def _erro(e):
     if isinstance(e, NaoConectado):
         return HTTPException(503, f"Kommo não conectado: {e}")
@@ -302,8 +308,12 @@ def mover(lid: int, dados: EtapaIn, request: Request, u=Depends(auth.exige("OPER
                          dados.pipeline_id or l["pipeline_id"])
     except Exception as e:
         raise _erro(e)
+    # a coluna do quadro vem do nome, da ordem e do funil guardados: sem levar os três junto, o lead movido fica na
+    # coluna certa com a ordem da etapa de antes (e o nome do funil de antes) até a próxima sincronia
     atualizar(con, "crm_leads", lid, stage_id=str(dados.stage_id), stage_name=res.get("etapa") or l["stage_name"],
-              pipeline_id=dados.pipeline_id or l["pipeline_id"], synced_at=agora())
+              stage_order=res["ordem"] if res.get("ordem") is not None else l["stage_order"],
+              pipeline_id=dados.pipeline_id or l["pipeline_id"], pipeline_name=res.get("funil") or l["pipeline_name"],
+              synced_at=agora())
     auditar(con, "crm.stage", f"user:{u['id']}", user_id=u["id"], entity_type="crm_lead", entity_id=lid,
             detail={"de": l["stage_name"], "para": res.get("etapa") or dados.stage_id}, ip=auth._ip(request))
     con.commit()
@@ -778,7 +788,7 @@ async def hook(request: Request, background: BackgroundTasks, key: str | None = 
     Autenticação: ?key= igual a KOMMO_HOOK_KEY (o widget não manda header). Se
     KOMMO_BOT_SECRET existir, o JWT descartável do bot também é conferido."""
     chave = _chave_hook()
-    if not chave or not hmac.compare_digest(chave, key or ""):
+    if not chave or not _segredo_igual(chave, key):
         auditar(con, "crm.hook.recusado", "kommo", detail={"motivo": "sem chave configurada" if not chave else "chave não bate",
                                                          "ip": auth._ip(request)})
         con.commit()
@@ -965,7 +975,7 @@ async def webhook(request: Request, background: BackgroundTasks, con: sqlite3.Co
     segredo = os.environ.get("KOMMO_WEBHOOK_SECRET", "")
     chave = _chave_hook()
     enviado = request.headers.get("x-urace-secret") or request.query_params.get("secret") or request.query_params.get("key") or ""
-    ok = (segredo and hmac.compare_digest(segredo, enviado)) or (chave and hmac.compare_digest(chave, enviado))
+    ok = (segredo and _segredo_igual(segredo, enviado)) or (chave and _segredo_igual(chave, enviado))
     if not ok:
         raise HTTPException(403, "Forbidden.")
     bruto = await request.body()
