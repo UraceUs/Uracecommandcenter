@@ -165,6 +165,19 @@ def trocar_senha(con, user_id, senha, por_user_id, ip=None):
 
 
 # ---------------------------------------------------------- rate limit
+def bloco_ip(ip):
+    """A conexão para os limites: o IP; no IPv6, o bloco /64 (uma casa recebe um /64 inteiro e troca de endereço
+    dentro dele à vontade)."""
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+        if a.version == 6:
+            return f"{ipaddress.ip_network(f'{ip}/64', strict=False).network_address}/64"
+    except ValueError:
+        pass
+    return ip
+
+
 def _falhas_recentes(con, chave):
     desde = (datetime.now(timezone.utc) - timedelta(minutes=JANELA_MIN)).strftime("%Y-%m-%dT%H:%M:%S")
     r = um(con, "SELECT COUNT(*) AS n FROM login_attempts WHERE key = ? AND ok = 0 AND at > ?",
