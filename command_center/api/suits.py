@@ -757,6 +757,8 @@ def _gmail_rascunho(para, assunto, corpo, anexos=None):
         return chamar("gmail", "gmail_rascunho", conta="urace", para=para, assunto=assunto, corpo=corpo, **extra)
     except NaoConectado as ex:
         raise HTTPException(503, f"Gmail não conectado: {ex}")
+    except Exception as ex:                  # debug 29/10: o Gmail recusou ou caiu — o motivo vai à tela, não um 500
+        raise HTTPException(502, f"O Gmail não criou o rascunho ({type(ex).__name__}: {str(ex)[:200]}). Tente de novo.")
     finally:
         if anterior is None:
             os.environ.pop("APLICAR", None)
@@ -927,10 +929,17 @@ def enviar_preparado(pid: int, oid: int, request: Request, con: sqlite3.Connecti
     item = um(con, "SELECT order_id FROM suit_outbox WHERE id=?", (oid,))
     if not item or item["order_id"] != pid:
         raise HTTPException(404, "Item não encontrado.")
+    from command_center.providers import NaoConectado
     try:
         res = sp.enviar_preparado(con, oid, u["id"])
     except sp.Recusado as e:
         raise HTTPException(400, str(e))
+    except NaoConectado as e:
+        raise HTTPException(503, f"Gmail não conectado: {e}")
+    except Exception as e:
+        # debug 29/10: o Gmail recusou ou caiu — o motivo vai à tela, não um 500. O item continua preparado e o próximo
+        # clique confere no Gmail antes de mandar (envio sem repetição, #382).
+        raise HTTPException(502, f"O Gmail não mandou agora ({type(e).__name__}: {str(e)[:200]}). Tente de novo.")
     _aud(con, request, u, "suit.designer.send_click", pid, {"item": oid, "repetido": bool(res.get("repetido"))})
     return ver(pid, con, u)
 
