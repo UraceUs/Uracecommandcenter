@@ -6982,3 +6982,35 @@ def test_card_do_cliente_dados_antes_da_linha_do_tempo_e_card_do_servico(servido
     assert not r["rola"] and not r["culpados"], r
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
     pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_suits_designers_da_lista_e_ponte_escolhe_designer_e_fornecedor(servidor, navegador, largura):
+    """#481, dono 29/10: "designer 1, designer 2, designer 3, com os endereços de e-mail fixos. E aí eu seleciono qual que é
+    o nome do designer nessa parte aí do ponte de e-mail e ele puxa esses e-mails de lá"."""
+    pg = entrar(navegador, servidor, largura=largura, altura=900)          # gerente: cadastra designer
+    abrir(pg, servidor, "/suits/fornecedores")
+    pg.get_by_role("heading", level=2, name=re.compile("^Designers")).wait_for()
+    sec = pg.locator("section", has=pg.get_by_role("heading", level=2, name=re.compile("^Designers")))
+    sec.get_by_role("button", name="Novo").click()
+    dlg = pg.get_by_role("dialog", name="Designer")
+    dlg.get_by_label("Nome").fill(f"Designer Fictício {largura}")
+    dlg.get_by_label("E-mail").fill(f"designer.{largura}@example.com")
+    dlg.get_by_role("button", name="Salvar").click()
+    pg.get_by_text("Designer salvo.").wait_for()
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill(f"Ana Ponte {largura}")
+    dlg.get_by_label("E-mail", exact=True).fill(f"ana.ponte.{largura}@example.com")
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name=f"Ana Ponte {largura}", level=1).wait_for()
+    ponte = pg.locator("section", has=pg.get_by_role("heading", level=2, name=re.compile("^Ponte de e-mail")))
+    assert ponte.get_by_label("E-mail do cliente").input_value() == f"ana.ponte.{largura}@example.com"
+    ponte.get_by_label("Designer", exact=True).select_option(label=f"Designer Fictício {largura} · designer.{largura}@example.com")
+    ponte.get_by_text(f"vai para designer.{largura}@example.com").wait_for()
+    ponte.get_by_role("button", name="Puxar conversas do Gmail").wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
