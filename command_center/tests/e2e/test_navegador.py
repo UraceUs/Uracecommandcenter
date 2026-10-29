@@ -1824,7 +1824,7 @@ def test_gerente_edita_o_modelo_do_checklist(servidor, navegador):
 
 
 # ------------------------------------------------------------------ site novo (#148)
-@pytest.mark.parametrize("largura", [360, 390])
+@pytest.mark.parametrize("largura", [360, 390, 1280])
 def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     site = servidor.removesuffix("/ops")
     pg = navegador.new_page(viewport={"width": largura, "height": 800})
@@ -1835,7 +1835,9 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     from command_center.vitrine import paginas_site
     post = paginas_site.dados("posts.json")["posts"][0]["slug"]
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"])["slug"]
-    for rota in ("/", "/services/arrive-and-drive/", "/sim2grid-racing-simulator/", "/services/", "/services/birthday-party/",
+    # #459: o nome com a palavra mais longa do catálogo ("“BIREL/COMPKART") esticava a coluna do produto
+    comprido = max(paginas_site.dados("produtos.json")["produtos"], key=lambda p: max(map(len, p["name"].split())))["slug"]
+    for rota in ("/", "/services/arrive-and-drive/", f"/store/p/{comprido}/", "/sim2grid-racing-simulator/", "/services/", "/services/birthday-party/",
                  "/academy/", "/pro-team/",
                  "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/",
                  # #261: a loja com busca, filtro de preço e paginação — o formulário não pode estourar a largura
