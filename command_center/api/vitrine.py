@@ -311,6 +311,10 @@ def _pagina(request, caminho, host, q):
             return _html(feita)
     if caminho in (C.ARRIVE["caminho"], "/academy/", "/pro-team/", "/for-beginners/", ps.SG.CAMINHO):
         return _html(html_da_pagina(caminho, host))
+    if caminho in ps.SG.FORM_CAMINHOS:                  # #493: as landings de formulário (preço das faixas do painel)
+        return _html(ps.sim2grid_form(host, caminho, **{k: v for k, v in (_do_banco(_sim_do_painel) or {}).items()
+                                                          if k in ("formatos", "faixas", "regras")},
+                                      enviado=q.get("sent") == "1"))
     if caminho == "/cart/":                             # #236: o carrinho (noindex, sem cache: é de cada pessoa)
         from command_center.providers import stripe_loja
         return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado(),
@@ -525,15 +529,21 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
     if not e_do_site(request):
         raise HTTPException(404)
     c = await _campos(request)
+    # #493: a landing de formulário do SIM2GRID volta para ela mesma, e o objetivo, a sessão e o canal viram a mensagem
+    pagina = c.get("volta") if c.get("volta") in ps.SG.FORM_CAMINHOS else "/contact/"
+    if pagina != "/contact/" and not c.get("mensagem"):
+        c["assunto"] = "sim2grid"
+        c["mensagem"] = "\n".join(f"{r}: {c[k][:200]}" for r, k in (("Goal", "goal"), ("Session", "session_type")) if c.get(k)) + \
+            f"\nChannel: landing page ({ps.SG.FORM_CAMINHOS[pagina]})"
     erro = _validar(c)
     if erro == "robo":
-        return _responde(request, True, "/contact/?sent=1")
+        return _responde(request, True, pagina + "?sent=1")
     if erro:
-        return _responde(request, False, "/contact/", erro)
+        return _responde(request, False, pagina, erro)
     if _estourou(_ip(request)) or _estourou_email(c["email"]):
-        return _responde(request, False, "/contact/", "Too many messages in a row. Please try again in a few minutes.")
+        return _responde(request, False, pagina, "Too many messages in a row. Please try again in a few minutes.")
     if len(c.get("mensagem", "")) < 2:
-        return _responde(request, False, "/contact/", "Please write a message.")
+        return _responde(request, False, pagina, "Please write a message.")
     assuntos = dict(ps.P.CONTACT["assuntos"])
     assunto = assuntos.get(c.get("assunto"), "Something else")
     notas = f"[{assunto}] {c['mensagem']}"
@@ -542,7 +552,7 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
                    f"{c['nome']} <{c['email']}> {c.get('telefone') or ''}\nAssunto: {assunto}\n\n{c['mensagem']}\n\n"
                    f"Vendas: https://ops.urace.us/ops/sales/{oid}")
     if not _pode_confirmar():
-        return _responde(request, True, "/contact/?sent=1")
+        return _responde(request, True, pagina + "?sent=1")
     confirmacao = ("We got your message — URACE",
                    f"Hi {_saudacao(c['nome'])},\n\nThanks for reaching out to URACE. We received your message about "
                    f"{assunto} and will reply shortly, usually within one business day.\n\nIn a hurry? Call or WhatsApp "
@@ -558,7 +568,7 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
             _confirmar_pessoa(c["email"], *confirmacao)
     else:
         _confirmar_pessoa(c["email"], *confirmacao)
-    return _responde(request, True, "/contact/?sent=1")
+    return _responde(request, True, pagina + "?sent=1")
 
 
 def _robo_no_formulario(oid, nome, email, assunto, mensagem, confirmacao):

@@ -747,3 +747,38 @@ def test_privacidade_e_termos_sao_os_do_site(cli):
     assert '<a href="/privacy/">Privacy policy</a>' in home and '<a href="/terms/">Terms</a>' in home
     assert "/legal/" not in "".join(cli.get(c).text for c in ("/", "/cart/", "/contact/"))
     assert "/privacy/" in PAGINAS and "/terms/" in PAGINAS, "no sitemap"
+
+
+@pytest.mark.parametrize("caminho,canal", [("/sim2grid-from-racing-simulator-to-the-grid-form/", "form"),
+                                           ("/sim2grid-from-racing-simulator-to-the-grid-form-sms/", "sms")])
+def test_landing_de_formulario_do_sim2grid_vira_oportunidade(cli, tmp_path, monkeypatch, caminho, canal):
+    """#493: as duas landings que o urace.us publicou em 22/10 (uma por canal da campanha) existem no site novo, com o
+    texto delas, o preço das faixas do painel e o formulário caindo em Vendas com o objetivo, a sessão e o canal."""
+    monkeypatch.setenv("CC_EMAIL_FAKE", str(tmp_path / "emails.jsonl"))
+    r = cli.get(caminho)
+    assert r.status_code == 200
+    p = _le(r.text)
+    assert [n for n, _ in p.h].count("h1") == 1
+    metas = {a.get("name"): a.get("content") for t, a in p.attrs if t == "meta"}
+    assert metas["robots"].startswith("noindex"), "landing de campanha: fora do Google"
+    assert "Your first step into motorsport starts here" in r.text and "This is SIM2GRID. Get in. Drive." in r.text
+    assert "From $50 / hour" in r.text and "From $125 / hour" in r.text, "o preço das faixas do painel"
+    assert caminho not in PAGINAS, "fora do sitemap"
+    r = cli.post("/ops/api/vitrine/contato", json={"nome": "Davi Rocha", "email": "davi@example.com", "telefone": "407 555 0123",
+                                                  "goal": "Improve my driving skills", "session_type": "With coaching",
+                                                  "canal": canal, "volta": caminho, "utm_source": "meta"})
+    assert r.json() == {"ok": True}
+    con = conectar(); aplicar_schema(con)
+    o = con.execute("SELECT name, service, notes FROM opportunities").fetchone()
+    assert o["name"] == "Davi Rocha" and "SIM2GRID" in o["service"]
+    assert "Goal: Improve my driving skills" in o["notes"] and "Session: With coaching" in o["notes"] and f"({canal})" in o["notes"]
+    # sem JavaScript, volta para a própria landing
+    r = cli.post("/ops/api/vitrine/contato", data={"nome": "Eva", "email": "eva@example.com", "goal": "Improve my driving skills",
+                                                  "session_type": "Without coaching", "volta": caminho}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == caminho + "?sent=1"
+    assert "aviso-ok" in cli.get(caminho + "?sent=1").text
+
+
+def test_home_do_wordpress_leva_para_a_raiz(cli):
+    r = cli.get("/home/", follow_redirects=False)
+    assert r.status_code == 301 and r.headers["location"] == "/"

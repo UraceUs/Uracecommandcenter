@@ -459,6 +459,97 @@ def _sim_planos(cartoes):
     return f'<ul class="sim-planos">{itens}</ul>' + (f'<p class="small muted">{e(grupo)}</p>' if grupo else "")
 
 
+def sim2grid_form(host, caminho, formatos=None, faixas=None, regras=None, enviado=False):
+    """#493: a landing de formulário do SIM2GRID (o mesmo texto do urace.us em dois endereços, um por canal da campanha).
+    O formulário vira oportunidade em Vendas (o mesmo caminho do contato), com o objetivo, a sessão, o canal e a campanha.
+    Fora do Google: a página principal do SIM2GRID, com a reserva, é a outra."""
+    from command_center.providers import sim2grid as sim
+    d, canal = SG.FORM, SG.FORM_CAMINHOS[caminho]
+    if formatos is None:
+        formatos, faixas, regras = _sim_padrao()
+        chave = lambda f: f["_i"]  # noqa: E731
+    else:
+        chave = lambda f: f["id"]  # noqa: E731
+    por_tipo = {("coach" if "coach" in (f.get("key") or "") else "solo"): chave(f) for f in formatos}
+    ativas = [x for x in faixas if x["active"] and x["price"] is not None]
+
+    def menor(tipo):
+        fs = [x for x in ativas if x["service_id"] == por_tipo.get(tipo)]
+        return min(fs, key=lambda x: x["price"]) if fs else None
+
+    def desde(tipo):
+        m = menor(tipo)
+        return f"From {usd(m['price'])} / hour" if m else "Call us for rates"
+    m_solo = menor("solo")
+    marcas = {"solo": sim.texto_das_faixas(faixas, por_tipo.get("solo")), "coach": sim.texto_das_faixas(faixas, por_tipo.get("coach"))}
+    faq = [(t, tuple(x.format(**marcas) for x in ps_)) for t, ps_ in d["faq"]]
+    sub = d["sub"].format(solo_desde_frase=f"Starting at {usd(m_solo['price'])}" if m_solo else "Call us for rates")
+    inicio = (f'<p class="small muted">{e(d["inicio"].format(inicio=sim.dias_txt(m_solo["days"]) + ", " + sim.faixa_txt(m_solo["start_hour"], m_solo["end_hour"])))}</p>'
+              if m_solo else "")
+    tel = f'<a href="tel:{e(C.SITE["telefone_e164"])}">{e(SG.TELEFONE)}</a>'
+    objetivos = "".join(f'<option value="{e(o)}">{e(o)}</option>' for o in d["objetivos"])
+    sessoes = "".join(f'<label class="opcao"><input type="radio" name="session_type" value="{e(v)}" required>'
+                      f' <span><b>{e(v)}</b> · {e(rot)} · {e(desde(tipo))}</span></label>' for v, rot, tipo in d["sessoes"])
+    etapas = "".join(f'<li><h3>{e(t)}</h3><p class="small muted">{e(sub_)}</p><p>{e(txt)}</p></li>' for t, sub_, txt, _l in d["etapas"])
+    rua, cidade, onde = SG.ENDERECO
+    corpo = f"""
+<section class="hero hero-servico hero-sim">
+  <img class="hero-foto" src="{estatico('img/' + SG.PAGINA['foto_topo'])}" alt="The URACE SIM2GRID racing simulator cockpit" width="600" height="800" fetchpriority="high">
+  <div class="hero-in">
+    <p class="eyebrow">{e(d['selo'])}</p>
+    <h1>{e(d['h1'])}</h1>
+    <p class="hero-sub">{e(sub)}</p>
+    <p class="small">{e(d['abertura'])}</p>
+    <div class="hero-acoes"><a class="btn" href="#formulario">{e(d['cta'])}</a>
+      <a class="btn btn-linha-branca" href="tel:{e(C.SITE["telefone_e164"])}">Questions? Call us</a></div>
+    <p class="small">{e(d['caminho_curto'])}</p>
+  </div>
+</section>
+
+<section class="faixa clara" aria-labelledby="h-form" id="formulario"><div class="largura estreita">
+  <p class="eyebrow">{e(d['form_rotulo'])}</p><h2 id="h-form">{e(d['form_titulo'])}</h2>
+  <p>{e(d['form_texto'])}</p><p class="small muted">{e(d['obrigatorio'])}</p>
+  {'<p class="aviso-ok" role="status">Thank you! We got your information and will contact you shortly.</p>' if enviado else ''}
+  <form class="form-contato" method="post" action="/ops/api/vitrine/contato" data-contato>
+    <input type="hidden" name="assunto" value="sim2grid"><input type="hidden" name="canal" value="{e(canal)}">
+    <input type="hidden" name="volta" value="{e(caminho)}">
+    <label>{e(d['objetivo_rotulo'])}<select name="goal" required><option value="">Select your goal</option>{objetivos}</select></label>
+    <fieldset class="sim-formatos"><legend>{e(d['sessao_rotulo'])}</legend>{sessoes}</fieldset>
+    {inicio}
+    <label>Full name<input name="nome" required autocomplete="name" maxlength="120"></label>
+    <label>Phone number<input name="telefone" type="tel" required autocomplete="tel" maxlength="40"><small class="muted">{e(d['telefone_dica'])}</small></label>
+    <label>Email address<input name="email" type="email" required autocomplete="email" maxlength="160"></label>
+    <label class="escondido" aria-hidden="true">Leave this empty<input name="site" tabindex="-1" autocomplete="off"></label>
+    <button class="btn btn-cheio" type="submit">{e(d['enviar'])}</button>
+    {_ps(d['consentimento'], 'small muted')}
+    <p class="form-estado" role="status" aria-live="polite"></p>
+  </form>
+  <h3>{e(d['proximo_titulo'])}</h3><p>{e(d['proximo_texto'])} {tel}</p>
+</div></section>
+
+<section class="faixa escura" aria-labelledby="h-oque"><div class="largura estreita texto">
+  <p class="eyebrow">{e(d['o_que_rotulo'])}</p><h2 id="h-oque">{e(d['o_que_titulo'])}</h2>{_ps(d['o_que'])}
+</div></section>
+
+<section class="faixa clara" aria-labelledby="h-caminho"><div class="largura estreita">
+  <p class="eyebrow">{e(d['caminho_rotulo'])}</p><h2 id="h-caminho">{e(d['caminho_titulo'])}</h2>{_ps(d['caminho_texto'])}
+  <ol class="sim-etapas">{etapas}</ol>
+</div></section>
+
+<section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita">
+  <p class="eyebrow">{e(d['faq_rotulo'])}</p><h2 id="h-faq">{e(d['faq_titulo'])}</h2><p>{e(d['faq_texto'])} {tel}</p>
+  {_faq(faq)}
+  <h3>Location</h3><p class="sim-onde small"><span>{e(rua)}, {e(cidade)} — {e(onde)}</span> · {tel} · <a href="mailto:{e(C.SITE['emails'][0])}">{e(C.SITE['emails'][0])}</a></p>
+</div></section>
+
+<section class="faixa escura" aria-labelledby="h-fim"><div class="largura estreita">
+  <p class="eyebrow">{e(d['fim_rotulo'])}</p><h2 id="h-fim">{e(d['fim_titulo'])}</h2><p>{e(d['fim_texto'])}</p>
+  <div class="hero-acoes"><a class="btn" href="#formulario">{e(d['fim_cta'])}</a></div>
+</div></section>"""
+    return layout(host=host, caminho=caminho, titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
+                  schemas=(_negocio(host),), scripts=("contato.js",), foto=SG.PAGINA["foto"], indexar=False)
+
+
 def sim2grid(host, formatos=None, faixas=None, regras=None, cartoes=None):
     """#392: a LP do SIM2GRID com a reserva por hora. `formatos`/`faixas`/`regras` vêm do painel (Site › Sim2Grid e
     Serviços e preços); None é o banco fora, e a página sai com os valores de fábrica e o telefone.
@@ -1630,7 +1721,8 @@ def redirecionamentos():
     # #236: /cart/ é o carrinho do site novo; o /checkout/ do WordPress cai nele
     # #252: /book-online/ é página indexada do urace.us (o Yoast publica no sitemap), então vai para
     # a página pública que faz o mesmo (agenda, preços e o botão de reservar) e não para dentro do portal
-    r = {"/shop/": "/store/", "/book-online/": C.ARRIVE["caminho"], "/my-account/": PORTAL, "/checkout/": "/cart/"}
+    r = {"/shop/": "/store/", "/book-online/": C.ARRIVE["caminho"], "/my-account/": PORTAL, "/checkout/": "/cart/",
+         "/home/": "/"}                                  # #493: o urace.us publica a home também em /home/
     for d in list(S.SERVICOS) + list(P.PAGINAS):
         for antigo in d.get("antigos", ()):
             r[antigo] = d["caminho"]
