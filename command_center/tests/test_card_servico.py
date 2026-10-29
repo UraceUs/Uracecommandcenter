@@ -5,6 +5,7 @@ Center do que pelo Asana".
 O card do cliente traz os dados (medidas, parentesco, classe) e, na linha do tempo, o resumo de cada serviço; o card
 do serviço lê o espelho; anotar e concluir subtarefa escrevem no Asana e o espelho relê. Tudo fictício."""
 import json
+from datetime import date, timedelta
 
 import pytest
 
@@ -128,18 +129,19 @@ def test_card_do_servico_waiver_anulada_nao_vale_e_a_valida_vence_a_reenviada(cl
     """debug 29/10: o card do serviço lia a waiver mais recente pelo status cru — a anulada (que continua `completed`)
     aparecia como assinada, e um reenvio ainda não assinado escondia a assinada que vale (o card do cliente já separava)."""
     _, tid, cid = espelhado
+    validade1, validade2 = (date.today() + timedelta(days=300)).isoformat(), (date.today() + timedelta(days=301)).isoformat()
     base = dict(client_id=cid, template="adult", signer_name="Nina Ficticia", signer_email="nina.ficticia@example.com")
     anulada = inserir(con, "waivers", status="completed", sent_at="2026-09-01T10:00:00Z", completed_at="2026-09-01T11:00:00Z",
-                      expires_at="2027-09-01", **base)
+                      expires_at=validade1, **base)
     inserir(con, "waiver_voids", waiver_id=anulada, by_name="Gerente", reason="assinada pelo responsável errado")
     con.commit()
     assert cli.get(B + f"/tasks/{tid}/servico").json()["cliente"]["waiver"]["status"] == "voided"
     inserir(con, "waivers", status="completed", sent_at="2026-09-02T10:00:00Z", completed_at="2026-09-02T11:00:00Z",
-            expires_at="2027-09-02", **base)
+            expires_at=validade2, **base)
     inserir(con, "waivers", status="sent", sent_at="2026-10-20T10:00:00Z", **base)
     con.commit()
     w = cli.get(B + f"/tasks/{tid}/servico").json()["cliente"]["waiver"]
-    assert w["status"] == "completed" and w["expires_at"] == "2027-09-02"
+    assert w["status"] == "completed" and w["expires_at"] == validade2
 
 
 def test_limpar_parentesco_e_classe_com_null_como_a_tela_manda(cli, con, espelhado):  # noqa: F811
