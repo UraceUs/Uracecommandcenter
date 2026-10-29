@@ -25,6 +25,7 @@ O que não é cópia literal, de propósito:
 from html import escape
 
 from command_center.vitrine import conteudo as C
+from command_center.vitrine import conteudo_paginas as P
 
 RESERVAR = "/services/arrive-and-drive/#reservar"          # agenda + carrinho + Stripe, com o preço do painel
 CONVERSA = C.LIGACAO                                        # o "Talk to us" do urace.us: a agenda de 15 min com a equipe
@@ -96,11 +97,8 @@ def _formulario_lp(assunto, obrigado=None):
 
 
 # duas fotos lado a lado: em cartões (as `figuras` são para galeria — com duas, ficam estreitas no computador)
-TEMPORADA = {"tipo": "cartoes", "eyebrow": "This season", "titulo": "On the top step", "itens": [
-    {"foto": "urace-team-bushnell-p1-p3.webp", "alt": "URACE team with the trophy after Frankie Iadevaia's P1 in Bushnell, Florida",
-     "titulo": "P1 + P3 · Bushnell, Florida", "texto": "Frankie Iadevaia wins Saturday, podium Sunday. The whole crew on the grid."},
-    {"foto": "urace-driver-jacksonville-p1.webp", "alt": "Frankie Iadevaia in his URACE suit, Jacksonville",
-     "titulo": "P1 · FLKC Rounds 7 & 8 · Jacksonville", "texto": "Frankie Iadevaia, URACE program driver. October 2026."}]}
+TEMPORADA = {"tipo": "cartoes", "eyebrow": "This season", "titulo": "On the top step",       # #521: conteudo.RESULTADOS
+             "itens": [{"foto": f, "alt": a, "titulo": t, "texto": x} for f, a, t, x in C.RESULTADOS]}
 
 # as três avaliações do Google do urace.us (as mesmas do resto do site); a nota e o número de avaliações não se escrevem
 # à mão (ficam velhos): fica o link para o Google
@@ -190,13 +188,9 @@ TRAINING_PACKAGES = {
     ],
 }
 
-# as próximas provas, como no urace.us de 29/10; o "Race the winter →" (a /winter/) entra quando a página da Winter
-# estiver no site novo
-CALENDARIO = {"eyebrow": "Where we are racing", "titulo": "Next rounds on the calendar",
-              "intro": "If your driver comes with us, this is the season. Dates and venues as published by the series.",
-              "itens": (("Nov 22, 2026", "AMR Karting Challenge · Round 10 · Homestead, Florida"),
-                        ("Dec 6, 2026", "Florida Karting Championship · Rounds 11 & 12 · AMR Motorplex"),
-                        ("Jan–Mar 2027", "SKUSA Winter Series and Florida winter rounds"))}
+# as próximas provas: a mesma lista do /pro-team/ (#521), com o "Race the winter →" da /winter/
+CALENDARIO = {"eyebrow": P.PRO_TEAM["calendario_rotulo"], "titulo": P.PRO_TEAM["calendario_titulo"],
+              "intro": P.PRO_TEAM["calendario_sub"], "itens": P.PRO_TEAM["calendario"]}
 
 
 def _proximas_provas(host, ctx, hoje=None):
