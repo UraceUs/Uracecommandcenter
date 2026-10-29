@@ -707,9 +707,22 @@ def tratar_pendentes(con, executar=None):
         marca = sp.ESCOPO.set({"pedido": pid, "tipo": f"whatsapp-{papel}", "email": None, "mensagens": {}})   # #382: só este pedido
         try:
             (executar or sp._executar_padrao)(con, cid, texto, f"suits-{pid}", uid, pr)
+            c = um(con, "SELECT status, error FROM ai_commands WHERE id=?", (cid,))
+            if c and c["status"] == "FAILED":                # `ia._executa` não levanta: a falha fica no comando
+                raise RuntimeError(f"a IA falhou: {(c['error'] or '')[:160]}")
             feitos.append({"pedido": pid, "papel": papel, "comando": cid})
         except Exception as e:
-            feitos.append({"pedido": pid, "papel": papel, "erro": f"{type(e).__name__}: {str(e)[:160]}"})
+            erro = f"{type(e).__name__}: {str(e)[:160]}"
+            feitos.append({"pedido": pid, "papel": papel, "erro": erro})
+            # debug 29/10: como na ponte de e-mail (#382), a mensagem que a IA não tratou volta no ciclo seguinte e,
+            # passado o limite de tentativas, vai para a equipe. Antes ficava "tratada" e ninguém era chamado.
+            n = sp._tentativa(con, f"atelie:{msgs[0]['id']}", pid, erro)
+            if n < sp.LIMITE_TENTATIVAS:
+                con.execute(f"UPDATE atelie_wa_mensagens SET estado='nova' WHERE id IN ({','.join('?' * len(msgs))})",
+                            [m["id"] for m in msgs])
+            else:
+                sp.precisa_humano(con, pid, f"a IA tentou {n} vezes tratar a mensagem no {PAPEIS.get(papel, papel)} e não "
+                                            f"conseguiu ({erro[:120]}): a equipe responde")
         finally:
             sp.ESCOPO.reset(marca)
     return feitos
