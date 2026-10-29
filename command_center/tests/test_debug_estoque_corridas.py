@@ -60,3 +60,18 @@ def test_unidade_do_proprio_cliente_usada_no_kart_dele_nao_vira_cobranca(cli):
     assert um(conectar(), "SELECT COUNT(*) n FROM stock_charges")["n"] == 0
 
 
+def test_mecanico_nao_ve_o_valor_dos_avisos_da_loja(cli):
+    """Custo é do gerente: o valor que o e-mail da loja trouxe (`amount` nos eventos) também."""
+    con = conectar()
+    pid = compras.criar_compra(con, None, [{"description": "Corrente", "qty": 1}], pedir=True)
+    inserir(con, "purchase_events", purchase_id=pid, kind="pagamento", amount=1234.5, subject="Payment received")
+    con.commit(); con.close()
+    h = entra(cli, "mec@urace.us")
+    c = cli.get(f"/ops/api/compras/{pid}", headers=h).json()
+    assert c["eventos"] and all(e["amount"] is None for e in c["eventos"])
+    lista = next(x for x in cli.get("/ops/api/compras", headers=h).json()["compras"] if x["id"] == pid)
+    assert all(e["amount"] is None for e in lista["eventos"])
+    h = entra(cli, "ger@urace.us")
+    assert cli.get(f"/ops/api/compras/{pid}", headers=h).json()["eventos"][0]["amount"] == 1234.5
+
+

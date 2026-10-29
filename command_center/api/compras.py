@@ -32,6 +32,7 @@ def _sem_custo(c, u):
         return c
     c = dict(c, total=None)
     c["linhas"] = [dict(l, unit_cost=None) for l in c["linhas"]]
+    c["eventos"] = [dict(e, amount=None) for e in c["eventos"]]      # o valor que a loja escreveu também é custo
     return c
 
 
