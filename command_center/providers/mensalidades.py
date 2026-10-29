@@ -133,8 +133,9 @@ def enviar_devidas(con, agora_local=None, enviar=None):
                       note="já existia no QuickBooks", updated_at=agora())
             feitas.append((m["id"], "já existia"))
             continue
-        qbo = _cliente_qbo(con, m["client_id"])
         try:
+            # dentro da proteção: o card sem invoice no espelho busca no QuickBooks, que pode estar fora do ar
+            qbo = _cliente_qbo(con, m["client_id"])
             if not qbo:
                 raise ErroMensalidade("cliente não encontrado no QuickBooks")
             dia = m["send_at"][:10]
