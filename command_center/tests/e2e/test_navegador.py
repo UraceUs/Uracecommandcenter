@@ -1720,6 +1720,34 @@ def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegad
     pg.close()
 
 
+def test_meu_dia_nao_mostra_o_dia_anterior_enquanto_o_proximo_carrega(servidor, navegador):
+    """Debug 29/10: ao passar para o dia seguinte com sinal fraco, a tela já dizia amanhã e ainda mostrava os serviços
+    e os checklists de hoje; tocar num checklist abria o de hoje com a data de amanhã. Enquanto o dia novo não chega,
+    a tela espera."""
+    pg = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=800)
+    pg.get_by_role("heading", name="Meu dia", level=1).wait_for()
+    hoje = pg.locator("article.cd", has_text="David Pedalo_Urace Daily_Arrive and Drive")
+    hoje.wait_for()
+    # o dia seguinte leva 2,5 s para chegar
+    pg.evaluate("""() => { window.__pend = 0; const orig = window.fetch; window.fetch = async (u, o) => {
+        const lenta = /\\/meu-dia\\?data=/.test(String(u))
+        if (lenta) window.__pend++
+        const r = await orig(u, o)
+        if (lenta) { await new Promise(ok => setTimeout(ok, 2500)); window.__pend-- }
+        return r } }""")
+    pg.get_by_role("button", name="Próximo dia").click()
+    pg.wait_for_function("() => window.__pend > 0")
+    pg.wait_for_timeout(300)
+    assert hoje.count() == 0, "a tela de amanhã ainda mostrava o serviço (e o checklist) de hoje"
+    pg.wait_for_function("() => window.__pend === 0", timeout=15000)
+    pg.get_by_role("heading", name="Serviços", level=2).wait_for()
+    assert hoje.count() == 0
+    pg.get_by_role("button", name="Dia anterior").click()
+    hoje.wait_for()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_calendario_em_cards_a_corrida_traz_um_card_por_cliente(servidor, navegador):
     """#233 (dono, 14/10): no mês, "separado ali os cards … corrida é um card de serviço geral com
     cards de serviços de cada cliente … um treino é um card de serviço daquele cliente"."""

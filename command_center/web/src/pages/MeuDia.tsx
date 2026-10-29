@@ -85,12 +85,14 @@ function CardsDoDia({ r, max = MAX_CARDS }: { r: Resumo; max?: number }) {
 function Semana({ data, abrir, nav }: { data: string; abrir: (iso: string) => void; nav: ReactNode }) {
   const de = segunda(data), ate = somar(de, 6)
   const p = useGet<Periodo>(`/meu-dia/periodo${qs({ de, ate })}`, 60000)
-  if (p.error && !p.data) return <ErrorState error={p.error} retry={p.reload} />
-  if (!p.data) return <Loading />
-  const hoje = p.data.hoje
+  // só a semana pedida: a de antes não fica na tela, com o título da nova, enquanto esta carrega (debug 29/10)
+  const per = p.data?.de === de ? p.data : null
+  if (p.error && !per) return <ErrorState error={p.error} retry={p.reload} />
+  if (!per) return <Loading />
+  const hoje = per.hoje
   return <Section title={tr("Semana de {0} a {1}", ddmm(de), ddmm(ate))} right={nav}>
     <div className="stack" style={{ gap: 8 }}>{Array.from({ length: 7 }, (_, i) => somar(de, i)).map(iso => {
-      const r = p.data!.dias[iso]
+      const r = per.dias[iso]
       return <button key={iso} className={`card card-b md-semana-d${iso === hoje ? ' hoje' : ''}`} onClick={() => abrir(iso)}>
         <h3 className="h3" style={{ margin: 0 }}>{rotuloData(iso)}{iso === hoje && <Chip tone="accent">{tr("hoje")}</Chip>}</h3>
         {vazio(r) ? <span className="small muted">{tr("Nada marcado")}</span> : <CardsDoDia r={r} max={Infinity} />}
@@ -102,9 +104,11 @@ function Semana({ data, abrir, nav }: { data: string; abrir: (iso: string) => vo
 function Mes({ data, abrir, nav }: { data: string; abrir: (iso: string) => void; nav: ReactNode }) {
   const mes = data.slice(0, 7), [a, m] = mes.split('-').map(Number)
   const p = useGet<Periodo>(`/meu-dia/periodo${qs({ de: `${mes}-01`, ate: ultimo(mes) })}`, 60000)
-  if (p.error && !p.data) return <ErrorState error={p.error} retry={p.reload} />
-  if (!p.data) return <Loading />
-  const { dias, hoje } = p.data
+  // só o mês pedido: o de antes não fica na grade do novo enquanto ele carrega (debug 29/10)
+  const per = p.data?.de === `${mes}-01` ? p.data : null
+  if (p.error && !per) return <ErrorState error={p.error} retry={p.reload} />
+  if (!per) return <Loading />
+  const { dias, hoje } = per
   const brancos = (new Date(a, m - 1, 1).getDay() + 6) % 7
   const proximos = Object.keys(dias).filter(iso => iso >= hoje && !vazio(dias[iso]))
   return <Section title={tr("{0}{1} de {2}", MESES[m - 1][0].toUpperCase(), MESES[m - 1].slice(1), a)} right={nav}>
@@ -161,6 +165,9 @@ export function MeuDia() {
   const [data, setData] = useState(hojeFL)
   const [vista, setVista] = useState<Vista>('dia')
   const d = useGet<Dia>(`/meu-dia${qs({ data })}`, 60000)
+  // só o dia pedido (debug 29/10): passando para o dia seguinte com sinal fraco, a tela dizia amanhã e ainda mostrava os
+  // serviços de hoje, e o checklist tocado nascia com a data errada. Enquanto o dia novo não chega, a tela espera.
+  const doDia = d.data?.data === data ? d.data : null
   const [excluir, setExcluir] = useState<Servico | null>(null)
   const passo = (n: number) => setData(x => vista === 'mes' ? outroMes(x, n) : somar(x, vista === 'semana' ? 7 * n : n))
   const abrirDia = (iso: string) => { setData(iso); setVista('dia'); window.scrollTo({ top: 0 }) }
@@ -185,27 +192,27 @@ export function MeuDia() {
       {data !== hojeFL() && <button className="btn sm ghost" onClick={() => setData(hojeFL())}>{tr("Hoje")}</button>}
       <button className="btn sm ghost" aria-label={tr("Próximo dia")} onClick={() => setData(x => somar(x, 1))}>›</button>
     </div>
-    {d.error && !d.data ? <ErrorState error={d.error} retry={d.reload} /> : !d.data ? <Loading /> : <>
-      {d.data.do_dia.length > 0 && <Section title={tr("Checklists do dia")}>
-        <div className="stack" style={{ gap: 8 }}>{d.data.do_dia.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>
+    {d.error && !doDia ? <ErrorState error={d.error} retry={d.reload} /> : !doDia ? <Loading /> : <>
+      {doDia.do_dia.length > 0 && <Section title={tr("Checklists do dia")}>
+        <div className="stack" style={{ gap: 8 }}>{doDia.do_dia.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>
       </Section>}
-      <Section title={tr("Serviços")} count={d.data.servicos.length}>
-        {!d.data.servicos.length ? <Empty title={tr("Nenhum serviço neste dia")} /> : <div className="cd-grade">{d.data.servicos.map(s => {
+      <Section title={tr("Serviços")} count={doDia.servicos.length}>
+        {!doDia.servicos.length ? <Empty title={tr("Nenhum serviço neste dia")} /> : <div className="cd-grade">{doDia.servicos.map(s => {
           // #313: o cartão D — a situação do serviço, o cliente, a barra dos checklists completos e cada checklist na linha
           const [rot, tom] = estadoDoServico(s.status)
           return <Cartao key={s.id} id={`servico-${s.id}`} estado={rot} tom={tom} avatar={s.cliente || s.title} nome={s.cliente || s.title} sub={[s.title]}
             progresso={s.checklists.length ? { rotulo: tr("Checklists feitos"), total: s.checklists.length, feito: s.checklists.filter(c => c.status === 'completo').length } : null}
-            acoes={s.client_id || d.data?.gerente ? <>
+            acoes={s.client_id || doDia.gerente ? <>
               {s.client_id && <Link className="btn" to={`/clients/${s.client_id}`}>{tr("Card")}</Link>}
               {s.client_id && <Link className="btn" to={`/balcao/${s.client_id}`}>{tr("Peças")}</Link>}
-              {d.data?.gerente && <button className="btn danger" onClick={() => setExcluir(s)} aria-label={tr("Excluir o serviço {0}", s.title)}>{tr("Excluir")}</button>}</> : null}>
+              {doDia.gerente && <button className="btn danger" onClick={() => setExcluir(s)} aria-label={tr("Excluir o serviço {0}", s.title)}>{tr("Excluir")}</button>}</> : null}>
             {s.checklists.length > 0 && <div className="cd-form">{s.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>}
           </Cartao>
         })}</div>}
       </Section>
       {excluir && <ExcluirServico s={excluir} onFechar={() => setExcluir(null)} onFeito={() => { setExcluir(null); d.reload() }} />}
-      {d.data.corridas.length > 0 && <Section title={tr("Corridas")} count={d.data.corridas.length}>
-        <div className="cd-grade">{d.data.corridas.map(r => <Cartao key={r.id} id={`corrida-${r.id}`} estado={tr("corrida")} tom="info" avatar={null} nome={r.name}
+      {doDia.corridas.length > 0 && <Section title={tr("Corridas")} count={doDia.corridas.length}>
+        <div className="cd-grade">{doDia.corridas.map(r => <Cartao key={r.id} id={`corrida-${r.id}`} estado={tr("corrida")} tom="info" avatar={null} nome={r.name}
           sub={[[r.track, r.city].filter(Boolean).join(' · ')]} grande={r.pilotos.length || null} detalhe={r.pilotos.length ? tr("piloto(s)") : null}
           progresso={r.checklists.length ? { rotulo: tr("Checklists feitos"), total: r.checklists.length, feito: r.checklists.filter(c => c.status === 'completo').length } : null}>
           {r.checklists.length > 0 && <div className="cd-form">{r.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>}
@@ -217,8 +224,8 @@ export function MeuDia() {
             {p.checklists.map(c => <BotaoCk key={c.template_id} c={c} data={data} />)}</div>)}
         </Cartao>)}</div>
       </Section>}
-      {d.data.sessoes.length > 0 && <Section title={tr("Sessões marcadas pelo site")} count={d.data.sessoes.length}>
-        <div className="tbl">{d.data.sessoes.map(x => <div className="tr" key={x.id}>
+      {doDia.sessoes.length > 0 && <Section title={tr("Sessões marcadas pelo site")} count={doDia.sessoes.length}>
+        <div className="tbl">{doDia.sessoes.map(x => <div className="tr" key={x.id}>
           <span style={{ width: 80 }} className="small">{PERIODO[x.period] || x.period}</span>
           <span className="grow">{x.piloto || '—'}{x.servico && <span className="small muted"> · {x.servico}</span>}</span>
           <Chip tone={x.status === 'confirmada' ? 'ok' : 'warn'}>{x.status === 'confirmada' ? tr("confirmada") : tr("esperando")}</Chip></div>)}</div>
