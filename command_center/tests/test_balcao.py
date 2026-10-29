@@ -417,6 +417,55 @@ def test_invoice_aberta_aparece_em_precisa_de_atencao_ate_ser_enviada(cli):
     assert not pendencia()
 
 
+def test_invoice_que_nao_subiu_fica_na_fila_e_na_atencao_com_o_total_das_pecas(cli):
+    """Debug 29/10: a primeira subida da invoice de peças falhou (QuickBooks fora do ar). O total ficava 0, e a fila
+    "para enviar" e "Precisa de atenção" (que olham total > 0) não mostravam a invoice: a peça usada só seria cobrada
+    se alguém abrisse aquele card de novo. O total é o das linhas daqui, suba ou não; a que tem erro fica na fila."""
+    prepara_peca(cli, cli.para)
+    h = entra(cli)
+    cli.qbo.falhar = "HTTP 503 em POST /invoice"
+    r = lanca(cli, h, cli.para).json()
+    sid, inv = r["leitura"]["id"], r["invoices"][0]
+    assert inv["qbo_error"] and inv["total"] == 89.5
+    hg = entra(cli, "ger@urace.us")
+
+    def fila():
+        return cli.get(f"{B}/invoices", headers=hg).json()
+
+    def pendencia():
+        return [a for a in cli.get("/ops/api/needs-attention").json() if a["entity"]["type"] == "parts_invoice"]
+    assert fila()["total"] == 1 and fila()["itens"][0]["id"] == inv["id"]
+    a = pendencia()
+    assert a and a[0]["level"] == "HIGH" and a[0]["facts"][0][1] == "US$ 89.50 · erro"
+    # subiu; depois o desfazer da única peça não conseguiu anular lá: sem linha, mas a fila continua mostrando o erro
+    cli.qbo.falhar = None
+    assert cli.post(f"{B}/invoices/{inv['id']}/sincronizar", headers=hg).json()["qbo_invoice_id"] == "inv-1"
+    cli.qbo.falhar = "HTTP 503 em POST /invoice"
+    h = entra(cli)
+    assert cli.post(f"{B}/leituras/{sid}/desfazer", headers=h).status_code == 200
+    hg = entra(cli, "ger@urace.us")
+    assert fila()["total"] == 1 and fila()["itens"][0]["qbo_error"] and pendencia()
+
+
+def test_peca_do_cobrar_nao_fica_tambem_a_cobrar_na_proxima_invoice(cli):
+    """Debug 29/10: a peça lida no COBRAR já está na invoice de peças do dia. Com o QuickBooks fora na hora, ela ficava
+    também "a cobrar" ("Cobrar peças do estoque" em Precisa de atenção, e a IA mandando pôr na próxima invoice do
+    cliente), e o "Tentar de novo" da invoice de peças cobrava a mesma peça outra vez."""
+    from command_center.api import atencao
+    prepara_peca(cli, cli.para)
+    h = entra(cli)
+    cli.qbo.falhar = "HTTP 503 em POST /invoice"
+    inv = lanca(cli, h, cli.para).json()["invoices"][0]
+    assert [l["name"] for l in inv["linhas"]] == ["Front bumper Tony Kart"], "a peça está na invoice de peças"
+    con = conectar()
+    assert estoque.cobrancas(con, cli.leo) == [], "e não fica a cobrar numa outra invoice"
+    assert not [i for i in atencao.coletar(con) if i["key"].startswith("estoque-cobrar")]
+    cli.qbo.falhar = None
+    hg = entra(cli, "ger@urace.us")
+    r = cli.post(f"{B}/invoices/{inv['id']}/sincronizar", headers=hg).json()
+    assert r["qbo_invoice_id"] == "inv-1" and [l["name"] for l in r["linhas"]] == ["Front bumper Tony Kart"]
+
+
 # ------------------------------------------------------------------ as duas vias no balcão (dono, 06/10)
 def test_as_duas_vias_aparecem_e_o_cartao_pode_ser_desligado(cli, monkeypatch):
     """Dono, 06/10: "tenha tanto a opção desse leitor quanto de montar invoice para poder enviar"."""

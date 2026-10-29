@@ -397,7 +397,9 @@ def lancar(con, client_id, item_id, modo, qty=1, local=estoque.SEDE, por=None, c
                                                      by_user_id=por, notes="balcão")
         pinv_id = _invoice_do_dia(con, client_id, data or hoje(), por)["id"]   # #180: a da data da leitura
         charge_id = estoque.registrar_cobranca(con, it["id"], client_id, qty, move_id=move, by_user_id=por, notes="balcão")
-        atualizar(con, "stock_charges", charge_id, parts_invoice_id=pinv_id)
+        # a cobrança nasce dentro da invoice de peças do dia: nunca fica "a cobrar" para outra invoice (a atenção
+        # "Cobrar peças do estoque", a IA), senão a peça sai cobrada duas vezes quando a de peças não sobe na hora
+        atualizar(con, "stock_charges", charge_id, parts_invoice_id=pinv_id, status="invoiced")
     elif modo == "guardar":
         estoque.entrada(con, it["id"], qty=qty, para=loc, client_id=client_id, reason="guardado do cliente",
                         by_user_id=por, source="balcao", notes="balcão")

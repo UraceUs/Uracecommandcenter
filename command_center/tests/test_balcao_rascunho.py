@@ -196,6 +196,22 @@ def test_resposta_perdida_nao_duplica_a_invoice(cli):
     assert saldo(cli.para) == 4, "a peça saiu uma vez só"
 
 
+def test_peca_do_rascunho_esperando_o_quickbooks_nao_fica_a_cobrar_em_outra_invoice(cli):
+    """Debug 29/10: a peça do estoque sai quando o rascunho vai virar invoice. Sem resposta do QuickBooks, ela ficava
+    "a cobrar" ("Cobrar peças do estoque" e a IA pondo na próxima invoice do cliente) enquanto a invoice do rascunho,
+    que pode já existir lá, também a cobra: a mesma peça duas vezes."""
+    from command_center.api import atencao
+    h = entra(cli)
+    linha(cli, h, origem="estoque", item_id=cli.para)
+    cli.qbo.perder_invoice = True
+    assert faturar(cli).status_code == 400
+    con = conectar()
+    assert estoque.cobrancas(con, cli.leo) == []
+    assert not [i for i in atencao.coletar(con) if i["key"].startswith("estoque-cobrar")]
+    assert faturar(cli).status_code == 200
+    assert estoque.cobrancas(conectar(), cli.leo) == [] and saldo(cli.para) == 4
+
+
 def test_recusa_certa_devolve_a_peca_e_o_rascunho_volta(cli):
     h = entra(cli)
     linha(cli, h, origem="estoque", item_id=cli.para)
