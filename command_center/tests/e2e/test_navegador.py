@@ -980,6 +980,33 @@ def test_conversa_da_equipe_abre_uma_vez_e_nao_fica_recarregando(servidor, naveg
     pg.close()
 
 
+def test_mensagem_enviada_na_equipe_aparece_uma_vez_so_com_a_rede_lenta(servidor, navegador):
+    """Debug 29/10: com a rede lenta, a busca de 5 s e a busca depois do envio pediam o mesmo "desde" e as duas punham a
+    mesma mensagem na tela: ela aparecia duas vezes, como se tivesse saído em dobro. A tela junta só o que ainda não tem."""
+    pg = entrar(navegador, servidor, largura=390, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    cid = pg.request.post(servidor + "/api/equipe/canais", headers=csrf,
+                          data={"name": "Box rede lenta", "kind": "EQUIPE", "membros": []}).json()["id"]
+    assert pg.request.post(servidor + f"/api/equipe/canais/{cid}/mensagens", headers=csrf, data={"text": "Bom dia, box"}).ok
+    pg.goto(servidor + f"/equipe/{cid}")
+    pg.locator(".chat .bub", has_text="Bom dia, box").wait_for()
+    # as duas próximas buscas do que é novo demoram 5,5 s para voltar (mais que o intervalo de 5 s)
+    pg.evaluate("""() => { window.__atrasar = 2; window.__voltaram = 0; const orig = window.fetch; window.fetch = async (u, o) => {
+        const lenta = (!o || !o.method || o.method === 'GET') && /\\/equipe\\/canais\\/\\d+\\?desde=[1-9]/.test(String(u)) && window.__atrasar > 0
+        if (lenta) window.__atrasar--
+        const r = await orig(u, o)
+        if (lenta) { await new Promise(ok => setTimeout(ok, 5500)); window.__voltaram++ }
+        return r } }""")
+    pg.get_by_placeholder("Escreva ou dite… Enter envia, Shift+Enter quebra a linha").fill("Kart 12 pronto")
+    pg.get_by_role("button", name="Enviar", exact=True).click()
+    pg.wait_for_function("() => window.__voltaram === 2", timeout=20000)
+    pg.wait_for_timeout(600)
+    assert pg.locator(".chat .bub", has_text="Kart 12 pronto").count() == 1, "a mensagem apareceu repetida"
+    assert pg.locator(".chat .bub", has_text="Bom dia, box").count() == 1
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 @pytest.mark.parametrize("largura", [360, 390])
 def test_area_do_cliente_escreve_tudo_do_mesmo_jeito(servidor, navegador, largura):
     """#81 (dono, 04/10: "veja as formatações que estão fora de padrão e padronize"): nome

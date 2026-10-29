@@ -251,25 +251,33 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
   useEffect(() => { aoMudar.current = onMudou })
   const [canalVisto, setCanalVisto] = useState(id)
   if (canalVisto !== id) { setCanalVisto(id); setConversa(null); setErro(null) }
+  // a busca do canal aberto; o envio usa a mesma, para não haver duas buscas pondo mensagem na tela
+  const buscarNovas = useRef<() => Promise<void>>(async () => {})
   useEffect(() => {
     let vivo = true
     ultimo.current = 0
     async function puxar() {
+      const desde = ultimo.current
       try {
-        const d = await api.get<Conversa>(`/equipe/canais/${id}?desde=${ultimo.current}`)
+        const d = await api.get<Conversa>(`/equipe/canais/${id}?desde=${desde}`)
         if (!vivo) return
         setErro(null)
+        if (!desde) setMudo(!!d.mudo)
+        // junta só o que a tela ainda não tem: com a rede lenta, duas buscas saíam com o mesmo "desde" e a mesma
+        // mensagem aparecia duas vezes (debug 29/10)
         setConversa(prev => {
-          if (!prev || ultimo.current === 0) { setMudo(!!d.mudo); return d }
-          return { ...d, mensagens: [...prev.mensagens, ...d.mensagens] }   // só o que é novo veio
+          if (!prev) return d
+          const ate = prev.mensagens.length ? prev.mensagens[prev.mensagens.length - 1].id : 0
+          return { ...d, mensagens: [...prev.mensagens, ...d.mensagens.filter(m => m.id > ate)] }
         })
-        const novas = d.mensagens
-        if (novas.length) {
-          ultimo.current = novas[novas.length - 1].id
-          api.post(`/equipe/canais/${id}/lido`, { ate: ultimo.current }).then(() => aoMudar.current()).catch(() => { /* marca de novo depois */ })
+        const novo = d.mensagens.length ? d.mensagens[d.mensagens.length - 1].id : 0
+        if (novo > ultimo.current) {                     // o "desde" só anda para a frente
+          ultimo.current = novo
+          api.post(`/equipe/canais/${id}/lido`, { ate: novo }).then(() => aoMudar.current()).catch(() => { /* marca de novo depois */ })
         }
-      } catch (e) { if (vivo && ultimo.current === 0) setErro(e as ApiError) }
+      } catch (e) { if (vivo && !desde) setErro(e as ApiError) }
     }
+    buscarNovas.current = puxar
     puxar()
     const t = setInterval(puxar, 5000)
     return () => { vivo = false; clearInterval(t) }
@@ -293,9 +301,7 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
     try {
       await api.post(`/equipe/canais/${id}/mensagens`, { text: t })
       setTexto(v => (v.trim() === t ? '' : v))
-      const d = await api.get<Conversa>(`/equipe/canais/${id}?desde=${ultimo.current}`)
-      setConversa(prev => prev ? { ...d, mensagens: [...prev.mensagens, ...d.mensagens] } : d)
-      if (d.mensagens.length) ultimo.current = d.mensagens[d.mensagens.length - 1].id
+      await buscarNovas.current()              // a mesma busca do intervalo; se ela falhar, a mensagem já saiu
       onMudou()
     } catch (e) {
       const err = e as ApiError
