@@ -508,8 +508,10 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .aviso-erro { background: #fbe9e9; border: 1px solid #f1c2c2; color: var(--vermelho); border-radius: var(--raio); padding: 14px 16px; margin: 8px 0 }
 .form-pedido fieldset.entrega { border: 1.5px solid #d9d9e1; border-radius: 8px; padding: 10px 12px; margin: 0; display: grid; gap: 4px; min-width: 0 }
 .form-pedido fieldset.entrega legend { font-weight: 600; font-size: .92rem; padding: 0 4px }
-.form-pedido label.opcao { display: flex; align-items: center; gap: 10px; font-weight: 600; min-height: 44px; cursor: pointer }
-.form-pedido label.opcao input { width: 20px; min-height: 20px; height: 20px; flex: none; accent-color: var(--vermelho) }
+.form-pedido label.opcao, .form-contato label.opcao { display: flex; align-items: center; gap: 10px; font-weight: 600; min-height: 44px; cursor: pointer }
+.form-pedido label.opcao input, .form-contato label.opcao input { width: 20px; min-height: 20px; height: 20px; flex: none; accent-color: var(--vermelho) }
+.form-contato fieldset { border: 1px solid #e3e3ea; border-radius: var(--raio); padding: 8px 14px; margin: 0; min-width: 0 }   /* #493 */
+.form-contato legend { font-weight: 600; font-size: .92rem; padding: 0 4px }
 .pedido-alt { margin-top: 18px; border-top: 1px solid #e6e6ec; padding-top: 12px }
 .pedido-alt > summary { cursor: pointer; font-weight: 600; min-height: 44px; display: flex; align-items: center }
 .pedido-alt > summary::before { content: "+"; color: var(--vermelho); font-weight: 800; width: 1.2em; flex: none }
