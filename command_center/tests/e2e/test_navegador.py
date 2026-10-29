@@ -1824,7 +1824,7 @@ def test_gerente_edita_o_modelo_do_checklist(servidor, navegador):
 
 
 # ------------------------------------------------------------------ site novo (#148)
-@pytest.mark.parametrize("largura", [360, 390])
+@pytest.mark.parametrize("largura", [360, 390, 1280])
 def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     site = servidor.removesuffix("/ops")
     pg = navegador.new_page(viewport={"width": largura, "height": 800})
@@ -1835,7 +1835,9 @@ def test_site_novo_um_h1_e_sem_rolagem_lateral(servidor, navegador, largura):
     from command_center.vitrine import paginas_site
     post = paginas_site.dados("posts.json")["posts"][0]["slug"]
     produto = next(p for p in paginas_site.dados("produtos.json")["produtos"] if p["images"] and p["variations"])["slug"]
-    for rota in ("/", "/services/arrive-and-drive/", "/sim2grid-racing-simulator/", "/services/", "/services/birthday-party/",
+    # #459: o nome com a palavra mais longa do catálogo ("“BIREL/COMPKART") esticava a coluna do produto
+    comprido = max(paginas_site.dados("produtos.json")["produtos"], key=lambda p: max(map(len, p["name"].split())))["slug"]
+    for rota in ("/", "/services/arrive-and-drive/", f"/store/p/{comprido}/", "/sim2grid-racing-simulator/", "/services/", "/services/birthday-party/",
                  "/academy/", "/pro-team/",
                  "/career/", "/about/", "/contact/", "/blog/", f"/blog/{post}/", "/store/", f"/store/p/{produto}/",
                  # #261: a loja com busca, filtro de preço e paginação — o formulário não pode estourar a largura
@@ -6859,10 +6861,10 @@ def test_editar_no_card_muda_nome_email_e_telefone(servidor, navegador, largura)
     pg.get_by_role("button", name="Salvar").click()
     pg.get_by_text("Cliente atualizado.").wait_for()
     pg.get_by_role("heading", level=1, name=f"Davi Editado {largura}").wait_for()
-    meta = pg.locator(".c360-h .meta")
-    assert f"Nina Editada {largura}" in meta.inner_text()
-    assert pg.locator(f'.c360-h a[href="mailto:nina.novo.{largura}@example.com"]').count() == 1
-    assert pg.locator('.c360-h a[href="tel:555-555-0132"]').count() == 1
+    dados = pg.locator(".cd-dados")                     # #460: o contato fica em Dados do cliente
+    assert f"Nina Editada {largura}" in dados.inner_text()
+    assert pg.locator(f'.cd-dados a[href="mailto:nina.novo.{largura}@example.com"]').count() == 1
+    assert pg.locator('.cd-dados a[href="tel:555-555-0132"]').count() == 1
     # o e-mail de outro card não entra: aparece o aviso para usar Unir
     outro = pg.request.post(servidor + "/api/clients", headers=csrf, data={"name": f"Outra Pessoa {largura}", "email": f"outra.{largura}@example.com"}).json()["id"]
     pg.get_by_role("button", name="Editar", exact=True).click()
@@ -6934,6 +6936,40 @@ def test_card_do_pedido_de_suits_no_desenho_aprovado(servidor, navegador, largur
     pg.locator(".suit-filtros").get_by_role("button", name=re.compile("^Notas")).click()
     assert all(c == "k-nota" for c in pg.locator(".suit-tempo > li").evaluate_all("xs => xs.map(x => x.className)"))
     pg.get_by_text("Nota de teste do desenho").first.wait_for()
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_card_do_cliente_dados_antes_da_linha_do_tempo_e_card_do_servico(servidor, navegador, largura):
+    """#460, dono 29/10: "antes de linha do tempo, coloca dados do cliente" e "ir para o card do serviço do cliente
+    dentro do Command Center". Dados do cliente antes das abas; a visita na linha do tempo traz o último comentário
+    do Asana e abre o card do serviço, que mostra o espelho (descrição, subtarefas, comentários)."""
+    pg = entrar(navegador, servidor, largura=largura, altura=800)
+    cid = pg.request.get(servidor + "/api/clients?q=Bryan%20Sapata").json()
+    cid = (cid["items"] if isinstance(cid, dict) else cid)[0]["id"]
+    abrir(pg, servidor, f"/clients/{cid}")
+    pg.get_by_role("heading", level=2, name="Dados do cliente").wait_for()
+    ordem = pg.evaluate("""() => { const d = document.querySelector('.cd-dados'), t = document.querySelector('.tabs')
+      return !!(d && t && (d.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING)) }""")
+    assert ordem, "Dados do cliente vem antes das abas"
+    abas = pg.locator(".tabs button").all_inner_texts()
+    assert abas[0] == "Linha do tempo" and abas[1].startswith("Serviços") and abas[2].startswith("Waivers") and abas[3].startswith("E-mails"), abas
+    dados = pg.locator(".cd-dados").inner_text()
+    assert "pablosapata@example.com" in dados and "anos" in dados
+    pg.get_by_text("Melhor volta 41.2", exact=False).first.wait_for()
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    pg.locator(".vis").first.get_by_role("link", name="Abrir o serviço").click()
+    pg.get_by_role("heading", level=1, name="Bryan Sapata_Academy_2 stroke [3/4]").wait_for()
+    assert "/servicos/" in pg.url
+    pg.get_by_role("heading", level=2, name=re.compile("^Comentários")).wait_for()
+    pg.get_by_text("Melhor volta 41.2", exact=False).first.wait_for()
+    pg.get_by_role("heading", level=2, name=re.compile("^Subtarefas")).wait_for()
+    assert pg.get_by_role("link", name=re.compile("card de Bryan Sapata")).count() == 1
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r

@@ -462,7 +462,8 @@ html { scroll-behavior: smooth; scroll-padding-top: 72px }
 .produto-fotos { display: grid; gap: 10px }
 .produto-fotos img, .produto-fotos .sem-foto { border-radius: var(--raio); border: 1px solid #e3e3ea }
 .produto-fotos img + img { width: 50%; justify-self: start }
-.produto-info { display: grid; gap: 14px; min-width: 0 }
+.produto-info { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0 }
+.produto-info h1 { overflow-wrap: anywhere }   /* #459: "“BIREL/COMPKART" esticava a coluna e a página rolava */
 .produto-info .eyebrow a { color: var(--vermelho); text-decoration: none }
 .produto-preco { font-size: 1.1rem }
 .produto-preco strong { font: 800 1.7rem/1.1 var(--titulo); font-stretch: 125% }

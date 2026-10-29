@@ -19,15 +19,9 @@ import { TextoComVoz } from '../components/Voz'
 import { SituacaoDaCopia } from '../components/CopiaDaWaiver'
 import { useReenviarCopia } from '../components/reenviarCopia'
 import { ESTADO_PEDIDO } from '../components/pedidoSite'
+import { DadosDoCliente, VisitaServico } from '../components/DadosDoCliente'
+import { CHAVES_MEDIDAS, idade } from '../components/medidas'
 import { tr, LOCALE } from '../i18n'
-
-function idade(dob?: string | null) {
-  if (!dob) return null
-  const d = new Date(dob.slice(0, 10) + 'T12:00:00Z'); if (isNaN(d.getTime())) return null
-  const h = new Date(); let a = h.getFullYear() - d.getFullYear()
-  if (h.getMonth() < d.getMonth() || (h.getMonth() === d.getMonth() && h.getDate() < d.getDate())) a--
-  return a
-}
 
 const KIND: Record<string, [string, 'ok' | 'warn' | 'crit' | 'info' | '']> = {
   SITE_PAYMENT: [tr("Pagamento no site"), 'ok'], SERVICE: [tr("Serviço"), 'info'], WAIVER_SENT: [tr("Waiver enviada"), 'warn'], WAIVER_SIGNED: [tr("Waiver assinada"), 'ok'], WAIVER_VOIDED: [tr("Waiver anulada"), 'crit'], EMAIL: ['E-mail', ''], AI_ACTION: [tr("Ação da IA"), 'info'], INVOICE: [tr("Invoice"), 'ok'],
@@ -56,7 +50,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   const corridas = useGet<Race[]>(id && tab === 'races' ? `/races?client_id=${id}&all=true` : null)
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ status: '', stage_code: '', notes: '', vip: false, monthly_plan: '', monthly_note: '', plan_type: '', pro_driver: false,
-    name: '', pilot_name: '', pilot_dob: '', email: '', email_alt: '', phone: '', company: '' })
+    name: '', pilot_name: '', pilot_dob: '', email: '', email_alt: '', phone: '', company: '', relationship: '', racing_class: '' })
+  const [medForm, setMedForm] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [selInv, setSelInv] = useState<number[]>([])
@@ -91,6 +86,15 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
 
+  /* #460: "Anotar neste serviço" — vai como comentário na tarefa do Asana e volta pelo espelho */
+  async function anotar(tid: number) {
+    const texto = await perguntar({ titulo: tr("Anotar neste serviço"), texto: tr("A anotação vai como comentário na tarefa do Asana, com o seu nome, e aparece aqui e no card do serviço."),
+      campo: tr("Anotação"), ok: tr("Anotar") }) as string | null
+    if (!texto?.trim()) return
+    try { await api.post(`/tasks/${tid}/comentar`, { texto: texto.trim() }); toast(tr("Anotado no serviço."), 'ok'); reload() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+
   async function togglePro() {
     const vai = !c.pro_driver
     if (!await perguntar(vai ? { titulo: tr("Tornar {0} um ★ Pro Racing Driver?", c.pilot_name || c.name), texto: tr("Ele vai para a aba Pro Racing Drivers e o card ganha Equipamento e Corridas."), ok: tr("Tornar Pro") } : { titulo: tr("Tirar {0} de Pro Racing Driver?", c.pilot_name || c.name), ok: tr("Tirar") })) return
@@ -100,7 +104,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
   }
   function openEdit() {
     setForm({ status: c.status, stage_code: c.stage_code || '', notes: c.notes || '', vip: !!c.vip, monthly_plan: c.monthly_plan || '', monthly_note: c.monthly_note || '', plan_type: c.plan_type || '', pro_driver: !!c.pro_driver,
-      name: c.name || '', pilot_name: c.pilot_name || '', pilot_dob: (c.pilot_dob || '').slice(0, 10), email: c.email || '', email_alt: c.email_alt || '', phone: c.phone || '', company: c.company || '' })
+      name: c.name || '', pilot_name: c.pilot_name || '', pilot_dob: (c.pilot_dob || '').slice(0, 10), email: c.email || '', email_alt: c.email_alt || '', phone: c.phone || '', company: c.company || '', relationship: c.relationship || '', racing_class: c.racing_class || '' })
+    setMedForm(Object.fromEntries(CHAVES_MEDIDAS.map(([k]) => [k, String(c.dados?.medidas?.[k] ?? '')])))
     setEdit(true)
   }
   async function save() {
@@ -111,6 +116,12 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       for (const k of ['name', 'pilot_name', 'pilot_dob', 'email', 'email_alt', 'phone', 'company'] as const)
         if (form[k].trim() !== ((k === 'pilot_dob' ? (c.pilot_dob || '').slice(0, 10) : c[k]) || '')) body[k] = form[k].trim()
       if (can('MANAGER')) body.vip = form.vip
+      // #460: parentesco, classe e medidas (só o que mudou)
+      if (form.relationship.trim() !== (c.relationship || '')) body.relationship = form.relationship.trim() || null
+      if (form.racing_class !== (c.racing_class || '')) body.racing_class = form.racing_class || null
+      const medAntes = Object.fromEntries(CHAVES_MEDIDAS.map(([k]) => [k, String(c.dados?.medidas?.[k] ?? '')]))
+      if (CHAVES_MEDIDAS.some(([k]) => (medForm[k] || '').trim() !== medAntes[k]))
+        body.measures = Object.fromEntries(CHAVES_MEDIDAS.filter(([k]) => (medForm[k] || '').trim()).map(([k]) => [k, medForm[k].trim()]))
       await api.patch(`/clients/${c.id}`, body)
       const perfil: Record<string, unknown> = { plan_type: form.plan_type }
       if (can('MANAGER')) perfil.pro_driver = form.pro_driver
@@ -140,13 +151,8 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
           <button type="button" className="btn ghost" style={{ minHeight: 40, whiteSpace: 'normal', textAlign: 'left' }} onClick={() => setTab('monthly')}>
             <Chip tone="warn">{tr("Piloto pro sem mensalidade no card: preencha sessões por mês e valor mensal")}</Chip></button>}
         <div className="meta">
-          <span><span className="k">{tr("Client ID")}</span> <b className="mono">{c.id}</b></span>
-          {c.pilot_name && c.pilot_name !== c.name && <span><span className="k">{tr("responsável")}</span> <b>{c.name}</b></span>}
-          {anos !== null && <span><span className="k">{tr("idade")}</span> <b>{anos}</b>{menor && <Chip tone="warn">{tr("menor · waiver parental")}</Chip>}</span>}
-          {c.email ? <span><span className="k">{tr("e-mail")}</span> <a href={`mailto:${c.email}`}>{c.email}</a>{c.email_alt && <> <span className="muted">·</span> <a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></>}</span> : <span className="muted">{tr("sem e-mail")}</span>}
-          {c.phone && <span><span className="k">{tr("tel")}</span> <a href={`tel:${c.phone}`}>{c.phone}</a></span>}
+          {menor && <Chip tone="warn">{tr("menor · waiver parental")}</Chip>}
           {c.company && <span><span className="k">{tr("empresa")}</span> {c.company}</span>}
-          {!!data.irmaos?.length && <span><span className="k">{tr("irmão(s)")}</span> {data.irmaos.map(i => <Link key={i.id} className="lchip" to={`/clients/${i.id}`} title={tr("Card do irmão: cada piloto tem o seu")}>{i.pilot_name || i.name}</Link>)}</span>}
         </div>
       </div>
       <div className="c360-acts">
@@ -163,21 +169,21 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     </div>
     {risco && <Banner tone="crit"><b>{tr("Serviço em")} {dias === 0 ? tr("HOJE") : tr("{0} dia(s)", dias)} {tr("sem waiver assinada.")}</b> {wBad ? tr("O e-mail {0} devolveu: corrija e reenvie.", wBad.signer_email) : wOpen ? tr("Envelope {0}; cobre a assinatura.", WAIVER_LABEL[wOpen.status!]) : tr("Nenhum envelope enviado.")}</Banner>}
     {!!c.vip && <Banner tone="info">{tr("Cliente VIP: dispensa waiver por decisão do dono (04/09/2026). Nada de cobrança automática.")}</Banner>}
-    <div className="grid g5 c360-k">
+    <div className="grid g4 c360-k">
       <div className="card kpi"><div className="lbl">{tr("Próximo serviço")}</div><div className="val" style={{ fontSize: 22 }}>{prox ? fmtDate(prox.due_on) : '—'}</div><div className="foot clamp2" title={prox?.title || ''}>{prox ? <>{prox.title} <SysLink links={prox.links} one /></> : tr("nada agendado")}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Último serviço")}</div><div className="val" style={{ fontSize: 22 }}>{ultimo ? fmtDate(ultimo.due_on) : '—'}</div><div className="foot clamp2" title={ultimo?.title || ''}>{ultimo ? <>{ultimo.title} <SysLink links={ultimo.links} one /></> : tr("nenhum concluído")}</div></div>
-      <div className="card kpi"><div className="lbl">{tr("Waiver")}</div><div className={`val ${wOk || c.vip ? 'ok' : wBad ? 'crit' : 'warn'}`} style={{ fontSize: 22 }}>{c.vip ? tr("dispensada") : wOk ? tr("assinada") : wBad ? tr("devolveu") : wOpen ? WAIVER_LABEL[wOpen.status!] : tr("nenhuma")}</div><div className="foot">{wOk?.expires_at ? <>{tr("vale até")} {fmtDate(wOk.expires_at)} </> : wOpen?.expires_at ? <>{tr("expira")} {fmtDate(wOpen.expires_at)} </> : ''}<SysLink links={(wOk || wOpen || wBad)?.links} one />
-        {!wOk && !c.vip && can('OPERATOR') && <button className="btn ghost sm" onClick={() => setTab('waivers')} title={tr("Mandar ao e-mail do card o convite para assinar a waiver")}>{tr("✉ Convite por e-mail")}</button>}</div></div>
       <div className="card kpi"><div className="lbl">{tr("Serviços")}</div><div className="val">{abertos}<span className="of">/{vivos.length}</span></div><div className="foot">{abertos === 1 ? tr("1 aberto") : tr("{0} abertos", abertos)} · {vivos.length - abertos} {tr("concluídos")}</div></div>
       {data.invoices !== null
         ? <div className="card kpi"><div className="lbl">{tr("Em aberto (QBO)")}</div><div className={`val ${(data.open_balance || 0) > 0 ? 'warn' : 'ok'}`} style={{ fontSize: 22 }}>{money(data.open_balance || 0)}</div><div className="foot">{data.invoices.length} {tr("invoice(s) ·")} {emailsAbertos ? <span style={{ color: 'var(--warn)' }}>{emailsAbertos} {tr("e-mail(s) sem resposta")}</span> : tr("e-mails em dia")}</div></div>
         : <div className="card kpi"><div className="lbl">{tr("E-mails")}</div><div className={`val ${emailsAbertos ? 'warn' : ''}`}>{emailsAbertos}</div><div className="foot">{tr("sem resposta ·")} {data.emails.length} {tr("conhecidos")}</div></div>}
     </div>
-    <details className="card c360-d"><summary className="card-h" style={{ cursor: 'pointer' }}><h2 className="h2">{tr("Dados completos")}</h2><span className="grow" /><span className="small muted">{c.source || '—'} {tr("· desde")} {fmtDate(c.created_at)}{c.scanned_at && <> {tr("· varrido")} {fmtDateTime(c.scanned_at)}</>}</span></summary>
+    <DadosDoCliente c={c} irmaos={data.irmaos} waiver={wOk} waiverAberta={wOpen || wBad} onWaivers={() => setTab('waivers')} onEditar={can('OPERATOR') ? openEdit : undefined}
+      onConvite={can('OPERATOR') ? () => setTab('waivers') : undefined} />
+    <details className="card c360-d"><summary className="card-h" style={{ cursor: 'pointer' }}><h2 className="h2">{tr("Plano e origem")}</h2><span className="grow" /><span className="small muted">{c.source || '—'} {tr("· desde")} {fmtDate(c.created_at)}{c.scanned_at && <> {tr("· varrido")} {fmtDateTime(c.scanned_at)}</>}</span></summary>
       <div className="card-b grid g3">
-        <dl className="dl"><dt>{tr("Piloto")}</dt><dd>{c.pilot_name || <span className="muted">{tr("o próprio")}</span>}</dd><dt>{tr("Nascimento")}</dt><dd className="mono">{fmtDate(c.pilot_dob)}</dd><dt>{tr("Responsável")}</dt><dd>{c.name}</dd></dl>
-        <dl className="dl"><dt>{tr("E-mail")}</dt><dd>{c.email ? <a href={`mailto:${c.email}`}>{c.email}</a> : '—'}{c.email_alt && <div className="small"><a href={`mailto:${c.email_alt}`}>{c.email_alt}</a></div>}</dd><dt>{tr("Telefone")}</dt><dd>{c.phone ? <a href={`tel:${c.phone}`}>{c.phone}</a> : '—'}</dd><dt>{tr("Empresa")}</dt><dd>{c.company || '—'}</dd></dl>
-        <dl className="dl"><dt>{tr("Plano mensal")}</dt><dd>{c.monthly_plan || <span className="muted">—</span>}{c.monthly_note && <div className="small muted">{c.monthly_note}</div>}</dd><dt>{tr("Etapa")}</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>{tr("Tipo")}</dt><dd>{c.plan_type === 'monthly' ? tr("Academy Monthly") : c.plan_type === 'daily' ? tr("Academy Day") : '—'}{!!c.pro_driver && tr(" · ★ Pro")}</dd></dl>
+        <dl className="dl"><dt>{tr("Plano mensal")}</dt><dd>{c.monthly_plan || <span className="muted">—</span>}{c.monthly_note && <div className="small muted">{c.monthly_note}</div>}</dd></dl>
+        <dl className="dl"><dt>{tr("Etapa")}</dt><dd>{data.stages.find(s => s.code === c.stage_code)?.label || c.stage_code || '—'}</dd><dt>{tr("Empresa")}</dt><dd>{c.company || '—'}</dd></dl>
+        <dl className="dl"><dt>{tr("Tipo")}</dt><dd>{c.plan_type === 'monthly' ? tr("Academy Monthly") : c.plan_type === 'daily' ? tr("Academy Day") : '—'}{!!c.pro_driver && tr(" · ★ Pro")}</dd></dl>
       </div>
     </details>
     {edit && <Section title={tr("Editar cliente")}>
@@ -189,7 +195,13 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
         <div className="field"><label htmlFor="ed-email2">{tr("E-mail alternativo")}</label><input id="ed-email2" className="input" type="email" inputMode="email" autoComplete="off" value={form.email_alt} onChange={e => setForm({ ...form, email_alt: e.target.value })} /></div>
         <div className="field"><label htmlFor="ed-phone">{tr("Telefone")}</label><input id="ed-phone" className="input" type="tel" inputMode="tel" autoComplete="off" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
         <div className="field"><label htmlFor="ed-company">{tr("Empresa")}</label><input id="ed-company" className="input" autoComplete="off" value={form.company} onChange={e => setForm({ ...form, company: e.target.value })} /></div>
+        <div className="field"><label htmlFor="ed-rel">{tr("Parentesco do responsável")}</label><input id="ed-rel" className="input" autoComplete="off" maxLength={40} value={form.relationship} onChange={e => setForm({ ...form, relationship: e.target.value })} placeholder={tr("ex.: mãe, pai, o próprio")} /></div>
+        <div className="field"><label htmlFor="ed-classe">{tr("Classe")}</label><select id="ed-classe" className="input" value={form.racing_class} onChange={e => setForm({ ...form, racing_class: e.target.value })}><option value="">{tr("pelo chassi / não definida")}</option>{(c.dados?.classes || []).map(x => <option key={x}>{x}</option>)}</select></div>
       </div>
+      <details style={{ marginBottom: 12 }}><summary className="small" style={{ cursor: 'pointer', minHeight: 40, display: 'flex', alignItems: 'center' }}>{tr("Medidas e tamanhos")}</summary>
+        <div className="grid g4" style={{ marginTop: 8 }}>{CHAVES_MEDIDAS.map(([k, rot]) => <div key={k} className="field"><label htmlFor={`ed-m-${k}`}>{rot}</label>
+          <input id={`ed-m-${k}`} className="input" autoComplete="off" inputMode={k.endsWith('_size') ? 'text' : 'decimal'} value={medForm[k] || ''} onChange={e => setMedForm({ ...medForm, [k]: e.target.value })} placeholder={k.endsWith('_lb') ? 'lb' : k.endsWith('_in') ? 'in' : ''} /></div>)}</div>
+      </details>
       <div className="grid g3">
         <div className="field"><label>{tr("Status")}</label><select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>{['ACTIVE', 'NEW', 'PENDING', 'AT_RISK', 'COMPLETED', 'INACTIVE'].map(s => <option key={s}>{s}</option>)}</select></div>
         <div className="field"><label>{tr("Etapa")}</label><select className="input" value={form.stage_code} onChange={e => setForm({ ...form, stage_code: e.target.value })}><option value="">—</option>{data.stages.map(s => <option key={s.code} value={s.code}>{s.label}</option>)}</select></div>
@@ -206,7 +218,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
     </Section>}
     {c.notes && !edit && <div className="card card-b small" style={{ whiteSpace: 'pre-wrap' }}><b>{tr("Notas:")}</b> {c.notes}</div>}
     <div className="tabs">
-      {(['timeline', 'monthly', 'equip', 'races', 'pecas', 'site', 'tasks', 'waivers', 'emails', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && ((t !== 'pecas' && t !== 'site') || can('OPERATOR') || (box && t === 'pecas'))
+      {(['timeline', 'tasks', 'waivers', 'emails', 'monthly', 'equip', 'races', 'pecas', 'site', 'invoices', 'ai'] as const).filter(t => (c.pro_driver || (t !== 'equip' && t !== 'races')) && ((t !== 'pecas' && t !== 'site') || can('OPERATOR') || (box && t === 'pecas'))
         && !(box && ['monthly', 'races', 'site', 'emails', 'invoices', 'ai'].includes(t))).map(t => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setTab(t)}>
         {{ timeline: tr("Linha do tempo"), monthly: tr("Mensalidade e contrato"), equip: tr("★ Equipamento"), races: tr("★ Corridas"), pecas: tr("Peças"), site: tr("Conta no site"), tasks: tr("Serviços ({0})", data.tasks.length), waivers: tr("Waivers ({0})", data.waivers.length), emails: tr("E-mails ({0})", data.emails.length), invoices: data.invoices === null ? 'Invoices 🔒' : `Invoices (${data.invoices.length})`, ai: tr("IA ({0})", data.ai_actions.length) }[t]}
       </button>)}
@@ -220,6 +232,9 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
           <div className="ev"><div className="d">{fmtDate(e.at)}</div><div className={`p ${tone}`} /><div className="b">
             <div className="row wrap" style={{ gap: 8 }}><span className={`kind ${tone}`}>{lbl}</span><span className="t">{e.title}</span><Status s={e.status} label={e.kind === 'SITE_PAYMENT' ? (ESTADO_PEDIDO[e.status || ''] || e.status) : e.kind.startsWith('WAIVER') ? (WAIVER_LABEL[(e.status || '').toLowerCase()] || e.status) : undefined} /><span className="grow" /><SysLink links={e.links} /></div>
             {e.detail && <div className="small muted">{e.detail}</div>}
+            {e.kind === 'SERVICE' && e.entity?.type === 'task' && <VisitaServico tid={e.entity.id} s={e.servico} fin={can('MANAGER')} abrir={can('OPERATOR')}
+              pecas={data.timeline.findIndex(x => x.kind === 'SERVICE' && (x.at || '').slice(0, 10) === (e.at || '').slice(0, 10)) === i ? data.pecas_por_dia?.[(e.at || '').slice(0, 10)] : undefined}
+              onAnotar={can('OPERATOR') ? anotar : undefined} />}
           </div></div>
         </div>
       })}</div>)}
@@ -235,7 +250,7 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       {tab === 'races' && <CorridasDoPiloto rs={corridas.data} loading={corridas.loading} cid={c.id} />}
       {tab === 'tasks' && <div className="tbl-wrap"><table className="tbl"><thead><tr><th>{tr("Data")}</th><th>{tr("Serviço")}</th><th>{tr("Coluna")}</th><th>{tr("Status")}</th><th>{tr("Subtarefas")}</th><th>{tr("Waiver")}</th><th></th></tr></thead><tbody>
         {data.tasks.length === 0 && <tr><td colSpan={7}><Empty>{tr("Sem serviços vinculados.")}</Empty></td></tr>}
-        {data.tasks.map(t => <tr key={t.id} className={t.deleted_at ? 'tr-excluido' : undefined}><td className="mono">{fmtDate(t.due_on)}</td><td>{t.title}
+        {data.tasks.map(t => <tr key={t.id} className={t.deleted_at ? 'tr-excluido' : undefined}><td className="mono">{fmtDate(t.due_on)}</td><td>{can('OPERATOR') && !t.deleted_at ? <Link to={`/servicos/${t.id}`}>{t.title}</Link> : t.title}
           {t.deleted_at && <div className="small muted">{tr("Excluído por {0} em {1}", t.deleted_by_name || '—', fmtDate(t.deleted_at))}{t.deleted_reason ? ` · ${t.deleted_reason}` : ''}</div>}</td><td>{t.section}</td><td>{t.deleted_at ? <Chip tone="crit">{tr("excluído")}</Chip> : <Status s={t.status} />}</td><td className="mono">{t.subtasks_total ? `${t.subtasks_done ?? 0}/${t.subtasks_total}` : '—'}</td><td className="nowrap">{t.waiver_id ? <a className="btn ghost sm" href={`/ops/api/waivers/${t.waiver_id}/download`} title={tr("A waiver assinada foi anexada nesta tarefa")}>{tr("📎 waiver")}</a> : <span className="muted">—</span>}</td>
           <td className="nowrap"><SysLink links={t.links} />{t.deleted_at ? (can('MANAGER') && <button className="btn ghost sm" onClick={() => restaurar(t.id)}>{tr("Restaurar")}</button>) : <>{can('OPERATOR') && <button className="btn ghost sm" onClick={() => setRenomear(t.id)} title={tr("trocar o nome do serviço (no Asana também)")}>{tr("Renomear")}</button>}{can('MANAGER') && <button className="btn ghost sm" onClick={() => setMover(t.id)} title={tr("este serviço é de outro cliente")}>{tr("Mover")}</button>}</>}</td></tr>)}
       </tbody></table></div>}
