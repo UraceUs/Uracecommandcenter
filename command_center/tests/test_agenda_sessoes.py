@@ -153,6 +153,24 @@ def test_data_em_outro_formato_nao_fura_a_vaga(con):
     assert len(todos(con, "SELECT id FROM bookings")) == 1
 
 
+def test_so_servico_de_sessao_marca_sessao(con):
+    """Debug 29/10: o cliente escolhe entre os serviços de sessão (`para_cliente`). O id de um add-on, de um plano ou de
+    uma hora de simulador mandado direto marcava o dia de pista com o preço daquele serviço (a hora do SIM2GRID: US$ 50,
+    sem depósito)."""
+    abre(con, cap=3)
+    c, p = conta(con, "a@example.com")
+    servicos_site.criar(con, None, {"name": "Plano mensal de teste", "price": 2500, "kind": "plan"})
+    outros = todos(con, "SELECT id, kind FROM booking_services WHERE active=1 AND kind IN ('addon', 'plan', 'sim')")
+    assert {x["kind"] for x in outros} == {"addon", "plan", "sim"}, "o Lead and Follow e o SIM2GRID nascem com o banco"
+    for x in outros:
+        with pytest.raises(ag.ErroAgenda, match="type of session"):
+            ag.agendar(con, c, proximo(2).isoformat(), "dia", p, servico_id=x["id"])
+    assert not todos(con, "SELECT id FROM bookings")
+    sessao = servicos_site.para_cliente(con)[0]
+    b = ag.agendar(con, c, proximo(2).isoformat(), "dia", p, servico_id=sessao["id"])
+    assert todos(con, "SELECT price FROM bookings WHERE id=?", (b,))[0]["price"] == sessao["price"]
+
+
 def test_cancelada_e_recusada_liberam_a_vaga(con):
     abre(con)
     d = proximo(2)

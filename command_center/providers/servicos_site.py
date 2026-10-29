@@ -339,8 +339,10 @@ def mudar(con, por, sid, d):
 
 
 def do_agendamento(con, sid):
-    """O serviço escolhido pelo cliente: tem de existir e estar ativo."""
-    s = um(con, "SELECT * FROM booking_services WHERE id=? AND active=1", (sid,)) if sid else None
+    """O serviço escolhido pelo cliente: tem de existir, estar ativo e ser de sessão (os que `para_cliente` mostra).
+    Add-on, plano e hora de simulador têm o seu próprio fluxo: como sessão de pista, sairiam pelo preço deles."""
+    s = um(con, "SELECT * FROM booking_services WHERE id=? AND active=1 AND COALESCE(kind,'session')='session'",
+           (sid,)) if sid else None
     if not s:
         raise ErroServico("Choose the type of session.")
     return s
