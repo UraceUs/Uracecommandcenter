@@ -330,6 +330,47 @@ def test_card_existente_so_liga_com_email_e_nome(amb):
 
 
 # ------------------------------------------------------------------ a volta do Stripe
+def _vendas(con):
+    return con.execute("SELECT COUNT(*) FROM opportunities").fetchone()[0]
+
+
+def test_sessao_alheia_com_o_numero_do_pedido_nao_paga_o_pedido(amb, monkeypatch):
+    """#483: o pedido cuja sessão não chegou a ser criada (o Stripe caiu) fica sem `stripe_session_id`. Um Payment Link da
+    mesma conta aceita `?client_reference_id=<pedido>` na URL: pago a US$ 1, ele marcava o pedido inteiro como pago."""
+    cli, con, *_ = amb
+
+    def cai(*a, **k):
+        raise stripe_loja.ErroStripe("Stripe HTTP 500")
+    monkeypatch.setattr(stripe_loja, "_http", cai)
+    _comprar(cli, _simples())
+    oid = con.execute("SELECT id FROM store_orders").fetchone()[0]
+    link = {"id": "cs_live_link", "object": "checkout.session", "client_reference_id": str(oid), "payment_status": "paid",
+            "amount_total": 100, "currency": "usd", "metadata": {}}
+    corpo, cab = _assinado(_evento(link, eid="evt_link"))
+    assert cli.post("/ops/api/stripe/webhook", content=corpo, headers=cab).json()["resultado"] == "sem pedido"
+    # nem com o número no metadata (um link montado à mão): o valor não é o do pedido
+    corpo, cab = _assinado(_evento(dict(link, metadata={"pedido": str(oid)}), eid="evt_link2"))
+    assert cli.post("/ops/api/stripe/webhook", content=corpo, headers=cab).json()["resultado"] == "divergente"
+    assert con.execute("SELECT status FROM store_orders").fetchone()[0] == "falhou" and _vendas(con) == 0
+
+
+def test_valor_ou_moeda_diferente_do_pedido_nao_vende(amb):
+    """#483: a sessão é a nossa, mas o que o Stripe cobrou não é o valor do pedido: não vende, a equipe vê na auditoria."""
+    cli, con, st, qbo, tmp = amb
+    sid = _comprar(cli, _simples()).headers["location"].rsplit("/", 1)[1]
+    certo = st.sessoes[sid]["amount_total"]
+    assert _pagar(cli, st, sid, eid="evt_a", amount_total=100).json()["resultado"] == "divergente"
+    assert _pagar(cli, st, sid, eid="evt_b", amount_total=certo, currency="eur").json()["resultado"] == "divergente"
+    st.sessoes[sid].update(amount_total=100, currency="usd")       # a página de obrigado também confere
+    assert "Your order is confirmed" not in cli.get(f"/store/thanks/?session_id={sid}").text
+    assert con.execute("SELECT status FROM store_orders").fetchone()[0] == "aberto" and _vendas(con) == 0
+    assert con.execute("SELECT COUNT(*) FROM audit_logs WHERE event='store.payment.mismatch'").fetchone()[0] == 3
+    assert not qbo.recibos and not _emails(tmp)
+    # o valor certo (com o arredondamento das linhas) vende normalmente
+    st.sessoes[sid]["amount_total"] = certo
+    assert _pagar(cli, st, sid, eid="evt_c").json()["resultado"] == "pago"
+
+
 def test_pagina_de_obrigado_confere_no_stripe_quando_o_webhook_atrasa(amb):
     cli, con, st, qbo, tmp = amb
     p = _simples()

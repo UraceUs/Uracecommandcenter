@@ -1,8 +1,8 @@
 """#448 (dono, 29/10): "é possível também mover para aprovado com o nível de admin pra cima".
 
 Sem a aprovação final escrita registrada, o pedido de Suits só vai para Approved pelo administrador, com o motivo
-na linha do tempo e na auditoria. Operador e gerente continuam com a trava do #382; a IA não libera sozinha; o
-pedido ao fornecedor continua pedindo a aprovação registrada."""
+na linha do tempo e na auditoria. Operador e gerente continuam com a trava do #382; a IA não libera sozinha.
+#482: o administrador também move para qualquer etapa à mão (aconteceu fora do Command Center)."""
 import os
 import tempfile
 
@@ -74,16 +74,35 @@ def test_admin_libera_para_approved_com_o_motivo_na_linha_do_tempo_e_na_auditori
     assert cli.post(f"{B}/{pid}/aprovar-admin", headers=h, json={"motivo": "de novo, já está"}).status_code == 400
 
 
-def test_a_transicao_continua_valendo(cli):
+def test_admin_move_para_qualquer_etapa_a_mao(cli):
+    """#482 (dono, 29/10): "libera essas travas ... já foi aprovado pelo cliente, fora de e-mail ... eu tenho que
+    conseguir colocar na etapa de produção". O administrador pula a ordem e as travas, com o motivo."""
     h = entra(cli, "admin@urace.us")
-    pid = _pedido(cli, h, "Cliente Fictício Cancelado")
-    assert cli.patch(f"{B}/{pid}", headers=h, json={"status": "canceled"}).status_code == 200
-    r = cli.post(f"{B}/{pid}/aprovar-admin", headers=h, json={"motivo": "aprovou por telefone"})
-    assert r.status_code == 400 and "não vai para Approved" in r.json()["detail"]
+    pid = _pedido(cli, h, "Cliente Fictício Producao")
+    assert cli.patch(f"{B}/{pid}", headers=h, json={"status": "in_production"}).status_code == 400   # o caminho comum trava
+    assert cli.post(f"{B}/{pid}/etapa-admin", headers=h, json={"etapa": "in_production", "motivo": "x"}).status_code == 400
+    assert cli.post(f"{B}/{pid}/etapa-admin", headers=h, json={"etapa": "voando", "motivo": "aprovou pessoalmente"}).status_code == 400
+    r = cli.post(f"{B}/{pid}/etapa-admin", headers=h, json={"etapa": "in_production", "motivo": "aprovou pessoalmente, já na produção"})
+    assert r.status_code == 200, r.text
+    p = r.json()
+    assert p["status"] == "in_production"
+    etapa = [n for n in p["notas"] if n["kind"] == "etapa"][-1]
+    assert "In Production" in etapa["text"] and "movido à mão pelo administrador: aprovou pessoalmente" in etapa["text"]
+    con = conectar()
+    a = um(con, "SELECT detail FROM audit_logs WHERE event='suit.stage.admin' AND entity_id=?", (str(pid),))
+    con.close()
+    assert a and '"para": "in_production"' in a["detail"]
+    # do cancelado e para trás também; e depois o caminho comum segue a tabela de transições
+    assert cli.post(f"{B}/{pid}/etapa-admin", headers=h, json={"etapa": "in_transit", "motivo": "fornecedor despachou"}).status_code == 200
+    assert cli.post(f"{B}/{pid}/etapa-admin", headers=h, json={"etapa": "in_transit", "motivo": "de novo, já está"}).status_code == 400
+    for email in ("op@urace.us", "gerente@urace.us"):
+        h2 = entra(cli, email)
+        assert cli.post(f"{B}/{pid}/etapa-admin", headers=h2, json={"etapa": "delivered", "motivo": "entregue em mãos"}).status_code == 403
 
 
 def test_a_ia_nao_libera_sozinha():
     assert mcp_operar.tipo_para_ia("POST", "/suits/1/aprovar-admin") == "aprovar"       # vira cartão de aprovar
+    assert mcp_operar.tipo_para_ia("POST", "/suits/1/etapa-admin") == "aprovar"
     con = conectar()
     try:
         pid = con.execute("INSERT INTO suit_orders (title, status) VALUES ('Pedido Fictício IA', 'design_review')").lastrowid

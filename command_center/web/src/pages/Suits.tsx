@@ -360,8 +360,14 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
   const [ia, setIa] = useState(true)
   const [indo, setIndo] = useState(false)
   const { can } = useAuth()
-  // #448: sem a aprovação escrita registrada, só o administrador leva a Approved, com o motivo escrito na nota
-  const liberar = etapa === 'approved' && pedido.status !== 'approved' && pedido.aprovacao?.estado !== 'valida' && can('ADMIN')
+  // #448/#482: o administrador leva o pedido a qualquer etapa à mão (aconteceu fora do Command Center), com o motivo na
+  // nota; vale quando a ordem das etapas ou uma trava (aprovação escrita, foto, endereço, rastreio) impediria
+  const admin = can('ADMIN')
+  const permitida = (c: string) => c === pedido.status || !meta.transicoes || (meta.transicoes[pedido.status] || []).includes(c)
+  const travada = (c: string) => (['approved', 'sent_to_supplier'].includes(c) && pedido.aprovacao?.estado !== 'valida')
+    || ['checked', 'address_sent', 'in_transit'].includes(c)
+  const liberar = admin && etapa !== pedido.status && (!permitida(etapa) || travada(etapa))
+  const nomeEtapa_ = meta.etapas.find(e => e.codigo === etapa)?.nome || etapa
   const ehImagem = !!arquivo && IMAGENS.includes(arquivo.type)
   const previa = useMemo(() => arquivo && ehImagem ? URL.createObjectURL(arquivo) : null, [arquivo, ehImagem])
   async function salvar() {
@@ -381,12 +387,12 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   async function liberarAprovado() {
-    if (texto.trim().length < 5) { toast(tr("Escreva na nota o motivo de liberar sem a aprovação escrita (ex.: aprovou por WhatsApp)."), 'warn'); return }
+    if (texto.trim().length < 5) { toast(tr("Escreva na nota o motivo de mover à mão (ex.: aprovou pessoalmente, já foi para a produção)."), 'warn'); return }
     setIndo(true)
     try {
-      await api.post(`/suits/${pedido.id}/aprovar-admin`, { motivo: texto.trim() })
+      await api.post(`/suits/${pedido.id}/etapa-admin`, { etapa, motivo: texto.trim() })
       if (arquivo) { const fd = new FormData(); fd.set('arquivo', arquivo); await api.postForm(`/suits/${pedido.id}/notas`, fd) }
-      toast(tr("Pedido liberado para Approved."), 'ok')
+      toast(tr("Pedido movido para {0}.", nomeEtapa_), 'ok')
       setTexto(''); setArquivo(null); onDone()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
@@ -397,12 +403,12 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
       <label className="btn ghost suit-arquivo"><Icon name="plus" size={16} /> {arquivo ? tr("Trocar arquivo") : tr("Anexar arquivo")}
         <input type="file" onChange={e => setArquivo(e.target.files?.[0] || null)} /></label>
       <label className="fld suit-etapa"><span>{tr("Etapa")}</span><select aria-label={tr("Etapa")} value={etapa} onChange={e => setEtapa(e.target.value)}>
-        {meta.etapas.filter(e => e.codigo === pedido.status || !meta.transicoes || (meta.transicoes[pedido.status] || []).includes(e.codigo)).map(e =>
-          <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? tr("{0} (atual)", e.nome) : tr("mover para {0}", e.nome)}</option>)}</select></label>
+        {meta.etapas.filter(e => admin || permitida(e.codigo)).map(e =>
+          <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? tr("{0} (atual)", e.nome) : permitida(e.codigo) ? tr("mover para {0}", e.nome) : tr("mover à mão para {0}", e.nome)}</option>)}</select></label>
       {pedido.ia_ligada !== 0 && <label className="check suit-ia"><input type="checkbox" checked={ia} onChange={e => setIa(e.target.checked)} /> {tr("Pedir à IA para seguir daqui")}</label>}
-      <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : liberar ? tr("Liberar para Approved") : tr("Salvar nota")}</button>
+      <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : liberar ? tr("Mover à mão para {0}", nomeEtapa_) : tr("Salvar nota")}</button>
     </div>
-    {liberar && <p className="small suit-liberar" role="note">{tr("Sem a aprovação final escrita do cliente registrada. Como administrador, você libera para Approved: escreva o motivo na nota (fica na linha do tempo, com o seu nome). O pedido ao fornecedor continua pedindo a aprovação registrada.")}</p>}
+    {liberar && <p className="small suit-liberar" role="note">{tr("Pelo caminho normal o pedido não vai para {0} agora (a ordem das etapas ou uma trava impede). Como administrador, você move à mão quando aconteceu fora do Command Center: escreva o motivo na nota (fica na linha do tempo e na auditoria, com o seu nome).", nomeEtapa_)}</p>}
     {(etapa === 'photos_received' || pedido.status === 'in_production') && <p className="small muted">{tr("Fotos do fornecedor (WhatsApp): anexe cada foto aqui com a etapa Photos received. O Checked (OK da equipe) exige pelo menos uma.")}</p>}
     {previa && <img src={previa} alt={tr("Print anexado")} className="suit-previa" />}
     {arquivo && !ehImagem && <p className="small muted suit-arquivo-nome">{tr("Anexado:")} <b>{arquivo.name}</b> · {tr("vai para os arquivos do pedido")}</p>}

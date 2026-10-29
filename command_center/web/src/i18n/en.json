@@ -4971,5 +4971,10 @@
 "designer": "designer",
 "preencha em Cliente › Editar": "fill it in Client › Edit",
 "vai para {0}": "goes to {0}",
-"É o designer atual (vale para o pedido sem escolha)": "Is the current designer (applies to orders without a choice)"
+"É o designer atual (vale para o pedido sem escolha)": "Is the current designer (applies to orders without a choice)",
+"Escreva na nota o motivo de mover à mão (ex.: aprovou pessoalmente, já foi para a produção).": "Write the reason for moving by hand in the note (e.g.: approved in person, already went to production).",
+"Mover à mão para {0}": "Move by hand to {0}",
+"Pedido movido para {0}.": "Order moved to {0}.",
+"Pelo caminho normal o pedido não vai para {0} agora (a ordem das etapas ou uma trava impede). Como administrador, você move à mão quando aconteceu fora do Command Center: escreva o motivo na nota (fica na linha do tempo e na auditoria, com o seu nome).": "The normal path doesn't take the order to {0} now (the stage order or a lock prevents it). As an administrator, you move it by hand when it happened outside the Command Center: write the reason in the note (it stays on the timeline and in the audit log, with your name).",
+"mover à mão para {0}": "move by hand to {0}"
 }

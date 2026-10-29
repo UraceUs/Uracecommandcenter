@@ -126,6 +126,11 @@ e Design Under Client Review, ou cancelado.
 
 Cada troca de etapa fica na **linha do tempo** do pedido, com quem trocou e quando.
 
+**Mover à mão (#482).** Quando algo aconteceu fora do Command Center (o cliente aprovou pessoalmente, o pedido já foi
+para a produção pelo WhatsApp), o **administrador** escolhe qualquer etapa na Nota do pedido. Se a ordem das etapas ou
+uma trava impediria, o botão vira **Mover à mão para …**: escreva o motivo na nota e salve. O motivo fica na linha do
+tempo e na auditoria, com o nome. Operador, gerente e a IA continuam com as travas; pela IA, isso vira cartão de aprovar.
+
 ---
 
 ## 4. As 29 medidas
