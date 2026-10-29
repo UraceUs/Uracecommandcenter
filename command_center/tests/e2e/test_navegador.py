@@ -2247,6 +2247,33 @@ def test_site_novo_contato_e_pedido_da_loja_chegam_em_vendas(servidor, navegador
     g.close()
 
 
+def test_formulario_de_interesse_manda_o_radio_marcado_e_o_evento_de_conversao(servidor, navegador):
+    """#502: o contato.js mandava o valor do ÚLTIMO rádio do grupo (a landing do SIM2GRID chegava sempre "With coaching") e
+    não avisava a medição. Agora vai o rádio marcado, e o `generate_lead` entra no dataLayer, sem nada da pessoa."""
+    import sqlite3
+    site = servidor.removesuffix("/ops")
+    caminho = "/sim2grid-from-racing-simulator-to-the-grid-form/"
+    v = navegador.new_page(viewport={"width": 390, "height": 844})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(site + caminho)
+    v.locator("select[name=goal]").select_option("Improve my driving skills")
+    v.get_by_label(re.compile("Without coaching")).check()
+    v.get_by_label("Full name").fill("Rui Radio")
+    v.get_by_label("Phone number").fill("407 555 0177")
+    v.get_by_label("Email address").fill("rui.radio.e2e@example.com")
+    v.get_by_role("button", name="Send my information").click()
+    v.get_by_text("Thank you! We got your message").wait_for()
+    eventos = v.evaluate("(window.dataLayer || []).filter(x => x.event === 'generate_lead')")
+    assert eventos == [{"event": "generate_lead", "lead_form": "sim2grid", "page_path": caminho}]
+    v.close()
+    con = sqlite3.connect(BANCO)
+    nota = con.execute("SELECT notes FROM opportunities WHERE email=?", ("rui.radio.e2e@example.com",)).fetchone()[0]
+    con.close()
+    assert "Session: Without coaching" in nota and "With coaching" not in nota
+    assert not erros, erros
+
+
 def test_loja_compra_no_stripe_checkout_e_o_pedido_entra_pago_em_vendas(servidor, navegador):
     """#174: Buy now → página do Checkout (o Stripe falso) → Pay → obrigado com o pedido confirmado,
     e a venda GANHO em Vendas. No celular, nada rola para o lado."""

@@ -17,7 +17,9 @@
       ev.preventDefault()
       var dados = {}
       Array.prototype.forEach.call(form.elements, function (el) {
-        if (el.name) dados[el.name] = el.value
+        // #502: rádio e caixa só valem marcados (antes ia sempre o valor do último rádio do grupo)
+        if (!el.name || ((el.type === 'radio' || el.type === 'checkbox') && !el.checked)) return
+        dados[el.name] = el.value
       })
       if (form.hasAttribute('data-produto')) dados.produto = form.getAttribute('data-produto')
       if (botao) botao.disabled = true
@@ -29,6 +31,10 @@
       }).then(function (r) { return r.json().catch(function () { return { ok: false } }) })
         .then(function (r) {
           if (r.ok) {
+            // #502: a conversão para a medição (o GTM só sai depois do "Accept"): o assunto e a página, nada da pessoa
+            ;(window.dataLayer = window.dataLayer || []).push({ event: 'generate_lead', lead_form: dados.assunto || (form.hasAttribute('data-pedido') ? 'store' : 'contact'), page_path: location.pathname })
+            var obrigado = form.getAttribute('data-obrigado')
+            if (obrigado && obrigado.charAt(0) === '/' && obrigado.charAt(1) !== '/') { location.assign(obrigado); return }
             form.setAttribute('data-enviado', '1')
             diz(form.hasAttribute('data-pedido')
               ? 'Thank you! We got your order request and will confirm availability, shipping and the total by email — nothing has been charged.'

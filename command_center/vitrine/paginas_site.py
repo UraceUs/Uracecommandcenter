@@ -1712,7 +1712,8 @@ def caminhos():
     out += [f"/blog/{p['slug']}/" for p in no_ar]
     out += ["/store/"] + [f"/store/{s}/" for s, _ in CATEGORIAS_LOJA] + [f"/store/p/{p['slug']}/" for p in produtos()]
     out += paginas_da_loja()                            # #261: /store/page/2/ e a página 2 de cada categoria
-    return out
+    from command_center.vitrine import blocos           # #502: as páginas por blocos que vão ao Google
+    return list(dict.fromkeys(out + blocos.caminhos_indexaveis()))
 
 
 @lru_cache(maxsize=1)
