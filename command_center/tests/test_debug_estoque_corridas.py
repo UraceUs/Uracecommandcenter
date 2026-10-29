@@ -86,3 +86,11 @@ def test_compra_atrasada_usa_o_dia_da_florida(con, monkeypatch):
     assert compras.compra(con, pid)["atrasada"]
 
 
+def test_corrida_de_hoje_na_florida_segue_no_calendario(con, monkeypatch):
+    """Tarefa de corrida concluída no Asana com data de hoje (Flórida) continua no calendário até o fim do dia."""
+    ontem_utc = date.today() - timedelta(days=1)
+    monkeypatch.setattr(portal, "hoje", lambda: ontem_utc)
+    tid = inserir(con, "tasks", title="ROK Cup Rodada 3", project="U-RACE", section="RACES", status="completed",
+                  due_on=ontem_utc.isoformat())
+    sync.sincronizar_corridas(con)
+    assert um(con, "SELECT active FROM races WHERE task_id=?", (tid,))["active"] == 1
