@@ -288,6 +288,12 @@ MIGRACOES = [
     # 29/10 — dono (#455): "as informações que estiverem no Asana serão as mesmas que estarão no Command Center,
     # sempre". A descrição e as datas do Asana ficam na tarefa; subtarefas, comentários e anexos em task_*.
     ("tasks", "notes", "TEXT"),
+    # 29/10 — dono (#460): "Dados do cliente" no card — parentesco, classe e as medidas que a equipe confere/edita.
+    ("clients", "relationship", "TEXT"),        # parentesco do responsável com o piloto (mãe, pai…)
+    ("clients", "racing_class", "TEXT"),        # Mini, Micro, Cadet, Junior, Senior, Shifter, Masters
+    ("clients", "measures", "TEXT"),            # json, as mesmas chaves da área do cliente (portal.MEDIDAS)
+    ("clients", "measures_at", "TEXT"),
+    ("clients", "measures_by", "INTEGER"),
     ("tasks", "asana_created_at", "TEXT"),
     ("tasks", "asana_completed_at", "TEXT"),
     ("tasks", "asana_modified_at", "TEXT"),      # o modified_at do Asana no último espelho completo

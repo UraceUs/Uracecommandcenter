@@ -668,6 +668,20 @@ def comentar_humano(gid, texto):
     return {"aplicado": True, "story_gid": r["gid"], "tarefa": t["name"]}
 
 
+def concluir_subtarefa_humano(gid_tarefa, gid_subtarefa):
+    """#460: porta humana do card do serviço — quem marca a subtarefa no painel conclui no Asana. Não é
+    ferramenta do agente e não passa por APLICAR; a proteção (ADM URACE, Matt tasks) vem pela tarefa-mãe.
+    Não existe desconcluir (regra do dono)."""
+    s = _ler_tarefa(gid_subtarefa)
+    if (s.get("parent") or {}).get("gid") != str(gid_tarefa):
+        raise ErroFerramenta(f"a subtarefa {gid_subtarefa} não é da tarefa {gid_tarefa}")
+    _recusar_se_protegida(s, "concluir subtarefa")
+    if s.get("completed"):
+        return {"aplicado": False, "motivo": "já estava concluída", "subtarefa": s.get("name")}
+    _req(f"/tasks/{gid_subtarefa}", "PUT", {"completed": True})
+    return {"aplicado": True, "subtarefa": s.get("name")}
+
+
 @srv.ferramenta(
     "asana_anexar_arquivo",
     "Sobe um arquivo como anexo da tarefa (ex.: a waiver assinada em PDF). O "
