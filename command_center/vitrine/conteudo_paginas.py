@@ -1,5 +1,6 @@
 """As páginas institucionais do site novo (#164) com o texto do urace.us de 13/10/2026 (#207): Academy,
-Pro Team, For Beginners, Career (The Driver Factory + Plan Your Career), About, Contact e Accessibility.
+Pro Team, For Beginners, Career (Plan Your Career), About, Contact e Accessibility. As landings de anúncio e a
+The Driver Factory são páginas próprias de novo (#506, `pg_landings.py`).
 
 Nada inventado: cada texto saiu da página citada. Correções de propósito: endereço com o Box 3
 (decisão de 01/10); o telefone da acessibilidade era "205 2291" no site antigo e aqui é o da
@@ -24,12 +25,13 @@ FECHO_PROXIMO = ("Every driver has a next step. Let's find yours.",
                  "Whether you want to experience karting for the first time, begin structured driver development or pursue "
                  "higher levels of competition, URACE is ready to help you move forward.")
 
-# ------------------------------------------------------------------ Academy (urace.us/urace-academy/ + /kart-training-packages/ + /services/)
+# ------------------------------------------------------------------ Academy (urace.us/urace-academy/ + /services/)
 # #254 (dono, 15/10): *"o kart school se tornou Urace academy"* — o texto que fazia sentido da página
 # /services/kart-school/ entrou aqui, e aquele endereço virou 301 para esta página.
 ACADEMY = {
     "caminho": "/academy/",
-    "antigos": ("/urace-academy/", "/kart-training-packages/", "/kart-driving-school/", "/services/kart-school/"),
+    # #506: /kart-training-packages/ e /kart-driving-school/ são landings próprias de novo (pg_landings.py)
+    "antigos": ("/urace-academy/", "/services/kart-school/"),
     # #508: o texto do urace.us de 29/10 (urace.us/urace-academy/): hero, currículo, planos, avaliações e o próximo passo
     "titulo": "URACE Academy: Kart School in Orlando | URACE",
     "descricao": ("URACE Academy is our kart school at Orlando Kart Center: monthly coached training on our karts and "
@@ -174,10 +176,10 @@ ACADEMY = {
     "fecho_cta": ("See the Racing Team", "/pro-team/"),
 }
 
-# ------------------------------------------------------------------ Pro Team (urace.us/pro-team/ + /professional-kart-team-racing-team/)
+# ------------------------------------------------------------------ Pro Team (urace.us/pro-team/)
+# #506: /professional-kart-team-racing-team/ é landing própria de novo (pg_landings.py), não mais 301 para cá
 PRO_TEAM = {
     "caminho": "/pro-team/",
-    "antigos": ("/professional-kart-team-racing-team/",),
     # #508: o título e a descrição do urace.us de 29/10
     "titulo": "URACE: Professional Kart Racing Team in Florida",
     "descricao": ("The URACE team runs race weekends in SKUSA, USPKS and Florida series, with kart prep, mechanics and "
@@ -216,10 +218,10 @@ PRO_TEAM = {
     "fecho_cta": ("Talk to our racing team", CONTATO),
 }
 
-# ------------------------------------------------------------------ For Beginners (urace.us/for-beginners/ + /kart-lessons-for-beginners/)
+# ------------------------------------------------------------------ For Beginners (urace.us/for-beginners/)
+# #506: /kart-lessons-for-beginners/ é landing própria de novo (pg_landings.py), não mais 301 para cá
 BEGINNERS = {
     "caminho": "/for-beginners/",
-    "antigos": ("/kart-lessons-for-beginners/",),
     "titulo": "How to Get Into Karting - Start in Orlando | URACE",
     "descricao": ("Never driven a race kart? Start here. How karting works, what to expect on your first day in Orlando, "
                   "and the path from first lap to competition."),
@@ -256,10 +258,12 @@ BEGINNERS = {
     "fecho_cta": ("Talk to us", CONTATO),
 }
 
-# ------------------------------------------------------------------ Career (urace.us/the-driver-factory/ + /plan-your-career/)
+# ------------------------------------------------------------------ Career (urace.us/plan-your-career/)
+# #506: a The Driver Factory voltou a ser página própria (pg_landings.py), com o título e a descrição dela no urace.us;
+# o /career/ é o /plan-your-career/ (o endereço que ele substitui), com o título e a descrição de lá.
 CAREER = {
     "caminho": "/career/",
-    "antigos": ("/the-driver-factory/", "/plan-your-career/"),
+    "antigos": ("/plan-your-career/",),
     # #508: o título e a abertura do urace.us de 29/10 (urace.us/plan-your-career/)
     "titulo": "Racing Career Path to F1, NASCAR, IMSA & IndyCar | URACE",
     "descricao": ("Plan a racing career step by step, from Sim2Grid and URACE Academy in Orlando to Formula 1, NASCAR, IMSA "

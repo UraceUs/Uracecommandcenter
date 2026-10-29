@@ -136,6 +136,12 @@ a mesma página ou um 301. Quem manda um link antigo para um cliente (`/urace-ac
 blog) pode mandar: ninguém cai em "Page not found". A lista e as regras estão em
 `docs/site-publico/comparacao-urace-us.md`, e a comparação
 completa dos dois sites (passo a passo da compra, o que falta no novo, peso e velocidade) também.
+As **landings de campanha** (#506) abrem como páginas próprias, com o texto do urace.us de 29/10 (até então
+eram 301): `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/`,
+`/professional-kart-team-racing-team/`, `/the-driver-factory/` (com o obrigado,
+`/the-driver-factory-thank-you-page/`) e as três do Arrive & Drive, fora do Google:
+`/arrive-and-drive-karting-experience/` (formulário), `/arrive-and-drive-karting-booking/` (leva à reserva do site)
+e `/arrive-and-drive-karting-thank-you/`. O formulário delas cai em Vendas (playbook de vendas, "O que o site vende").
 
 ---
 
