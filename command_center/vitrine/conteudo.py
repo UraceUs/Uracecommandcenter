@@ -127,6 +127,21 @@ REEMBOLSO = (
 
 HORARIO = ("We’re open every day, from 8 AM to 8 PM.",)
 
+# #508: o "Book a call" / "Talk to us" do urace.us de 29/10 (a agenda do Google da equipe, na Academy e no Contact)
+LIGACAO = "https://calendar.app.google/KBbHhXjoRMS6sbHv8"
+GOOGLE = ("https://www.google.com/maps/place/URACE/@28.4108348,-81.377619,17z/data=!4m8!3m7!1s0x88e77d37e3e0fd25:"
+          "0xa9426dd3f3d2290e!8m2!3d28.4108348!4d-81.377619!9m1!1b1")
+# as avaliações do Google que o urace.us mostra (29/10): o texto e o nome como estão lá — o número de avaliações não se
+# escreve (fica velho); o link leva a todas
+AVALIACOES = (("Claire Baillie", "Parent · UK · Google review",
+               "Hayden, who is currently racing as a cadet, has been karting since the age of five and races nationally in "
+               "the UK. U Race seamlessly caters to everyone from complete novices to professional drivers."),
+              ("Samira Torres", "Parent · visiting Orlando · Google review",
+               "The coaching is extremely professional, organized, and focused on real driver development, not just "
+               "recreational karting."),
+              ("Tyron", "Driver · racing in France · Google review",
+               "It was a great experience. Thank you Italo for everything you taught me."))
+
 FAQ_COMUM = (
     ("The track", (TRACK,)),
     ("Terms and conditions", TERMOS),
