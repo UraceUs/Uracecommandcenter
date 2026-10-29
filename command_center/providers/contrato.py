@@ -321,13 +321,18 @@ def _id_qbo(con, inv_id):
     return r["external_id"] if r else None
 
 
+def invoices_das_sessoes(con, cid):
+    """Os ids no QuickBooks das invoices das sessões do site do card (extra, avulsa, add-on): nenhuma é a mensalidade."""
+    return {str(r["qbo_invoice_id"]) for r in todos(con, f"""SELECT DISTINCT b.qbo_invoice_id FROM bookings b
+                       JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id
+                      WHERE {CARD_DO_AGENDAMENTO}=? AND b.qbo_invoice_id IS NOT NULL""", (cid,))} if cid else set()
+
+
 def mensalidades_por_mes(con, cid):
     """({mês: invoice de mensalidade}, [todas as invoices do card]) pelo espelho do QuickBooks. A invoice de uma
     sessão do site (extra, avulsa, add-on) nunca é a mensalidade, mesmo com o item "Academy | Extra session"."""
     invs = todos(con, "SELECT * FROM invoices WHERE client_id=? ORDER BY issued_on DESC", (cid,)) if cid else []
-    das_sessoes = {str(r["qbo_invoice_id"]) for r in todos(con, f"""SELECT DISTINCT b.qbo_invoice_id FROM bookings b
-                       JOIN portal_accounts a ON a.id=b.account_id LEFT JOIN portal_pilots p ON p.id=b.pilot_id
-                      WHERE {CARD_DO_AGENDAMENTO}=? AND b.qbo_invoice_id IS NOT NULL""", (cid,))} if cid else set()
+    das_sessoes = invoices_das_sessoes(con, cid)
     por_mes = {}
     for i in invs:
         # 01/10 (#63): a invoice de mensalidade também é reconhecida pelo item da linha (a de 17/09 não tem memo,

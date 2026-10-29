@@ -933,6 +933,18 @@ class NadaSaiu(RuntimeError):
     nada_saiu = True
 
 
+def clientes_qbo_da_venda(o):
+    """Os clientes do QuickBooks que são o responsável desta venda: pelo e-mail (a busca do QuickBooks é exata)
+    ou, sem e-mail, só o de nome inteiro igual. A busca por nome é por pedaço ("Maria Exemplo" acha "Ana Maria
+    Exemplo Souza"): pegar o primeiro achado mandava a invoice para outra pessoa (debug 29/10)."""
+    from command_center.providers import identidade
+    busca = chamar("quickbooks", "qbo_clientes_buscar", texto=o["email"] or o["name"], maximo=5) or []
+    if o["email"]:
+        return busca
+    k = identidade.chave_exata(o["name"])
+    return [c for c in busca if k and identidade.chave_exata(c.get("nome") or "") == k]
+
+
 def _qbo(con, o, aprovado, ref=None, deposito=0.0, so_deposito=False, requestid=None):
     """Cliente no QuickBooks (se não existe) e invoice criada + enviada: o serviço pelo item do
     catálogo e, quando o serviço pede, o depósito na mesma linha "Security deposit" da venda
@@ -944,7 +956,7 @@ def _qbo(con, o, aprovado, ref=None, deposito=0.0, so_deposito=False, requestid=
         return {"cliente_qbo": None, "invoice": None, "pendente": True}
     nome, email = o["name"], o["email"]
     try:
-        busca = chamar("quickbooks", "qbo_clientes_buscar", termo=email or nome, maximo=5) or []
+        busca = clientes_qbo_da_venda(o)
         cliente = (busca[0] if busca else None)
         if not cliente:
             novo = _aplicando("quickbooks", chamar, "quickbooks", "qbo_criar_cliente", nome=nome, email=email, telefone=o["phone"])
@@ -1158,19 +1170,23 @@ def _fechar(oid, dados, request, tarefas, u, con, o, marca, falou):
             _passo(saida, nome, False, SEM_RESPOSTA.format(str(e)[:160]) if nome == "qbo" and falou.get("erro")
                    else str(e)[:240])
 
+    tarefa = None                         # a 1ª tarefa do painel com data: o próximo passo da venda
     for e in dados.extras[:10]:
         try:
             res = _extra(con, o, e, u["id"])
             _passo(saida, f"extra:{e.titulo[:40]}", True, f"tarefa em {res['onde']}", res)  # nome = o que o closer escreveu
+            if res["onde"] == "painel" and res.get("quando") and not tarefa:
+                tarefa = {"next_at": res["quando"], "next_what": e.titulo}
         except Exception as ex:                                  # noqa: BLE001
             _passo(saida, f"extra:{e.titulo[:40]}", False, str(ex)[:200])
 
     fechado = resumo_do_fechamento(u["name"], o, ref, na_tabela, por_que, aprovado, deposito, saida)
     etapa = "GANHO" if o["client_id"] else "FECHAMENTO"
+    # o Ganho tira o retorno de antes; a tarefa do painel que o closer acabou de escrever fica (sem ela, a data sumia)
+    proximo = (tarefa or {"next_at": None}) if etapa == "GANHO" else ({} if o["next_at"] else (tarefa or {}))
     incerta = falou.get("erro")           # A1: o QuickBooks não respondeu: a marca fica, sem desfecho
     with transacao(con, imediata=True):     # R3: o fechamento entra inteiro, com a linha do tempo e a auditoria
-        gravar_fechamento(con, oid, lambda f: _troca_tudo(f, fechado, marca, incerta), stage=etapa,
-                          next_at=None if etapa == "GANHO" else o["next_at"])
+        gravar_fechamento(con, oid, lambda f: _troca_tudo(f, fechado, marca, incerta), stage=etapa, **proximo)
         for p in saida:
             _ev(con, oid, PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}",
                 p.get("client_id") and {"client_id": p["client_id"]} or None,
@@ -1324,9 +1340,13 @@ def refazer(oid: int, passo: str, request: Request, irmao: bool = False, item_id
             if deposito:
                 f["deposito_cobrado"] = res.get("invoice") or True
             _tira_marca(f, marca)
+    # a venda fechada sem card ficou em Fechamento: com o card agora, ela é Ganho, como no fechamento (o retorno sai)
+    ganho = passo == "cliente" and o["stage"] != "GANHO"
     with transacao(con, imediata=True):   # o que saiu, a linha do tempo e a auditoria entram juntos
-        gravar_fechamento(con, oid, muda)
+        gravar_fechamento(con, oid, muda, **({"stage": "GANHO", "next_at": None} if ganho else {}))
         _ev(con, oid, PASSO_KIND[passo], f"{PASSO_PT[passo]}: refeito à mão", res, ator, 1)
+        if ganho:
+            _ev(con, oid, "stage", f"{ETAPA_PT[o['stage']]} → {ETAPA_PT['GANHO']}", None, ator, 1)
         if passo == "qbo":                # #310: o reenvio fica na auditoria, como o Liberar
             auditar(con, "sales.invoice.resend", ator, user_id=u["id"], entity_type="opportunity",
                     entity_id=oid, detail={"valor": o["amount"], "na_tabela": na_tabela, "item": ref and ref["item_id"],
@@ -1547,7 +1567,7 @@ def registrar_invoice(oid: int, dados: RegistrarIn, request: Request, u=Depends(
                                  "aparece no passo do QuickBooks.")
     try:                                  # só leitura: a invoice e o cliente desta venda no QuickBooks
         inv = chamar("quickbooks", "invoice_por_numero", numero=numero)
-        clientes = (chamar("quickbooks", "qbo_clientes_buscar", termo=o["email"] or o["name"], maximo=5) or []) if inv else []
+        clientes = clientes_qbo_da_venda(o) if inv else []
     except NaoConectado:
         raise HTTPException(503, "Ligue o QuickBooks para conferir (Integrações): sem conferir a invoice, nada é registrado.")
     except Exception as e:                                       # noqa: BLE001
