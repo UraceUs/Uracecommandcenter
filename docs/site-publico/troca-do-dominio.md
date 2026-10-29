@@ -19,13 +19,33 @@ nada aqui roda sozinho. O passo a passo técnico está em `site-inteiro-2026-10-
 ## No dia (dono)
 
 - [ ] Registro A de `urace.us` e `www.urace.us` → IP da VPS (como foi feito com `novo.urace.us`).
-- [ ] Avisar o Claude: ele manda **um bloco** com as variáveis `CC_SITE_HOSTS`, `CC_SITE_PREVIEW=0`,
-      `CC_DOMINIOS_EXTRAS` e o deploy.
+- [ ] Avisar o Claude: ele manda **um bloco** com as variáveis e o deploy (abaixo).
+
+### O bloco do dia (#462)
+
+As quatro variáveis vão no `~/.urace/adminai.env`. O deploy também as lê de lá (antes do #462 o
+`CC_DOMINIOS_EXTRAS` só valia digitado no terminal, e o `urace.us` não entraria no Caddy):
+
+```
+CC_SITE_HOSTS=urace.us,www.urace.us,novo.urace.us
+CC_SITE_PRINCIPAL=urace.us
+CC_SITE_PREVIEW=0
+CC_DOMINIOS_EXTRAS="ops.urace.us my.urace.us novo.urace.us parts.urace.us urace.us www.urace.us"
+```
+
+- Todo nome de `CC_SITE_HOSTS` vira bloco de **site** no Caddy (antes só o `novo.`: o `urace.us` cairia no
+  bloco do painel, com a raiz levando ao login da equipe).
+- `CC_SITE_PRINCIPAL` faz `www.urace.us` e `novo.urace.us` responderem **301 para `https://urace.us`** com o
+  mesmo caminho e a mesma query (só GET/HEAD; a API `/ops/api/` não redireciona, para a página aberta antes da
+  troca continuar funcionando). É também o endereço dos links que o servidor monta (pedido, editor, blog).
+- Depois: `bash adminai/deploy/command_center/servir_command_center.sh`. Um nome cujo DNS ainda não aponta
+  para a VPS é pulado pelo script; rodar de novo quando o DNS propagar.
 
 ## Depois (Claude confere e manda as fotos)
 
 - [ ] `https://urace.us` abre o site novo com cadeado; `www.` e `novo.` levam a `urace.us` (301).
-- [ ] `my.urace.us/...` leva a `https://urace.us/ops/portal/...` mantendo o caminho.
+- [ ] `my.urace.us` continua abrindo a área do cliente (decisão de 07/10: aplicação separada).
+- [ ] `docs/playbooks/` e o guia de Suits: trocar `novo.urace.us` por `urace.us` (PR do mesmo dia).
 - [ ] As 10 páginas principais abrindo (início, Arrive and Drive, Academy, Pro Team, iniciantes,
       carreira, sobre, loja, blog, contato), sem rolar para o lado em 360 px e 390 px.
 - [ ] Contato pelo site cai em Vendas com a campanha; chat cai no Kommo.
