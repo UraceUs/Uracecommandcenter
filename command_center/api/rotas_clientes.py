@@ -67,6 +67,7 @@ def client_360(cid: int, u=Depends(auth.usuario_atual), con: sqlite3.Connection 
     tarefas = todos(con, """SELECT t.*, ud.name AS deleted_by_name FROM tasks t LEFT JOIN users ud ON ud.id=t.deleted_by
                             WHERE t.client_id=? ORDER BY t.due_on DESC""", (cid,))
     for t in tarefas:
+        t.pop("notes", None)                 # #457: a descrição do espelho do Asana vai só no detalhe da tarefa
         t["links"] = _links(con, "task", t["id"])
     # #109: a anulada continua no card, com quem anulou, quando e por quê (a linha dela não muda)
     waivers = todos(con, """SELECT w.*, v.at AS voided_at, v.by_name AS voided_by, v.reason AS void_reason
