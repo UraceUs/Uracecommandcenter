@@ -312,6 +312,14 @@ def _avaliacoes(titulo="Google reviews"):
 </div></section>"""
 
 
+def _resultados(host):
+    """#521: "On the top step", os resultados da temporada (`conteudo.RESULTADOS`), desenhados como nas landings."""
+    from command_center.vitrine import blocos
+    b = {"tipo": "cartoes", "eyebrow": "This season", "titulo": "On the top step", "ancora": "top-step",
+         "itens": [{"foto": f, "alt": a, "titulo": t, "texto": x} for f, a, t, x in C.RESULTADOS]}
+    return blocos.DESENHO["cartoes"](b, 1, host, {})
+
+
 def academy(host, planos=None, cartoes=None):
     """#297: sem plano do painel que se vende pelo site, os cartões são os do painel (`site_offers`), e só sem
     eles a planilha de sempre. #508: o texto e a ordem do urace.us de 29/10."""
@@ -328,6 +336,7 @@ def academy(host, planos=None, cartoes=None):
   <p class="eyebrow">{e(d['planos_rotulo'])}</p><h2 id="h-planos">{e(d['planos_titulo'])}</h2><p class="muted">{e(d['planos_sub'])}</p>{_planos_do_painel(planos) if planos else (_grupos_dos_cartoes(cartoes, planos) if cartoes else _planos_da_planilha(d['planos_grupos']))}
   {primeiro}
 </div></section>
+{_resultados(host)}
 {_avaliacoes()}
 <section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita"><h2 id="h-faq">Good to know</h2>{_faq(d['faq'])}</div></section>
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'], 'escura')}"""
@@ -381,13 +390,14 @@ def _proximas(calendario, hoje=None):
 
 
 def _calendario(d, hoje=None):
-    """As próximas provas da equipe; sem nenhuma por vir, a seção não sai."""
+    """As próximas provas da equipe; sem nenhuma por vir, a seção não sai. O texto da prova aceita [link](/caminho) (#521)."""
+    from command_center.vitrine import blocos
     provas = _proximas(d["calendario"], hoje)
     if not provas:
         return ""
     return f"""<section class="faixa clara" aria-labelledby="h-cal"><div class="largura duas">
   <div><p class="eyebrow">{e(d['calendario_rotulo'])}</p><h2 id="h-cal">{e(d['calendario_titulo'])}</h2><p>{e(d['calendario_sub'])}</p></div>
-  <dl class="calendario">{"".join(f"<div><dt>{e(q)}</dt><dd>{e(n)}</dd></div>" for q, n in provas)}</dl>
+  <dl class="calendario">{"".join(f"<div><dt>{e(q)}</dt><dd>{blocos.inline(n)}</dd></div>" for q, n in provas)}</dl>
 </div></section>"""
 
 

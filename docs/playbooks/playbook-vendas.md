@@ -896,7 +896,9 @@ páginas de aniversário, corporativo e grupos têm um botão que abre a **agend
 (`calendar.app.google/…`, o mesmo link do urace.us). A ligação marcada ali vai para a agenda, **não** para Vendas: quem
 atende cria ou atualiza a oportunidade em Vendas (origem **Site**). As avaliações do Google que essas páginas mostram são
 as três do urace.us, com o texto e o nome como estão no Google, e o link leva a todas. No Racing Team, a lista "Next rounds
-on the calendar" esconde sozinha a prova que já passou (no dia da Flórida); prova nova entra pelo desenvolvimento.
+on the calendar" esconde sozinha a prova que já passou (no dia da Flórida); prova nova entra pelo desenvolvimento, numa lista
+só que vale para o `/pro-team/` e para a landing do Racing Team (a linha de jan–mar leva à `/winter/`, #521). Os resultados
+da temporada ("On the top step") também são uma lista só: aparecem na home, na About, na Academy e nas landings.
 
 ### SIM2GRID: a hora de simulador (#392)
 

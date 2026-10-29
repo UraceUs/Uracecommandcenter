@@ -126,3 +126,43 @@ def test_calendario_so_mostra_a_prova_que_ainda_vem():
          "calendario_sub": ""}
     assert "<dt>Jan–Mar 2027</dt>" in paginas_site._calendario(d, date(2027, 3, 31))
     assert paginas_site._calendario(d, date(2027, 4, 1)) == ""
+
+
+# ------------------------------------------------------------------ #521: as frentes juntas
+LANDINGS_COM_RESULTADOS = ("/kart-lessons-for-beginners/", "/kart-driving-school/", "/kart-training-packages/",
+                           "/professional-kart-team-racing-team/")
+
+
+def _calendario_html(html):
+    m = re.search(r'<dl class="calendario">(.*?)</dl>', html, re.S)
+    return m.group(1) if m else ""
+
+
+def test_calendario_do_racing_team_leva_a_winter_nas_duas_paginas(cli):
+    """O "Race the winter →" do urace.us, agora que a /winter/ existe; o /pro-team/ e a landing leem a mesma lista."""
+    listas = []
+    for caminho in ("/pro-team/", "/professional-kart-team-racing-team/"):
+        cal = _calendario_html(cli.get(caminho).text)
+        assert re.search(r'<a href="/winter/">Race the winter →</a>', cal), caminho
+        listas.append(re.findall(r"<dt>([^<]+)</dt>", cal))
+    assert listas[0] == listas[1] and listas[0][-1] == "Jan–Mar 2027"
+    assert cli.get("/winter/").status_code == 200
+
+
+def test_resultados_da_temporada_iguais_na_academy_na_home_na_about_e_nas_landings(cli):
+    titulos = [t for _f, _a, t, _x in C.RESULTADOS]
+    for caminho in ("/academy/", "/", "/about/", *LANDINGS_COM_RESULTADOS):
+        html = cli.get(caminho).text
+        m = re.search(r'<section [^>]*id="top-step"[^>]*>.*?</section>|<section [^>]*>(?:(?!</section>).)*On the top step.*?</section>',
+                      html, re.S)
+        assert m, caminho
+        secao = h.unescape(m.group(0))
+        for (foto, alt, titulo, texto) in C.RESULTADOS:
+            assert titulo in secao and texto in secao and alt in secao, (caminho, titulo)
+            assert re.search(rf'<img src="/_s/img/{re.escape(foto)}\?v=\w+" alt="[^"]*" width="\d+" height="\d+" loading="lazy"',
+                             m.group(0)), (caminho, foto)
+        assert [t for t in titulos if t in secao] == titulos, caminho
+    # na Academy: um h1, a seção com h2 e os resultados em h3 (sem pular nível)
+    academy = cli.get("/academy/").text
+    assert academy.count("<h1") == 1
+    assert re.search(r'<h2 id="h-b1">On the top step</h2>.*?<h3>P1 \+ P3 · Bushnell, Florida</h3>', academy, re.S)
