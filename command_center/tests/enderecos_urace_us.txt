@@ -243,3 +243,8 @@
 /store/?orderby=menu_order
 /product-category/engines/?orderby=price
 /store/parts/page/2/
+# #506 (29/10): as landings do Arrive & Drive (publicadas em 27/10, fora do Google) e o obrigado da The Driver Factory
+/arrive-and-drive-karting-experience/
+/arrive-and-drive-karting-booking/
+/arrive-and-drive-karting-thank-you/
+/the-driver-factory-thank-you-page/

@@ -58,7 +58,9 @@ foi respeitado (o `Disallow: /` do novo.urace.us é o nosso, da prévia).
 | `/services/birthday-party/` | Kart Racing Birthday Parties in Orlando \| URACE | Kart Racing Birthday Parties in Orlando | igual | |
 | `/services/corporate-events/` | Corporate Karting Events in Orlando \| URACE | Corporate Karting Events in Orlando | igual | |
 | `/services/group-events-social-gatherings/` | Group Kart Racing Events in Orlando \| URACE | Group Kart Racing Events & Social Gatherings in Orlando | `/services/group-events/` | endereço encurtado |
-| `/the-driver-factory/` e `/plan-your-career/` | How to Become a Professional Racing Driver / Plan Your Career - Urace | duas páginas, conteúdo quase igual | `/career/` | **duas viraram uma** |
+| `/the-driver-factory/` e `/plan-your-career/` | How to Become a Professional Racing Driver / Plan Your Career - Urace | duas páginas, conteúdo quase igual | `/career/` | **duas viraram uma**; desde 29/10 (#506) a The Driver Factory é página própria de novo (`/the-driver-factory/`, com o obrigado), e o `/career/` fica com o título e a descrição do `/plan-your-career/` |
+| `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/`, `/professional-kart-team-racing-team/` (#506) | os do urace.us de 29/10 | os do urace.us de 29/10 | mesmos endereços | as 4 landings de anúncio, por blocos (`vitrine/pg_landings.py`): o texto de hoje, o formulário cai em Vendas, o preço é o do painel |
+| `/arrive-and-drive-karting-experience/`, `/arrive-and-drive-karting-booking/`, `/arrive-and-drive-karting-thank-you/` (#506) | os do urace.us de 27/10 (`noindex`) | os do urace.us de 27/10 | mesmos endereços, fora do sitemap | o formulário leva ao obrigado; a agenda da página de reserva vira o botão da reserva do site (`/services/arrive-and-drive/#reservar`) |
 | `/blog/` + 7 artigos + 4 categorias | Kart Racing Blog - How to Race Karts \| URACE | Take advantage of our materials | `/blog/`, `/blog/<slug>/`, `/blog/category/<c>/` | os 7 artigos e as 4 categorias vieram inteiros; o artigo sai de `/` para `/blog/` |
 | `/store/` + 70 produtos | Kart Parts Store - Chassis, Engines & Tires \| URACE | Everything you need to race faster | `/store/`, `/store/p/<slug>/` | 69 dos 70 produtos (§4) |
 | `/cart/` | Cart - Urace | Cart | `/cart/` | o novo junta **sessão + loja** no mesmo carrinho |
@@ -174,8 +176,8 @@ A lista que importa para trocar o urace.us. Cada linha diz onde a coisa está ho
 | 11 | **Lead do CF7 em planilha do Google** | `cf7-google-sheets-connector` | baixo (o novo põe em Vendas, que é melhor — mas a equipe pode depender da planilha) |
 | 12 | **reCAPTCHA** nos formulários | `wpcf7-recaptcha` | baixo: o novo usa honeypot + 8 envios por IP a cada 10 min |
 | 13 | **Tradução de todo o site** | GTranslate (widget em 30 páginas) | médio: no novo, EN/PT só nas páginas da compra |
-| 14 | **4 landing pages de anúncio** com o layout de campanha | `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/`, `/professional-kart-team-racing-team/` | médio: hoje redirecionam para `/for-beginners/`, `/academy/`, `/pro-team/`; se tiver anúncio ativo, confirmar |
-| 15 | **Páginas de obrigado das campanhas** (`/typ/`, `/lp*-cancelada/`) | plugin da agência | baixo: redirecionam para `/career/` |
+| 14 | ~~**4 landing pages de anúncio** com o layout de campanha~~ | `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/`, `/professional-kart-team-racing-team/` | **feito em #506** (29/10): páginas próprias de novo, com o texto do urace.us; as 3 do Arrive & Drive e a The Driver Factory também |
+| 15 | **Páginas de obrigado das campanhas** (`/typ/`, `/lp*-cancelada/`) | plugin da agência | baixo: redirecionam para `/career/` (o `/arrive-and-drive-karting-thank-you/` e o `/the-driver-factory-thank-you-page/` são páginas, #506) |
 | 16 | **Carrinho sem JavaScript** | o `/cart/` do WooCommerce é HTML do servidor | baixo: o `/cart/` novo precisa de JS (tem aviso e links de saída) |
 | 17 | ~~**1 produto**~~ | **feito em #261**: `/product/otk-magnesium-wheels-set-mxc-130mm-210mm/` (OTK MXC, jogo de rodas de magnésio, $838.95) entrou em `dados/produtos.json` |
 | 18 | **Área do cliente com histórico de pedidos da loja** | `/my-account/` (orders, downloads, addresses) | o portal tem sessões e planos; o pedido da loja só pelo link pessoal `/order/<token>/` |
@@ -306,10 +308,9 @@ interno das páginas). Antes deste PR, **110 deles cairiam no 404** no site novo
 |---|---|
 | `/` | `/` (mesma) |
 | `/for-beginners/`, `/about/`, `/pro-team/`, `/contact/`, `/accessibility/`, `/blog/`, `/services/`, `/services/<slug>/` (6) | mesmos endereços |
-| `/urace-academy/`, `/kart-training-packages/`, `/kart-driving-school/` | `/academy/` |
-| `/professional-kart-team-racing-team/` | `/pro-team/` |
-| `/kart-lessons-for-beginners/` | `/for-beginners/` |
-| `/the-driver-factory/`, `/plan-your-career/`, `/typ/`, `/the-driver-factory-thank-you-page/`, `/lp1-cancelada/` … `/lp4-cancelada/` | `/career/` |
+| `/urace-academy/` | `/academy/` |
+| `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/`, `/professional-kart-team-racing-team/`, `/the-driver-factory/`, `/the-driver-factory-thank-you-page/` e as 3 do Arrive & Drive | mesmos endereços (#506: as landings voltaram a ser páginas; até 29/10 eram 301 para `/for-beginners/`, `/academy/`, `/pro-team/` e `/career/`) |
+| `/plan-your-career/`, `/typ/`, `/lp1-cancelada/` … `/lp4-cancelada/` | `/career/` |
 | `/services/group-events-social-gatherings/`, `/group-events-social-gatherings/` | `/services/group-events/` |
 | `/corporate-events/` | `/services/corporate-events/` |
 | `/birthday-party/` | `/services/birthday-party/` |
@@ -416,6 +417,9 @@ Cada item é uma coisa pequena e verificável. O que entrou neste PR está em §
    **RESPONDIDO — dono, 15/10 (#262): sem campanha ativa no momento.** O 301 de hoje
    (`/for-beginners/`, `/academy/`, `/pro-team/`) fica como está e **não** se faz layout de campanha
    agora. Quando voltar a existir anúncio, isto se reabre com a página de destino na mão.
+   **Reaberto e feito — dono, 29/10 (#506): *"sim, pode trazer o texto"*.** O urace.us reescreveu as
+   quatro em 29/10, e a home e as campanhas levam a elas: no site novo são páginas próprias de novo
+   (`vitrine/pg_landings.py`), com as 3 do Arrive & Drive e a The Driver Factory.
 5. **As duas lojas**: a recomendação é desligar o checkout do WooCommerce no mesmo dia da troca de
    DNS (§6). Confirma? Enquanto as duas estiverem no ar, estoque, preço e pedido ficam em dois
    lugares.
