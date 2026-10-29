@@ -683,14 +683,15 @@ def eventos_brutos_humano(maximo=20, desde_dias=30):
 # clique de uma pessoa. Todas exigem APLICAR=1 (o painel libera na hora).
 def mover_etapa_humano(lead_id, etapa_id, funil_id=None):
     """Move o lead de etapa no funil. Não fecha, não apaga: só muda a coluna."""
-    funil, etapa, _ = _nome_etapa(funil_id, etapa_id) if funil_id else (None, None, None)
+    funil, etapa, ordem = _nome_etapa(funil_id, etapa_id) if funil_id else (None, None, None)
     if not _aplicar():
         return _simulado(f"mover lead {lead_id} para a etapa {etapa or etapa_id}")
     corpo = {"status_id": int(etapa_id)}
     if funil_id:
         corpo["pipeline_id"] = int(funil_id)
     _req(f"/leads/{int(lead_id)}", "PATCH", corpo)
-    return {"aplicado": True, "lead_id": str(lead_id), "etapa_id": str(etapa_id), "etapa": etapa, "funil": funil}
+    return {"aplicado": True, "lead_id": str(lead_id), "etapa_id": str(etapa_id), "etapa": etapa, "funil": funil,
+            "ordem": ordem}
 
 
 def marcar_tag_humano(lead_id, tags):
