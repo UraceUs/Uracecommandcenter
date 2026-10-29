@@ -150,3 +150,17 @@ def test_puxar_com_gmail_fora_vira_aviso_e_nao_erro(cli, monkeypatch):
     assert r.status_code == 200, r.text
     assert r.json()["puxadas"]["ligadas"] == {} and "Gmail não conectado" in r.json()["puxadas"]["aviso"]
     assert cli.post(f"{B}/99999/ponte/puxar", headers=h).status_code == 404
+
+
+def test_a_ia_recebe_o_designer_e_o_fornecedor_do_pedido_com_o_contexto(con):
+    """#495 (dono, 29/10: "já com os contextos"): o prompt da ponte diz quem são o designer e o fornecedor deste pedido."""
+    _, d2 = _designers(con)
+    con.execute("UPDATE suit_designers SET notes='entrega a arte em 48 h' WHERE id=?", (d2,))
+    f = inserir(con, "suit_suppliers", name="Ateliê Fictício", contact="Ana Ateliê", email="atelie@example.com",
+                comments="produz em 3 semanas; manda fotos pelo WhatsApp", is_current=0)
+    pid = _pedido(con, designer_id=d2, supplier_id=f)
+    cfg = sp.config(con)
+    txt = sp.prompt(con, {"tipo": "cliente", "pedido_id": pid, "thread_id": "t1", "mensagens": []}, cfg, [])
+    assert "DESIGNER DESTE PEDIDO: Designer Dois <designer.dois@example.com>. Contexto da equipe: entrega a arte em 48 h" in txt
+    assert "FORNECEDOR DESTE PEDIDO: Ateliê Fictício (contato: Ana Ateliê) <atelie@example.com>" in txt
+    assert "manda fotos pelo WhatsApp" in txt

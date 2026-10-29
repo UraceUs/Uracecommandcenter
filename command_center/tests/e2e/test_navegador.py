@@ -44,7 +44,7 @@ ROTAS = ["/", "/cofre", "/attention", "/clients", "/clients/1", "/races", "/gmai
          "/pedidos", "/compras", "/planejamento", "/equipe", "/site", "/site/agendamentos", "/site/disponibilidade", "/site/servicos", "/site/cartoes",
          "/site/sim2grid", "/site/produtos", "/site/produtos/235", "/site/estoque", "/site/editor", "/site/editor/1", "/site/blog", "/site/blog/451",
          "/site/waiver", "/site/pedidos", "/site/deposito", "/balcao", "/biblioteca", "/biblioteca/historicos", "/meu-dia", "/checklists",
-         "/suits", "/suits/leads", "/suits/fornecedores", "/suits/ponte", "/suits/whatsapp", "/suits/modelo", "/como-usar",
+         "/suits", "/suits/leads", "/suits/contatos", "/suits/fornecedores", "/suits/ponte", "/suits/whatsapp", "/suits/modelo", "/como-usar",
          "/como-usar/geral", "/como-usar/vendas", "/como-usar/mecanicos"]
 
 
@@ -3011,11 +3011,24 @@ def test_suits_ponte_comeca_em_simulacao_e_guarda_o_designer(servidor, navegador
     pg = entrar(navegador, servidor, largura=390, altura=900)
     abrir(pg, servidor, "/suits/ponte")
     pg.get_by_text("Em simulação:").wait_for()
-    pg.get_by_label("E-mail do designer").fill("designer@example.com")
-    pg.get_by_role("button", name="Salvar", exact=True).click()
-    pg.get_by_text("Ponte salva.").wait_for()
+    # #495 (dono, 29/10: "cria uma aba com contatos dentro da Alpha Line onde tenha os fornecedores e designer"): a Ponte
+    # leva à aba Contatos, com os designers e os fornecedores (e-mail fixo e contexto para a IA)
+    assert pg.get_by_label("E-mail do designer").count() == 0          # o campo de um designer só saiu da Ponte
+    pg.get_by_role("link", name="Contatos", exact=True).last.click()
+    pg.wait_for_url(lambda u: u.endswith("/suits/contatos"))
+    sec = pg.locator("section", has=pg.get_by_role("heading", level=2, name=re.compile("^Designers")))
+    sec.get_by_role("button", name="Novo").click()
+    dlg = pg.get_by_role("dialog", name="Designer")
+    dlg.get_by_label("Nome").fill("Designer Ponte Ficticio")
+    dlg.get_by_label("E-mail").fill("designer@example.com")
+    dlg.get_by_label(re.compile("^Contexto para a IA")).fill("faz a arte em 48 h; fala inglês")
+    dlg.get_by_role("button", name="Salvar").click()
+    pg.get_by_text("Designer salvo.").wait_for()
+    abrir(pg, servidor, "/suits/fornecedores")                         # o endereço antigo leva à aba Contatos
+    pg.wait_for_url(lambda u: u.endswith("/suits/contatos"))
+    pg.get_by_text("designer@example.com").first.wait_for()
+    pg.get_by_role("heading", level=2, name=re.compile("^Fornecedores")).wait_for()
     abrir(pg, servidor, "/suits/ponte")
-    assert pg.get_by_label("E-mail do designer").input_value() == "designer@example.com"
     assert not pg.get_by_label("Envio automático (sem aprovação)").is_checked()
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
@@ -6513,7 +6526,7 @@ _TELAS_D = {
     "/attention": ({"pilula", "nome", "acoes"}, None),
     "/suits": ({"pilula", "nome", "bloco"}, "Pietro Suit Cartao D"),        # o pedido abre inteiro
     "/suits/leads": ({"pilula", "nome", "acoes"}, "Bruno Lead Cartao D"),
-    "/suits/fornecedores": ({"pilula", "nome", "bloco", "acoes"}, "Alpha Teste Cartao D"),
+    "/suits/contatos": ({"pilula", "nome", "bloco", "acoes"}, "Alpha Teste Cartao D"),
     "/integrations": ({"pilula", "nome", "bloco"}, "Dialpad"),
     "/crm/funil": ({"pilula", "nome"}, None),                               # o lead abre a conversa
     "/equipe#Pessoas": ({"pilula", "nome"}, None),                           # a pessoa abre a conversa
@@ -6989,7 +7002,7 @@ def test_suits_designers_da_lista_e_ponte_escolhe_designer_e_fornecedor(servidor
     """#481, dono 29/10: "designer 1, designer 2, designer 3, com os endereços de e-mail fixos. E aí eu seleciono qual que é
     o nome do designer nessa parte aí do ponte de e-mail e ele puxa esses e-mails de lá"."""
     pg = entrar(navegador, servidor, largura=largura, altura=900)          # gerente: cadastra designer
-    abrir(pg, servidor, "/suits/fornecedores")
+    abrir(pg, servidor, "/suits/contatos")
     pg.get_by_role("heading", level=2, name=re.compile("^Designers")).wait_for()
     sec = pg.locator("section", has=pg.get_by_role("heading", level=2, name=re.compile("^Designers")))
     sec.get_by_role("button", name="Novo").click()

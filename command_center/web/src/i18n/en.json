@@ -4976,5 +4976,11 @@
 "Mover à mão para {0}": "Move by hand to {0}",
 "Pedido movido para {0}.": "Order moved to {0}.",
 "Pelo caminho normal o pedido não vai para {0} agora (a ordem das etapas ou uma trava impede). Como administrador, você move à mão quando aconteceu fora do Command Center: escreva o motivo na nota (fica na linha do tempo e na auditoria, com o seu nome).": "The normal path doesn't take the order to {0} now (the stage order or a lock prevents it). As an administrator, you move it by hand when it happened outside the Command Center: write the reason in the note (it stays on the timeline and in the audit log, with your name).",
-"mover à mão para {0}": "move by hand to {0}"
+"mover à mão para {0}": "move by hand to {0}",
+"Contatos": "Contacts",
+"Contexto para a IA (o que ele faz, como falar com ele, idioma)": "Context for the AI (what they do, how to talk to them, language)",
+"Contexto para a IA": "Context for the AI",
+"Designers e fornecedores, com o e-mail fixo e o contexto para a IA, ficam na aba": "Designers and suppliers, with their fixed email and the context for the AI, are in the tab",
+"Na Ponte de e-mail de cada pedido você escolhe o designer; o e-mail e o contexto vêm daqui. O atual vale para o pedido sem escolha. O cliente nunca vê nome nem e-mail de designer.": "In each order's Email bridge you pick the designer; the email and the context come from here. The current one applies to orders without a choice. The client never sees a designer's name or email.",
+"Na Ponte de e-mail de cada pedido você escolhe o fornecedor; o e-mail e o contexto vêm daqui. O atual vale para o pedido sem escolha.": "In each order's Email bridge you pick the supplier; the email and the context come from here. The current one applies to orders without a choice."
 }
