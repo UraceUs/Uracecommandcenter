@@ -139,6 +139,20 @@ def test_capacidade_e_dia_todo_ocupa_os_dois(con):
     assert periodo(con, d, "tarde", "equipe")["reason"] == "lotado"
 
 
+def test_data_em_outro_formato_nao_fura_a_vaga(con):
+    """Debug 29/10: o Python lê "20261105" (e "2026-W45-4") como data. A vaga era conferida pela data lida, mas o
+    agendamento gravava o texto como veio: fora da contagem da ocupação, a mesma vaga era vendida de novo."""
+    abre(con)
+    d = proximo(2)
+    c1, p1 = conta(con, "a@example.com"); c2, p2 = conta(con, "b@example.com")
+    b = ag.agendar(con, c1, d.strftime("%Y%m%d"), "manha", p1, servico_id=sv(con))
+    assert todos(con, "SELECT date FROM bookings WHERE id=?", (b,))[0]["date"] == d.isoformat()
+    assert not periodo(con, d, "manha")["open"], "a sessão conta na ocupação do dia"
+    with pytest.raises(ag.ErroAgenda, match="no longer available"):
+        ag.agendar(con, c2, d.isoformat(), "manha", p2, servico_id=sv(con))
+    assert len(todos(con, "SELECT id FROM bookings")) == 1
+
+
 def test_cancelada_e_recusada_liberam_a_vaga(con):
     abre(con)
     d = proximo(2)

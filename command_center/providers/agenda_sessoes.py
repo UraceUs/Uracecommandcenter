@@ -231,6 +231,8 @@ def agendar(con, conta_id, data_iso, periodo, piloto_id=None, notes=None, servic
         dia = date.fromisoformat(data_iso)
     except (TypeError, ValueError):
         raise ErroAgenda("Choose a valid date.")
+    # o Python também lê "20261105" e "2026-W45-4": grava (e compara) a data lida, senão a sessão fica fora da ocupação
+    data_iso = dia.isoformat()
     if not um(con, "SELECT 1 AS x FROM portal_pilots WHERE id=? AND account_id=? AND active=1", (piloto_id, conta_id)):
         raise ErroAgenda("Driver not found on your account.")
     from command_center.providers import portal            # import aqui: portal não depende da agenda
