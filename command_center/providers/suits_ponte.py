@@ -194,6 +194,15 @@ def _guardas(pedido, papel, texto, cfg):
         for dado in (cfg.get("designer_email"), cfg.get("designer_nome")):
             if dado and len(dado) >= 3 and dado.lower() in t:
                 raise Recusado("O cliente não pode ver o nome nem o contato do designer: fale como a URACE.")
+    if papel == "fornecedor" and not pedido.get("checked_at"):
+        # debug 29/10 (regra 11, #382): o endereço do cliente, e o telefone que vai com ele, só vão ao fornecedor depois do
+        # OK da equipe nas fotos (Checked). O grupo do fornecedor no WhatsApp já recusava (`atelie_whatsapp.guardas`).
+        marcas, digitos = _marcas_do_cliente(pedido)
+        problemas = [rot for rot, m in marcas if rot == "o endereço do cliente" and m in t]
+        problemas += [rot for rot, d in digitos if d[-7:] in _digitos(texto)]
+        if problemas:
+            raise Recusado("O fornecedor só recebe " + " e ".join(dict.fromkeys(problemas)) + " depois do OK da equipe nas "
+                           "fotos (Checked): reescreva sem isso. O endereço vai pela seção Endereço ao fornecedor.")
 
 
 def destinatario(con, pedido, papel, cfg):
@@ -319,6 +328,22 @@ def _vetor_sem_metadados(nome, dados):
     return re.sub(rb"(?m)^%%(?:For|Creator|Title|Author|CreationDate):[^\r\n]*[\r\n]*", b"", dados)
 
 
+def _texto_do_pdf(nome, dados):
+    """O texto das páginas, quando o arquivo é PDF (o .ai de hoje também é). Debug 29/10: no PDF de verdade o conteúdo
+    vem comprimido, e procurar o e-mail ou o nome do cliente nos bytes crus não achava nada. Sem acento, minúsculo e
+    com os espaços juntos, como as marcas. Não deu para ler o texto: o arquivo não sai (revisão do Mio, #382)."""
+    import io
+    if b"%PDF" not in dados[:1024]:
+        return ""
+    try:
+        from pypdf import PdfReader
+        texto = " ".join(pg.extract_text() or "" for pg in PdfReader(io.BytesIO(dados)).pages)
+    except Exception as e:
+        raise Recusado(f"não deu para ler o texto de {nome} ({type(e).__name__}) e conferir que não tem dado do cliente: "
+                       "o arquivo não sai. Peça o PDF exportado de novo.")
+    return _sem_acento(re.sub(r"\s+", " ", texto).lower())
+
+
 def limpar_para_designer(arquivos, pedido):
     """#382 (C): o que vai ao designer sai sem metadados, e o arquivo que ainda contenha o e-mail, o telefone, o
     endereço ou o nome completo do cliente não sai. O nome do arquivo com o nome ou o e-mail do cliente é trocado."""
@@ -333,8 +358,9 @@ def limpar_para_designer(arquivos, pedido):
         if any(_sem_acento(m) in nome_baixo or m in nome.lower() for _, m in marcas):
             nome = f"Suits-{pedido['id']}-ref-{i}{os.path.splitext(nome)[1].lower()}"
         baixo = dados.lower()
-        achou = [rot for rot, m in marcas if m.encode() in baixo]
-        achou += [rot for rot, d in digitos if d.encode() in dados]
+        texto = _texto_do_pdf(nome, dados)               # o PDF guarda o texto comprimido: os bytes crus não bastam
+        achou = [rot for rot, m in marcas if m.encode() in baixo or (texto and _sem_acento(m) in texto)]
+        achou += [rot for rot, d in digitos if d.encode() in dados or (texto and d in re.sub(r"[\s().+-]", "", texto))]
         if achou:
             raise Recusado(f"o arquivo {nome} contém {', '.join(dict.fromkeys(achou))}: não vai ao designer. Use um arquivo "
                            "só com o design.")
@@ -752,7 +778,9 @@ def _pedidos_do_fornecedor(con, assunto):
     achados = set()
     for p in todos(con, "SELECT id, title, driver_name FROM suit_orders WHERE closed=0 AND discarded_at IS NULL ORDER BY id DESC"):
         for nome in (p["title"], p["driver_name"]):
-            if nome and len(nome) >= 4 and nome.lower() in a:
+            n = (nome or "").strip().lower()
+            # debug 29/10: o nome inteiro, como palavra — "ana fict" dentro de "ana ficticia" é o suit de outro cliente
+            if len(n) >= 4 and re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)", a):
                 achados.add(p["id"])
     return achados
 
@@ -802,7 +830,8 @@ def conversas_novas(con, gm, ignoradas=None):
                     con.execute("UPDATE suit_orders SET gmail_thread_fornecedor=? WHERE id=?", (th, pid))
                 eventos.append({"tipo": "fornecedor", "pedido_id": pid, "thread_id": th, "mensagens": novas})
             elif cfg.get("designer_email") and de == cfg["designer_email"].lower():
-                ids = {int(x) for x in re.findall(r"#\s?(\d+)", assunto + " " + (novas[-1].get("corpo") or "")[:500])}
+                # debug 29/10: o número inteiro (\b) — a cor "#1A1A1A" não é o pedido #1 de outro cliente
+                ids = {int(x) for x in re.findall(r"#\s?(\d+)\b", assunto + " " + (novas[-1].get("corpo") or "")[:500])}
                 ids = {x for x in ids if um(con, "SELECT 1 AS x FROM suit_orders WHERE id=? AND discarded_at IS NULL", (x,))}
                 if len(ids) > 1:
                     _ambiguo(con, novas, th, ids, "e-mail do designer")
