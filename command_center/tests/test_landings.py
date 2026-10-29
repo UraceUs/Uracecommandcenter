@@ -212,6 +212,14 @@ def test_calendario_do_racing_team_so_mostra_a_prova_que_ainda_vem(cli):
     assert pg_landings._proximas_provas("novo.urace.us", ctx, date(2027, 4, 1)) == ""
 
 
+@pytest.mark.parametrize("caminho", ["/kart-training-packages/", "/professional-kart-team-racing-team/"])
+def test_o_boost_fica_fora_como_na_academy_e_no_pro_team(cli, caminho):
+    """O urace.us de 29/10 ainda mostra o URACE Boost; ele não está na planilha de preços (dono, 15/10, #273)."""
+    html = _pagina(cli, caminho)
+    assert "Boost" not in html and ">Two ways in, depending on where you are</h2>" in html
+    assert "Race Weekend Support" in html and 'href="/academy/"' in html
+
+
 def test_avaliacoes_com_link_para_o_google_e_sem_numero_a_mao(cli):
     """Nota e número de avaliações ficam velhos: a página leva ao Google, não escreve "4.9 · 38 reviews"."""
     html = _pagina(cli, "/kart-lessons-for-beginners/")

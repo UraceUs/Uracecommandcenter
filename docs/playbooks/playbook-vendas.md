@@ -874,9 +874,8 @@ a campanha), no serviço da página. As respostas do formulário ficam na nota d
 
 A **opção** é o que pesa: A é Arrive and Drive, B é Academy, C é Racing Team — mesmo quando o serviço da
 oportunidade é o da página. `/arrive-and-drive-karting-booking/` não tem formulário: o botão leva à reserva do site
-(`/services/arrive-and-drive/#reservar`). As landings da Academy e do Racing Team mostram o **URACE Boost** como no
-urace.us de 29/10, **sem preço** e com o botão de conversar; ele continua fora da planilha (#273): quem pedir, fale
-com o gerente antes de prometer.
+(`/services/arrive-and-drive/#reservar`). O **URACE Boost** que o urace.us ainda mostra nas landings da Academy e do
+Racing Team fica de fora no site novo, como na `/academy/` e no `/pro-team/`: não está na planilha (#273).
 
 **Na reserva do site** (#279, dono 15/10):
 - **Lead and Follow** é uma caixinha ao lado do kart: *Add Lead and Follow (+$769)*. Vai para o carrinho

@@ -10,8 +10,10 @@ domínio elas não podem quebrar. O texto é o da página de hoje (lida em 29/10
 - a The Driver Factory (16/10), de novo página própria (era 301 para o /career/), com o obrigado dela.
 
 O que não é cópia literal, de propósito:
-- **Preço só do painel.** O "from $719" do Arrive and Drive é o cartão com a chave `kart`; Academy, Boost, Racing Team,
+- **Preço só do painel.** O "from $719" do Arrive and Drive é o cartão com a chave `kart`; Academy, Racing Team,
   Sim2Grid, o security deposit e as opções do formulário saem sem o número (o urace.us escreve à mão).
+- **O URACE Boost fica de fora** (não está na planilha de preços, dono 15/10, #273), como na /academy/ e no /pro-team/
+  (#508): o "Three ways in" das landings da Academy e do Racing Team fica com dois cartões, "Two ways in".
 - **A reserva é a do site** (dono, 15/10, #262: um caminho só para reservar): a agenda da página de reserva do urace.us
   (kart, dia, Lead and Follow, checkout do WooCommerce) vira o botão para `/services/arrive-and-drive/#reservar`.
 - **O nome é URACE** (o urace.us escreve "URace" nas páginas do Arrive & Drive); citação de avaliação fica como está.
@@ -116,22 +118,19 @@ ESCADA = {"tipo": "cartoes", "eyebrow": "Your next step", "titulo": "The ladder 
               {"titulo": "URACE Racing Team", "texto": "Race-team program for regional, national and international grids.",
                "link": ("Talk to the team", "/professional-kart-team-racing-team/")}]}
 
-# Academy ($2,756.90 / month) e Boost ($5,000 / 30 days, "$625 a session") sem o número
-TRES_CAMINHOS = {"tipo": "cartoes", "eyebrow": "How we work with competitive drivers",
-                 "titulo": "Three ways in, depending on where you are", "itens": [
-                     {"titulo": "URACE Academy",
-                      "texto": ("Not racing yet? Start here. Four coached sessions a month with kart, full equipment, "
-                                "maintenance and a professional coach included. Month to month, no minimum term."),
-                      "link": ("Join URACE Academy", "/academy/")},
-                     {"titulo": "URACE Boost",
-                      "texto": ("Eight sessions in 30 days. A standalone intensive month for drivers preparing for a race "
-                                "or a season, at our lowest per-session rate. No contract."),
-                      "link": ("Talk to our racing team", CONVERSA)},
-                     {"titulo": "Race Weekend Support",
-                      "texto": ("We run the kart. You drive. Kart preparation and trackside support at the rounds we are "
-                                "entered in. Entries, tyres, fuel and consumables are quoted per event.",
-                                "**Let’s talk** · per event"),
-                      "link": ("Talk to our racing team", CONVERSA)}]}
+# a Academy sem o número ($2,756.90 / month); o URACE Boost ($5,000 / 30 days) do urace.us fica de fora: não está na
+# planilha (#273), e a /academy/ e o /pro-team/ também não o oferecem. Com dois cartões, "Two ways in" (era "Three")
+CAMINHOS = {"tipo": "cartoes", "eyebrow": "How we work with competitive drivers",
+            "titulo": "Two ways in, depending on where you are", "itens": [
+                {"titulo": "URACE Academy",
+                 "texto": ("Not racing yet? Start here. Four coached sessions a month with kart, full equipment, "
+                           "maintenance and a professional coach included. Month to month, no minimum term."),
+                 "link": ("Join URACE Academy", "/academy/")},
+                {"titulo": "Race Weekend Support",
+                 "texto": ("We run the kart. You drive. Kart preparation and trackside support at the rounds we are "
+                           "entered in. Entries, tyres, fuel and consumables are quoted per event.",
+                           "**Let’s talk** · per event"),
+                 "link": ("Talk to our racing team", CONVERSA)}]}
 
 BEGINNERS = {
     "caminho": "/kart-lessons-for-beginners/", "nome": "Kart Lessons for Beginners",
@@ -184,7 +183,7 @@ TRAINING_PACKAGES = {
                  "Month to month, no long-term contract."),
          "ctas": [("Join URACE Academy", "/academy/"), ("Talk to us", CONVERSA)],
          "foto": "img-7762-scaled.webp", "alt": "URACE on track"},
-        TRES_CAMINHOS,
+        CAMINHOS,
         _fundador(CONVERSA),
         _formulario_lp("academy"),
         TEMPORADA, AVALIACOES,
@@ -225,7 +224,7 @@ RACING_TEAM = {
          "foto": "urace-team-bushnell-p1-p3.webp",
          "alt": "URACE team with the trophy after Frankie Iadevaia's P1 in Bushnell, Florida",
          "nota": "**P1** · Frankie Iadevaia · FLKC Jacksonville · Oct 2026"},
-        TRES_CAMINHOS,
+        CAMINHOS,
         {"tipo": "funcao", "render": _proximas_provas, **CALENDARIO},
         _fundador(CONVERSA),
         _formulario_lp("team"),
