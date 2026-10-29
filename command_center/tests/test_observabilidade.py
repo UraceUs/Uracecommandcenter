@@ -86,12 +86,16 @@ def test_5xx_e_contado_e_logado_como_aviso(cli, logs):
         raise RuntimeError("falhou de propósito")
     if not any(getattr(rt, "path", "") == "/ops/api/_teste_500" for rt in app.routes):
         app.add_api_route("/ops/api/_teste_500", quebra, methods=["POST"])
-    c = TestClient(app, base_url="https://cc.test", raise_server_exceptions=False)
-    assert c.post("/ops/api/_teste_500").status_code == 500
-    rota = next(x for x in ob.metricas()["rotas"] if x["rota"] == "POST /ops/api/_teste_500")
-    assert rota["erros_5xx"] == 1
-    ln = [json.loads(x) for x in logs if '"_teste_500"' in x or "_teste_500" in x]
-    assert ln and ln[-1]["status"] == 500
+    try:
+        c = TestClient(app, base_url="https://cc.test", raise_server_exceptions=False)
+        assert c.post("/ops/api/_teste_500").status_code == 500
+        rota = next(x for x in ob.metricas()["rotas"] if x["rota"] == "POST /ops/api/_teste_500")
+        assert rota["erros_5xx"] == 1
+        ln = [json.loads(x) for x in logs if '"_teste_500"' in x or "_teste_500" in x]
+        assert ln and ln[-1]["status"] == 500
+    finally:
+        # #451: a rota de teste sai do app; senão a trava de rota sem login (#438) a vê quando roda depois, na mesma parte do CI
+        app.router.routes[:] = [rt for rt in app.router.routes if getattr(rt, "path", "") != "/ops/api/_teste_500"]
 
 
 def test_navegador_manda_vital_e_erro(cli):
