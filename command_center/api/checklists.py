@@ -31,6 +31,24 @@ def _erro(e):
     return HTTPException(400, str(e))
 
 
+SO_DO_CARGO = "Este checklist não é do seu cargo."
+
+
+def _do_cargo(con, u, sql, args):
+    """Quem tem cargo (mecânico, coach) só mexe no checklist do cargo dele. O `abrir` já recusava; ver, marcar, foto e
+    concluir aceitavam o id do preenchimento de outro cargo (debug 29/10). Sem cargo (gerente): vê tudo."""
+    if not u.get("cargo"):
+        return
+    t = um(con, sql, args)
+    if t and t["cargo"] != u["cargo"]:
+        raise HTTPException(403, SO_DO_CARGO)
+
+
+def _run_do_cargo(con, u, rid):
+    _do_cargo(con, u, "SELECT t.cargo FROM checklist_runs r JOIN checklist_templates t ON t.id=r.template_id WHERE r.id=?",
+              (rid,))
+
+
 @dia.get("")
 def meu_dia(data: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"), con: sqlite3.Connection = Depends(get_db),
             u=Depends(auth.exige("OPERATOR"))):
@@ -145,9 +163,7 @@ class AbrirIn(BaseModel):
 
 @r.post("/runs", status_code=201)
 def abrir(dados: AbrirIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
-    t = um(con, "SELECT cargo FROM checklist_templates WHERE id=?", (dados.template_id,))
-    if t and u.get("cargo") and t["cargo"] != u["cargo"]:
-        raise HTTPException(403, "Este checklist não é do seu cargo.")
+    _do_cargo(con, u, "SELECT cargo FROM checklist_templates WHERE id=?", (dados.template_id,))
     try:
         rid = ck.abrir(con, dados.template_id, dados.ctx, u["id"])
     except (LookupError, ck.ErroChecklist, KeyError, ValueError) as e:
@@ -158,6 +174,7 @@ def abrir(dados: AbrirIn, request: Request, con: sqlite3.Connection = Depends(ge
 
 @r.get("/runs/{rid}")
 def ver(rid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    _run_do_cargo(con, u, rid)
     try:
         return ck.preenchimento(con, rid)
     except LookupError as e:
@@ -171,6 +188,7 @@ class MarcarIn(BaseModel):
 
 @r.post("/runs/{rid}/itens/{iid}")
 def marcar(rid: int, iid: int, dados: MarcarIn, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    _run_do_cargo(con, u, rid)
     try:
         ck.marcar(con, rid, iid, dados.done, dados.note, u["id"])
     except (LookupError, ck.ErroChecklist) as e:
@@ -182,6 +200,7 @@ def marcar(rid: int, iid: int, dados: MarcarIn, con: sqlite3.Connection = Depend
 @r.post("/runs/{rid}/itens/{iid}/foto", status_code=201)
 async def foto(rid: int, iid: int, arquivo: UploadFile = File(...), con: sqlite3.Connection = Depends(get_db),
                u=Depends(auth.exige("OPERATOR"))):
+    _run_do_cargo(con, u, rid)
     dados = await arquivo.read(MAX_FOTO + 1)
     if len(dados) > MAX_FOTO:
         raise HTTPException(413, "Foto grande demais (máximo 15 MB).")
@@ -195,6 +214,9 @@ async def foto(rid: int, iid: int, arquivo: UploadFile = File(...), con: sqlite3
 
 @r.get("/fotos/{fid}")
 def ver_foto(fid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    _do_cargo(con, u, """SELECT t.cargo FROM checklist_photos f JOIN checklist_run_items i ON i.id=f.run_item_id
+                         JOIN checklist_runs r ON r.id=i.run_id JOIN checklist_templates t ON t.id=r.template_id
+                        WHERE f.id=?""", (fid,))
     f = um(con, "SELECT file_path FROM checklist_photos WHERE id=?", (fid,))
     if not f or not f["file_path"] or not os.path.isfile(f["file_path"]):
         raise HTTPException(404, "Foto não encontrada.")
@@ -204,6 +226,7 @@ def ver_foto(fid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth
 
 @r.post("/runs/{rid}/concluir")
 def concluir(rid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    _run_do_cargo(con, u, rid)
     try:
         ck.concluir(con, rid, u["id"])
     except (LookupError, ck.ErroChecklist) as e:

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Res
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from command_center.api import auth
-from command_center.db import auditar, get_db, um
+from command_center.db import auditar, get_db, transacao, um
 from command_center.providers import balcao as b, estoque
 
 r = APIRouter(prefix="/ops/api/balcao", tags=["balcao"])
@@ -145,14 +145,15 @@ def lancar(dados: LancarIn, request: Request, con: sqlite3.Connection = Depends(
 def desfazer(scan_id: int, request: Request, con: sqlite3.Connection = Depends(get_db),
              u=Depends(auth.exige("OPERATOR"))):
     try:
-        s = b.desfazer(con, scan_id, u["id"])
+        # ler e desfazer com a trava de escrita já pega: dois toques não leem "ainda não desfeita" juntos (devolviam
+        # a peça duas vezes). A conexão é autocommit: sem isto, nem o rollback desfazia o que já tinha sido gravado.
+        with transacao(con, imediata=True):
+            s = b.desfazer(con, scan_id, u["id"])
+            _aud(con, request, u, "balcao.desfazer", "client", s["client_id"], {"leitura": scan_id, "modo": s["mode"]})
     except LookupError:
         raise HTTPException(404, "Leitura não encontrada.")
     except (b.ErroBalcao, estoque.ErroEstoque) as e:
-        con.rollback()
         raise _erro(e)
-    _aud(con, request, u, "balcao.desfazer", "client", s["client_id"], {"leitura": scan_id, "modo": s["mode"]})
-    con.commit()
     _sincronizar(con, s["parts_invoice_id"])
     return b.do_cliente(con, s["client_id"])
 
@@ -177,17 +178,18 @@ def cadastrar(dados: CodigoIn, request: Request, con: sqlite3.Connection = Depen
     if (dados.price is not None or dados.qbo_item_id or dados.qbo_categoria_id) and not gerente:
         raise HTTPException(403, "Preço e item do QuickBooks são do gerente.")
     try:
-        item_id = dados.item_id
-        if not item_id:
-            item_id = estoque.criar_item(con, dados.kind, dados.nome or "", category=dados.category, price=dados.price)
-        elif dados.price is not None:
-            estoque.atualizar_item(con, item_id, price=dados.price)
-        cod = b.cadastrar_codigo(con, dados.codigo, item_id, u["id"])
+        # a peça nova (ou o preço) e o código numa transação só: código recusado não deixa peça órfã na prateleira
+        # (a conexão é autocommit; o rollback de antes não desfazia o que já estava gravado)
+        with transacao(con, imediata=True):
+            item_id = dados.item_id
+            if not item_id:
+                item_id = estoque.criar_item(con, dados.kind, dados.nome or "", category=dados.category, price=dados.price)
+            elif dados.price is not None:
+                estoque.atualizar_item(con, item_id, price=dados.price)
+            cod = b.cadastrar_codigo(con, dados.codigo, item_id, u["id"])
+            _aud(con, request, u, "balcao.codigo", "stock_item", item_id, {"codigo": cod, "novo": not dados.item_id})
     except (b.ErroBalcao, estoque.ErroEstoque) as e:
-        con.rollback()
         raise _erro(e)
-    _aud(con, request, u, "balcao.codigo", "stock_item", item_id, {"codigo": cod, "novo": not dados.item_id})
-    con.commit()
     aviso = None
     if gerente and (dados.qbo_item_id or dados.qbo_categoria_id):
         try:
@@ -426,14 +428,13 @@ def rapido_desfazer_lancada(scan_id: int, request: Request, con: sqlite3.Connect
                             u=Depends(auth.exige("OPERATOR"))):
     """#206: desfazer pelo celular a peça que foi direto para a OS."""
     try:
-        s = br.desfazer_lancada(con, scan_id, u["id"], _gerente(u))
+        with transacao(con, imediata=True):          # dois toques no celular: a peça volta uma vez só
+            s = br.desfazer_lancada(con, scan_id, u["id"], _gerente(u))
+            _aud(con, request, u, "balcao.rapido.desfazer_os", "client", s["client_id"], {"leitura": scan_id})
     except LookupError:
         raise HTTPException(404, "Leitura não encontrada.")
     except (b.ErroBalcao, br.ErroRapido, estoque.ErroEstoque) as e:
-        con.rollback()
         raise HTTPException(400, str(e))
-    _aud(con, request, u, "balcao.rapido.desfazer_os", "client", s["client_id"], {"leitura": scan_id})
-    con.commit()
     _sincronizar(con, s["parts_invoice_id"])
     return {"ok": True}
 
@@ -498,7 +499,6 @@ def revisao_descartar(pid: int, dados: DescartarIn, request: Request, con: sqlit
 # e salve, fica pendente só a revisão para confirmar/alterar pelo gerente"). A invoice de quem não é gerente fica
 # aguardando a REVISÃO (MANAGER): confirmar, ou alterar as linhas, que atualiza a mesma invoice no QuickBooks. Enviar e
 # cobrar no cartão só depois da revisão. "Conferir no QuickBooks" (resposta perdida) é MANAGER.
-from command_center.db import transacao  # noqa: E402
 from command_center.providers import balcao_rascunho as rz  # noqa: E402
 
 

@@ -210,6 +210,34 @@ def test_mecanico_nao_abre_checklist_do_coach(cli):
     assert cli.post(f"{C}/runs", json={"template_id": coach["id"], "ctx": {"tipo": "dia"}}, headers=h).status_code == 403
 
 
+def test_coach_nao_ve_nem_preenche_pelo_id_o_checklist_do_mecanico(cli):
+    """Debug 29/10: o "abrir" já recusava o checklist de outro cargo, mas ver, marcar, subir foto, concluir e ver a foto
+    aceitavam o id do preenchimento: o coach marcava item do checklist do mecânico (e o contrário)."""
+    da_cargo(cli, cli.ids["mec"], "MECANICO")
+    da_cargo(cli, cli.ids["coach"], "COACH")
+    hm = entra(cli, "luis@urace.us")
+    mod = next(t for t in cli.get(f"{C}/modelos").json()["modelos"] if t["name"] == "Mechanic Checklist")
+    run = cli.post(f"{C}/runs", json={"template_id": mod["id"], "ctx": {"tipo": "dia"}}, headers=hm).json()
+    it = run["itens"][0]
+    r = cli.post(f"{C}/runs/{run['id']}/itens/{it['id']}/foto", files={"arquivo": ("x.png", _png(), "image/png")}, headers=hm)
+    fid = next(i for i in r.json()["itens"] if i["id"] == it["id"])["fotos"][0]
+    hc = entra(cli, "hernan@urace.us")
+    assert cli.get(f"{C}/runs/{run['id']}").status_code == 403
+    assert cli.post(f"{C}/runs/{run['id']}/itens/{it['id']}", json={"done": True}, headers=hc).status_code == 403
+    assert cli.post(f"{C}/runs/{run['id']}/itens/{it['id']}/foto", files={"arquivo": ("x.png", _png(), "image/png")},
+                    headers=hc).status_code == 403
+    assert cli.post(f"{C}/runs/{run['id']}/concluir", headers=hc).status_code == 403
+    assert cli.get(f"{C}/fotos/{fid}").status_code == 403
+    con = conectar()
+    assert um(con, "SELECT done FROM checklist_run_items WHERE id=?", (it["id"],))["done"] == 0
+    assert um(con, "SELECT COUNT(*) AS n FROM checklist_photos")["n"] == 1
+    # quem é do cargo e o gerente continuam
+    hm = entra(cli, "luis@urace.us")
+    assert cli.post(f"{C}/runs/{run['id']}/itens/{it['id']}", json={"done": True}, headers=hm).status_code == 200
+    entra(cli, "ger@urace.us")
+    assert cli.get(f"{C}/runs/{run['id']}").status_code == 200 and cli.get(f"{C}/fotos/{fid}").status_code == 200
+
+
 def test_incompleto_de_ontem_vai_para_precisa_de_atencao(cli):
     con = conectar()
     t = um(con, "SELECT id FROM checklist_templates WHERE name='Mechanic Checklist'")
