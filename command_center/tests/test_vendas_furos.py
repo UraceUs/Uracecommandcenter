@@ -332,6 +332,55 @@ def test_fechamento_cria_o_card_do_irmao_e_nunca_poe_no_card_do_outro(cli):
     assert r.json()["client_id"] == theo
 
 
+def test_card_criado_pelo_passo_depois_do_fechamento_vira_ganho(cli):
+    """Debug 29/10: o fechamento sem card fica em Fechamento (Ganho é a venda fechada com o card). Quando o card nascia
+    depois, pelo botão do passo (o "É irmão" do #204, ou o "tentar de novo"), a venda ficava em Fechamento para
+    sempre: o retorno de antes do fechamento continuava na agenda e, vencido, em Precisa de atenção."""
+    con = conectar()
+    try:
+        inserir(con, "clients", name="Vera Lima", pilot_name="Ana Lima", email="vera.lima@example.com",
+                status="ACTIVE", source="asana")
+        con.commit()
+    finally:
+        con.close()
+    h = entra(cli, "closer@urace.us")
+    oid = cria(cli, h, name="Vera Lima", email="vera.lima@example.com", pilot_name="Rui Lima")
+    r = cli.post(f"{B}/sales/{oid}/next", headers=h, json={"quando": "2020-01-02T15:00:00Z", "o_que": "ligar para fechar"})
+    assert r.status_code == 200
+    so_cliente = {"cliente": True, "qbo": False, "waiver": False, "asana": False, "kommo": False}
+    assert cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": so_cliente}).json()["etapa"] == "FECHAMENTO"
+    r = cli.post(f"{B}/sales/{oid}/step/cliente?irmao=true", headers=h)
+    assert r.status_code == 200, r.text
+    o = cli.get(f"{B}/sales/{oid}", headers=h).json()["oportunidade"]
+    assert o["client_id"] == r.json()["resultado"]["client_id"]
+    assert (o["stage"], o["next_at"]) == ("GANHO", None)
+    assert oid not in [x["id"] for x in cli.get(f"{B}/sales/agenda", headers=h).json()["retornos"]], \
+        "o retorno de antes do fechamento saiu da agenda"
+
+
+def test_tarefa_do_painel_criada_no_fechamento_fica_com_a_data(cli):
+    """Debug 29/10: a tarefa personalizada "no painel" do fechamento vira o próximo passo da venda (data e texto), e a
+    gravação final do fechamento escrevia por cima: no Ganho apagava a data, no Fechamento voltava à data lida antes das
+    tarefas. Ficava só o texto, sem data — o lembrete nunca aparecia, e o passo dizia "tarefa em painel"."""
+    h = entra(cli, "closer@urace.us")
+    tarefa = [{"titulo": "Mandar o vídeo de boas-vindas", "onde": "painel", "quando": "2030-02-10"}]
+    # Ganho (o card nasce): o retorno de antes do fechamento sai, a tarefa fica
+    oid = cria(cli, h, name="Tarefa No Ganho", email="tarefa.ganho@example.com")
+    r = cli.post(f"{B}/sales/{oid}/next", headers=h, json={"quando": "2020-01-02T15:00:00Z", "o_que": "ligar para fechar"})
+    assert r.status_code == 200
+    passos = {"cliente": True, "qbo": False, "waiver": False, "asana": False, "kommo": False}
+    r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": passos, "extras": tarefa})
+    assert r.status_code == 200 and r.json()["etapa"] == "GANHO", r.text
+    o = cli.get(f"{B}/sales/{oid}", headers=h).json()["oportunidade"]
+    assert (o["next_at"], o["next_what"]) == ("2030-02-10T12:00:00Z", "Mandar o vídeo de boas-vindas")
+    # Fechamento (sem card) e sem retorno: a tarefa é o próximo passo, com a data
+    oid = cria(cli, h, name="Tarefa No Fechamento", email="tarefa.fecha@example.com")
+    r = cli.post(f"{B}/sales/{oid}/close", headers=h, json={"passos": dict(passos, cliente=False), "extras": tarefa})
+    assert r.status_code == 200 and r.json()["etapa"] == "FECHAMENTO", r.text
+    o = cli.get(f"{B}/sales/{oid}", headers=h).json()["oportunidade"]
+    assert (o["next_at"], o["next_what"]) == ("2030-02-10T12:00:00Z", "Mandar o vídeo de boas-vindas")
+
+
 # ------------------------------------------------------------------ 7: retorno vencido em Atenção
 def test_retorno_de_venda_vencido_aparece_em_precisa_de_atencao(cli):
     h = entra(cli, "closer@urace.us")

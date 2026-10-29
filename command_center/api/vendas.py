@@ -1158,19 +1158,23 @@ def _fechar(oid, dados, request, tarefas, u, con, o, marca, falou):
             _passo(saida, nome, False, SEM_RESPOSTA.format(str(e)[:160]) if nome == "qbo" and falou.get("erro")
                    else str(e)[:240])
 
+    tarefa = None                         # a 1ª tarefa do painel com data: o próximo passo da venda
     for e in dados.extras[:10]:
         try:
             res = _extra(con, o, e, u["id"])
             _passo(saida, f"extra:{e.titulo[:40]}", True, f"tarefa em {res['onde']}", res)  # nome = o que o closer escreveu
+            if res["onde"] == "painel" and res.get("quando") and not tarefa:
+                tarefa = {"next_at": res["quando"], "next_what": e.titulo}
         except Exception as ex:                                  # noqa: BLE001
             _passo(saida, f"extra:{e.titulo[:40]}", False, str(ex)[:200])
 
     fechado = resumo_do_fechamento(u["name"], o, ref, na_tabela, por_que, aprovado, deposito, saida)
     etapa = "GANHO" if o["client_id"] else "FECHAMENTO"
+    # o Ganho tira o retorno de antes; a tarefa do painel que o closer acabou de escrever fica (sem ela, a data sumia)
+    proximo = (tarefa or {"next_at": None}) if etapa == "GANHO" else ({} if o["next_at"] else (tarefa or {}))
     incerta = falou.get("erro")           # A1: o QuickBooks não respondeu: a marca fica, sem desfecho
     with transacao(con, imediata=True):     # R3: o fechamento entra inteiro, com a linha do tempo e a auditoria
-        gravar_fechamento(con, oid, lambda f: _troca_tudo(f, fechado, marca, incerta), stage=etapa,
-                          next_at=None if etapa == "GANHO" else o["next_at"])
+        gravar_fechamento(con, oid, lambda f: _troca_tudo(f, fechado, marca, incerta), stage=etapa, **proximo)
         for p in saida:
             _ev(con, oid, PASSO_KIND.get(p["passo"], "task"), f"{p['nome']}: {p['detalhe']}",
                 p.get("client_id") and {"client_id": p["client_id"]} or None,
