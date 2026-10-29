@@ -149,6 +149,12 @@ def _cruzam(a, b):
     return all(x == y or x.startswith("{") or y.startswith("{") for x, y in zip(sa, sb))
 
 
+# Rotas que nasceram nestes módulos depois da divisão: a lista de cima continua a foto do rotas.py de antes.
+NOVAS = [
+    ('GET', '/ops/api/tasks/{tid}/anexos/{agid}'),        # #455: o anexo do espelho do Asana, com link novo
+]
+
+
 def test_nenhuma_rota_do_rotas_py_sumiu():
     assert len(ESPERADAS) == 112 and len(set(ESPERADAS)) == 112
     rotas = _planas()
@@ -181,4 +187,4 @@ def test_cada_modulo_tem_o_seu_r_e_o_mcp_enxerga():
         for rota in mod.r.routes:
             if isinstance(rota, APIRoute):
                 vistas |= {(m, rota.path) for m in rota.methods}
-    assert vistas == set(ESPERADAS)
+    assert vistas == set(ESPERADAS) | set(NOVAS)
