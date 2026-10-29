@@ -191,6 +191,25 @@ TRAINING_PACKAGES = {
     ],
 }
 
+# as próximas provas, como no urace.us de 29/10; o "Race the winter →" (a /winter/) entra quando a página da Winter
+# estiver no site novo
+CALENDARIO = {"eyebrow": "Where we are racing", "titulo": "Next rounds on the calendar",
+              "intro": "If your driver comes with us, this is the season. Dates and venues as published by the series.",
+              "itens": (("Nov 22, 2026", "AMR Karting Challenge · Round 10 · Homestead, Florida"),
+                        ("Dec 6, 2026", "Florida Karting Championship · Rounds 11 & 12 · AMR Motorplex"),
+                        ("Jan–Mar 2027", "SKUSA Winter Series and Florida winter rounds"))}
+
+
+def _proximas_provas(host, ctx, hoje=None):
+    """O calendário (o bloco `definicoes`) só com a prova que ainda vem, no dia da Flórida — a regra do /pro-team/
+    (#508); sem nenhuma por vir, a seção não sai."""
+    from command_center.vitrine import blocos, paginas_site
+    provas = paginas_site._proximas(CALENDARIO["itens"], hoje)
+    if not provas:
+        return ""
+    return blocos.DESENHO["definicoes"]({**CALENDARIO, "tipo": "definicoes", "itens": provas}, ctx["indice"], host, ctx)
+
+
 RACING_TEAM = {
     "caminho": "/professional-kart-team-racing-team/", "nome": "URACE Racing Team",
     "titulo": "URACE Race Team Support with a Pro Coach | Orlando",
@@ -207,12 +226,7 @@ RACING_TEAM = {
          "alt": "URACE team with the trophy after Frankie Iadevaia's P1 in Bushnell, Florida",
          "nota": "**P1** · Frankie Iadevaia · FLKC Jacksonville · Oct 2026"},
         TRES_CAMINHOS,
-        # o "Race the winter →" (a /winter/) entra quando a página da Winter estiver no site novo
-        {"tipo": "definicoes", "eyebrow": "Where we are racing", "titulo": "Next rounds on the calendar",
-         "intro": "If your driver comes with us, this is the season. Dates and venues as published by the series.",
-         "itens": [("Nov 22, 2026", "AMR Karting Challenge · Round 10 · Homestead, Florida"),
-                   ("Dec 6, 2026", "Florida Karting Championship · Rounds 11 & 12 · AMR Motorplex"),
-                   ("Jan–Mar 2027", "SKUSA Winter Series and Florida winter rounds")]},
+        {"tipo": "funcao", "render": _proximas_provas, **CALENDARIO},
         _fundador(CONVERSA),
         _formulario_lp("team"),
         TEMPORADA, AVALIACOES,

@@ -199,6 +199,19 @@ def test_nenhum_link_da_landing_quebra_nem_volta_ao_wordpress(cli, caminho):
             assert h.startswith(("https://", "tel:+1407")), (caminho, h)
 
 
+def test_calendario_do_racing_team_so_mostra_a_prova_que_ainda_vem(cli):
+    """A regra do /pro-team/ (#508): a prova que já passou sai sozinha; sem nenhuma por vir, a seção não sai."""
+    from datetime import date
+
+    from command_center.vitrine import pg_landings
+    assert 'Next rounds on the calendar</h2>' in _pagina(cli, "/professional-kart-team-racing-team/")
+    ctx = {"indice": 2, "caminho": "/professional-kart-team-racing-team/"}
+    depois = pg_landings._proximas_provas("novo.urace.us", ctx, date(2026, 11, 23))
+    assert "Nov 22, 2026" not in depois and "<dt>Dec 6, 2026</dt>" in depois and 'aria-labelledby="h-b2"' in depois
+    assert "Nov 22, 2026" in pg_landings._proximas_provas("novo.urace.us", ctx, date(2026, 11, 22)), "no dia da prova ela aparece"
+    assert pg_landings._proximas_provas("novo.urace.us", ctx, date(2027, 4, 1)) == ""
+
+
 def test_avaliacoes_com_link_para_o_google_e_sem_numero_a_mao(cli):
     """Nota e número de avaliações ficam velhos: a página leva ao Google, não escreve "4.9 · 38 reviews"."""
     html = _pagina(cli, "/kart-lessons-for-beginners/")
