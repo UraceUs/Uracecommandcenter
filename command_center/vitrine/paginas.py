@@ -11,6 +11,7 @@ fora do topo; enquanto o site é prévia (`CC_SITE_PREVIEW`), `noindex`.
 import hashlib
 import json
 import os
+import re
 from contextvars import ContextVar
 from functools import lru_cache
 from html import escape
@@ -196,6 +197,28 @@ def _cabecalho(atual):
 </header>"""
 
 
+@lru_cache(maxsize=None)
+def _tamanho_logo(nome):
+    """Largura e altura de um logo de static/img: a do arquivo, ou a do viewBox do SVG (para o `width`/`height`)."""
+    if nome.endswith(".svg"):
+        with open(os.path.join(STATIC, "img", os.path.basename(nome)), encoding="utf-8") as f:
+            caixa = re.search(r'viewBox="[\d.]+ [\d.]+ ([\d.]+) ([\d.]+)"', f.read())
+        return (round(float(caixa[1])), round(float(caixa[2]))) if caixa else (None, None)
+    return tamanho_estatico(nome)
+
+
+def _parceiros():
+    """#511: a faixa do urace.us de 29/10 antes do rodapé: "Powered by" o Orlando Kart Center e os parceiros."""
+    def logo(nome, arq):
+        w, h = _tamanho_logo(arq)
+        return f'<img src="{estatico("img/" + arq)}" alt="{e(nome)}" width="{w}" height="{h}" loading="lazy" decoding="async">'
+    lista = "".join(f"<li>{logo(n, a)}</li>" for n, a in C.PARCEIROS)
+    return f"""<aside class="parceiros" aria-label="Powered by and partners"><div class="parceiros-in">
+  <div class="parceiros-okc"><p class="parceiros-rot">Powered by</p>{logo(*C.POWERED_BY)}</div>
+  <div><p class="parceiros-rot">Partners</p><ul>{lista}</ul></div>
+</div></aside>"""
+
+
 def _rodape():
     end = C.SITE["endereco"]
     # #442: só a 1ª letra maiúscula; o .capitalize() baixava o resto ("Inside the orlando kart center")
@@ -270,6 +293,7 @@ def layout(*, host, caminho, titulo, descricao, corpo, schemas=(), scripts=(), f
 <main id="conteudo">
 {corpo}
 </main>
+{_parceiros()}
 {_rodape()}
 </body>
 </html>"""

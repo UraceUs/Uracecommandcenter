@@ -136,6 +136,12 @@ a mesma página ou um 301. Quem manda um link antigo para um cliente (`/urace-ac
 blog) pode mandar: ninguém cai em "Page not found". A lista e as regras estão em
 `docs/site-publico/comparacao-urace-us.md`, e a comparação
 completa dos dois sites (passo a passo da compra, o que falta no novo, peso e velocidade) também.
+As **landings de campanha** (#506) abrem como páginas próprias, com o texto do urace.us de 29/10 (até então
+eram 301): `/kart-lessons-for-beginners/`, `/kart-driving-school/`, `/kart-training-packages/`,
+`/professional-kart-team-racing-team/`, `/the-driver-factory/` (com o obrigado,
+`/the-driver-factory-thank-you-page/`) e as três do Arrive & Drive, fora do Google:
+`/arrive-and-drive-karting-experience/` (formulário), `/arrive-and-drive-karting-booking/` (leva à reserva do site)
+e `/arrive-and-drive-karting-thank-you/`. O formulário delas cai em Vendas (playbook de vendas, "O que o site vende").
 
 ---
 
@@ -877,6 +883,9 @@ assim como tinhamos no urace.us"*. Em toda página do site:
   teclado (Tab até a setinha e Enter; Esc fecha). Sobre a foto do topo a barra é transparente; ao rolar, fica escura.
 - **Celular:** o ☰ abre o menu em tela cheia; cada grupo abre e fecha no toque. Conta e busca da loja ficam no fim da lista.
 - **Our Services** saiu do topo e continua no rodapé e nas páginas. Nenhum link de antes sumiu do site.
+- **Powered by e parceiros** (#511): antes do rodapé, em toda página, a faixa do urace.us de 29/10 com o logo do
+  Orlando Kart Center e os parceiros (ILX Group, AZ Car Rental, CANOTOPS e Allure Global Events), sem link. Parceiro que
+  entra ou sai muda pelo desenvolvimento (`conteudo.PARCEIROS`, com o logo em `static/img`).
 - **Animações:** botão sobe 2 px e cartão sobe 4 px com sombra (mouse em cima); as seções surgem ao rolar, uma vez;
   os campeões da Career são um carrossel no celular (arrastar ou as setas ‹ ›); o "Book now" pulsa de leve três vezes
   e para. Quem pediu ao celular/computador **menos movimento** (prefers-reduced-motion) vê tudo parado e à mostra.
@@ -933,6 +942,18 @@ como montou o arrive and drive com todas as configurações ajustaveis"*.
   de cada piloto, o sorteio e a waiver. A hora de simulador **não** ocupa a agenda do kart (Disponibilidade).
 - **Os programas mensais** (3x, 2x, 1x por semana) são cartões da página em **Cartões das páginas › SIM2GRID**; o botão
   abre o contato com o programa já escrito (assunto *SIM2GRID racing simulator*).
+
+### Race the Winter 2027 (#505)
+
+`novo.urace.us/winter/` é a página da temporada de inverno, com o texto do urace.us de hoje, capítulo a capítulo: a
+janela (as cinco fases do inverno), o calendário (as sete provas, com filtro: casa, opcionais, a confirmar), o kart peça a
+peça (as oito peças abrem uma a uma; "Part 8 of the kart" abre o capacete), o motor e o **localizador de categoria**
+(data de nascimento → idade de corrida em 1º/01/2027 → as classes da SKUSA abertas), o formulário **Build your winter**
+(cai em Vendas, playbook de vendas, seção 5), o pacote dentro e fora da pista e a **estimativa**:
+a diária do kart de *Site › Serviços e preços* × os dias de teste que cabem na estadia (o resto é "quoted per event" ou
+"quoted separately"). O que a página de hoje tinha e saiu: o circuito em 3D e os três vídeos curtos (moram no WordPress;
+a vitória continua no link do Instagram). O que lá está escondido também não sai aqui ("We bring everything", a ficha da
+temporada e o "Next step"). Sem JavaScript a página mostra tudo; com "menos movimento" nada se mexe.
 
 ### Painel do site (#306)
 

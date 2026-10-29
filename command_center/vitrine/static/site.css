@@ -268,6 +268,14 @@ address { font-style: normal }
 .agenda-nota { color: var(--cinza); font-size: .82rem }
 
 /* --------------------------------------------------------------- rodapé */
+/* #511: "Powered by" e os parceiros, antes do rodapé, como no urace.us de 29/10 */
+.parceiros { background: var(--branco); color: var(--tinta); border-top: 1px solid #e3e3ea; padding: 28px 16px }
+.parceiros-in { max-width: var(--largura); margin: 0 auto; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 24px 40px }
+.parceiros-rot { margin: 0 0 10px; font: 600 .72rem/1.2 var(--condensada); letter-spacing: .16em; text-transform: uppercase; color: var(--cinza) }
+.parceiros-okc img { display: block; height: 52px; width: auto }
+.parceiros ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 32px }
+.parceiros li img { display: block; width: auto; height: auto; max-height: 30px; max-width: 150px }
+@media (min-width: 760px) { .parceiros-okc { padding-right: 40px; border-right: 1px solid #e3e3ea } }
 .rodape { background: #000; color: #fff; padding: 48px 16px 24px }
 .rodape-in { max-width: var(--largura); margin: 0 auto; display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr) }
 @media (min-width: 760px) { .rodape-in { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) } }
@@ -802,6 +810,184 @@ body:has(> main > .hero:first-child) main > .hero-sim:first-child .hero-in { pad
 .contador strong { font: 800 clamp(1.6rem, 7vw, 2.6rem)/1 var(--titulo); font-stretch: 125%; color: #fff; font-variant-numeric: tabular-nums }
 .contador span { color: var(--cinza-claro); font-size: .85rem }
 .largura > .numeros { max-width: none; margin: 0 }   /* dentro da faixa: as colunas cabem na largura do celular */
+
+/* ------------------------------------------------------------ Race the Winter 2027 (#505)
+ * As peças que só a /winter/ tem. Os botões de escolha e as contas aparecem com o `winter.js`; sem ele, a página mostra
+ * tudo (as três origens, as sete provas, as classes da SKUSA e a diária de cada kart). Motion: só transform/opacity. */
+.winter-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
+.winter-chips-rotulo { font-weight: 700; margin-right: 4px }
+.winter-chip { min-height: 44px; padding: 8px 16px; border: 1.5px solid #d9d9e1; border-radius: 999px; background: #fff; color: var(--tinta);
+  font: 600 .92rem/1.2 var(--texto); cursor: pointer; transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
+.escura .winter-chip { background: transparent; color: #fff; border-color: rgba(255,255,255,.45) }
+.winter-chip[aria-pressed="true"] { background: var(--vermelho); border-color: var(--vermelho); color: #fff }
+.winter-chip:active { transform: scale(.97) }
+.winter-kicker { font-weight: 800; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--cinza) }
+.escura .winter-kicker { color: var(--cinza-claro) }
+.winter-tag { justify-self: start; align-self: start; display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px;
+  border: 1.5px solid transparent; border-radius: 999px; background: var(--papel); color: var(--tinta); font-size: .78rem; font-weight: 700; white-space: nowrap }
+.winter-tag-home { background: var(--vermelho); color: #fff }
+.winter-tag-tbc { background: transparent; border-style: dashed; border-color: var(--cinza) }
+.escura .winter-tag-opt { background: var(--linha); color: #fff }
+.escura .winter-tag-tbc { color: #fff; border-color: var(--cinza-claro) }
+
+/* o topo: de onde a pessoa vem */
+.winter-origem { padding-top: 26px; padding-bottom: 26px }
+.winter-origem .largura { gap: 14px }
+.winter-origem-linhas { margin: 0; display: grid; gap: 12px; max-width: 72ch }
+.winter-origem-linhas div { display: grid; gap: 2px }
+.winter-origem-linhas dt { font-weight: 700; color: var(--vermelho-2) }
+.winter-origem-linhas dd { margin: 0; color: #e2e2ea }
+.winter-origem-linhas strong { color: #fff }
+
+/* a palavra do fundador */
+.winter-citacao { margin: 0; display: grid; gap: 18px; grid-template-columns: minmax(0, 1fr); align-items: center }
+.winter-citacao img { width: min(240px, 70%); border-radius: 14px; aspect-ratio: 5 / 6; object-fit: cover }
+.winter-citacao blockquote { background: none; border: 0; border-radius: 0; padding: 0; gap: 14px }
+.winter-citacao-grande { font: 800 clamp(1.5rem, 5vw, 2.5rem)/1.12 var(--titulo); font-stretch: 125%; text-wrap: balance }
+.winter-citacao-grande span { color: var(--vermelho) }
+.winter-citacao blockquote p + p { color: #3c3d50; font-size: 1.05rem; max-width: 62ch }
+.winter-citacao figcaption { display: grid; gap: 2px }
+.winter-citacao figcaption span { color: var(--cinza) }
+@media (min-width: 760px) {
+  .winter-citacao { grid-template-columns: 260px minmax(0, 1fr); column-gap: 48px }
+  .winter-citacao img { width: 100%; grid-row: 1 / span 2 }
+}
+
+/* o calendário */
+.winter-rodadas .cartao { gap: 4px }
+.winter-quando { color: var(--vermelho); font-weight: 800; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase }
+.cartao .winter-quando { color: var(--vermelho) }
+.winter-decisiva::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: currentColor; vertical-align: 1px }
+.cartao .winter-data { font: 800 1.35rem/1.15 var(--titulo); font-stretch: 125%; color: var(--tinta) }
+.winter-provas { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px }
+.winter-provas li { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 6px 14px; padding: 14px; border: 1.5px solid #e3e3ea; border-radius: var(--raio) }
+.winter-provas li[data-tipo="home"] { border-color: var(--vermelho) }
+.winter-prova-dia { display: grid; align-content: start; line-height: 1.15 }
+.winter-prova-dia strong { font: 800 1.7rem/1 var(--titulo); font-stretch: 125%; font-variant-numeric: tabular-nums }
+.winter-prova-dia span { color: var(--cinza); font-size: .78rem; font-weight: 600 }
+.winter-prova-txt { display: grid; gap: 4px; min-width: 0 }
+.winter-prova-nome { font-weight: 700 }
+.winter-prova-txt p + p { color: #3c3d50; font-size: .92rem }
+.winter-provas .winter-tag { grid-column: 2 }
+@media (min-width: 760px) {
+  .winter-provas li { grid-template-columns: 72px minmax(0, 1fr) auto; align-items: start }
+  .winter-provas .winter-tag { grid-column: 3; grid-row: 1 }
+}
+.winter-nota { border-left: 3px solid var(--vermelho); padding-left: 14px; display: grid; gap: 4px; max-width: 72ch }
+.winter-nota p + p { color: #3c3d50 }
+
+/* o kart, peça a peça (sem o desenho interativo), e a equipe */
+.winter-maquina-grade { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 900px) { .winter-maquina-grade { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: start } }
+.winter-pecas { display: grid; gap: 8px; min-width: 0 }
+.winter-peca { border: 1.5px solid #e3e3ea; border-radius: var(--raio); padding: 0 14px; background: #fff }
+.winter-peca[open] { border-color: var(--tinta) }
+.winter-peca > summary { list-style: none; min-height: 56px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 12px;
+  padding: 10px 0; cursor: pointer }
+.winter-peca > summary::-webkit-details-marker { display: none }
+.winter-peca-n { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--tinta); color: #fff; font-weight: 800;
+  font-variant-numeric: tabular-nums }
+.winter-peca[open] .winter-peca-n { background: var(--vermelho) }
+.winter-peca-t { display: grid; gap: 1px; min-width: 0 }
+.winter-peca-t small { color: var(--cinza); font-size: .85rem; line-height: 1.35 }
+.winter-peca-corpo { display: grid; gap: 12px; padding: 0 0 16px; color: #3c3d50 }
+@media (min-width: 600px) { .winter-peca-corpo { padding-left: 46px } }
+.winter-quem { margin: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)) }
+.winter-quem div { display: grid; gap: 2px; background: var(--papel); border-radius: 8px; padding: 10px 12px }
+.winter-quem dt { color: var(--vermelho); font-weight: 800; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase }
+.winter-quem dd { margin: 0; color: var(--tinta) }
+.winter-foto { margin: 0; display: grid; gap: 8px; align-content: start; min-width: 0 }
+.winter-foto img { width: 100%; border-radius: var(--raio) }
+.winter-foto figcaption { color: var(--cinza); font-size: .9rem }
+.winter-duo { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 700px) { .winter-duo { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+.winter-duo img { aspect-ratio: 4 / 3; object-fit: cover }
+
+/* o motor e o localizador de categoria */
+.winter-motores { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)) }
+.winter-motor { display: grid; gap: 8px; align-content: start; background: var(--preto-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 18px }
+.winter-motor.padrao { border-color: var(--vermelho-2); box-shadow: inset 0 3px 0 var(--vermelho-2) }
+.winter-motor h3 { font-size: 1.4rem }
+.winter-motor-sub { color: var(--vermelho-2); font-weight: 700; font-size: .9rem }
+.winter-motor p:not([class]) { color: var(--cinza-claro) }
+.winter-categorias { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); margin-top: 18px }
+@media (min-width: 900px) { .winter-categorias { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); align-items: start } }
+.winter-categorias-texto { display: grid; gap: 12px; color: #e2e2ea }
+.winter-categorias-texto h3 { font-size: 1.2rem; color: #fff }
+.winter-calc { display: grid; gap: 14px; min-width: 0; background: var(--preto-2); border: 1px solid var(--linha); border-radius: 14px; padding: 18px }
+.winter-calc-campos { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 600px) { .winter-calc-campos { grid-template-columns: repeat(3, minmax(0, 1fr)) } }
+.winter-calc label { display: grid; gap: 4px; min-width: 0; font-weight: 600; font-size: .92rem }
+.winter-calc label:has(> .opcional) { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .3em; row-gap: 4px }
+.winter-calc label:has(> .opcional) > .winter-unidade { flex-basis: 100% }
+.winter-calc .opcional { color: var(--cinza-claro) }
+.winter-calc input, .winter-calc select { width: 100%; min-width: 0; min-height: 46px; padding: 10px 12px; border: 1.5px solid #d9d9e1; border-radius: 8px;
+  font: 400 1rem/1.4 var(--texto); color: var(--tinta); background: #fff }
+.winter-calc input:focus, .winter-calc select:focus { border-color: var(--vermelho-2); outline: none; box-shadow: 0 0 0 3px rgba(255,80,81,.25) }
+.winter-unidade { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 6px }
+.winter-idade { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px }
+.winter-idade strong { font: 800 2.6rem/1 var(--titulo); font-stretch: 125%; font-variant-numeric: tabular-nums }
+.winter-idade span { color: var(--cinza-claro) }
+.winter-classes { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(190px, 100%), 1fr)) }
+.winter-classes li { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--linha); border-radius: var(--raio); color: var(--cinza-claro);
+  font-size: .85rem; transition: opacity var(--dur) var(--curva) }
+.winter-classes strong { color: #fff; font-size: .98rem }
+.winter-calc.com-idade .winter-classes li { opacity: .5 }
+.winter-calc.com-idade .winter-classes li.aberta { opacity: 1; border-color: var(--vermelho-2); box-shadow: inset 3px 0 0 var(--vermelho-2) }
+.winter-dica { color: #e2e2ea }
+.winter-dica:empty { display: none }
+
+/* o plano no formulário */
+.winter-duas { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 600px) { .winter-duas { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+.form-contato .winter-opcoes { display: grid; gap: 2px; padding: 8px 14px 10px }
+.form-contato label.winter-opcao { align-items: flex-start; font-weight: 400; padding: 8px 0 }
+.form-contato label.winter-opcao input { margin-top: 2px }
+.winter-opcao span { display: grid; gap: 1px; min-width: 0 }
+.winter-opcao strong { font-weight: 700 }
+.winter-opcao small { color: var(--cinza); font-size: .82rem }
+.winter-resumo { display: grid; gap: 12px; border: 1.5px solid #e3e3ea; border-radius: var(--raio); padding: 14px }
+.winter-resumo-t { color: var(--cinza); font-weight: 800; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase }
+.winter-resumo-n { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; text-align: center }
+.winter-resumo-n div { display: flex; flex-direction: column-reverse; gap: 4px }
+.winter-resumo-n dt { color: var(--cinza); font-size: .8rem }
+.winter-resumo-n dd { margin: 0; font: 800 1.7rem/1 var(--titulo); font-stretch: 125%; font-variant-numeric: tabular-nums }
+.winter-alertas { margin: 0; padding: 10px 12px 10px 28px; display: grid; gap: 4px; color: #8a4b00; background: #fff4e5; border-radius: 8px; font-size: .88rem }
+
+/* a estimativa: a diária do kart (do painel) × os dias de teste */
+.winter-estimativa { display: grid; gap: 22px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 900px) { .winter-estimativa { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start } }
+.winter-est-esq { display: grid; gap: 18px; min-width: 0 }
+.winter-karts { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0 }
+.winter-karts legend { font-weight: 700; padding: 0; margin-bottom: 8px }
+.winter-kts { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)) }
+@media (min-width: 600px) { .winter-kts { grid-template-columns: repeat(4, minmax(0, 1fr)) } }
+.winter-kt { min-height: 60px; display: grid; gap: 2px; align-content: center; padding: 10px 12px; border: 1.5px solid var(--linha); border-radius: var(--raio);
+  background: var(--preto-2); color: #fff; font: 700 .92rem/1.2 var(--texto); text-align: left; cursor: pointer;
+  transition: transform var(--dur) var(--curva), opacity var(--dur) var(--curva) }
+.winter-kt small { color: var(--cinza-claro); font-weight: 500; font-size: .78rem; font-variant-numeric: tabular-nums }
+.winter-kt[aria-pressed="true"] { border-color: var(--vermelho-2); box-shadow: 0 0 0 3px rgba(255,80,81,.22) }
+.winter-kt:active { transform: scale(.98) }
+.winter-testes { display: grid; gap: 6px }
+.winter-testes label { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; font-weight: 600 }
+.winter-testes strong { font: 800 1.4rem/1 var(--titulo); font-stretch: 125%; font-variant-numeric: tabular-nums }
+.winter-testes input { grid-column: 1 / -1; width: 100%; min-height: 40px; accent-color: var(--vermelho) }
+.winter-linhas { display: grid; border-top: 1px solid var(--linha) }
+.winter-linhas > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 14px; padding: 12px 0; border-bottom: 1px solid var(--linha) }
+.winter-linhas span { display: grid; gap: 2px; min-width: 0; font-weight: 600 }
+.winter-linhas small { color: var(--cinza-claro); font-weight: 400; font-size: .82rem }
+.winter-linhas b { text-align: right; font-variant-numeric: tabular-nums }
+.winter-opcional b { max-width: 11em; color: var(--cinza-claro); font-weight: 500; font-size: .85rem }
+.winter-letra-miuda { color: var(--cinza-claro) }
+.winter-total { display: grid; gap: 10px; align-content: start; min-width: 0; background: var(--preto-2); border: 1px solid var(--linha); border-radius: 14px; padding: 20px }
+@media (min-width: 900px) { .winter-total { position: sticky; top: 76px } }
+.winter-total-t { color: var(--cinza-claro); font-weight: 800; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase }
+.winter-total-v { font: 800 clamp(2.2rem, 9vw, 3rem)/1 var(--titulo); font-stretch: 125%; font-variant-numeric: tabular-nums }
+.winter-total-v span { color: var(--vermelho-2); margin-right: 4px }
+.winter-total a:not(.btn) { color: #fff }
+@media (prefers-reduced-motion: reduce) {
+  .winter-chip:active, .winter-kt:active { transform: none }
+}
 
 /* ------------------------------------------------------------ home, About e Programs por blocos (#507) */
 /* as fotos de lá vêm em proporções diferentes: na mesma fileira de cartões, a mesma altura */

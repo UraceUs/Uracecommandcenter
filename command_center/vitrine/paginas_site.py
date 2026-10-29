@@ -1726,7 +1726,8 @@ def redirecionamentos():
     for antigo, novo in ALIAS_LOJA.items():
         r[f"/product-category/{antigo}/"] = f"/store/{novo}/"
     r["/product-category/apparel/suits/"] = "/store/custom-kart-suits/"
-    for c in ("/lp1-cancelada/", "/lp2-cancelada/", "/lp3-cancelada/", "/lp4-cancelada/", "/typ/", "/the-driver-factory-thank-you-page/"):
+    # #506: o /the-driver-factory-thank-you-page/ é o obrigado da The Driver Factory de novo (pg_landings.py)
+    for c in ("/lp1-cancelada/", "/lp2-cancelada/", "/lp3-cancelada/", "/lp4-cancelada/", "/typ/"):
         r[c] = "/career/"
     # #262 (dono, 15/10): o programa de afiliados "encerra". Os endereços do SliceWP que o urace.us
     # publica não podem cair no 404 nem levar a uma tela que promete afiliação: vão para o /contact/,

@@ -46,6 +46,12 @@ SITE = {
                "https://www.google.com/maps/place/Urace+-+Kart+team+and+school/@28.4108348,-81.377619,17z"),
 }
 
+# #511: a faixa antes do rodapé do urace.us de 29/10: "Powered by" o Orlando Kart Center e os parceiros, com o nome e o
+# logo como estão lá (sem link). Os logos moram em static/img.
+POWERED_BY = ("Orlando Kart Center", "parceiro-orlando-kart-center.webp")
+PARCEIROS = (("ILX Group", "parceiro-ilx-group.svg"), ("AZ Car Rental", "parceiro-az-car-rental.svg"),
+             ("CANOTOPS", "parceiro-canotops.webp"), ("Allure Global Events", "parceiro-allure.webp"))
+
 # O site inteiro mora aqui (#164): nenhum link do menu volta ao WordPress.
 ANTIGO = "https://urace.us"
 # #207: os rótulos do menu do urace.us de 13/10, nos caminhos do site novo. "Events" (um submenu sem

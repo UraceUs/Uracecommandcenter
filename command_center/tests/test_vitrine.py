@@ -134,12 +134,13 @@ def test_nenhum_link_volta_ao_wordpress_e_nenhum_link_interno_quebra(cli):
     assert not quebrados
 
 
+# #506: /kart-training-packages/, /professional-kart-team-racing-team/ e /the-driver-factory/ são páginas próprias de novo
+# (as landings do urace.us, `pg_landings.py`): não redirecionam mais (test_landings.py confere)
 @pytest.mark.parametrize("antigo, novo", [
-    ("/kart-training-packages/", "/academy/"),
+    ("/urace-academy/", "/academy/"),
     ("/services/kart-school/", "/academy/"),                       # #254: virou a URACE Academy
     ("/services/professional-coaching/", "/services/arrive-and-drive/"),   # #254: virou o Arrive and Drive
-    ("/professional-kart-team-racing-team/", "/pro-team/"),
-    ("/the-driver-factory/", "/career/"),
+    ("/plan-your-career/", "/career/"),
     ("/shop/", "/store/"),
     ("/product-category/engines/", "/store/engines/"),
     ("/book-online/", "/services/arrive-and-drive/"),      # #252: página indexada vai para página pública

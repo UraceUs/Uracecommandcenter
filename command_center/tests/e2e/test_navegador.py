@@ -2038,6 +2038,51 @@ def test_site_novo_404_com_saida_no_celular(servidor, navegador, largura):
     pg.close()
 
 
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_site_winter_localizador_e_estimativa_no_celular(servidor, navegador, largura):
+    """#505: a /winter/ (Race the Winter 2027). O localizador acha a idade de corrida em 1º de janeiro de 2027 e acende as
+    classes da SKUSA (e a idade vai para o formulário); a estimativa é a diária do kart do painel × os dias de teste que
+    cabem na estadia; nada rola para o lado e todo alvo de toque tem ≥ 40 px."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 800}, reduced_motion="reduce")
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    pg.goto(site + "/winter/"); pg.wait_for_load_state("networkidle")
+    assert [t for n, t in _cabecalhos(pg) if n == 1] == ["Race the winter"]
+
+    # o localizador: quem nasceu em 10/06/2014 tem 12 anos de corrida em 1º/01/2027
+    pg.locator("[data-dob]").fill("2014-06-10")
+    assert pg.locator("[data-idade]").inner_text() == "12"
+    assert pg.locator(".winter-classes li.aberta strong").all_inner_texts() == ["Mini Swift", "KA100 Junior", "X30 Junior"]
+    assert pg.locator("[data-idade-campo]").input_value() == "12", "a idade vai para o formulário, à vista"
+
+    # a estimativa: 2-stroke (o padrão de 7 anos para cima) × 6 dos 18 dias de teste entre 11/01 e 14/02
+    usd = lambda v: f"${v:,.0f}" if float(v).is_integer() else f"${v:,.2f}"     # noqa: E731
+    kart = pg.locator('[data-kt][aria-pressed="true"]')
+    assert kart.get_attribute("data-kt") == "2s"
+    preco = float(kart.get_attribute("data-preco"))
+    assert pg.locator("[data-n-testes]").inner_text() == "18" and pg.locator("[data-testes-v]").inner_text() == "6"
+    assert pg.locator("[data-total]").inner_text() == usd(6 * preco)
+    shifter = pg.locator('[data-kt="shift"]')
+    shifter.click()
+    assert pg.locator("[data-total]").inner_text() == usd(6 * float(shifter.get_attribute("data-preco")))
+    # a volta em 24/01 deixa só a 1ª janela de teste (19–21/01) dentro da estadia
+    pg.locator("[data-volta]").select_option(label="Sunday 24 Jan")
+    assert pg.locator("[data-testes-v]").inner_text() == "3"
+    assert "Some weekends fall outside your stay. Stretch the dates or drop them." in pg.locator("[data-alertas]").inner_text()
+
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    menor = pg.evaluate("""() => [...document.querySelectorAll('main a, main button, header a, header summary')]
+        .filter(e => e.offsetParent !== null && !e.closest('p, li, dd, address'))
+        .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+        .filter(([h]) => h < 40)""")
+    assert not menor, menor
+    assert not erros, erros
+    pg.close()
+
+
 _ALVOS_DO_TOPO = """(sel) => [...document.querySelectorAll(sel)]
     .filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' })
     .map(e => [Math.round(e.getBoundingClientRect().height), (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 24)])
@@ -2274,6 +2319,71 @@ def test_formulario_de_interesse_manda_o_radio_marcado_e_o_evento_de_conversao(s
     nota = con.execute("SELECT notes FROM opportunities WHERE email=?", ("rui.radio.e2e@example.com",)).fetchone()[0]
     con.close()
     assert "Session: Without coaching" in nota and "With coaching" not in nota
+    assert not erros, erros
+
+
+# #506: as landings do urace.us (as quatro de anúncio, as três do Arrive & Drive e a Driver Factory com o obrigado)
+LANDINGS_506 = ("/kart-lessons-for-beginners/", "/kart-driving-school/", "/kart-training-packages/",
+                "/professional-kart-team-racing-team/", "/arrive-and-drive-karting-experience/",
+                "/arrive-and-drive-karting-booking/", "/arrive-and-drive-karting-thank-you/", "/the-driver-factory/",
+                "/the-driver-factory-thank-you-page/")
+
+
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_landings_do_urace_us_um_h1_sem_rolagem_e_alvo_de_toque(servidor, navegador, largura):
+    """#506: cada landing abre nela mesma (não é mais 301 nem 404), com um h1, sem rolar para o lado no celular e com
+    botão de 40 px, sem erro de JavaScript."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 800})
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    problemas = []
+    for rota in LANDINGS_506:
+        pg.goto(site + rota); pg.wait_for_load_state("networkidle")
+        if not pg.url.endswith(rota):
+            problemas.append(f"{rota}: foi para {pg.url}")
+        h1 = [t for n, t in _cabecalhos(pg) if n == 1]
+        if len(h1) != 1:
+            problemas.append(f"{rota}: {len(h1)} h1")
+        r = pg.evaluate(_VAZA)
+        if r["rola"] or r["culpados"]:
+            problemas.append(f"{rota}: rola {r['culpados']}")
+        menor = pg.evaluate("""() => [...document.querySelectorAll('main a, main button, main label.opcao, header a, header summary')]
+            .filter(e => e.offsetParent !== null && !e.closest('p, li, dd, address'))   // link no meio do texto não é botão
+            .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+            .filter(([h]) => h < 40)""")
+        if menor:
+            problemas.append(f"{rota}: alvo de toque < 40 px {menor[:3]}")
+    pg.close()
+    assert not problemas, "\n".join(problemas)
+    assert not erros, erros
+
+
+def test_landing_do_arrive_and_drive_no_celular_manda_o_formulario_e_vai_ao_obrigado(servidor, navegador):
+    """#506: no celular, o formulário da landing do Arrive & Drive pede o que a página de hoje pede, cai em Vendas com as
+    respostas na nota e leva ao obrigado (a campanha conta a conversão pela URL, como no urace.us)."""
+    import sqlite3
+    site = servidor.removesuffix("/ops")
+    v = navegador.new_page(viewport={"width": 390, "height": 844})
+    erros = []
+    v.on("pageerror", lambda e: erros.append(str(e)))
+    v.goto(site + "/arrive-and-drive-karting-experience/")
+    v.get_by_role("link", name="Plan my first track day").first.click()      # o botão do topo desce ao pedido
+    v.get_by_label("Full name").fill("Lia Pista")
+    v.get_by_label("Email").fill("lia.pista.e2e@example.com")
+    v.locator("select[name=x_experience_for]").select_option("My child")
+    v.get_by_label("Driver’s age").fill("9")
+    v.locator("select[name=x_karting_experience]").select_option("None, this would be my first time")
+    v.get_by_role("button", name="Email my track-day inquiry").click()
+    v.wait_for_url("**/arrive-and-drive-karting-thank-you/")
+    v.get_by_role("heading", level=1, name="Thanks! Your inquiry is on its way.").wait_for()
+    v.close()
+    con = sqlite3.connect(BANCO)
+    o = con.execute("SELECT service, notes FROM opportunities WHERE email=?", ("lia.pista.e2e@example.com",)).fetchone()
+    con.close()
+    assert o[0] == "Arrive and Drive"
+    assert "Experience for: My child" in o[1] and "Driver age: 9" in o[1] and "Karting experience: None" in o[1]
     assert not erros, erros
 
 

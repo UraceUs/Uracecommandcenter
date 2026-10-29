@@ -145,7 +145,7 @@ sem dano ao kart; dano acima do depósito é cobrado à parte.
 | Fechar venda | **Fechar venda** | cada passo com "feito", "aguardando" ou "falhou"; auditoria `sales.close` |
 | Pagamento | QuickBooks → espelho do painel | o espelho sincroniza a cada 15 min |
 | Waiver | DocuSign ou área do cliente | `sent` → `completed`. **`delivered` não é assinada** |
-| Contato ou pedido pelo site | `/contact/` e a loja | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260). Limite contra robô: 8 envios por conexão a cada 10 min e 6 por hora para o mesmo e-mail (#438); passou disso, o site pede para tentar mais tarde |
+| Contato ou pedido pelo site | `/contact/`, a loja e as landings de campanha (#506) | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260). Limite contra robô: 8 envios por conexão a cada 10 min e 6 por hora para o mesmo e-mail (#438); passou disso, o site pede para tentar mais tarde |
 | Chat do site | balão do Kommo nas páginas públicas (#170) | a conversa vira lead no Kommo, como no site antigo, e aparece no Chat do Kommo; responda por lá |
 
 ### As etapas e o que move cada uma
@@ -861,6 +861,23 @@ Preço, sempre da **planilha de preços** do dono (15/10, #273). A taxa de pista
 
 Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: não estão na planilha.
 
+**Landings de campanha (#506, dono 29/10: *"sim, pode trazer o texto"*):** os endereços que a home e os anúncios do
+urace.us usam abrem no site novo com o texto de lá, e o formulário de cada uma entra em **Vendas** (origem Site, com
+a campanha), no serviço da página. As respostas do formulário ficam na nota da oportunidade, uma por linha:
+
+| Landing | Serviço em Vendas | O que a nota traz |
+|---|---|---|
+| `/kart-lessons-for-beginners/`, `/kart-driving-school/` | Arrive and Drive | *Address*, *Option* (A: só experimentar · B: entrar na Academy · C: Racing Team · D: sem orçamento agora), *Previous experience* |
+| `/kart-training-packages/` | URACE Academy | idem |
+| `/professional-kart-team-racing-team/` | Racing Team | idem |
+| `/the-driver-factory/` | URACE Academy | idem; depois de enviar, a pessoa vai para `/the-driver-factory-thank-you-page/` |
+| `/arrive-and-drive-karting-experience/` | Arrive and Drive | *Experience for* (para quem é), *Driver age*, *Karting experience* e a mensagem; depois de enviar, `/arrive-and-drive-karting-thank-you/` |
+
+A **opção** é o que pesa: A é Arrive and Drive, B é Academy, C é Racing Team — mesmo quando o serviço da
+oportunidade é o da página. `/arrive-and-drive-karting-booking/` não tem formulário: o botão leva à reserva do site
+(`/services/arrive-and-drive/#reservar`). O **URACE Boost** que o urace.us ainda mostra nas landings da Academy e do
+Racing Team fica de fora no site novo, como na `/academy/` e no `/pro-team/`: não está na planilha (#273).
+
 **Na reserva do site** (#279, dono 15/10):
 - **Lead and Follow** é uma caixinha ao lado do kart: *Add Lead and Follow (+$769)*. Vai para o carrinho
   como linha própria, é pago no Stripe junto com a sessão, e a sessão agendada mostra nas notas
@@ -918,6 +935,26 @@ sem coach **$50/h** seg–sex 7h–17h, **$75/h** seg–sex 18h–24h e **$90/h*
 - **Dia de piloto × dia de diversão**: o calendário pode mostrar o selo do dia (ex.: **🏁 Pilot day**, **🎮 Fun night**)
   que a equipe define em Site › Sim2Grid › Etiqueta do dia. Use o selo na conversa: para quem treina, ofereça o dia de
   piloto; para quem quer se divertir com amigos, a noite de diversão. Enquanto ninguém definir, não há selo.
+
+### Race the Winter 2027: a temporada de inverno (#505)
+
+A página `novo.urace.us/winter/` (a mesma do urace.us, refeita com o texto de lá) vende a temporada de janeiro a março de
+2027: as quatro rodadas da SKUSA Winter Series no Orlando Kart Center (15–17/01 e 12–14/02), as provas opcionais, os dias
+de teste e o que a URACE arranja fora da pista. O que chega em Vendas:
+
+- **"Build your winter"** é um formulário: cada envio vira oportunidade **Racing Team**, origem **Site**, com o plano na
+  nota, uma linha por campo — `Season: Winter Season 2027`, o piloto (primeiro nome), de onde vem, a idade de corrida em
+  1º/01/2027 e o peso com equipamento (quando a pessoa preencheu), os fins de semana marcados (`Weekend 1: 15–17 Jan ·
+  SKUSA Winter Series · Rounds 1 & 2`…), a chegada, a volta, a base (hotel) e os opcionais (`Concierge: Yes`…). A equipe
+  liga e monta o plano de verdade: classe, motor, dias de teste e inscrições.
+- **A estimativa da página** é só a diária do kart do Arrive and Drive (o preço de *Site › Serviços e preços*) × os dias
+  de teste escolhidos. O apoio do fim de semana de corrida ("quoted per event"), inscrição, pneu, passe da pista, viagem e
+  os opcionais **não** entram no número. Mudou a diária no painel, a página muda junto.
+- O **localizador de categoria** usa as classes da SKUSA Winter 2026 (as de 2027 a SKUSA confirma antes da inscrição): a
+  classe e o motor continuam sendo escolha da equipe.
+- O link personalizado de antes continua valendo: `…/winter/?driver=Nome&from=europe` (ou `north`, `other`) abre a
+  página com o nome do piloto no formulário e a origem marcada.
+- "Get the real quote" abre a agenda do Lucas (Google Calendar); o e-mail da página é `lucas@urace.us`.
 
 ### 5.1 Carrinho do site e pagamento no Stripe (#236)
 
