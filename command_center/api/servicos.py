@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from command_center.api import auth
-from command_center.db import agora, auditar, get_db, um
+from command_center.db import agora, auditar, get_db, status_da_waiver, um
 
 r = APIRouter(prefix="/ops/api/tasks", tags=["servicos"])
 
@@ -239,8 +239,10 @@ def servico(tid: int, u=Depends(auth.exige("OPERATOR")), con: sqlite3.Connection
         c = um(con, "SELECT * FROM clients WHERE id=?", (t["client_id"],))
         if c:
             dados = rotas_clientes.dados_do_cliente(con, c)
-            w = um(con, """SELECT status, expires_at FROM waivers WHERE client_id=? ORDER BY COALESCE(completed_at, sent_at) DESC LIMIT 1""",
-                   (c["id"],))
+            # a assinada que vale (não anulada) vem primeiro, como no card do cliente; a anulada aparece como `voided`
+            sv = status_da_waiver("w")
+            w = um(con, f"""SELECT {sv} AS status, w.expires_at FROM waivers w WHERE w.client_id=?
+                            ORDER BY ({sv} = 'completed') DESC, COALESCE(w.completed_at, w.sent_at) DESC LIMIT 1""", (c["id"],))
             m = dados["medidas"]
             cliente = {"id": c["id"], "nome": c["name"], "piloto": c["pilot_name"], "nascimento": c["pilot_dob"], "vip": bool(c["vip"]),
                        "classe": dados["classe"], "waiver": dict(w) if w else None,
