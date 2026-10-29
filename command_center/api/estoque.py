@@ -316,7 +316,11 @@ def rota_saida(dados: MoverIn, request: Request, con: sqlite3.Connection = Depen
     # Peça DA URACE usada no kart de um cliente vira cobrança dele (dono, 29/09: o preço final
     # "vai entrar na invoice daquele cliente que usar aquela peça"). Peça que já era do cliente
     # não se cobra: é dele.
-    cobra = bool(dados.para_cliente_id) and not dados.client_id
+    dono = dados.client_id
+    if dados.unit_id:                  # ficha individual: o dono é o da unidade, não o que veio no pedido
+        un = um(con, "SELECT client_id FROM stock_units WHERE id=? AND item_id=?", (dados.unit_id, dados.item_id))
+        dono = un["client_id"] if un else dono
+    cobra = bool(dados.para_cliente_id) and not dono
     try:
         with transacao(con):
             res = estoque.saida(con, dados.item_id, qty=dados.qty, unit_id=dados.unit_id,
