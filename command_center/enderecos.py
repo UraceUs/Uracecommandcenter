@@ -11,6 +11,10 @@ tenham a url urace.us"*.
   ele recebe as respostas com o próprio endereço, para o login não se perder no meio.
 
 Um `Host` que não é nosso nunca vira link (injeção de cabeçalho): cai no principal.
+
+O site público (#148) tem os nomes de `CC_SITE_HOSTS`, hoje `novo.urace.us` (a prévia). Na troca do
+domínio (#462) entram `urace.us` e `www.urace.us`, e `CC_SITE_PRINCIPAL=urace.us` diz qual deles vai
+nos links e para onde os outros levam (301).
 """
 import os
 from urllib.parse import urlsplit
@@ -18,6 +22,7 @@ from urllib.parse import urlsplit
 PAINEL = "ops.urace.us"
 CLIENTE = "my.urace.us"
 ANTIGO = "urace-bridge.duckdns.org"
+SITE_PREVIA = "novo.urace.us"
 
 
 def _host(valor):
@@ -61,3 +66,20 @@ def host_da_requisicao(request):
 
 def base_da_requisicao(request):
     return f"https://{host_da_requisicao(request)}"
+
+
+def site_hosts():
+    """Os nomes do site público, na ordem de `CC_SITE_HOSTS` (por padrão, a prévia)."""
+    nomes = [_host(h) for h in os.environ.get("CC_SITE_HOSTS", SITE_PREVIA).split(",")]
+    return [h for i, h in enumerate(nomes) if h and h not in nomes[:i]] or [SITE_PREVIA]
+
+
+def site_redireciona():
+    """#462: o nome para onde os outros nomes do site levam (301), quando `CC_SITE_PRINCIPAL` é um deles."""
+    p = _host(os.environ.get("CC_SITE_PRINCIPAL"))
+    return p if p in site_hosts() else None
+
+
+def site_principal():
+    """O nome do site que vai nos links: o de `CC_SITE_PRINCIPAL`; sem ele, o primeiro de `CC_SITE_HOSTS`."""
+    return site_redireciona() or site_hosts()[0]

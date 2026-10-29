@@ -80,6 +80,20 @@ def e_do_site(request):
     return host_de(request) in hosts()
 
 
+def endereco_principal(request):
+    """#462: na troca do domínio, `www.urace.us` e `novo.urace.us` levam a `urace.us` (`CC_SITE_PRINCIPAL`) com o
+    mesmo caminho e a mesma query (301), para o Google guardar um endereço só. Só GET/HEAD (um formulário enviado no
+    meio da troca não se perde) e nunca a API: a página aberta antes da troca continua falando com o próprio nome.
+    None quando não há o que mudar — sem a variável, a prévia continua como está."""
+    from command_center import enderecos
+    principal = enderecos.site_redireciona()
+    host = host_de(request)
+    if (not principal or host == principal or host not in hosts() or request.method not in ("GET", "HEAD")
+            or request.url.path.startswith("/ops/api/")):
+        return None
+    return f"https://{principal}{request.url.path}" + (f"?{request.url.query}" if request.url.query else "")
+
+
 def _html(conteudo, status=200):
     # #260: a política abre os hosts da medição só quando a página realmente levou o bloco dela —
     # assim a permissão nunca é maior do que o HTML usa, sem passar o caminho por oito chamadas
