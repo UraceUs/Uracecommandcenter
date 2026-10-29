@@ -697,3 +697,26 @@ kbd.k{font-family:var(--mono);font-size:11px;border:1px solid var(--rule-strong)
   color:var(--muted);font:inherit;font-weight:600;cursor:pointer}
 .tab.on{color:var(--ink);border-bottom-color:var(--accent)}
 .tab:hover{color:var(--ink)}
+/* #460: Dados do cliente (antes da linha do tempo) e a visita na linha do tempo */
+.cd-dados{margin:12px 0}
+.cd-tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.cd-tile{display:flex;flex-direction:column;gap:2px;min-width:0;padding:10px 12px;border:1px solid var(--rule);border-radius:var(--r-2,6px);background:var(--surface-2,transparent)}
+.cd-tile .k{font-family:var(--font-cond);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.cd-tile b.ok{color:var(--ok)}.cd-tile b.warn,.cd-tile .warn{color:var(--warn)}.cd-tile b.crit{color:var(--crit)}
+.cd-medidas{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:16px;margin-top:14px}
+.cd-tam{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.cd-dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 16px;margin:0}
+.cd-dl>div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dotted var(--rule);padding:3px 0}
+.cd-dl dt{color:var(--muted)}.cd-dl dd{margin:0;font-family:var(--mono);font-size:12.5px;text-align:right}
+.quebra{overflow-wrap:anywhere}
+.linkish{background:none;border:0;padding:0;color:var(--brand);text-decoration:underline;cursor:pointer;font:inherit;min-height:0}
+.vis{margin-top:6px;display:grid;gap:6px}
+.vis .bloco{border-left:3px solid var(--rule);padding:4px 10px}
+.vis .bloco .k{font-family:var(--font-cond);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}
+.vis .acoes{display:flex;flex-wrap:wrap;gap:6px}
+.vis .acoes .btn{min-height:40px}
+@media(max-width:900px){.cd-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.cd-medidas{grid-template-columns:minmax(0,1fr)}.cd-dl{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:420px){.cd-tam{grid-template-columns:repeat(2,minmax(0,1fr))}.tl .ev{grid-template-columns:64px 14px minmax(0,1fr)}}
+.svc-g{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px;align-items:start}
+.svc-main,.svc-side{display:grid;gap:12px;min-width:0}
+@media(max-width:900px){.svc-g{grid-template-columns:minmax(0,1fr)}}

@@ -15,6 +15,7 @@ import { tr } from './i18n'
 // não o painel inteiro. O login fica no pacote inicial — é a primeira coisa que aparece.
 const tela = <N extends string>(carregar: () => Promise<Record<N, ComponentType<any>>>, nome: N) =>
   lazy(() => carregar().then(m => ({ default: m[nome] })))
+const Servico = tela(() => import('./pages/Servico'), 'Servico')
 const AICommand = tela(() => import('./pages/AI'), 'AICommand')
 const Activity = tela(() => import('./pages/AI'), 'Activity')
 const Approvals = tela(() => import('./pages/AI'), 'Approvals')
@@ -121,6 +122,7 @@ function Rotas() {
           <Route path="planejamento" element={<Planejamento />} />
           <Route path="clients" element={<Clients />} />
           <Route path="clients/:id" element={<Client360 />} />
+          <Route path="servicos/:id" element={<Guard min="OPERATOR"><Servico /></Guard>} />
           <Route path="asana" element={<AsanaPage />} />
           <Route path="docusign" element={<DocuSignPage />} />
           <Route path="gmail" element={<GmailPage />} />

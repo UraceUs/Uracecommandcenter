@@ -50,6 +50,8 @@ export interface Client {
   /** #340: a Mensalidade do card (sessões por mês e valor) — o pro sem ela vai para Precisa de atenção */
   monthly_amount?: number | null; monthly_sessions?: number | null
   created_at: string; updated_at: string
+  /** #460: "Dados do cliente" */
+  relationship?: string | null; racing_class?: string | null; dados?: DadosCliente
   open_tasks?: number; done_tasks?: number; last_service?: string | null
   next_service?: string | null; waiver_status?: string | null
   emails_open?: number; last_activity?: string | null
@@ -101,9 +103,30 @@ export interface QboSummary {
   top_debtors: { id: number; name: string; pilot_name: string | null; balance: number; n: number }[]
 }
 
+/** O detalhe da tarefa (espelho do Asana, #455) */
+export interface TaskDetail {
+  connected: boolean; reason?: string; gid?: string
+  task?: { notas?: string | null; link?: string | null; campos?: Record<string, string> | null; responsavel?: string | null; secao?: string | null
+    criada_em?: string; modificada_em?: string; subtarefas_lista?: { gid: string; nome: string; concluida: boolean; vence_em: string | null }[] }
+  comments?: { quando: string; quem: string | null; texto: string | null }[]
+  attachments?: { gid: string; nome: string | null; origem: string | null; quando: string | null; download: string | null }[]
+  /** #455: o detalhe vem do espelho do Asana; `aviso` quando o Asana não respondeu a "Atualizar do Asana" */
+  espelho?: { em: string | null; erro?: string | null; aviso?: string | null }
+}
+
+/** #460: medidas (as chaves da área do cliente), parentesco e classe, com de onde vieram */
+export interface DadosCliente {
+  medidas: Record<string, number | string>; medidas_fonte: { de: 'site' | 'equipe'; em: string | null }[]
+  parentesco: string | null; parentesco_de: 'card' | 'waiver' | null
+  classe: string | null; classe_de: 'card' | 'chassi' | null; classes: string[]
+}
+export interface PecasDoDia { id: number; status: string; doc: string | null; total: number | null; itens: { nome: string; qtd: number }[] }
 export interface TimelineEvent {
-  at: string; kind: 'SERVICE' | 'WAIVER_SENT' | 'WAIVER_SIGNED' | 'EMAIL' | 'AI_ACTION' | 'INVOICE' | 'SITE_PAYMENT'
+  at: string; kind: 'SERVICE' | 'WAIVER_SENT' | 'WAIVER_SIGNED' | 'WAIVER_VOIDED' | 'EMAIL' | 'AI_ACTION' | 'INVOICE' | 'SITE_PAYMENT'
   title: string; status: string; entity: { type: string; id: number }; detail?: string | null; links?: Link[]
+  /** #460: na visita, o resumo do serviço vindo do espelho do Asana */
+  servico?: { subtarefas: [number, number]; comentarios: number; ultimo_comentario: { quem: string | null; texto: string; quando: string } | null
+    checklists: [number, number] | null }
 }
 
 export interface Client360 {
@@ -111,6 +134,8 @@ export interface Client360 {
   invoices: Invoice[] | null; ai_actions: AiAction[]; timeline: TimelineEvent[]
   stages: { code: string; label: string }[]; last_service?: Task | null; open_balance?: number | null
   irmaos?: { id: number; name: string; pilot_name: string | null }[]
+  /** #460: as peças do balcão por dia de serviço (AAAA-MM-DD) */
+  pecas_por_dia?: Record<string, PecasDoDia[]>
 }
 
 export interface AiCommand {
@@ -189,3 +214,13 @@ export interface Monthly { months: MonthlyMonth[]; last_monthly_amount: number |
 export interface Race { id: number; name: string; series: string | null; track: string | null; city: string | null; date_start: string | null; date_end: string | null; notes: string | null; source: string | null; active: number; invites: number
   task_id?: number | null; task?: { id: number; title: string; status: string; due_on: string | null; section: string | null; subtasks_total: number | null; subtasks_done: number | null; assignee: string | null; links?: Link[] } | null
   invited: { id: number; client_id: number; name: string; pilot_name: string | null; status: string; estimate_text: string | null; estimate_cmd: number | null; estimate_status: string | null }[] }
+
+/** #460: o card do serviço no Command Center (GET /tasks/{id}/servico) */
+export interface ServicoCard {
+  servico: TaskDetail
+  tarefa: { id: number; titulo: string; data: string | null; status: string; secao: string | null; responsavel: string | null; client_id: number | null; excluida: boolean }
+  cliente: { id: number; nome: string; piloto: string | null; nascimento: string | null; vip: boolean; classe: string | null
+    waiver: { status: string; expires_at: string | null } | null; tamanhos: Record<string, string> } | null
+  pecas_do_dia: PecasDoDia[]
+  checklists: { id: number; title: string; status: string; total: number; feitos: number }[]
+}
