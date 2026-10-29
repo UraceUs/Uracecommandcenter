@@ -22,11 +22,11 @@ O que não é cópia literal, de propósito:
 """
 from html import escape
 
+from command_center.vitrine import conteudo as C
+
 RESERVAR = "/services/arrive-and-drive/#reservar"          # agenda + carrinho + Stripe, com o preço do painel
-CONVERSA = "https://calendar.app.google/KBbHhXjoRMS6sbHv8"  # o "Talk to us" do urace.us: 15 min com a equipe
+CONVERSA = C.LIGACAO                                        # o "Talk to us" do urace.us: a agenda de 15 min com a equipe
 FUNDADOR = "https://www.youtube.com/watch?v=KQPMDLgVW3s"    # "A message from our founder" (o site não embute vídeo)
-GOOGLE = ("https://www.google.com/maps/place/URACE/@28.4108348,-81.377619,17z/data=!4m8!3m7!1s0x88e77d37e3e0fd25:"
-          "0xa9426dd3f3d2290e!8m2!3d28.4108348!4d-81.377619!9m1!1b1")
 TELEFONE, TEL = "+1 (407) 250-2291", "tel:+14072502291"
 OBRIGADO_AD = "/arrive-and-drive-karting-thank-you/"
 OBRIGADO_DF = "/the-driver-factory-thank-you-page/"
@@ -100,16 +100,10 @@ TEMPORADA = {"tipo": "cartoes", "eyebrow": "This season", "titulo": "On the top 
     {"foto": "urace-driver-jacksonville-p1.webp", "alt": "Frankie Iadevaia in his URACE suit, Jacksonville",
      "titulo": "P1 · FLKC Rounds 7 & 8 · Jacksonville", "texto": "Frankie Iadevaia, URACE program driver. October 2026."}]}
 
-# a nota e o número de avaliações não se escrevem à mão (ficam velhos): fica o link para o Google
-AVALIACOES = {"tipo": "depoimentos", "eyebrow": "Google reviews", "rotulo_secao": "Google reviews", "itens": [
-    ("Claire Baillie", "Parent · UK · Google review",
-     "Hayden, who is currently racing as a cadet, has been karting since the age of five and races nationally in the UK. "
-     "U Race seamlessly caters to everyone from complete novices to professional drivers."),
-    ("Samira Torres", "Parent · visiting Orlando · Google review",
-     "The coaching is extremely professional, organized, and focused on real driver development, not just recreational karting."),
-    ("Tyron", "Driver · racing in France · Google review",
-     "It was a great experience. Thank you Italo for everything you taught me.")],
-    "link": ("Read them all on Google", GOOGLE)}
+# as três avaliações do Google do urace.us (as mesmas do resto do site); a nota e o número de avaliações não se escrevem
+# à mão (ficam velhos): fica o link para o Google
+AVALIACOES = {"tipo": "depoimentos", "eyebrow": "Google reviews", "rotulo_secao": "Google reviews", "itens": C.AVALIACOES,
+              "link": ("Read them all on Google", C.GOOGLE)}
 
 # o Sim2Grid ($1,200 / month) e a Academy ($2,756.90 / month) saem sem o preço: não é o do painel
 ESCADA = {"tipo": "cartoes", "eyebrow": "Your next step", "titulo": "The ladder keeps going",
