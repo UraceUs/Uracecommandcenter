@@ -4,7 +4,7 @@
  * invoice com os itens que eu falar; se não tiver item ele cria; coloque também todo o inventário do QuickBooks".
  * O rascunho mora no servidor (recarregar ou outro aparelho mostra o mesmo) e é do card aberto, nunca de outro.
  * Montar é de quem está no galpão; "Criar invoice" é do gerente (cria item no QuickBooks e usa o preço digitado). */
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError, qs } from '../api/client'
 import { Banner, Chip, Scrim, Section } from '../components/ui'
 import { useToast } from '../components/useToast'
@@ -21,6 +21,25 @@ export interface EstadoRz { rascunho: Rz | null; faturados: Rz[]; gerente: boole
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 const ORIGEM: Record<string, string> = { estoque: tr("estoque"), quickbooks: tr("QuickBooks"), livre: tr("linha livre") }
 const num = (s: string) => { const n = Number(s.replace(',', '.')); return s.trim() !== '' && Number.isFinite(n) ? n : null }
+
+/** Cada resposta do rascunho é o rascunho inteiro; a tela aplica só a do pedido mais novo (debug 29/10, o padrão do
+ *  #453). Peças lidas em seguida com sinal fraco: a releitura da primeira chegava depois da segunda e a tela voltava para
+ *  trás (1 peça em vez de 2; o mecânico lia de novo e o cliente pagava a mais). Quando houve cruzamento, relê no fim. */
+function useMaisNovo<T>(aplicar: (r: T) => void, reler: () => Promise<T>) {
+  const voo = useRef({ emVoo: 0, ultimo: 0, cruzou: false })
+  return useCallback(async (p: Promise<unknown>): Promise<T> => {
+    const v = voo.current
+    const n = ++v.ultimo
+    if (++v.emVoo > 1) v.cruzou = true
+    try {
+      const r = await p as T
+      if (n === v.ultimo) aplicar(r)
+      return r
+    } finally {
+      if (--v.emVoo === 0 && v.cruzou) { v.cruzou = false; reler().then(aplicar).catch(() => undefined) }
+    }
+  }, [aplicar, reler])
+}
 
 /** O inventário inteiro do QuickBooks, buscado e paginado no servidor (o espelho do catálogo). */
 export function BuscaQbo({ onEscolher, rotulo }: { onEscolher: (i: ItemQboLista) => void; rotulo?: string }) {
@@ -111,7 +130,7 @@ function NovaLinha({ clientId, inicial, enviar, onFeito, onFechar }: { clientId:
   </form></Scrim>
 }
 
-function LinhaEditavel({ base, l, travada, onMudou }: { base: string; l: LinhaRz; travada: boolean; onMudou: (r: never) => void }) {
+function LinhaEditavel({ base, l, travada, enviar }: { base: string; l: LinhaRz; travada: boolean; enviar: (p: Promise<unknown>) => Promise<unknown> }) {
   const toast = useToast()
   const [qty, setQty] = useState(String(l.qty))
   const [preco, setPreco] = useState(l.preco != null ? String(l.preco) : '')
@@ -123,11 +142,11 @@ function LinhaEditavel({ base, l, travada, onMudou }: { base: string; l: LinhaRz
   async function salvar(campo: 'qty' | 'preco', valor: string) {
     const n = num(valor)
     if (n === null || n === (campo === 'qty' ? l.qty : l.preco)) return
-    try { onMudou(await api.patch<never>(`${base}/${l.id}`, { [campo]: n })) }
+    try { await enviar(api.patch(`${base}/${l.id}`, { [campo]: n })) }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   async function remover() {
-    try { onMudou(await api.del<never>(`${base}/${l.id}`)); toast(tr("Linha removida."), 'ok') }
+    try { await enviar(api.del(`${base}/${l.id}`)); toast(tr("Linha removida."), 'ok') }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   return <li className="rz-linha">
@@ -155,25 +174,27 @@ export function RascunhoInvoice({ clientId, versao, onEstado, onFaturou }: { cli
   const [nova, setNova] = useState(false)
   const [indo, setIndo] = useState(false)
   const aplicar = useCallback((r: EstadoRz) => { setD(r); onEstado(!!r.rascunho) }, [onEstado])
-  useEffect(() => { api.get<EstadoRz>(`/balcao/cliente/${clientId}/rascunho`).then(aplicar).catch(e => toast((e as ApiError).message, 'crit')) }, [clientId, versao, aplicar, toast])
+  const reler = useCallback(() => api.get<EstadoRz>(`/balcao/cliente/${clientId}/rascunho`), [clientId])
+  const pedir = useMaisNovo(aplicar, reler)
+  useEffect(() => { pedir(reler()).catch(e => toast((e as ApiError).message, 'crit')) }, [versao, pedir, reler, toast])
   async function faturar() {
     setIndo(true)
     try {
-      const r = await api.post<EstadoRz>(`/balcao/cliente/${clientId}/rascunho/faturar`)
-      aplicar(r); toast(tr("Invoice criada no QuickBooks (não enviada)."), 'ok'); onFaturou()
+      await pedir(api.post<EstadoRz>(`/balcao/cliente/${clientId}/rascunho/faturar`))
+      toast(tr("Invoice criada no QuickBooks (não enviada)."), 'ok'); onFaturou()
     } catch (e) {
       toast((e as ApiError).message, 'crit')
-      api.get<EstadoRz>(`/balcao/cliente/${clientId}/rascunho`).then(aplicar).catch(() => undefined)
+      pedir(reler()).catch(() => undefined)
     } finally { setIndo(false) }
   }
   async function conferir() {
     setIndo(true)
-    try { aplicar(await api.post<EstadoRz>(`/balcao/cliente/${clientId}/rascunho/conferir`)); toast(tr("Conferido no QuickBooks."), 'ok'); onFaturou() }
+    try { await pedir(api.post<EstadoRz>(`/balcao/cliente/${clientId}/rascunho/conferir`)); toast(tr("Conferido no QuickBooks."), 'ok'); onFaturou() }
     catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
   async function descartar() {
     if (!window.confirm(tr("Descartar o rascunho inteiro?"))) return
-    try { aplicar(await api.post<EstadoRz>(`/balcao/cliente/${clientId}/rascunho/descartar`)); toast(tr("Rascunho descartado."), 'ok') }
+    try { await pedir(api.post<EstadoRz>(`/balcao/cliente/${clientId}/rascunho/descartar`)); toast(tr("Rascunho descartado."), 'ok') }
     catch (e) { toast((e as ApiError).message, 'crit') }
   }
   const rz = d?.rascunho
@@ -182,7 +203,7 @@ export function RascunhoInvoice({ clientId, versao, onEstado, onFaturou }: { cli
     {!d ? <span className="spin" /> : <div className="stack" style={{ gap: 10 }}>
       {!rz ? <p className="small muted" style={{ margin: 0 }}>{tr("Monte a invoice com várias peças e valores: do estoque, do inventário do QuickBooks ou numa linha livre. Com o rascunho aberto, cada peça lida no modo COBRAR entra nele.")}</p> : <>
         {rz.erro && <Banner tone={rz.incerto ? 'warn' : 'crit'}>{rz.erro}</Banner>}
-        <ul className="rz-linhas">{rz.linhas.map(l => <LinhaEditavel key={l.id} base={`/balcao/cliente/${clientId}/rascunho/linhas`} l={l} travada={!!travada} onMudou={aplicar} />)}</ul>
+        <ul className="rz-linhas">{rz.linhas.map(l => <LinhaEditavel key={l.id} base={`/balcao/cliente/${clientId}/rascunho/linhas`} l={l} travada={!!travada} enviar={pedir} />)}</ul>
         <div className="rz-total-geral"><span>{tr("Total")}</span><span className="mono">{usd(rz.total)}</span></div>
         {rz.sem_preco.length > 0 && <Banner tone="warn">{tr("Sem preço: {0}. Digite o preço para criar a invoice.", rz.sem_preco.join(', '))}</Banner>}
         {!d.gerente && <p className="small muted" style={{ margin: 0 }}>{tr("A invoice que você criar fica aguardando a revisão do gerente: ele confirma ou altera antes de enviar.")}</p>}
@@ -199,7 +220,7 @@ export function RascunhoInvoice({ clientId, versao, onEstado, onFaturou }: { cli
         {d.faturados.map(f => <div key={f.id} className="small">{tr("Invoice {0} · {1} · {2}", f.doc_number || '—', usd(f.total), f.invoice_status === 'enviada' ? tr("enviada") : tr("não enviada"))}</div>)}
       </div>}
     </div>}
-    {nova && <NovaLinha clientId={clientId} onFeito={aplicar} onFechar={() => setNova(false)} />}
+    {nova && <NovaLinha clientId={clientId} enviar={c => pedir(adicionarLinha(clientId, c))} onFeito={() => undefined} onFechar={() => setNova(false)} />}
   </Section>
 }
 
@@ -243,6 +264,8 @@ export function RevisaoInvoice({ pid, onFeito, onFechar }: { pid: number; onFeit
   const [indo, setIndo] = useState(false)
   const carregar = useCallback(() => { api.get<Revisao>(`/balcao/invoices/${pid}/revisao`).then(setD).catch(e => { toast((e as ApiError).message, 'crit'); onFechar() }) }, [pid, toast, onFechar])
   useEffect(() => { carregar() }, [carregar])
+  const reler = useCallback(() => api.get<Revisao>(`/balcao/invoices/${pid}/revisao`), [pid])
+  const pedir = useMaisNovo(setD, reler)
   async function acao(qual: 'confirmar' | 'sincronizar') {
     setIndo(true)
     try {
@@ -258,7 +281,7 @@ export function RevisaoInvoice({ pid, onFeito, onFechar }: { pid: number; onFeit
       <p className="small muted" style={{ margin: 0 }}>{d.invoice.cliente} · {tr("Mudar preço, quantidade ou linha atualiza a mesma invoice no QuickBooks.")}</p>
       {d.invoice.qbo_error && <Banner tone="crit">{tr("QuickBooks:")} {d.invoice.qbo_error}</Banner>}
       <ul className="rz-linhas">{d.rascunho.linhas.map(l => <LinhaEditavel key={l.id} base={`/balcao/invoices/${pid}/revisao/linhas`} l={l} travada={false}
-        onMudou={(r: Revisao) => setD(r)} />)}</ul>
+        enviar={pedir} />)}</ul>
       <div className="rz-total-geral"><span>{tr("Total")}</span><span className="mono">{usd(total)}</span></div>
       <div className="rz-acoes" style={{ justifyContent: 'flex-end' }}>
         <button type="button" className="btn" onClick={() => setNova(true)}>{tr("Adicionar linha")}</button>
@@ -266,8 +289,8 @@ export function RevisaoInvoice({ pid, onFeito, onFechar }: { pid: number; onFeit
         <button type="button" className="btn ghost" onClick={onFechar}>{tr("Fechar")}</button>
         <button type="button" className="btn primary" disabled={indo || !!d.invoice.qbo_error} onClick={() => acao('confirmar')}>{indo ? <span className="spin" /> : tr("Confirmar a invoice")}</button>
       </div>
-      {nova && <NovaLinha clientId={d.invoice.client_id} enviar={c => api.post(`/balcao/invoices/${pid}/revisao/linhas`, c)}
-        onFeito={(r: Revisao) => setD(r)} onFechar={() => setNova(false)} />}
+      {nova && <NovaLinha clientId={d.invoice.client_id} enviar={c => pedir(api.post(`/balcao/invoices/${pid}/revisao/linhas`, c))}
+        onFeito={() => undefined} onFechar={() => setNova(false)} />}
     </>}
   </div></Scrim>
 }
