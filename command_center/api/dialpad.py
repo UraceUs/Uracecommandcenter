@@ -213,7 +213,8 @@ async def webhook(request: Request, con: sqlite3.Connection = Depends(get_db)):
     chave = _chave_hook()
     if not chave:
         raise HTTPException(409, f"DIALPAD_HOOK_KEY ainda não está em {ENV}. Veja docs/adminai/dialpad-conexao.md.")
-    if not hmac.compare_digest(request.query_params.get("key") or "", chave):     # #438: tempo constante
+    # #438: tempo constante; em bytes, senão uma chave com acento na URL dava erro 500 em vez de 403 (debug 29/10)
+    if not hmac.compare_digest((request.query_params.get("key") or "").encode("utf-8", "replace"), chave.encode("utf-8", "replace")):
         raise HTTPException(403, "chave do webhook não confere")
 
     bruto = (await request.body()).decode("utf-8", "replace").strip()

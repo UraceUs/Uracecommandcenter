@@ -220,10 +220,14 @@ def canal(cid: int, desde: int = 0, u=Depends(auth.usuario_atual), con: sqlite3.
     c = _canal(con, cid)
     if not _pode_ver(con, cid, u):
         raise HTTPException(403, "Você não participa desta conversa.")
-    msgs = todos(con, """SELECT m.*, u.name AS usuario FROM team_messages m
-                         LEFT JOIN users u ON u.id = m.user_id
-                         WHERE m.channel_id=? AND m.id > ? AND m.deleted_at IS NULL
-                         ORDER BY m.id LIMIT 300""", (cid, int(desde or 0)))
+    # `desde` = 0 é abrir a conversa: vale o fim dela (as 300 mais novas); pedir só o que é novo (`desde` > 0) segue a
+    # ordem de chegada. Antes abrir uma conversa com mais de 300 mensagens mostrava as 300 mais velhas, e as novas só
+    # chegavam de 5 em 5 segundos, uma página por vez.
+    msgs = todos(con, """SELECT * FROM (SELECT m.*, u.name AS usuario FROM team_messages m
+                                         LEFT JOIN users u ON u.id = m.user_id
+                                         WHERE m.channel_id=? AND m.id > ? AND m.deleted_at IS NULL
+                                         ORDER BY m.id %s LIMIT 300) ORDER BY id""" % ("DESC" if not desde else "ASC"),
+                 (cid, int(desde or 0)))
     membros = todos(con, """SELECT u.id, u.name, u.email, u.role, m.last_read_id, m.muted
                             FROM team_members m JOIN users u ON u.id=m.user_id
                             WHERE m.channel_id=? ORDER BY u.name""", (cid,))
