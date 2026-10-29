@@ -909,6 +909,26 @@ sem coach **$50/h** seg–sex 7h–17h, **$75/h** seg–sex 18h–24h e **$90/h*
   que a equipe define em Site › Sim2Grid › Etiqueta do dia. Use o selo na conversa: para quem treina, ofereça o dia de
   piloto; para quem quer se divertir com amigos, a noite de diversão. Enquanto ninguém definir, não há selo.
 
+### Race the Winter 2027: a temporada de inverno (#505)
+
+A página `novo.urace.us/winter/` (a mesma do urace.us, refeita com o texto de lá) vende a temporada de janeiro a março de
+2027: as quatro rodadas da SKUSA Winter Series no Orlando Kart Center (15–17/01 e 12–14/02), as provas opcionais, os dias
+de teste e o que a URACE arranja fora da pista. O que chega em Vendas:
+
+- **"Build your winter"** é um formulário: cada envio vira oportunidade **Racing Team**, origem **Site**, com o plano na
+  nota, uma linha por campo — `Season: Winter Season 2027`, o piloto (primeiro nome), de onde vem, a idade de corrida em
+  1º/01/2027 e o peso com equipamento (quando a pessoa preencheu), os fins de semana marcados (`Weekend 1: 15–17 Jan ·
+  SKUSA Winter Series · Rounds 1 & 2`…), a chegada, a volta, a base (hotel) e os opcionais (`Concierge: Yes`…). A equipe
+  liga e monta o plano de verdade: classe, motor, dias de teste e inscrições.
+- **A estimativa da página** é só a diária do kart do Arrive and Drive (o preço de *Site › Serviços e preços*) × os dias
+  de teste escolhidos. O apoio do fim de semana de corrida ("quoted per event"), inscrição, pneu, passe da pista, viagem e
+  os opcionais **não** entram no número. Mudou a diária no painel, a página muda junto.
+- O **localizador de categoria** usa as classes da SKUSA Winter 2026 (as de 2027 a SKUSA confirma antes da inscrição): a
+  classe e o motor continuam sendo escolha da equipe.
+- O link personalizado de antes continua valendo: `…/winter/?driver=Nome&from=europe` (ou `north`, `other`) abre a
+  página com o nome do piloto no formulário e a origem marcada.
+- "Get the real quote" abre a agenda do Lucas (Google Calendar); o e-mail da página é `lucas@urace.us`.
+
 ### 5.1 Carrinho do site e pagamento no Stripe (#236)
 
 Dono, 14/10: *"o sistema de carrinho e checkout ... usando o Stripe"*; *"quando a pessoa selecionar
