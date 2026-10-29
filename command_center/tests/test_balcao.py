@@ -136,6 +136,22 @@ def test_codigo_novo_cadastra_peca_e_o_gerente_cria_o_item_no_quickbooks(cli):
     assert nome == "criar_item" and kw["categoria_id"] == "c1" and kw["preco"] == 45
 
 
+def test_codigo_recusado_nao_deixa_peca_orfa_nem_preco_mudado(cli):
+    """Debug 29/10: cadastrar o código de uma peça nova gravava a peça e depois o código. Código recusado (já é de
+    outra peça, ou ilegível) respondia 400, mas a peça nova ficava na prateleira, sem código (a conexão é autocommit:
+    o rollback não desfazia nada), e cada nova tentativa criava outra. O preço do gerente também ficava mudado."""
+    cod = prepara_peca(cli, cli.para)                 # o código da embalagem já é do para-choque
+    h = entra(cli)
+    antes = conectar().execute("SELECT COUNT(*) FROM stock_items").fetchone()[0]
+    for codigo in (cod, "x"):
+        r = cli.post(f"{B}/codigos", json={"codigo": codigo, "nome": "Chain 219 (teste)", "category": "hardware"}, headers=h)
+        assert r.status_code == 400, r.text
+    assert conectar().execute("SELECT COUNT(*) FROM stock_items").fetchone()[0] == antes, "nenhuma peça órfã"
+    hg = entra(cli, "ger@urace.us")
+    assert cli.post(f"{B}/codigos", json={"codigo": cod, "item_id": cli.pneu, "price": 45}, headers=hg).status_code == 400
+    assert estoque.item(conectar(), cli.pneu)["price"] is None, "sem o código, o preço também não muda"
+
+
 def test_etiqueta_urace_para_peca_sem_codigo(cli):
     h = entra(cli)
     assert cli.post(f"{B}/itens/{cli.pneu}/codigo-urace", headers=h).json()["codigo"] == f"URC{cli.pneu:06d}"

@@ -177,17 +177,18 @@ def cadastrar(dados: CodigoIn, request: Request, con: sqlite3.Connection = Depen
     if (dados.price is not None or dados.qbo_item_id or dados.qbo_categoria_id) and not gerente:
         raise HTTPException(403, "Preço e item do QuickBooks são do gerente.")
     try:
-        item_id = dados.item_id
-        if not item_id:
-            item_id = estoque.criar_item(con, dados.kind, dados.nome or "", category=dados.category, price=dados.price)
-        elif dados.price is not None:
-            estoque.atualizar_item(con, item_id, price=dados.price)
-        cod = b.cadastrar_codigo(con, dados.codigo, item_id, u["id"])
+        # a peça nova (ou o preço) e o código numa transação só: código recusado não deixa peça órfã na prateleira
+        # (a conexão é autocommit; o rollback de antes não desfazia o que já estava gravado)
+        with transacao(con, imediata=True):
+            item_id = dados.item_id
+            if not item_id:
+                item_id = estoque.criar_item(con, dados.kind, dados.nome or "", category=dados.category, price=dados.price)
+            elif dados.price is not None:
+                estoque.atualizar_item(con, item_id, price=dados.price)
+            cod = b.cadastrar_codigo(con, dados.codigo, item_id, u["id"])
+            _aud(con, request, u, "balcao.codigo", "stock_item", item_id, {"codigo": cod, "novo": not dados.item_id})
     except (b.ErroBalcao, estoque.ErroEstoque) as e:
-        con.rollback()
         raise _erro(e)
-    _aud(con, request, u, "balcao.codigo", "stock_item", item_id, {"codigo": cod, "novo": not dados.item_id})
-    con.commit()
     aviso = None
     if gerente and (dados.qbo_item_id or dados.qbo_categoria_id):
         try:
