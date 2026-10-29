@@ -169,8 +169,10 @@ CONTATO = ("name", "pilot_name", "pilot_dob", "email", "email_alt", "phone", "co
 CLASSES = ("Mini", "Micro", "Cadet", "Junior", "Senior", "Shifter", "Masters")
 
 
-def _dados_limpos(campos, u):
-    """#460: parentesco (texto curto), classe (da lista) e medidas (as mesmas chaves e faixas da área do cliente)."""
+def _dados_limpos(campos, u, medidas_antes=None):
+    """#460: parentesco (texto curto), classe (da lista) e medidas (as mesmas chaves e faixas da área do cliente).
+    Medidas: só as chaves que vieram mudam o que a equipe já conferiu (vazio tira a da equipe e volta a valer a do site);
+    as outras continuam vindo da área do cliente, e o que o cliente atualizar lá aparece (debug 29/10)."""
     if "relationship" in campos:
         campos["relationship"] = " ".join(campos["relationship"].split())[:40] or None
     if "racing_class" in campos:
@@ -180,11 +182,20 @@ def _dados_limpos(campos, u):
         campos["racing_class"] = cl or None
     if "measures" in campos:
         from command_center.providers import portal
+        novas = campos["measures"] or {}
+        if not isinstance(novas, dict):
+            raise HTTPException(400, "Medidas inválidas.")
         try:
-            m = portal.medidas(campos["measures"])
+            m = portal.medidas(novas) or {}
         except portal.ErroPortal as e:
             raise HTTPException(400, str(e))
-        campos.update(measures=json.dumps(m) if m else None, measures_at=agora(), measures_by=u["id"])
+        equipe = dict(json.loads(medidas_antes) if medidas_antes else {})
+        for k, v in novas.items():
+            if k in m:
+                equipe[k] = m[k]
+            elif v in (None, ""):
+                equipe.pop(k, None)
+        campos.update(measures=json.dumps(equipe) if equipe else None, measures_at=agora(), measures_by=u["id"])
 
 
 def dados_do_cliente(con, c):
@@ -269,7 +280,7 @@ def client_patch(cid: int, dados: ClienteIn, request: Request, u=Depends(auth.ex
             campos[k] = ""
     antes = um(con, f"SELECT {', '.join(CONTATO)} FROM clients WHERE id=?", (cid,))
     _contato_limpo(con, cid, campos, antes)
-    _dados_limpos(campos, u)
+    _dados_limpos(campos, u, (um(con, "SELECT measures FROM clients WHERE id=?", (cid,)) or {}).get("measures"))
     if "vip" in campos:
         if not auth.pode(u["role"], "MANAGER"):
             raise HTTPException(403, "Only managers can change VIP.")

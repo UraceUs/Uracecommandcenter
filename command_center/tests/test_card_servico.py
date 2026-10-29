@@ -153,3 +153,28 @@ def test_limpar_parentesco_e_classe_com_null_como_a_tela_manda(cli, con, espelha
     assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"relationship": None, "racing_class": None}).status_code == 200
     c = um(con, "SELECT relationship, racing_class FROM clients WHERE id=?", (cid,))
     assert (c["relationship"], c["racing_class"]) == (None, None)
+
+
+def test_medida_editada_pela_equipe_nao_congela_as_do_site(cli, con, espelhado):  # noqa: F811
+    """Debug 29/10: editar UMA medida no card não copia as do site como "da equipe"; o que o cliente atualizar depois
+    no site continua aparecendo, e esvaziar a medida da equipe volta a valer a do site."""
+    _, _, cid = espelhado
+    conta = con.execute("""INSERT INTO portal_accounts (email, pw_salt, pw_hash, name, birth_date, phone, address_line1, city,
+                           state, zip, terms_accepted_at, client_id) VALUES ('nina.site@example.com','s','h','Nina Ficticia',
+                           '1985-02-01','555-0142','100 Rua Ficticia','Orlando','FL','32824','2026-09-01T00:00:00Z',?)""",
+                        (cid,)).lastrowid
+    pil = con.execute("INSERT INTO portal_pilots (account_id, name, client_id, measures, measures_updated_at) VALUES (?, 'Theo Ficticio', ?, ?, ?)",
+                      (conta, cid, json.dumps({"height_in": 55, "weight_lb": 80}), "2026-10-01T12:00:00Z")).lastrowid
+    con.commit()
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"measures": {"weight_lb": "82"}}).status_code == 200
+    assert json.loads(um(con, "SELECT measures FROM clients WHERE id=?", (cid,))["measures"]) == {"weight_lb": 82.0}
+    # a tela manda só o que mudou: mudar o peito depois não apaga o peso que a equipe já tinha conferido
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"measures": {"chest_in": "30"}}).status_code == 200
+    assert json.loads(um(con, "SELECT measures FROM clients WHERE id=?", (cid,))["measures"]) == {"weight_lb": 82.0, "chest_in": 30.0}
+    con.execute("UPDATE portal_pilots SET measures=?, measures_updated_at=? WHERE id=?",
+                (json.dumps({"height_in": 57, "weight_lb": 81}), "2026-10-29T12:00:00Z", pil)); con.commit()
+    d = cli.get(B + f"/clients/{cid}").json()["client"]["dados"]["medidas"]
+    assert d["height_in"] == 57 and d["weight_lb"] == 82.0          # o site atualizou a altura; o peso é o que a equipe conferiu
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"measures": {"weight_lb": ""}}).status_code == 200
+    d = cli.get(B + f"/clients/{cid}").json()["client"]["dados"]["medidas"]
+    assert d["weight_lb"] == 81                                         # esvaziar volta a valer a do site
