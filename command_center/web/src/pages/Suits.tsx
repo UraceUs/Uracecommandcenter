@@ -27,7 +27,7 @@ interface Linha { id: number; title: string; product: string; quantity: number; 
   status: string; closed: number; order_date: string | null; due_on: string | null; source: string; fornecedor: string | null
   notas: number; ultima_nota: string | null; updated_at: string | null; created_at: string
   discarded_at?: string | null; discard_reason?: string | null; ia_ligada?: number; is_test?: number; wa_rascunhos?: number }
-interface Nota { id: number; status: string | null; kind: string; text: string | null; tem_imagem: number; command_id: number | null
+interface Nota { id: number; status: string | null; kind: string; text: string | null; tem_imagem: number; arquivo?: string | null; command_id: number | null
   created_at: string; autor: string | null; ia?: { status: string; output: string | null; error: string | null } | null }
 type Valor = { v: number; u: string } | { t: string }
 interface PedidoApi extends Omit<Linha, 'notas'> { customer_email: string | null; customer_phone: string | null; ship_address: string | null
@@ -75,6 +75,9 @@ const TOM: Record<string, 'neutral' | 'warn' | 'info' | 'accent' | 'ok' | 'crit'
   sent_to_supplier: 'info', supplier_accepted: 'info', in_production: 'info', photos_received: 'warn', checked: 'accent',
   address_sent: 'info', in_transit: 'accent', delivered: 'ok', canceled: 'neutral' }
 const IDIOMAS: [string, string][] = [['en', tr("Inglês")], ['pt', tr("Português")], ['es', tr("Espanhol")], ['it', tr("Italiano")], ['fr', tr("Francês")], ['de', tr("Alemão")]]
+// #447: imagem vira foto na linha do tempo; o resto vai para os arquivos do pedido
+const IMAGENS = ['image/png', 'image/jpeg', 'image/webp']
+const ARQUIVO_MAX = 25 * 1024 * 1024
 const KIND: Record<string, string> = { nota: tr("nota"), etapa: tr("etapa"), ia: 'IA', email: tr("e-mail"), whatsapp: 'WhatsApp' }
 const ESTADO_MED: Record<string, string> = { preenchida: tr("preenchida"), conferida: tr("conferida"), suspeita: tr("suspeita") }
 const horaFL = (iso: string) => { const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z'); return isNaN(d.getTime()) ? iso
@@ -258,7 +261,7 @@ export function SuitPedido() {
     <WhatsAppDoPedido pedido={d} onDone={p.reload} />
     <EmailFornecedor pedido={d} onDone={p.reload} />
     <EnderecoFornecedor pedido={d} onDone={p.reload} />
-    <Linha_do_tempo meta={meta.data} notas={d.notas} />
+    <Linha_do_tempo meta={meta.data} notas={d.notas} pid={d.id} />
     {d.asana_notes || d.asana_gid ? <Section title={tr("Como estava no Asana")}>
       {d.asana_status && <p className="small muted">{tr("Status no Asana:")} {d.asana_status}</p>}
       {d.asana_notes && <pre className="suit-pre">{d.asana_notes}</pre>}
@@ -330,12 +333,20 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [ia, setIa] = useState(true)
   const [indo, setIndo] = useState(false)
-  const previa = useMemo(() => arquivo ? URL.createObjectURL(arquivo) : null, [arquivo])
+  const { can } = useAuth()
+  // #448: sem a aprovação escrita registrada, só o administrador leva a Approved, com o motivo escrito na nota
+  const liberar = etapa === 'approved' && pedido.status !== 'approved' && pedido.aprovacao?.estado !== 'valida' && can('ADMIN')
+  const ehImagem = !!arquivo && IMAGENS.includes(arquivo.type)
+  const previa = useMemo(() => arquivo && ehImagem ? URL.createObjectURL(arquivo) : null, [arquivo, ehImagem])
   async function salvar() {
-    if (!texto.trim() && !arquivo && etapa === pedido.status) { toast(tr("Escreva a nota, anexe um print ou mude a etapa."), 'warn'); return }
+    if (!texto.trim() && !arquivo && etapa === pedido.status) { toast(tr("Escreva a nota, anexe um arquivo ou mude a etapa."), 'warn'); return }
+    if (liberar) return liberarAprovado()
     const fd = new FormData()
     fd.set('texto', texto.trim()); fd.set('status', etapa === pedido.status ? '' : etapa); fd.set('pedir_ia', String(ia && pedido.ia_ligada !== 0 && !!(texto.trim() || arquivo)))
-    if (arquivo) fd.set('imagem', arquivo)
+    if (arquivo) {
+      if (arquivo.size > ARQUIVO_MAX) { toast(tr("Arquivo grande demais (máximo 25 MB)."), 'warn'); return }
+      fd.set('arquivo', arquivo)
+    }
     setIndo(true)
     try {
       const r = await api.postForm<{ id: number | null; command_id: number | null }>(`/suits/${pedido.id}/notas`, fd)
@@ -343,20 +354,32 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
       setTexto(''); setArquivo(null); onDone()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
+  async function liberarAprovado() {
+    if (texto.trim().length < 5) { toast(tr("Escreva na nota o motivo de liberar sem a aprovação escrita (ex.: aprovou por WhatsApp)."), 'warn'); return }
+    setIndo(true)
+    try {
+      await api.post(`/suits/${pedido.id}/aprovar-admin`, { motivo: texto.trim() })
+      if (arquivo) { const fd = new FormData(); fd.set('arquivo', arquivo); await api.postForm(`/suits/${pedido.id}/notas`, fd) }
+      toast(tr("Pedido liberado para Approved."), 'ok')
+      setTexto(''); setArquivo(null); onDone()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
   return <Section title={tr("Nota")}>
     <label className="fld"><span className="sr-only">{tr("Nota")}</span><textarea rows={3} value={texto} onChange={e => setTexto(e.target.value)}
       placeholder={tr("O que aconteceu? Ex.: cliente aprovou o design, mandou as medidas no print, pediu outra cor…")} /></label>
     <div className="suit-nota-op">
-      <label className="btn ghost suit-arquivo"><Icon name="plus" size={16} /> {arquivo ? tr("Trocar print") : tr("Anexar print")}
-        <input type="file" accept="image/png,image/jpeg,image/webp" onChange={e => setArquivo(e.target.files?.[0] || null)} /></label>
+      <label className="btn ghost suit-arquivo"><Icon name="plus" size={16} /> {arquivo ? tr("Trocar arquivo") : tr("Anexar arquivo")}
+        <input type="file" onChange={e => setArquivo(e.target.files?.[0] || null)} /></label>
       <label className="fld suit-etapa"><span>{tr("Etapa")}</span><select aria-label={tr("Etapa")} value={etapa} onChange={e => setEtapa(e.target.value)}>
         {meta.etapas.filter(e => e.codigo === pedido.status || !meta.transicoes || (meta.transicoes[pedido.status] || []).includes(e.codigo)).map(e =>
           <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? tr("{0} (atual)", e.nome) : tr("mover para {0}", e.nome)}</option>)}</select></label>
       {pedido.ia_ligada !== 0 && <label className="check suit-ia"><input type="checkbox" checked={ia} onChange={e => setIa(e.target.checked)} /> {tr("Pedir à IA para seguir daqui")}</label>}
-      <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : tr("Salvar nota")}</button>
+      <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : liberar ? tr("Liberar para Approved") : tr("Salvar nota")}</button>
     </div>
+    {liberar && <p className="small suit-liberar" role="note">{tr("Sem a aprovação final escrita do cliente registrada. Como administrador, você libera para Approved: escreva o motivo na nota (fica na linha do tempo, com o seu nome). O pedido ao fornecedor continua pedindo a aprovação registrada.")}</p>}
     {(etapa === 'photos_received' || pedido.status === 'in_production') && <p className="small muted">{tr("Fotos do fornecedor (WhatsApp): anexe cada foto aqui com a etapa Photos received. O Checked (OK da equipe) exige pelo menos uma.")}</p>}
     {previa && <img src={previa} alt={tr("Print anexado")} className="suit-previa" />}
+    {arquivo && !ehImagem && <p className="small muted suit-arquivo-nome">{tr("Anexado:")} <b>{arquivo.name}</b> · {tr("vai para os arquivos do pedido")}</p>}
   </Section>
 }
 
@@ -722,13 +745,14 @@ function SaudeTopo() {
   </p>
 }
 
-function Linha_do_tempo({ meta, notas }: { meta: Meta; notas: Nota[] }) {
+function Linha_do_tempo({ meta, notas, pid }: { meta: Meta; notas: Nota[]; pid: number }) {
   const lista = [...notas].reverse()
   return <Section title={tr("Linha do tempo")} count={notas.length}>
     {!lista.length ? <Empty title={tr("Nada ainda")} /> : <ol className="suit-tempo">{lista.map(n => <li key={n.id} className={`k-${n.kind}`}>
       <div className="small muted">{horaFL(n.created_at)} · {n.autor || (n.kind === 'ia' ? tr("IA") : tr("sistema"))} · {KIND[n.kind] || n.kind}{n.status ? ` · ${nomeEtapa(meta, n.status)}` : ''}</div>
       {n.text && <div className="suit-texto">{n.text}</div>}
       {n.tem_imagem ? <a href={`/ops/api/suits/notas/${n.id}/imagem`} target="_blank" rel="noreferrer"><img className="suit-img" loading="lazy" src={`/ops/api/suits/notas/${n.id}/imagem`} alt={tr("Print da nota")} /></a> : null}
+      {n.arquivo ? <a className="suit-anexo" href={`/ops/api/suits/${pid}/anexos/${encodeURIComponent(n.arquivo)}`} download><Icon name="doc" size={14} /> {n.arquivo}</a> : null}
       {n.ia && <div className="suit-ia-res">{n.ia.status === 'DONE' ? <Md text={n.ia.output || ''} /> : n.ia.status === 'FAILED'
         ? <span style={{ color: 'var(--crit)' }}>{tr("A IA não conseguiu:")} {n.ia.error}</span> : <span className="muted">{tr("A IA está trabalhando nesta nota…")}</span>}
         {n.command_id && <Link className="small" to={`/ai/${n.command_id}`}>{tr("abrir no AI Command")}</Link>}</div>}

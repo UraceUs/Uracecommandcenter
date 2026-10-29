@@ -2735,6 +2735,13 @@ def test_suits_registra_o_pedido_anota_com_print_muda_a_etapa_e_grava_medida(ser
     foto.scroll_into_view_if_needed()
     pg.wait_for_function("() => { const i = document.querySelector('.suit-tempo img.suit-img'); return i && i.complete && i.naturalWidth > 0 }")
     pg.locator(".suit-etapas li.atual", has_text="Awaiting Measurements").wait_for()
+    # #447 (dono, 29/10): "anexar qualquer tipo de arquivo" — o PDF vai para os arquivos do pedido, com o link na nota
+    pdf = tmp_path / f"ficha-{largura}.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n% ficha ficticia\n")
+    pg.get_by_label("Anexar arquivo").set_input_files(str(pdf))
+    pg.get_by_text(f"ficha-{largura}.pdf", exact=True).wait_for()
+    pg.get_by_role("button", name="Salvar nota").click()
+    pg.get_by_role("link", name=f"ficha-{largura}.pdf").first.wait_for()
     pg.get_by_role("button", name="Preencher").click()
     pg.get_by_label("1 – Head circumference").fill("59")
     pg.get_by_role("button", name="Salvar medidas").click()
@@ -2789,6 +2796,34 @@ def test_suits_descarta_o_que_nao_e_pedido_e_restaura(servidor, navegador, largu
     pg.get_by_role("button", name="Restaurar o pedido").click()
     pg.get_by_role("button", name="Não é pedido de suit").wait_for()
     assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
+@pytest.mark.parametrize("largura", [360, 1280])
+def test_suits_admin_libera_para_approved_com_o_motivo(servidor, navegador, largura):
+    """#448 (dono, 29/10): "mover para aprovado com o nível de admin pra cima" — sem a aprovação escrita registrada,
+    o administrador libera com o motivo escrito na nota."""
+    pg = entrar(navegador, servidor, email="italo@urace.us", largura=largura, altura=900)     # o ADMIN do teste
+    abrir(pg, servidor, "/suits")
+    pg.get_by_role("button", name="Registrar novo pedido").click()
+    dlg = pg.get_by_role("dialog", name="Registrar novo pedido")
+    dlg.get_by_label("Cliente", exact=True).fill(f"Liberado Fictício {largura}")
+    dlg.get_by_role("button", name="Registrar", exact=True).click()
+    pg.get_by_role("heading", name=f"Liberado Fictício {largura}", level=1).wait_for()
+    pg.get_by_label("Pedir à IA para seguir daqui").uncheck()
+    pg.get_by_label("Etapa", exact=True).select_option("approved")
+    pg.get_by_text(re.compile("Como administrador, você libera para Approved")).wait_for()
+    pg.get_by_role("button", name="Liberar para Approved").click()
+    pg.get_by_text(re.compile("Escreva na nota o motivo")).wait_for()          # sem motivo, não libera
+    pg.get_by_label("Nota", exact=True).fill("cliente aprovou por WhatsApp")
+    pg.get_by_role("button", name="Liberar para Approved").click()
+    pg.get_by_text("Pedido liberado para Approved.").wait_for()
+    pg.locator(".suit-etapas li.atual", has_text="Approved").wait_for()
+    pg.get_by_text(re.compile("liberado pelo administrador sem a aprovação final escrita registrada: cliente aprovou")).first.wait_for()
+    assert pg.get_by_role("button", name="Salvar nota").count() == 1
     r = pg.evaluate(_VAZA)
     assert not r["rola"] and not r["culpados"], r
     assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)

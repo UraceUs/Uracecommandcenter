@@ -95,7 +95,7 @@ endereço para o envio"*.
 | 2 | Awaiting Measurements | `awaiting_measurements` | boas-vindas enviadas (com o manual), esperando as medidas | — |
 | 3 | Design Pending | `design_pending` | com as ideias de design: o designer trabalha | — |
 | 4 | Design Under Client Review | `design_review` | o cliente está olhando a arte | — |
-| 5 | Approved | `approved` | aprovação final escrita do cliente | exige a **aprovação final válida** |
+| 5 | Approved | `approved` | aprovação final escrita do cliente | exige a **aprovação final válida**; sem ela, só o **administrador** libera, com o motivo (#448) |
 | 6 | Order sent to supplier | `sent_to_supplier` | pedido de produção enviado ao fornecedor | exige a aprovação válida |
 | 7 | Accepted by supplier | `supplier_accepted` | o fornecedor confirmou | — |
 | 8 | In Production | `in_production` | o fornecedor está fazendo | — |
@@ -358,8 +358,11 @@ Para achar o card do cliente: `GET /ops/api/clients` com consulta `q` = nome.
 | ligar/desligar a ponte e o envio automático, designer, assinatura, política | `PUT /ops/api/suits/ponte` | `{"envio_automatico": false}` | Ger. |
 | fornecedores e o modelo do e-mail ao fornecedor | `POST`/`PATCH /ops/api/suits/fornecedores…`, `PUT /ops/api/suits/modelo` | — | Ger. |
 
-**Nota com print:** a nota com imagem (screenshot para a IA entender, ou as **fotos do fornecedor** que chegaram
-pelo WhatsApp) só pelo painel, no campo "Nota" do pedido. Pelo Claude, a nota é só texto.
+**Nota com arquivo** (#447): o botão **Anexar arquivo** da nota aceita qualquer tipo, até 25 MB. Imagem (PNG, JPG,
+WEBP) vira foto na linha do tempo, comprimida e sem EXIF: o screenshot para a IA entender, ou as **fotos do fornecedor**
+que chegaram pelo WhatsApp. Outro arquivo (PDF, planilha, arte em AI/PSD, ZIP, vídeo curto) vai para os **Arquivos do
+pedido**, aparece na nota com o link e sai só com sessão, sempre como download. A IA recebe o caminho do arquivo junto
+com a nota. Só pelo painel; pelo Claude, a nota é só texto.
 
 ---
 
@@ -457,6 +460,7 @@ etapa por conta própria. Mostre ao Lucas o que chegou e pergunte o que fazer.
 | a ponte não roda | em Suits › Ponte de e-mail: a ponte precisa estar ligada e a IA no motor novo |
 | "Falta … para montar o pedido ao fornecedor" | complete o que a mensagem diz (medida, fornecedor atual, e-mail do fornecedor, arte final, aprovação final) |
 | "Sem a aprovação final escrita do cliente…" | a aprovação não existe ou ficou desatualizada (mudou a arte ou uma medida): peça ao cliente a aprovação da versão atual |
+| Administrador e o cliente aprovou fora do e-mail (WhatsApp, telefone) | na nota, escolha **mover para Approved**, escreva o motivo e clique em **Liberar para Approved** (#448). Fica na linha do tempo e na auditoria com o seu nome. Operador e gerente não liberam; a IA só propõe, e uma pessoa clica. O **pedido ao fornecedor continua pedindo a aprovação registrada**: registre o trecho em "Registrar aprovação" antes de mandar à produção |
 | "De … o pedido não vai para …" | a etapa pulou: siga a ordem da seção 3 |
 | "não deu para limpar" / "este tipo de arquivo não é limpo" | peça o arquivo exportado em PNG, JPG ou PDF |
 | "casa com mais de um pedido aberto" (em Precisa de atenção) | ligue a conversa ao pedido certo em Ponte de e-mail › Ligar conversas |

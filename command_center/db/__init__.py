@@ -267,6 +267,7 @@ MIGRACOES = [
     ("suit_orders", "final_request", "TEXT"),
     ("suit_orders", "welcome_sent_at", "TEXT"),
     ("suit_orders", "checked_at", "TEXT"),
+    ("suit_notes", "file_name", "TEXT"),          # #447: o arquivo (não imagem) da nota, na pasta do pedido
     ("suit_orders", "checked_by", "INTEGER REFERENCES users(id)"),
     ("suit_orders", "address_sent_at", "TEXT"),
     ("suit_orders", "bridge_last_try_at", "TEXT"),
