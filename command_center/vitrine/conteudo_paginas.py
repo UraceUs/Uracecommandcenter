@@ -8,7 +8,7 @@ empresa, (407) 250 2291; remarcação com 24 h e as idades dos karts do produto 
 botões de comprar levam à reserva do site. Preço de serviço não é texto fixo: os planos vêm do painel
 (Site › Serviços) e o Arrive and Drive de `conteudo.KARTS`; o que o sistema não tem fica sem preço.
 """
-from command_center.vitrine.conteudo import FAQ_EVENTO, FECHO_DUVIDAS, SITE
+from command_center.vitrine.conteudo import AVALIACOES, FAQ_EVENTO, FECHO_DUVIDAS, GOOGLE, LIGACAO, SITE  # noqa: F401
 
 RESERVAR = "/ops/portal/reserve"
 CONTATO = "/contact/"
@@ -32,20 +32,29 @@ ACADEMY = {
     "caminho": "/academy/",
     # #506: /kart-training-packages/ e /kart-driving-school/ são landings próprias de novo (pg_landings.py)
     "antigos": ("/urace-academy/", "/services/kart-school/"),
-    "titulo": "Kart Academy in Orlando - Monthly Driver Training | URACE",
-    "descricao": ("The URACE Kart Academy in Orlando: monthly kart training with professional coaching, race equipment and "
-                  "a clear path from first laps into competition."),
-    "eyebrow": "Driver Development · Orlando, FL",
-    "h1": "Four coached sessions a month. One driver getting faster.",
-    "sub": ("The URACE Academy is a monthly program for drivers who are past their first day in a kart: practical "
-            "training, theory, real karts and a professional environment, for kids and adults. You bring the driver — we "
-            "bring the kart, the full equipment, the maintenance and a professional coach."),
+    # #508: o texto do urace.us de 29/10 (urace.us/urace-academy/): hero, currículo, planos, avaliações e o próximo passo
+    "titulo": "URACE Academy: Kart School in Orlando | URACE",
+    "descricao": ("URACE Academy is our kart school at Orlando Kart Center: monthly coached training on our karts and "
+                  "equipment, with no big upfront investment."),
+    "eyebrow": "Step 3 · URACE Academy · Orlando",
+    "h1": "URACE Academy. Kart school in Orlando.",
+    "sub": ("Four coached sessions a month with kart, full equipment, maintenance and a professional coach included. "
+            "Month to month, no minimum term."),
     "foto": "imagem-segunda-dobra.webp",
-    "cta": ("Join URACE Academy", RESERVAR + "?service=academy"),
-    "mais_titulo": MAIS_TITULO,
-    "mais": MAIS,
-    "planos_titulo": "Choose your commitment",
+    "cta": ("Join the Academy", RESERVAR + "?service=academy"),
+    "cta2": ("Talk to us", LIGACAO),
+    "curriculo_rotulo": "Curriculum",
+    "curriculo_titulo": "Real coaching. Not just seat time.",
+    "curriculo_itens": ("Acceleration, braking, cornering and racing technique.",
+                        "Racing principles, track dynamics and safety protocols.",
+                        "Setup, adjustments and performance, so the driver understands the kart.",
+                        "Structured on-track sessions with real-time coaching and feedback."),
+    "planos_rotulo": "Plans",
+    "planos_titulo": "Pick your pace",
     "planos_sub": "The longer you commit, the less each session costs.",
+    # o "Not sure yet?" da página de hoje: o preço é o do Arrive and Drive no painel (o menor kart), nunca texto
+    "primeiro": ("Not sure yet?", "Start with one Arrive and Drive session. Your coach reads the data and tells you "
+                 "straight which plan fits.", "+ refundable deposit", ("Book a first session", "/services/arrive-and-drive/#reservar")),
     # Só aparecem sem plano cadastrado no painel; aí o botão abre o contato. O texto é o do site atual,
     # sem os valores por sessão (o preço do plano é o do painel).
     # #273 (dono, 15/10): a planilha de preços é a fonte, e a Academy tem preço próprio para 4 stroke (e Baby
@@ -89,63 +98,23 @@ ACADEMY = {
              "You bring the kart and your mechanic; we bring the coaching and the track day. Additional sessions $300 each.",
              "$1,200", "per month"))),
     ),
-    "para_quem_titulo": "Who is this for?",
-    # os dois últimos vêm do "Who is this for?" da Kart School (#254)
-    "para_quem": ("Drivers already competing or preparing to compete", "Individuals seeking structured, high-performance training",
-                  "Drivers committed to long-term development", "Those looking for real coaching, not just seat time",
-                  "Drivers focused on consistency, speed, and race performance",
-                  "Kids aged 6–14 and adults", "Early-stage racers who already had their first day in a kart"),
-    "curriculo": (("Driving Fundamentals", "Master acceleration, braking, cornering, and racing techniques"),
-                  ("Theoretical Foundations", "Understand racing principles, track dynamics, and safety protocols"),
-                  ("Kart Mechanics", "Learn about chassis, engine and component maintenance, and develop technical knowledge of kart setup, adjustments and performance optimization"),
-                  ("Practical Sessions", "Structured on-track sessions with real-time coaching and feedback")),
-    "objetivos": ("Develop advanced driving skills and race consistency", "Build a deep understanding of kart dynamics and performance",
-                  "Strengthen mental focus and competitive mindset", "Prepare drivers for competitive racing and elite-level performance"),
-    "carreira_titulo": "Career planning, specialists & add-on services",
-    "carreira_intro": "Every Academy family works with a career specialist, not just a coach. That means real planning behind the driving, not only laps:",
-    "carreira": ("Career path analysis: our specialists assess the driver's progress and lay out realistic next steps, categories, and timelines.",
-                 "Track planning: deciding which tracks and race weekends make sense for where the driver is right now.",
-                 "Logistics planning: coordinating travel, scheduling, and race-weekend logistics around school and family life.",
-                 "Cost-efficiency planning: budgeting the season so spending matches the driver's actual stage and goals, not guesswork.",
-                 "Brand & sponsorship association: once a driver is competitive, we help shape their story and connect it with potential sponsors and brand partners.",
-                 "On-track team: the same mechanic who preps the equipment and the coach who reviews the laps, working together on every session."),
-    "carreira_extras_intro": "Available as paid add-ons, negotiated separately once a driver is ready for them:",
-    "carreira_extras": ("Press & PR advisory for the driver and family.", "Video content production for the driver's own highlight reels and sponsor material."),
-    "inclui_titulo": "Package includes",
-    "inclui": ("Kart: High-performance kart provided for each session.", "Coach: Expert coaching from professional instructors.",
-               "Mechanic: On-site mechanical support to keep the kart race-ready.", "Career planning: Ongoing guidance from your career specialist.",
-               "In-depth safety instructions.", "Driver Pass: Access to the track for the driver.",
-               "1 Guest Pass: Bring one guest (family or friend) to accompany and support you (Additional guests subject to track pass price)."),
-    # #254: da Kart School — o que levar, o "Why URACE" e o passo a passo de entrar (os passos são os
-    # da compra do plano no site e o que os termos da Academy já dizem: 4 dias por mês, chegada às 8 am)
-    "trazer_titulo": "What you need to bring",
-    "trazer": ("MUST wear long pants, closed toe shoes and a jacket.",),
-    "porque_titulo": "Real training, theory and pro coaching, month after month",
-    "porque": ("Professional Track - where real races happen.", "Theory and mechanics simplified",
-               "Mentorship by winning drivers", "Confidence, reflexes and racing mindset",
-               "Monthly Program = Continuous Evolution"),
-    "passos_titulo": "How to join the URACE Academy",
-    "passos": ("Choose your commitment above — the longer you commit, the less each session costs.",
-               "Sign in or create your URACE account and tell us who the driver is (height and weight, so the kart is prepared).",
-               "Pay the first month online and sign the waiver.",
-               "Your four sessions a month are scheduled once a week, with your coach. Arrival at the track is 8 am."),
-    "caminho_titulo": "Your path: Arrive and Drive → Academy → Racing Team",
-    "caminho_texto": ("URACE Academy isn't a standalone class — it's the middle rung of a ladder. Drivers usually start at Arrive "
-                      "and Drive, where they get their first real laps and we get our first read on their potential. Academy is "
-                      "where that potential becomes a plan: four sessions a month of structured coaching, video and data review, "
-                      "and a career specialist tracking progress alongside the driving. From there, Academy drivers who are ready "
-                      "move up to the URACE Racing Team — our motorsport hub, where they compete under the URACE banner on the "
-                      "path toward the main leagues of the sport.",
-                      "We're also building a racing simulator program, launching soon, to give Academy and Racing Team drivers "
-                      "extra seat time between track days without the cost of extra track sessions. Not sure where your driver "
-                      "fits on that path? Talk to Our Career Specialist and we'll map it out with you.",
-                      "Every driver starts somewhere. URACE provides a structured environment where young drivers can experience "
-                      "motorsport, develop their skills and progress toward increasingly competitive levels of racing."),
-    "etapas": (("Experience", "Discover karting and take your first laps with professional guidance.", "icon-experience.webp"),
-               ("Develop", "Build technique, discipline, consistency and a competitive mindset through structured training.", "icon-develop.webp"),
-               ("Compete", "Gain race experience and learn to perform in competitive environments.", "icon-compete.webp"),
-               ("Pursue the next level", "Continue developing with professional coaching, racing experience and long-term guidance.", "icon-pursue.webp")),
-    "faq": (("Add-ons, travel and track fees", (
+    # #508: a página de hoje do urace.us é curta; o que é informação prática da página antiga (o que o plano inclui, o
+    # que trazer e como entrar) fica aqui, na FAQ
+    "faq": (("What the plan includes", ("Kart: High-performance kart provided for each session.",
+                                        "Coach: Expert coaching from professional instructors.",
+                                        "Mechanic: On-site mechanical support to keep the kart race-ready.",
+                                        "Career planning: Ongoing guidance from your career specialist.",
+                                        "In-depth safety instructions.", "Driver Pass: Access to the track for the driver.",
+                                        "1 Guest Pass: Bring one guest (family or friend) to accompany and support you "
+                                        "(Additional guests subject to track pass price).")),
+            ("What to bring", ("MUST wear long pants, closed toe shoes and a jacket.",)),
+            ("How joining works", ("Choose your plan above — the longer you commit, the less each session costs.",
+                                   "Sign in or create your URACE account and tell us who the driver is (height and weight, "
+                                   "so the kart is prepared).",
+                                   "Pay the first month online and sign the waiver.",
+                                   "Your four sessions a month are scheduled once a week, with your coach. Arrival at the "
+                                   "track is 8 am.")),
+            ("Add-ons, travel and track fees", (
                 # #273: da planilha de preços do dono (15/10)
                 "Lead and Follow is an add-on for any training day: a partner trainer on track with the driver, for $769 per training day.",
                 "Academy services provided outside of the Orlando Kart Center are charged an extra $250 for hotel, food and transport.",
@@ -202,24 +171,26 @@ ACADEMY = {
                 "the session itself. By using URACE's services, you agree to this policy and understand that rescheduling fees "
                 "may apply.")),
             ("Cancelling the plan", ("Renews month by month; cancel with 30 days written notice.",))),
-    "fecho": "Future pros start here.",
-    "fecho_sub": " ".join(FECHO_PROXIMO),
-    "fecho_cta": ("Join URACE Academy", RESERVAR + "?service=academy"),
+    "fecho": "When you are ready: the Racing Team",
+    "fecho_sub": "Race-team program for regional, national and international grids. Your coach tells you when.",
+    "fecho_cta": ("See the Racing Team", "/pro-team/"),
 }
 
 # ------------------------------------------------------------------ Pro Team (urace.us/pro-team/)
 # #506: /professional-kart-team-racing-team/ é landing própria de novo (pg_landings.py), não mais 301 para cá
 PRO_TEAM = {
     "caminho": "/pro-team/",
-    "titulo": "Kart Racing Team in Florida - Join the URACE Team",
-    "descricao": ("URACE runs a professional kart racing team in Florida: engine programme, coaching, race support and a "
-                  "selection path from club karting upward."),
+    # #508: o título e a descrição do urace.us de 29/10
+    "titulo": "URACE: Professional Kart Racing Team in Florida",
+    "descricao": ("The URACE team runs race weekends in SKUSA, USPKS and Florida series, with kart prep, mechanics and "
+                  "coaching, on the path to F1, NASCAR, IMSA and IndyCar."),
     "eyebrow": "Driver Development · Orlando, FL",
     "h1": "You already race. Now race with a team behind you.",
     "sub": ("URACE prepares the kart, runs the race weekend and puts a professional coach alongside the driver — based at "
             "the Orlando Kart Center and entered in the Florida and national calendars."),
     "foto": "banner-topo-lp-urace-1.webp",
     "cta": ("Talk to our racing team", CONTATO),
+    "cta2": ("Book a call", LIGACAO),
     "metodo": ("Our teaching method includes data analysis, on-board video study and explanation of the theories involved "
                "in all the driving aspects we discuss. We offer full support for local, regional and national events."),
     "suporte_titulo": "Professional Kart Racing Team",
@@ -233,12 +204,15 @@ PRO_TEAM = {
     # (nome, sub, texto, preço, por, link): o preço "academy"/"boost" é o do plano no painel; sem plano, sem preço
     "opcoes": (("URACE Academy", "Not racing yet? Start here.", "Four coached sessions a month with kart, full equipment, maintenance and a professional coach included. Month to month, no minimum term.", "academy", "Per month", "/academy/"),
                ("Race Weekend Support", "We run the kart. You drive.", "Kart preparation and trackside support at the rounds we are entered in. Race entries, tyres, fuel and consumables are quoted per event and are not part of the fee.", "Let’s talk", "Per event", CONTATO)),
-    "calendario_titulo": "Where we are racing",
-    "calendario_sub": "The rounds URACE is entered in. If your driver comes with us, this is the season. Dates and venues as published by the series.",
+    # #508: como no urace.us de 29/10. A prova que já passou sai sozinha da lista (paginas_site._proximas)
+    "calendario_rotulo": "Where we are racing",
+    "calendario_titulo": "Next rounds on the calendar",
+    "calendario_sub": "If your driver comes with us, this is the season. Dates and venues as published by the series.",
     "calendario": (("Oct 18, 2026", "SKAPA Winter Series — Rounds 4 & 5"),
                    ("Oct 25, 2026", "AMR Karting Challenge — Round 9, Homestead, Florida"),
                    ("Nov 22, 2026", "AMR Karting Challenge — Round 10, Homestead, Florida"),
-                   ("Dec 6, 2026", "Florida Karting Championship — Rounds 11 & 12, AMR Motorplex")),
+                   ("Dec 6, 2026", "Florida Karting Championship — Rounds 11 & 12, AMR Motorplex"),
+                   ("Jan–Mar 2027", "SKUSA Winter Series and Florida winter rounds")),
     "fecho": "Future pros start here.",
     "fecho_sub": " ".join(FECHO_PROXIMO),
     "fecho_cta": ("Talk to our racing team", CONTATO),
@@ -285,19 +259,19 @@ BEGINNERS = {
 }
 
 # ------------------------------------------------------------------ Career (urace.us/plan-your-career/)
-# #506: a The Driver Factory voltou a ser página própria (pg_landings.py), com o título e a descrição dela no urace.us
-# (que o /career/ tinha herdado); o /career/ fica com os do /plan-your-career/ de hoje, o endereço que ele substitui.
+# #506: a The Driver Factory voltou a ser página própria (pg_landings.py), com o título e a descrição dela no urace.us;
+# o /career/ é o /plan-your-career/ (o endereço que ele substitui), com o título e a descrição de lá.
 CAREER = {
     "caminho": "/career/",
     "antigos": ("/plan-your-career/",),
+    # #508: o título e a abertura do urace.us de 29/10 (urace.us/plan-your-career/)
     "titulo": "Racing Career Path to F1, NASCAR, IMSA & IndyCar | URACE",
     "descricao": ("Plan a racing career step by step, from Sim2Grid and URACE Academy in Orlando to Formula 1, NASCAR, IMSA "
-                  "or IndyCar. See each step, what it costs and when."),
-    "eyebrow": "Career Plan · Orlando",
+                  "or IndyCar."),
+    "eyebrow": "Career plan · Orlando",
     "h1": "How to become a racing driver: one ladder. Start at the bottom.",
-    "sub": ("Nobody is born on a grid. Every professional driver climbed a ladder, and every rung of it was paid for and "
-            "earned. This page is that ladder, laid out end to end — from a simulator seat in Orlando to Formula 1, IndyCar "
-            "or NASCAR. We run the bottom of it and we prepare drivers for the rest."),
+    "sub": ("Every pro climbed the same ladder. Here it is, from a sim seat in Orlando to F1, IndyCar or NASCAR. We run "
+            "the bottom rungs and get drivers ready for the rest."),
     "foto": "enzo-1.webp",
     "cta": ("Find my next step", CONTATO),
     "degraus_titulo": "The ladder ends on our grid",
@@ -427,9 +401,10 @@ ABOUT = {
 # ------------------------------------------------------------------ Contact (urace.us/contact/)
 CONTACT = {
     "caminho": "/contact/",
-    "titulo": "Contact URACE - Kart Racing School in Orlando",
-    "descricao": (f"Talk to the URACE team about kart lessons, the academy or race support. Orlando Kart Center, "
-                  f"{SITE['endereco']['rua']}. Call {SITE['telefone']}."),
+    # #508: o título e a descrição do urace.us de 29/10
+    "titulo": "Contact URACE - Professional Racing Team in Orlando",
+    "descricao": (f"Talk to URACE about URACE Academy, URACE Sim2Grid or the racing team. Orlando Kart Center, "
+                  f"{SITE['endereco']['rua'].split(',')[0]}. Call {SITE['telefone']}."),
     "eyebrow": "Contact",
     "h1": "Talk to URACE",
     "sub": "New lead, question, or planning a group / corporate event? Fill out the form below and our team will get back to you.",

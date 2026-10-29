@@ -394,18 +394,20 @@ def test_programas_fundidos_em_arrive_and_drive_e_urace_academy(cli):
         assert antigo not in PAGINAS and SITE + antigo not in locs
         r = cli.get(antigo, follow_redirects=False)
         assert r.status_code == 301 and r.headers["location"] == novo
-    # o texto aproveitado está na página que herdou
+    # o texto aproveitado está na página que herdou. #508: a Academy segue o urace.us de 29/10, que se apresenta como a
+    # kart school ("URACE Academy. Kart school in Orlando."); da Kart School antiga fica a FAQ da educação completa
     academy = cli.get("/academy/").text
-    for trecho in ("Mentorship by winning drivers", "closed toe shoes", "How to join the URACE Academy",
-                   "comprehensive racing education", "practical training, theory, real karts"):
+    for trecho in ("URACE Academy. Kart school in Orlando.", "Real coaching. Not just seat time.",
+                   "comprehensive racing education"):
         assert trecho in academy, trecho
     arrive = cli.get("/services/arrive-and-drive/").text
     for trecho in ("Professional coaching, data and video analysis", "Lead and Follow", "Technique and mindset training",
                    "Theory and mechanics simplified", "Drivers who already race"):
         assert trecho in arrive, trecho
-    # nenhuma página do site (nem o nome do programa, nem o link) fica falando dos dois
+    # nenhuma página do site (nem o nome do programa, nem o link) fica falando dos dois. #508: o título da Academy no
+    # urace.us de 29/10 ("URACE Academy: Kart School in Orlando") é a Academy se dizendo escola de kart, não o programa
     for c in PAGINAS:
-        html = cli.get(c).text
+        html = cli.get(c).text.replace("URACE Academy: Kart School in Orlando", "")
         assert not re.search(r"\bKart School\b|\bProfessional Coaching\b", html), c
         for antigo, _ in ANTIGOS_254:
             assert f'href="{antigo}"' not in html and f'"https://novo.urace.us{antigo}"' not in html, (c, antigo)
