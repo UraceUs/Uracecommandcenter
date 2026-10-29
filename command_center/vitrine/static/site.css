@@ -806,6 +806,7 @@ body:has(> main > .hero:first-child) main > .hero-sim:first-child .hero-in { pad
 /* ------------------------------------------------------------ home, About e Programs por blocos (#507) */
 /* as fotos de lá vêm em proporções diferentes: na mesma fileira de cartões, a mesma altura */
 #pick-your-line .cartao img, #the-ladder .cartao img { aspect-ratio: 3 / 2; object-fit: cover }
+#pick-your-line .cartao img { object-position: 50% 0 }      /* a foto da equipe: corta embaixo, não as cabeças */
 /* os resultados da temporada (duas fotos) em meia largura no computador; os pilotos em duas colunas no celular */
 #top-step .figuras { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)) }
 #drivers .figuras { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)) }
