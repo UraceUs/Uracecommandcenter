@@ -5,7 +5,7 @@
  * no status que estiver" e "O envio ao Usman ... tem um padrão de envio. Salva esse padrão como
  * template". O que vivia no projeto SUITS do Asana (pedidos, leads e fornecedores) vem para cá.
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom'
 import { api, ApiError, qs } from '../api/client'
 import { useGet, usePaginado } from '../api/hooks'
@@ -31,7 +31,8 @@ interface Nota { id: number; status: string | null; kind: string; text: string |
   created_at: string; autor: string | null; ia?: { status: string; output: string | null; error: string | null } | null }
 type Valor = { v: number; u: string } | { t: string }
 interface PedidoApi extends Omit<Linha, 'notas'> { customer_email: string | null; customer_phone: string | null; ship_address: string | null
-  language: string | null; supplier_id: number | null; fornecedor_email: string | null; paid_at: string | null; tracking: string | null
+  language: string | null; supplier_id: number | null; fornecedor_email: string | null; fornecedor: string | null
+  designer_id: number | null; designer: { id: number | null; nome: string | null; email: string | null } | null; paid_at: string | null; tracking: string | null
   asana_gid: string | null; asana_notes: string | null; asana_status: string | null; measurements: Record<string, Valor>
   site_order: string | null; gmail_thread_cliente: string | null; gmail_thread_designer: string | null; gmail_thread_fornecedor: string | null
   medidas_texto: Record<string, string>; faltam_medidas: string[]; design: Record<string, string>; criado_por: string | null; notas: Nota[]
@@ -62,6 +63,7 @@ function oQuePuxou(d: DadosCliente) {
 const cartao = (id: number, nome: string | null, piloto: string | null) => ({ id, name: nome || '', pilot_name: piloto, email: null, phone: null } as unknown as Client)
 interface Resumo { por_etapa: Record<string, number>; abertos: number; fechados: number; descartados?: number; testes?: number; leads: number; fornecedores: number }
 interface Lead { id: number; name: string; email: string | null; phone: string | null; notes: string | null; status: string; order_id: number | null; created_at: string; client_id: number | null }
+interface Designer { id: number; name: string; email: string | null; notes: string | null; is_current: number; pedidos?: number }
 interface Fornecedor { id: number; name: string; contact: string | null; email: string | null; phone: string | null; has_fia: number | null
   status: string | null; price: string | null; shipping: string | null; payment: string | null; lead_time: string | null; comments: string | null
   is_current: number; pedidos: number; asana_gid: string | null }
@@ -123,7 +125,7 @@ export function Suits() {
       className={() => (aba === path ? 'on' : '')}>{rot}{path === 'leads' && resumo.data ? <span className="count">{resumo.data.leads}</span> : null}</NavLink>)}</nav>
     {meta.error ? <div className="card"><ErrorState error={meta.error} retry={meta.reload} /></div>
       : aba === 'leads' ? <Leads />
-      : aba === 'fornecedores' ? <Fornecedores />
+      : aba === 'fornecedores' ? <><Fornecedores /><Designers /></>
       : aba === 'modelo' ? <Modelo />
       : aba === 'ponte' ? <Ponte />
       : aba === 'whatsapp' ? <WhatsApp />
@@ -547,6 +549,33 @@ const tamanho = (b: number) => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.
 
 function PonteDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void }) {
   const toast = useToast()
+  const designers = useGet<Designer[]>('/suits/designers')
+  const fornecedores = useGet<Fornecedor[]>('/suits/fornecedores')
+  const [puxando, setPuxando] = useState(false)
+  const tentou = useRef(false)
+  // #481 (dono, 29/10: "eu preciso que já venha a conversa com o cliente ... ele puxa de lá"): procura no Gmail as
+  // conversas que faltam — sozinho na primeira vez que o pedido abre sem a conversa do cliente, e no botão
+  async function puxar(silencioso = false) {
+    setPuxando(true)
+    try {
+      const r = await api.post<{ puxadas: { ligadas: Record<string, string>; faltam: string[]; aviso?: string } }>(`/suits/${pedido.id}/ponte/puxar`)
+      const n = Object.keys(r.puxadas.ligadas).length
+      if (r.puxadas.aviso) { if (!silencioso) toast(r.puxadas.aviso, 'warn') }
+      else if (n) { toast(tr("Conversas ligadas pelo Gmail: {0}.", Object.keys(r.puxadas.ligadas).join(', ')), 'ok'); onDone() }
+      else if (!silencioso) toast(r.puxadas.faltam.length ? tr("Não achei no Gmail: {0}.", r.puxadas.faltam.join(', ')) : tr("As conversas já estão ligadas."), 'warn')
+    } catch (e) { if (!silencioso) toast((e as ApiError).message, 'crit') } finally { setPuxando(false) }
+  }
+  useEffect(() => {
+    if (tentou.current || pedido.gmail_thread_cliente || !pedido.customer_email || pedido.discarded_at) return
+    tentou.current = true
+    void puxar(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pedido.id])
+  async function escolher(campo: 'designer_id' | 'supplier_id', valor: string) {
+    try { await api.patch(`/suits/${pedido.id}`, { [campo]: valor ? Number(valor) : 0 }); toast(tr("Salvo."), 'ok'); onDone() }
+    catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  const fAtual = (fornecedores.data || []).find(f => f.id === pedido.supplier_id) || (fornecedores.data || []).find(f => f.is_current)
   const anexos = useGet<Anexo[]>(`/suits/${pedido.id}/anexos?v=${pedido.notas.length}`)
   const [ed, setEd] = useState<Record<string, string> | null>(null)
   const [indo, setIndo] = useState(false)
@@ -568,6 +597,18 @@ function PonteDoPedido({ pedido, onDone }: { pedido: PedidoApi; onDone: () => vo
   }
   return <Section title={tr("Ponte de e-mail")} right={!ed && <button className="btn sm ghost" onClick={() => setEd(Object.fromEntries(papeis.map(([k]) => [k, String((pedido as unknown as Record<string, unknown>)[k] ?? '')])))}><Icon name="pencil" size={14} /> {tr("Ligar conversas")}</button>}>
     <p className="small muted">{tr("A IA lê e responde nestas conversas do Gmail: com o cliente, com o designer (sem os dados do cliente) e com o fornecedor.")}{pedido.site_order ? tr(" Pedido do site #{0}.", pedido.site_order) : ''}</p>
+    <div className="suit-form">
+      <label className="fld"><span>{tr("E-mail do cliente")}</span><input aria-label={tr("E-mail do cliente")} value={pedido.customer_email || ''} readOnly placeholder={tr("preencha em Cliente › Editar")} /></label>
+      <label className="fld"><span>{tr("Designer")}</span><select aria-label={tr("Designer")} value={pedido.designer_id || ''} onChange={e => escolher('designer_id', e.target.value)}>
+        <option value="">{tr("o atual")}{pedido.designer && !pedido.designer_id && pedido.designer.nome ? ` (${pedido.designer.nome})` : ''}</option>
+        {(designers.data || []).map(d => <option key={d.id} value={d.id}>{d.name}{d.email ? ` · ${d.email}` : ''}</option>)}</select>
+        {pedido.designer?.email && <span className="small muted">{tr("vai para {0}", pedido.designer.email)}</span>}</label>
+      <label className="fld"><span>{tr("Fornecedor")}</span><select aria-label={tr("Fornecedor")} value={pedido.supplier_id || ''} onChange={e => escolher('supplier_id', e.target.value)}>
+        <option value="">{tr("o atual")}{!pedido.supplier_id && fAtual ? ` (${fAtual.name})` : ''}</option>
+        {(fornecedores.data || []).map(f => <option key={f.id} value={f.id}>{f.name}{f.email ? ` · ${f.email}` : ''}</option>)}</select>
+        {fAtual?.email && <span className="small muted">{tr("vai para {0}", fAtual.email)}</span>}</label>
+    </div>
+    <div className="row gap wrap" style={{ margin: '8px 0' }}><button className="btn" disabled={puxando} onClick={() => puxar()}>{puxando ? <span className="spin" /> : <Icon name="mail" size={14} />} {tr("Puxar conversas do Gmail")}</button></div>
     {ed ? <><div className="suit-form">{papeis.map(([k, rot]) => <label key={k} className="fld"><span>{rot} {tr("(link ou id do Gmail)")}</span>
         <input value={ed[k]} onChange={e => setEd(x => ({ ...x!, [k]: e.target.value }))} placeholder={tr("cole o link da conversa")} /></label>)}</div>
       <div className="row gap"><button className="btn ghost" onClick={() => setEd(null)}>{tr("Cancelar")}</button><button className="btn primary" onClick={salvar}>{tr("Salvar")}</button></div></>
@@ -888,6 +929,41 @@ function Fornecedores() {
         <label className="fld"><span>{tr("Tem FIA")}</span><select value={ed.has_fia == null ? '' : String(ed.has_fia)} onChange={e => setEd(x => ({ ...x, has_fia: e.target.value === '' ? null : Number(e.target.value) }))}>
           <option value="">{tr("não sabemos")}</option><option value="1">{tr("sim")}</option><option value="0">{tr("não")}</option></select></label></div>
       <label className="check"><input type="checkbox" checked={!!ed.is_current} onChange={e => setEd(x => ({ ...x, is_current: e.target.checked ? 1 : 0 }))} /> {tr("É o fornecedor atual (recebe os pedidos)")}</label>
+      <div className="modal-foot"><button className="btn ghost" onClick={() => setEd(null)}>{tr("Cancelar")}</button><button className="btn primary" onClick={salvar}>{tr("Salvar")}</button></div>
+    </div></Scrim>}
+  </Section>
+}
+
+/** #481 (dono, 29/10: "designer 1, designer 2, designer 3, com os endereços de e-mail fixos"): a lista que a Ponte de
+ *  e-mail do pedido usa. O atual vale para o pedido que não escolheu outro. */
+function Designers() {
+  const { can } = useAuth()
+  const toast = useToast()
+  const lista = useGet<Designer[]>('/suits/designers')
+  const [ed, setEd] = useState<Partial<Designer> | null>(null)
+  async function salvar() {
+    if (!ed) return
+    try {
+      const corpo = { name: ed.name, email: ed.email, notes: ed.notes, is_current: !!ed.is_current }
+      if (ed.id) await api.patch(`/suits/designers/${ed.id}`, corpo); else await api.post('/suits/designers', corpo)
+      setEd(null); lista.reload(); toast(tr("Designer salvo."), 'ok')
+    } catch (e) { toast((e as ApiError).message, 'crit') }
+  }
+  return <Section title={tr("Designers")} count={lista.data?.length} right={can('MANAGER') && <button className="btn sm" onClick={() => setEd({})}><Icon name="plus" size={14} /> {tr("Novo")}</button>}>
+    <p className="small muted">{tr("Na Ponte de e-mail de cada pedido você escolhe o designer; o e-mail vem daqui. O atual vale para o pedido sem escolha. O cliente nunca vê nome nem e-mail de designer.")}</p>
+    {lista.error ? <ErrorState error={lista.error} retry={lista.reload} /> : !lista.data ? <Loading /> : !lista.data.length ? <Empty title={tr("Nenhum designer")}>{tr("Cadastre o primeiro.")}</Empty>
+      : <div className="cd-grade">{lista.data.map(d => <Cartao key={d.id} id={`designer-${d.id}`} estado={d.is_current ? tr("atual") : tr("designer")} tom={d.is_current ? 'ok' : 'neutral'}
+          avatar={d.name} avatarTom="azul" nome={d.name} sub={[d.email]} grande={d.pedidos} detalhe={tr("Pedidos")}
+          acoes={can('MANAGER') ? <button className="btn" onClick={() => setEd({ ...d })}><Icon name="pencil" size={14} /> {tr("Editar")}</button> : null}>
+          {d.notes ? <CdLista><CdItem tom="neutral" valor={d.notes}>{tr("Notas")}</CdItem></CdLista> : null}
+        </Cartao>)}</div>}
+    {ed && <Scrim onMouseDown={() => setEd(null)}><div className="modal" style={{ maxWidth: 520 }} onMouseDown={e => e.stopPropagation()} role="dialog" aria-modal="true" aria-label={tr("Designer")}>
+      <h3>{ed.id ? tr("Editar {0}", ed.name) : tr("Novo designer")}</h3>
+      <div className="suit-form">
+        <label className="fld"><span>{tr("Nome")}</span><input value={ed.name || ''} onChange={e => setEd(x => ({ ...x, name: e.target.value }))} /></label>
+        <label className="fld"><span>{tr("E-mail")}</span><input type="email" inputMode="email" value={ed.email || ''} onChange={e => setEd(x => ({ ...x, email: e.target.value }))} /></label>
+        <label className="fld"><span>{tr("Notas")}</span><input value={ed.notes || ''} onChange={e => setEd(x => ({ ...x, notes: e.target.value }))} /></label></div>
+      <label className="check"><input type="checkbox" checked={!!ed.is_current} onChange={e => setEd(x => ({ ...x, is_current: e.target.checked ? 1 : 0 }))} /> {tr("É o designer atual (vale para o pedido sem escolha)")}</label>
       <div className="modal-foot"><button className="btn ghost" onClick={() => setEd(null)}>{tr("Cancelar")}</button><button className="btn primary" onClick={salvar}>{tr("Salvar")}</button></div>
     </div></Scrim>}
   </Section>

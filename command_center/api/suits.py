@@ -117,6 +117,7 @@ class PedidoIn(BaseModel):
     language: str | None = None
     client_id: int | None = None
     supplier_id: int | None = None
+    designer_id: int | None = None      # #481: o designer deste pedido (da lista da Alpha Line)
     order_date: str | None = None
     due_on: str | None = None
     paid_at: str | None = None
@@ -134,7 +135,7 @@ class PedidoIn(BaseModel):
 
 
 CAMPOS = ("title", "product", "quantity", "customer_name", "customer_email", "customer_phone", "ship_address",
-          "driver_name", "language", "client_id", "supplier_id", "order_date", "due_on", "paid_at", "tracking",
+          "driver_name", "language", "client_id", "supplier_id", "designer_id", "order_date", "due_on", "paid_at", "tracking",
           "site_order", "gmail_thread_cliente", "gmail_thread_designer", "gmail_thread_fornecedor", "ia_ligada", "is_test")
 
 
@@ -187,6 +188,11 @@ def _gravar(con, dados: dict, u_id, pid=None, fonte="manual"):
         raise suits.Invalido("quantidade entre 1 e 50")
     if campos.get("supplier_id") and not um(con, "SELECT id FROM suit_suppliers WHERE id=?", (campos["supplier_id"],)):
         raise suits.Invalido("fornecedor não existe")
+    if campos.get("designer_id") and not um(con, "SELECT id FROM suit_designers WHERE id=?", (campos["designer_id"],)):
+        raise suits.Invalido("designer não existe")
+    for k in ("supplier_id", "designer_id"):        # 0 = voltar para o padrão (o atual da lista)
+        if dados.get(k) == 0:
+            campos[k] = None
     if campos.get("client_id") and not um(con, "SELECT id FROM clients WHERE id=?", (campos["client_id"],)):
         raise suits.Invalido("cliente não existe")
     if dados.get("client_id") == 0:          # 0 = desvincular (a tela manda 0 quando tira o cliente)
@@ -395,6 +401,58 @@ def mudar_fornecedor(fid: int, dados: FornecedorIn, request: Request, con: sqlit
     return um(con, "SELECT * FROM suit_suppliers WHERE id=?", (fid,))
 
 
+# -------------------------------------------------------------- designers (#481)
+@r.get("/designers")
+def designers(con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """Os designers da Alpha Line (nome e e-mail fixo); a Ponte de e-mail do pedido escolhe um deles."""
+    _ponte().semear_designers(con)
+    return todos(con, """SELECT d.*, (SELECT COUNT(*) FROM suit_orders o WHERE o.designer_id=d.id) AS pedidos
+                         FROM suit_designers d ORDER BY d.is_current DESC, d.name""")
+
+
+class DesignerIn(BaseModel):
+    name: str | None = None
+    email: str | None = None
+    notes: str | None = None
+    is_current: bool | None = None
+
+
+def _designer_campos(dados):
+    c = {k: _limpo(v) for k, v in dados.model_dump(exclude_unset=True).items()}
+    if "is_current" in c:
+        c["is_current"] = 1 if c["is_current"] else 0
+    if c.get("email") and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", c["email"]):
+        raise HTTPException(400, "E-mail do designer inválido.")
+    if "name" in c and not (c["name"] or "").strip():
+        raise HTTPException(400, "Diga o nome do designer.")
+    return c
+
+
+@r.post("/designers", status_code=201)
+def criar_designer(dados: DesignerIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    c = _designer_campos(dados)
+    if not (c.get("name") or "").strip():
+        raise HTTPException(400, "Diga o nome do designer.")
+    if c.get("is_current"):
+        con.execute("UPDATE suit_designers SET is_current=0")
+    did = inserir(con, "suit_designers", updated_at=agora(), **c)
+    _aud(con, request, u, "suit.designer.created", did, tipo="suit_designer")
+    return um(con, "SELECT * FROM suit_designers WHERE id=?", (did,))
+
+
+@r.patch("/designers/{did}")
+def mudar_designer(did: int, dados: DesignerIn, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
+    if not um(con, "SELECT id FROM suit_designers WHERE id=?", (did,)):
+        raise HTTPException(404, "Designer não encontrado.")
+    c = _designer_campos(dados)
+    if c.get("is_current"):
+        con.execute("UPDATE suit_designers SET is_current=0")       # o padrão é um só
+    if c:
+        atualizar(con, "suit_designers", did, updated_at=agora(), **c)
+    _aud(con, request, u, "suit.designer.updated", did, {"campos": list(c)}, tipo="suit_designer")
+    return um(con, "SELECT * FROM suit_designers WHERE id=?", (did,))
+
+
 # ------------------------------------------------------------ importar do Asana
 @r.post("/importar")
 def importar(request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("MANAGER"))):
@@ -550,6 +608,7 @@ def ver(pid: int, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exig
             c = um(con, "SELECT status, output, error FROM ai_commands WHERE id=?", (n["command_id"],))
             n["ia"] = dict(c) if c else None
     p["preparados"] = _ponte().preparados(con, pid)          # #382: e-mails ao designer esperando o clique
+    p["designer"] = _ponte().designer_do_pedido(con, p)      # #481: o designer que vale (o escolhido ou o padrão)
     return p
 
 
@@ -735,6 +794,25 @@ def simular(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db
     threading.Thread(target=_vai, daemon=True, name=f"cc-suits-sim-{pid}").start()
     _aud(con, request, u, "suit.bridge.simulate", pid)
     return {"iniciada": True}
+
+
+@r.post("/{pid}/ponte/puxar")
+def puxar_conversas(pid: int, request: Request, con: sqlite3.Connection = Depends(get_db), u=Depends(auth.exige("OPERATOR"))):
+    """#481: procura no Gmail e liga ao pedido as conversas que faltam (cliente, designer, fornecedor). Só lê."""
+    from command_center.providers import NaoConectado
+    try:
+        r_ = _ponte().achar_conversas(con, pid)
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    except _ponte().Recusado as e:
+        raise HTTPException(400, str(e))
+    except NaoConectado as e:          # a tela procura sozinha ao abrir o pedido: Gmail fora vira aviso, não erro
+        r_ = {"ligadas": {}, "faltam": [], "aviso": f"Gmail não conectado: {str(e)[:200]}"}
+    except Exception as e:             # noqa: BLE001 - o Gmail respondeu erro: nada foi ligado, a tela mostra o motivo
+        r_ = {"ligadas": {}, "faltam": [], "aviso": f"O Gmail não respondeu: {str(e)[:200]}"}
+    if r_["ligadas"]:
+        _aud(con, request, u, "suit.bridge.linked", pid, {"ligadas": list(r_["ligadas"])})
+    return dict(ver(pid, con, u), puxadas=r_)
 
 
 @r.get("/{pid}/email-fornecedor")
