@@ -24,7 +24,8 @@ Os blocos (`tipo`):
 - ``videos``: eyebrow, titulo, intro, itens [(titulo, url)]
 - ``definicoes``: eyebrow, titulo, intro, itens [(termo, descrição)]
 - ``faq``: eyebrow, titulo, intro, itens [(pergunta, resposta | (parágrafos,))] — vira FAQPage no JSON-LD
-- ``formulario``: eyebrow, titulo, texto, assunto, enviar, mensagem (rótulo do campo de texto, opcional), nota
+- ``formulario``: eyebrow, titulo, texto, assunto, enviar, mensagem (rótulo do campo de texto, opcional), nota, obrigado
+  (o caminho de uma página registrada: depois de enviar, a pessoa vai para lá — a campanha conta a conversão pela URL)
 - ``contador``: eyebrow, titulo, texto, alvo (ISO 8601 com fuso), rotulo (o que acontece na data)
 - ``cta``: titulo, texto, ctas
 - ``posts``: eyebrow, titulo, intro, n — os artigos no ar (do banco)
@@ -59,6 +60,7 @@ LINK = re.compile(r"\[([^\]\n]{1,160})\]\(([^)\s]{1,400})\)")
 NEGRITO = re.compile(r"\*\*([^*\n]{1,200})\*\*")
 HREF_OK = re.compile(r"(?:/(?!/)[^\s\"'<>]*|#[A-Za-z][\w-]{0,60}|https://[^\s\"'<>]+|tel:\+?[\d-]{7,20}|mailto:[^\s\"'<>@]+@[^\s\"'<>]+)")
 ANCORA = re.compile(r"[a-z][a-z0-9-]{0,40}")
+CAMINHO_SITE = re.compile(r"/(?:[a-z0-9]+(?:-[a-z0-9]+)*/)+")
 PRECOS_DO_PAINEL = ("kart",)
 
 
@@ -86,6 +88,12 @@ def registro():
 
 def caminhos_indexaveis():
     return [c for c, p in registro().items() if p.get("indexar", True)]
+
+
+def obrigados():
+    """As páginas de obrigado dos formulários (só caminhos registrados: o contato nunca redireciona para fora)."""
+    return {b["obrigado"] for p in registro().values() for b in p["blocos"]
+            if b["tipo"] == "formulario" and b.get("obrigado") in registro()}
 
 
 def voltas_de_formulario():
@@ -278,12 +286,17 @@ def _formulario(b, i, host, ctx):
     com o assunto e a página de onde veio, e volta para esta página."""
     caminho = ctx["caminho"]
     enviado = ctx.get("enviado")
+    obrigado = b.get("obrigado")
+    if obrigado and not CAMINHO_SITE.fullmatch(obrigado):
+        raise ErroBloco(f"obrigado: {obrigado!r}")
+    obrigado_attr = f' data-obrigado="{e(obrigado)}"' if obrigado else ""
+    obrigado_campo = f'<input type="hidden" name="obrigado" value="{e(obrigado)}">' if obrigado else ""
     mensagem = (f'<label>{e(b["mensagem"])} <span class="opcional">(optional)</span>'
                 f'<textarea name="mensagem" maxlength="2000" rows="4"></textarea></label>') if b.get("mensagem") else ""
     miolo = _cabeca(b, i) + (f'<p>{inline(b["texto"])}</p>' if b.get("texto") else "") + f"""
   {'<p class="aviso-ok" role="status">Thank you! We got your information and will contact you shortly.</p>' if enviado else ''}
-  <form class="form-contato" method="post" action="/ops/api/vitrine/contato" data-contato>
-    <input type="hidden" name="assunto" value="{e(b.get('assunto') or 'other')}"><input type="hidden" name="volta" value="{e(caminho)}">
+  <form class="form-contato" method="post" action="/ops/api/vitrine/contato" data-contato{obrigado_attr}>
+    <input type="hidden" name="assunto" value="{e(b.get('assunto') or 'other')}"><input type="hidden" name="volta" value="{e(caminho)}">{obrigado_campo}
     <label>Full name<input name="nome" required autocomplete="name" maxlength="120"></label>
     <label>Email<input name="email" type="email" required autocomplete="email" maxlength="160"></label>
     <label>Phone<input name="telefone" type="tel" autocomplete="tel" maxlength="40"></label>

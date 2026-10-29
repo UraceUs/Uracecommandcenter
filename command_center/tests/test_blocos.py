@@ -124,7 +124,16 @@ def cli(tmp_path, monkeypatch):
     monkeypatch.delenv("CC_SITE_HOSTS", raising=False)
     vitrine._envios.clear()
     oculta = {**EXEMPLO, "caminho": "/exemplo-oculto/", "titulo": "Hidden example | URACE", "indexar": False}
-    monkeypatch.setattr(blocos, "registro", lambda: {EXEMPLO["caminho"]: EXEMPLO, oculta["caminho"]: oculta})
+    lp = {"caminho": "/exemplo-lp/", "titulo": "Example LP | URACE", "descricao": "An example landing page with a form "
+          "that sends the visitor to its own thank-you page.", "indexar": False,
+          "blocos": [{"tipo": "hero", "h1": "Book your day"},
+                     {"tipo": "formulario", "titulo": "Your details", "assunto": "arrive-and-drive",
+                      "obrigado": "/exemplo-obrigado/"}]}
+    obrigado = {"caminho": "/exemplo-obrigado/", "titulo": "Thank you | URACE", "descricao": "Thank you page of the "
+                "example landing page, used by the tests of the block renderer.", "indexar": False,
+                "blocos": [{"tipo": "hero", "h1": "Thanks! Your inquiry is on its way."}]}
+    paginas = {x["caminho"]: x for x in (EXEMPLO, oculta, lp, obrigado)}
+    monkeypatch.setattr(blocos, "registro", lambda: paginas)
     with TestClient(app, base_url="https://novo.urace.us") as t:
         yield t
     vitrine._envios.clear()            # o limite do formulário é da memória do processo: não vaza para o próximo teste
@@ -157,3 +166,22 @@ def test_o_formulario_da_pagina_cai_em_vendas_e_volta_para_ela(cli):
     r = cli.post("/ops/api/vitrine/contato", data={"nome": "Eva Reis", "email": "eva@example.com", "mensagem": "Hi there",
                                                   "volta": "https://outro.example/"}, follow_redirects=False)
     assert r.headers["location"] == "/contact/?sent=1"
+
+
+def test_formulario_com_pagina_de_obrigado_vai_para_ela(cli):
+    """#502: a campanha conta a conversão pela URL do obrigado (como no urace.us), com e sem JavaScript."""
+    assert 'data-contato data-obrigado="/exemplo-obrigado/"' in cli.get("/exemplo-lp/").text
+    r = cli.post("/ops/api/vitrine/contato", data={"nome": "Davi Rocha", "email": "davi@example.com", "assunto": "arrive-and-drive",
+                                                  "volta": "/exemplo-lp/", "obrigado": "/exemplo-obrigado/"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/exemplo-obrigado/"
+    # obrigado que não é de um formulário registrado: volta para a página, nunca para fora
+    for alvo in ("/contact/", "https://outro.example/"):
+        r = cli.post("/ops/api/vitrine/contato", data={"nome": "Eva Reis", "email": "eva@example.com", "volta": "/exemplo-lp/",
+                                                      "obrigado": alvo}, follow_redirects=False)
+        assert r.headers["location"] == "/exemplo-lp/?sent=1", alvo
+
+
+def test_obrigado_fora_do_site_nao_desenha():
+    d = {**EXEMPLO, "blocos": EXEMPLO["blocos"][:1] + [{"tipo": "formulario", "obrigado": "https://outro.example/"}]}
+    with pytest.raises(blocos.ErroBloco):
+        blocos.corpo("novo.urace.us", d)

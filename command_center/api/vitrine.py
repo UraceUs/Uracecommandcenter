@@ -541,6 +541,8 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
     c = await _campos(request)
     # #493: a landing de formulário do SIM2GRID volta para ela mesma, e o objetivo, a sessão e o canal viram a mensagem
     pagina = c.get("volta") if c.get("volta") in (set(ps.SG.FORM_CAMINHOS) | blocos.voltas_de_formulario()) else "/contact/"
+    # #502: o formulário com página de obrigado vai para ela (a campanha conta a conversão pela URL); só caminho registrado
+    ok = c["obrigado"] if c.get("obrigado") in blocos.obrigados() else pagina + "?sent=1"
     if pagina in blocos.voltas_de_formulario() and not c.get("mensagem"):
         c["mensagem"] = f"Form on {pagina}"                # #502: o formulário de uma página por blocos, sem texto
     if pagina in ps.SG.FORM_CAMINHOS and not c.get("mensagem"):
@@ -549,7 +551,7 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
             f"\nChannel: landing page ({ps.SG.FORM_CAMINHOS[pagina]})"
     erro = _validar(c)
     if erro == "robo":
-        return _responde(request, True, pagina + "?sent=1")
+        return _responde(request, True, ok)
     if erro:
         return _responde(request, False, pagina, erro)
     if _estourou(_ip(request)) or _estourou_email(c["email"]):
@@ -564,7 +566,7 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
                    f"{c['nome']} <{c['email']}> {c.get('telefone') or ''}\nAssunto: {assunto}\n\n{c['mensagem']}\n\n"
                    f"Vendas: https://ops.urace.us/ops/sales/{oid}")
     if not _pode_confirmar():
-        return _responde(request, True, pagina + "?sent=1")
+        return _responde(request, True, ok)
     confirmacao = ("We got your message — URACE",
                    f"Hi {_saudacao(c['nome'])},\n\nThanks for reaching out to URACE. We received your message about "
                    f"{assunto} and will reply shortly, usually within one business day.\n\nIn a hurry? Call or WhatsApp "
@@ -580,7 +582,7 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
             _confirmar_pessoa(c["email"], *confirmacao)
     else:
         _confirmar_pessoa(c["email"], *confirmacao)
-    return _responde(request, True, pagina + "?sent=1")
+    return _responde(request, True, ok)
 
 
 def _robo_no_formulario(oid, nome, email, assunto, mensagem, confirmacao):
