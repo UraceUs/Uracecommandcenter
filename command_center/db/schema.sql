@@ -203,6 +203,50 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 CREATE INDEX IF NOT EXISTS tasks_due ON tasks(due_on, status);
 
+-- #455: o espelho completo do Asana. Cada tarefa do quadro U-RACE (menos "Matt tasks") guarda aqui as
+-- subtarefas, os comentários e os anexos como estão no Asana (a descrição e as datas ficam em `tasks`).
+-- Nada se apaga: o que sumiu do Asana fica com `gone_at`. O link de download do anexo expira no Asana,
+-- então ele não é guardado: a rota do painel pede um novo na hora de abrir.
+CREATE TABLE IF NOT EXISTS task_subtasks (
+  id           INTEGER PRIMARY KEY,
+  task_id      INTEGER NOT NULL REFERENCES tasks(id),
+  gid          TEXT NOT NULL UNIQUE,
+  name         TEXT,
+  completed    INTEGER NOT NULL DEFAULT 0,
+  completed_at TEXT,
+  due_on       TEXT,
+  assignee     TEXT,
+  sort         INTEGER,
+  gone_at      TEXT,
+  synced_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS task_subtasks_tarefa ON task_subtasks(task_id, sort);
+
+CREATE TABLE IF NOT EXISTS task_comments (
+  id           INTEGER PRIMARY KEY,
+  task_id      INTEGER NOT NULL REFERENCES tasks(id),
+  gid          TEXT NOT NULL UNIQUE,
+  author       TEXT,
+  text         TEXT,
+  created_at   TEXT,
+  gone_at      TEXT,
+  synced_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS task_comments_tarefa ON task_comments(task_id, created_at);
+
+CREATE TABLE IF NOT EXISTS task_attachments (
+  id           INTEGER PRIMARY KEY,
+  task_id      INTEGER NOT NULL REFERENCES tasks(id),
+  gid          TEXT NOT NULL UNIQUE,
+  name         TEXT,
+  host         TEXT,
+  size         INTEGER,
+  created_at   TEXT,
+  gone_at      TEXT,
+  synced_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+);
+CREATE INDEX IF NOT EXISTS task_attachments_tarefa ON task_attachments(task_id, created_at);
+
 CREATE TABLE IF NOT EXISTS waivers (
   id            INTEGER PRIMARY KEY,
   client_id     INTEGER REFERENCES clients(id),

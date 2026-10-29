@@ -1523,6 +1523,25 @@ def _png_pequeno(caminho):
     return caminho
 
 
+def test_tarefa_do_asana_abre_do_espelho_e_atualizar_avisa_com_o_asana_fora(servidor, navegador):
+    """#455 (dono, 29/10): "as informações que estiverem no Asana serão as mesmas que estarão no Command Center".
+    O detalhe da tarefa vem do espelho; sem Asana (como no e2e), "Atualizar do Asana" avisa e o espelho continua."""
+    pg = entrar(navegador, servidor, largura=1280)
+    abrir(pg, servidor, "/asana?v=board")
+    pg.locator(".tcard", has_text="Bryan Sapata_Academy_2 stroke [3/4]").first.click()
+    modal = pg.locator(".modal")
+    modal.get_by_text(re.compile("Espelho do Asana · atualizado")).wait_for()
+    modal.get_by_text("Melhor volta 41.2: trabalhar a curva 3.").wait_for()
+    modal.get_by_text("Kart ready").wait_for()
+    href = modal.get_by_role("link", name=re.compile("volta-rapida.mp4")).get_attribute("href")
+    assert re.search(r"/ops/api/tasks/\d+/anexos/e2e-a1$", href), href      # abre pelo painel, com link novo do Asana
+    modal.get_by_role("button", name="↻ Atualizar do Asana").click()
+    modal.get_by_text(re.compile("Asana fora agora")).wait_for()
+    modal.get_by_text("Melhor volta 41.2: trabalhar a curva 3.").wait_for()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 def test_meu_dia_do_mecanico_cabe_em_390(servidor, navegador):
     pg = entrar(navegador, servidor, "luis@urace.us", largura=390, altura=800)
     pg.get_by_role("heading", name="Meu dia", level=1).wait_for()

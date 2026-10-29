@@ -24,7 +24,7 @@
 > Todos os guias também estão no painel, em **Administrativo › Como usar**, para ler ou baixar; lá fica
 > também o **MD para a sua IA**, que junta tudo num arquivo só.
 >
-> Atualizado em 28/10/2026 (#430, a busca de cliente aceita o **Client ID**; antes, #420, a **IA do painel opera** o Command Center inteiro, como quem pediu; antes, #410, o **Editar** do card corrige nome, e-mail, telefone, piloto e nascimento; antes, #394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
+> Atualizado em 29/10/2026 (#455, a tarefa do Asana por dentro fica **espelhada** no painel: descrição, subtarefas, comentários e anexos, com **Atualizar do Asana**; antes, #430, a busca de cliente aceita o **Client ID**; antes, #420, a **IA do painel opera** o Command Center inteiro, como quem pediu; antes, #410, o **Editar** do card corrige nome, e-mail, telefone, piloto e nascimento; antes, #394, o menu em dropdown do site e as animações; antes, #355, o aluno do plano marca **"Training Day X/Y"**; antes, #340, o **piloto pro** marca pelo pacote: o contador do mês para o cliente e para a
 > equipe, só o serviço do plano, add-ons e a invoice das extras na hora da marcação; antes, #115, o **pacote de prova** da waiver para o advogado; antes, #117, conferir o documento da
 > waiver no balcão e o nascimento travado, e #313, o
 > cartão do padrão D em todo o painel, e #312, a inserção sempre no topo e o **Adicionar serviço** com a página do site). Tudo aqui foi conferido no código do
@@ -194,7 +194,7 @@ pedem acesso de operador.
 | Administrativo | **QuickBooks** | `/ops/quickbooks` | invoices e pagamentos. A IA prepara; enviar pede aprovação | todos veem a tela; financeiro é gerente+ |
 | Administrativo | **DocuSign** | `/ops/docusign` | as waivers. Entregue não é assinada; devolvida é e-mail errado | todos |
 | Administrativo | **Gmail** | `/ops/gmail` | o que a triagem da IA não decidiu | todos |
-| Administrativo | **Asana** | `/ops/asana` | o **espelho** do quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services. Tarefa excluída no Asana sai daqui na sincronia seguinte (até 15 min) e fica no card do cliente como "excluída no Asana" | todos |
+| Administrativo | **Asana** | `/ops/asana` | o **espelho** do quadro U-RACE: agenda (TUESDAY a SUNDAY), RACES e Finished Services. A tarefa por dentro (descrição, subtarefas, comentários, anexos) fica guardada no painel igual ao Asana (#455): abre rápido e aparece mesmo com o Asana fora; **↻ Atualizar do Asana** relê na hora. Tarefa excluída no Asana sai daqui na sincronia seguinte (até 15 min) e fica no card do cliente como "excluída no Asana" | todos |
 | Administrativo | **Integrações** | `/ops/integrations` | o estado de cada sistema; "Verificar agora"; atualizar o sistema | todos (atualizar: administrador) |
 | Administrativo | **Auditoria** | `/ops/audit` | o registro imutável de tudo | gerente+ |
 | Administrativo | **Políticas da IA** | `/ops/policies` | o que a IA faz sozinha, o que pede confirmação, aprovação ou está bloqueado | administrador |

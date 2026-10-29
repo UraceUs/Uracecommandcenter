@@ -113,11 +113,23 @@ interface TaskDetail {
     criada_em?: string; modificada_em?: string; subtarefas_lista?: { gid: string; nome: string; concluida: boolean; vence_em: string | null }[] }
   comments?: { quando: string; quem: string | null; texto: string | null }[]
   attachments?: { gid: string; nome: string | null; origem: string | null; quando: string | null; download: string | null }[]
+  /** #455: o detalhe vem do espelho do Asana; `aviso` quando o Asana não respondeu a "Atualizar do Asana" */
+  espelho?: { em: string | null; erro?: string | null; aviso?: string | null }
 }
 function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
   const nav = useNavigate()
   const { can } = useAuth()
-  const det = useGet<TaskDetail>(`/tasks/${t.id}/detail`)
+  const lido = useGet<TaskDetail>(`/tasks/${t.id}/detail`)
+  const toast = useToast()
+  const [relendo, setRelendo] = useState(false)
+  // a resposta de "Atualizar do Asana" é a que vale (traz o aviso quando o Asana não respondeu)
+  const [relido, setRelido] = useState<TaskDetail | null>(null)
+  const det = { ...lido, data: relido ?? lido.data }
+  async function atualizarDoAsana() {
+    setRelendo(true)
+    try { setRelido(await api.get<TaskDetail>(`/tasks/${t.id}/detail?atualizar=1`)) }
+    catch (e) { toast((e as ApiError).message, 'crit') } finally { setRelendo(false) }
+  }
   const fields = (det.data?.task?.campos as Record<string, string> | undefined) || (safeJson(t.fields) as Record<string, string> | null)
   const subs = det.data?.task?.subtarefas_lista || []
   return <Scrim onMouseDown={onClose}><div className="modal" style={{ maxWidth: 860 }} onMouseDown={e => e.stopPropagation()}>
@@ -134,6 +146,11 @@ function TaskModal({ t, onClose }: { t: Task; onClose: () => void }) {
     {det.error && <ErrorState error={det.error} retry={det.reload} />}
     {det.data && !det.data.connected && <Banner tone="warn">{tr("Sem Asana ao vivo agora:")} {String(det.data.reason || '').replace(/[.\s]+$/, '')}{tr(". Mostrando só o espelho.")}</Banner>}
     {det.data?.connected && <>
+      <div className="row wrap small muted" style={{ gap: 8 }}>
+        <span>{det.data.espelho?.em ? tr("Espelho do Asana · atualizado {0}", fmtDateTime(det.data.espelho.em)) : tr("Espelho do Asana")}</span>
+        <button className="btn ghost sm" disabled={relendo} onClick={atualizarDoAsana}>{relendo ? <span className="spin" /> : tr("↻ Atualizar do Asana")}</button>
+      </div>
+      {det.data.espelho?.aviso && <Banner tone="warn">{det.data.espelho.aviso}</Banner>}
       <Section title={tr("Descrição")}>{det.data.task?.notas ? <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'var(--font)', margin: 0, fontSize: 13.5 }}>{det.data.task.notas}</pre> : <span className="muted small">{tr("sem descrição")}</span>}</Section>
       <div className="grid g2">
         <Section title={<>{tr("Subtarefas")} <Dots done={subs.filter(s => s.concluida).length} total={subs.length} /></>} count={subs.length} tight>{subs.length === 0 ? <Empty>{tr("Nenhuma.")}</Empty> : <div>{subs.map(s => <div key={s.gid} className="att"><div className={`lv ${s.concluida ? 'LOW' : 'MEDIUM'}`} /><div className="grow" style={{ textDecoration: s.concluida ? 'line-through' : undefined, color: s.concluida ? 'var(--muted)' : undefined }}>{s.concluida ? '✓ ' : '○ '}{s.nome}{s.vence_em && <span className="small muted mono"> · {fmtDate(s.vence_em)}</span>}</div></div>)}</div>}</Section>

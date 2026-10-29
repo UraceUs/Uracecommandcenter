@@ -137,6 +137,14 @@ DocuSign daquele cliente.
 - **Asana** (`/ops/asana`) — calendário, quadro, lista e a tarefa por dentro
   (descrição, campos, subtarefas, anexos, comentários), com a caixa da IA dentro
   do modal da tarefa. Serviço novo nasce do **modelo oficial**, na coluna do dia.
+  Desde #455 a tarefa por dentro vem do **espelho completo** no banco
+  (`command_center/providers/espelho_asana.py`, tabelas `task_subtasks`,
+  `task_comments` e `task_attachments`): a sincronia de 15 min relê só o que mudou no
+  Asana (`modified_at`), até 40 tarefas por rodada, das abertas e mais perto de hoje
+  para as antigas; **↻ Atualizar do Asana** relê na hora. Com o Asana fora, o
+  espelho continua aparecendo, com o aviso. Nada se apaga: o que sumiu do Asana fica
+  marcado (`gone_at`). O anexo abre por `/ops/api/tasks/{id}/anexos/{gid}`, que
+  pede ao Asana um link novo (o dele expira).
 - **DocuSign** (`/ops/docusign`) — waivers: baixar o PDF assinado, reenviar
   corrigindo o e-mail, anular envelope em aberto, lixeira, aba de assinadas e os
   documentos internos separados. `delivered` **não é** assinado.
