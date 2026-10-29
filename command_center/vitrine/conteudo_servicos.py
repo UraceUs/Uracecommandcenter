@@ -17,7 +17,7 @@ endereços antigos viram 301 (`paginas_site.redirecionamentos()`).
 
 Cada página é um dicionário; `paginas_site.servico()` desenha todas com o mesmo esqueleto.
 """
-from command_center.vitrine.conteudo import DEPOIMENTOS_EVENTOS, FAQ_COMUM, GRUPOS, HORARIO, SITE  # noqa: F401
+from command_center.vitrine.conteudo import DEPOIMENTOS_EVENTOS, FAQ_COMUM, GRUPOS, HORARIO, LIGACAO, SITE  # noqa: F401
 
 RESERVAR = "/ops/portal/reserve"
 CONTATO = "/contact/"
@@ -120,12 +120,15 @@ BIRTHDAY = {
     "titulo": "Kart Racing Birthday Parties in Orlando | URACE",
     "descricao": ("Throw a birthday party on a real racing track in Orlando. Racing karts, safety gear and coaches included, "
                   "organised end to end by the URACE team."),
-    "eyebrow": "Birthday Party · Orlando, FL",
-    "h1": "Kart Racing Birthday Parties in Orlando",
-    "sub": ("Celebrate with speed, adrenaline, and a fully personalized experience. At URACE, every birthday is one of a kind. You tell us how you want to celebrate — and we’ll build a fun, safe, "
-            "and unforgettable event for all ages."),
+    # #508: a abertura do urace.us de 29/10
+    "eyebrow": "Birthday parties · Orlando",
+    "h1": "Kart racing birthday parties in Orlando",
+    "sub": ("Real race karts on a real circuit, run like a race weekend: practice, grid order, timed final, results on a "
+            "sheet at the end. Fully personalized, safe and for all ages."),
     "foto": "group-482141.webp",
-    "cta": ("I want to book my birthday with URACE", CONTATO),
+    "cta": ("Book my birthday", CONTATO),
+    "cta2": ("Book a call", LIGACAO),
+    "avaliacoes": True,
     "formatos_titulo": "How your party can happen",
     "formatos_intro": ("No pre-set packages. Just possibilities. You mix and match to create the perfect event for your crew. "
                        "Here are some ways to make your birthday celebration even more epic:"),
@@ -152,13 +155,15 @@ CORPORATE = {
     "titulo": "Corporate Karting Events in Orlando | URACE",
     "descricao": ("Corporate events on a professional racing track in Orlando. Real race karts, full safety gear and coaching - "
                   "a team day people actually remember."),
-    "eyebrow": "Corporate Events at URACE",
-    "h1": "Corporate Karting Events in Orlando",
-    "sub": ("Boost team building, motivation, and performance with an experience that combines adrenaline, strategy, and real "
-            "teamwork. At URACE, no two events are the same: you choose the format, and we create a dynamic, safe, and "
-            "unforgettable experience for your team."),
+    # #508: a abertura do urace.us de 29/10
+    "eyebrow": "Corporate events · Orlando",
+    "h1": "Corporate karting events in Orlando",
+    "sub": ("Team building with adrenaline, strategy and real teamwork. You choose the format, we run it like a race "
+            "weekend: practice, grid order, timed final, results on a sheet."),
     "foto": "group-482140.webp",
-    "cta": ("I want to book my corporate event", CONTATO),
+    "cta": ("Book my corporate event", CONTATO),
+    "cta2": ("Book a call", LIGACAO),
+    "avaliacoes": True,
     "beneficios_titulo": "Why host a corporate event at URACE?",
     "beneficios_intro": ("Karting isn’t just fun: it’s a powerful, hands-on way to develop essential team skills. Our race formats "
                          "naturally build decision-making, focus, collaboration, and communication — all in an exciting, "
@@ -207,13 +212,15 @@ GROUPS = {
     "titulo": "Group Kart Racing Events in Orlando | URACE",
     "descricao": ("Group karting in Orlando for friends, clubs and social gatherings. Real race karts, gear and coaching "
                   "included, built around your group size and pace."),
-    "eyebrow": "Group Events · Orlando, FL",
-    "h1": "Group Kart Racing Events & Social Gatherings in Orlando",
-    "sub": ("Bring your crew together with adrenaline, fun, and a one-of-a-kind experience. At URACE, every group event is "
-            "custom-built. You pick the vibe and we’ll design a safe, thrilling, and unforgettable experience for your "
-            "friends, family, travel team, or crew."),
+    # #508: a abertura do urace.us de 29/10
+    "eyebrow": "Groups & social · Orlando",
+    "h1": "Group kart racing events in Orlando",
+    "sub": ("Bring your crew together. Every group event is custom-built: practice, grid order, timed final and results "
+            "on a sheet. Friends, family, travel teams."),
     "foto": "group-482140-2.webp",
-    "cta": ("I want to book a group event", CONTATO),
+    "cta": ("Book a group event", CONTATO),
+    "cta2": ("Book a call", LIGACAO),
+    "avaliacoes": True,
     "porque_titulo": "Why celebrate with URACE?",
     "porque_intro": ("We mix excitement, challenge, and laughs, perfect for bonding and making memories. Karting brings people "
                      "together through teamwork, friendly rivalry, and tons of fun. Top reasons to bring your group to URACE:"),

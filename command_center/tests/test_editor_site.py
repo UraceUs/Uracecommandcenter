@@ -565,7 +565,7 @@ def test_troca_de_texto_da_faixa_original_vale_com_o_hash_certo(amb):
     assert f'data-ed-t="{k}" data-ed-orig="' in previa and NOVO_H1 in previa
     assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
     html = site.get("/academy/").text
-    assert f"<h1>{NOVO_H1}</h1>" in html and "Four coached sessions a month" not in _main(html)
+    assert f"<h1>{NOVO_H1}</h1>" in html and "URACE Academy. Kart school in Orlando." not in _main(html)
     assert "data-ed-" not in html, "o site não leva nada do editor"
     lds = [json.loads(x) for x in re.findall(r'<script type="application/ld\+json">(.*?)</script>', html, re.S)]
     faq = next(x for x in lds if x.get("@type") == "FAQPage")
