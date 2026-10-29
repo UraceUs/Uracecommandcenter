@@ -9,7 +9,6 @@ definido, e o teste "sem credencial" chamou o Gmail de verdade
 import atexit
 import os
 import shutil
-import sys
 import tempfile
 
 import pytest
@@ -53,11 +52,13 @@ def _selo_de_teste(_pasta_do_selo, monkeypatch):
     monkeypatch.setattr(selo_waiver, "_carimbadores", lambda: [("urn:test:tsa-falsa", selo_teste.tsa())])
 
 
-# #511: os limites do site (formulário, pedido e checkout: 8 por conexão a cada 10 min; 6 por hora por e-mail) moram na
-# memória do processo. Sem zerar entre testes, a ordem dos arquivos decidia quem estourava: um arquivo novo mudou as
-# partes do CI e o test_vitrine passou a herdar os checkouts dos arquivos da loja que rodam antes dele na mesma parte.
 @pytest.fixture(autouse=True)
 def _limites_do_site_zerados():
-    vitrine = sys.modules.get("command_center.api.vitrine")      # só se já foi importado: teste de fora do site não paga
+    """#485 guarda na memória do processo quantos envios cada IP/e-mail fez nos formulários do site. Entre testes isso
+    vazava: conforme a divisão do CI em partes, um teste anterior gastava o limite de um e-mail e o seguinte levava
+    400 (debug 29/10). Cada teste começa com os limites zerados."""
+    import sys
+    vitrine = sys.modules.get("command_center.api.vitrine")
     if vitrine is not None:
         vitrine._envios.clear()
+    yield

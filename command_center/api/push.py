@@ -125,7 +125,9 @@ def avisar(con, user_ids, titulo, corpo, url="/ops/"):
     except BaseException:                                          # noqa: BLE001 — ver `disponivel`
         return {"enviados": 0, "motivo": "push não está pronto neste servidor"}
     marcas = ",".join("?" * len(ids))
-    assinaturas = todos(con, f"SELECT * FROM push_subscriptions WHERE user_id IN ({marcas})", tuple(ids))
+    # quem foi desativado deixa de receber: o aparelho dele continua assinado, e o aviso diz quem escreveu e onde
+    assinaturas = todos(con, f"""SELECT s.* FROM push_subscriptions s JOIN users u ON u.id = s.user_id
+                                  WHERE s.user_id IN ({marcas}) AND u.active=1""", tuple(ids))
     enviados, limpas = 0, 0
     for a in assinaturas:
         ok, morta = _mandar_uma(a, {"titulo": titulo, "corpo": corpo, "url": url}, vapid)

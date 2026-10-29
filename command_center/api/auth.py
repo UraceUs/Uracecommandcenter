@@ -634,7 +634,8 @@ def usuario_atual(request: Request, con: sqlite3.Connection = Depends(get_db)):
     if request.method not in ("GET", "HEAD", "OPTIONS"):
         csrf_cookie = request.cookies.get(COOKIE_CSRF, "")
         csrf_header = request.headers.get("x-csrf", "")
-        if not csrf_cookie or not hmac.compare_digest(csrf_cookie, csrf_header):
+        # em bytes: `compare_digest` com texto só aceita ASCII; um cabeçalho com acento dava erro 500 (debug 29/10)
+        if not csrf_cookie or not hmac.compare_digest(csrf_cookie.encode("utf-8", "replace"), csrf_header.encode("utf-8", "replace")):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "CSRF check failed.")
     request.state.cc_user = s["user_id"]           # para o log da requisição (observabilidade)
     u = {"id": s["user_id"], "email": s["email"], "name": s["name"],
