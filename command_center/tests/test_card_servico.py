@@ -5,6 +5,7 @@ Center do que pelo Asana".
 O card do cliente traz os dados (medidas, parentesco, classe) e, na linha do tempo, o resumo de cada serviço; o card
 do serviço lê o espelho; anotar e concluir subtarefa escrevem no Asana e o espelho relê. Tudo fictício."""
 import json
+from datetime import date, timedelta
 
 import pytest
 
@@ -122,3 +123,60 @@ def test_dados_do_cliente_parentesco_classe_e_medidas(cli, con, espelhado):  # n
     assert ev["servico"]["subtarefas"] == [1, 2] and ev["servico"]["comentarios"] == 2
     assert ev["servico"]["ultimo_comentario"]["texto"] == "melhor volta 41.2"
     assert all("notes" not in t for t in c["tasks"])                 # a descrição do Asana não vai nas listas
+
+
+def test_card_do_servico_waiver_anulada_nao_vale_e_a_valida_vence_a_reenviada(cli, con, espelhado):  # noqa: F811
+    """debug 29/10: o card do serviço lia a waiver mais recente pelo status cru — a anulada (que continua `completed`)
+    aparecia como assinada, e um reenvio ainda não assinado escondia a assinada que vale (o card do cliente já separava)."""
+    _, tid, cid = espelhado
+    validade1, validade2 = (date.today() + timedelta(days=300)).isoformat(), (date.today() + timedelta(days=301)).isoformat()
+    base = dict(client_id=cid, template="adult", signer_name="Nina Ficticia", signer_email="nina.ficticia@example.com")
+    anulada = inserir(con, "waivers", status="completed", sent_at="2026-09-01T10:00:00Z", completed_at="2026-09-01T11:00:00Z",
+                      expires_at=validade1, **base)
+    inserir(con, "waiver_voids", waiver_id=anulada, by_name="Gerente", reason="assinada pelo responsável errado")
+    con.commit()
+    assert cli.get(B + f"/tasks/{tid}/servico").json()["cliente"]["waiver"]["status"] == "voided"
+    inserir(con, "waivers", status="completed", sent_at="2026-09-02T10:00:00Z", completed_at="2026-09-02T11:00:00Z",
+            expires_at=validade2, **base)
+    inserir(con, "waivers", status="sent", sent_at="2026-10-20T10:00:00Z", **base)
+    con.commit()
+    w = cli.get(B + f"/tasks/{tid}/servico").json()["cliente"]["waiver"]
+    assert w["status"] == "completed" and w["expires_at"] == validade2
+
+
+def test_limpar_parentesco_e_classe_com_null_como_a_tela_manda(cli, con, espelhado):  # noqa: F811
+    """debug 29/10: a tela de Editar dados manda `null` para esvaziar o parentesco e a classe, e o servidor tratava
+    `null` como "não mexe": o campo voltava igual. Sem a chave, continua não mexendo."""
+    _, _, cid = espelhado
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"relationship": "mãe", "racing_class": "Cadet"}).status_code == 200
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"notes": "só a nota"}).status_code == 200
+    c = um(con, "SELECT relationship, racing_class FROM clients WHERE id=?", (cid,))
+    assert (c["relationship"], c["racing_class"]) == ("mãe", "Cadet")
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"relationship": None, "racing_class": None}).status_code == 200
+    c = um(con, "SELECT relationship, racing_class FROM clients WHERE id=?", (cid,))
+    assert (c["relationship"], c["racing_class"]) == (None, None)
+
+
+def test_medida_editada_pela_equipe_nao_congela_as_do_site(cli, con, espelhado):  # noqa: F811
+    """Debug 29/10: editar UMA medida no card não copia as do site como "da equipe"; o que o cliente atualizar depois
+    no site continua aparecendo, e esvaziar a medida da equipe volta a valer a do site."""
+    _, _, cid = espelhado
+    conta = con.execute("""INSERT INTO portal_accounts (email, pw_salt, pw_hash, name, birth_date, phone, address_line1, city,
+                           state, zip, terms_accepted_at, client_id) VALUES ('nina.site@example.com','s','h','Nina Ficticia',
+                           '1985-02-01','555-0142','100 Rua Ficticia','Orlando','FL','32824','2026-09-01T00:00:00Z',?)""",
+                        (cid,)).lastrowid
+    pil = con.execute("INSERT INTO portal_pilots (account_id, name, client_id, measures, measures_updated_at) VALUES (?, 'Theo Ficticio', ?, ?, ?)",
+                      (conta, cid, json.dumps({"height_in": 55, "weight_lb": 80}), "2026-10-01T12:00:00Z")).lastrowid
+    con.commit()
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"measures": {"weight_lb": "82"}}).status_code == 200
+    assert json.loads(um(con, "SELECT measures FROM clients WHERE id=?", (cid,))["measures"]) == {"weight_lb": 82.0}
+    # a tela manda só o que mudou: mudar o peito depois não apaga o peso que a equipe já tinha conferido
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"measures": {"chest_in": "30"}}).status_code == 200
+    assert json.loads(um(con, "SELECT measures FROM clients WHERE id=?", (cid,))["measures"]) == {"weight_lb": 82.0, "chest_in": 30.0}
+    con.execute("UPDATE portal_pilots SET measures=?, measures_updated_at=? WHERE id=?",
+                (json.dumps({"height_in": 57, "weight_lb": 81}), "2026-10-29T12:00:00Z", pil)); con.commit()
+    d = cli.get(B + f"/clients/{cid}").json()["client"]["dados"]["medidas"]
+    assert d["height_in"] == 57 and d["weight_lb"] == 82.0          # o site atualizou a altura; o peso é o que a equipe conferiu
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"measures": {"weight_lb": ""}}).status_code == 200
+    d = cli.get(B + f"/clients/{cid}").json()["client"]["dados"]["medidas"]
+    assert d["weight_lb"] == 81                                         # esvaziar volta a valer a do site

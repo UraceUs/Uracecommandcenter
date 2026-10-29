@@ -120,8 +120,9 @@ export function ClientCard({ id, onClose }: { id: number; onClose?: () => void }
       if (form.relationship.trim() !== (c.relationship || '')) body.relationship = form.relationship.trim() || null
       if (form.racing_class !== (c.racing_class || '')) body.racing_class = form.racing_class || null
       const medAntes = Object.fromEntries(CHAVES_MEDIDAS.map(([k]) => [k, String(c.dados?.medidas?.[k] ?? '')]))
-      if (CHAVES_MEDIDAS.some(([k]) => (medForm[k] || '').trim() !== medAntes[k]))
-        body.measures = Object.fromEntries(CHAVES_MEDIDAS.filter(([k]) => (medForm[k] || '').trim()).map(([k]) => [k, medForm[k].trim()]))
+      // só a medida que a equipe mudou vai (vazio = volta a valer a do site); o resto continua vindo da área do cliente
+      const mudou = CHAVES_MEDIDAS.filter(([k]) => (medForm[k] || '').trim() !== medAntes[k])
+      if (mudou.length) body.measures = Object.fromEntries(mudou.map(([k]) => [k, (medForm[k] || '').trim()]))
       await api.patch(`/clients/${c.id}`, body)
       const perfil: Record<string, unknown> = { plan_type: form.plan_type }
       if (can('MANAGER')) perfil.pro_driver = form.pro_driver
