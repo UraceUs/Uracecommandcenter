@@ -763,11 +763,13 @@ def test_faixa_se_acha_pela_ancora_quando_o_banco_tira_uma_faixa(amb, monkeypatc
     # #507: a home por blocos — a âncora de cada faixa é o título dela (`h-b<n>`, n = o bloco)
     blocos_home = pg_home.HOME["blocos"]
     h_blog, h_depo = (f"h-b{next(i for i, b in enumerate(blocos_home) if b['tipo'] == t)}" for t in ("posts", "depoimentos"))
+    ancora = next(b.get("ancora") for b in blocos_home if b["tipo"] == "depoimentos")
+    a_depo = f"#{ancora}" if ancora else h_depo                      # a âncora é o `id` da faixa, senão o título
     i_blog, i_fim = anc.index(h_blog), len(fx) - 1
     assert i_fim > i_blog and [x["ancora"] for x in itens] == anc, "a página aberta guarda a âncora de cada faixa"
     k_fim = next(f.chave for f in ed._analisar(fx[i_fim])[0] if f.tag == "h2")
     k_blog = next(f.chave for f in ed._analisar(fx[i_blog])[0] if f.tag == "h2")
-    i_depo = anc.index(h_depo)
+    i_depo = anc.index(a_depo)
     itens = _com_textos(_com_textos(itens, i_fim, {k_fim: "Still curious? Ask us"}), i_blog, {k_blog: "Fresh from the track"})
     itens = [{**x, "oculto": True} if x["indice"] == i_depo else x for x in itens]
     assert _salvar(painel, h, pid, conteudo={"itens": itens}).json()["erros"] == {}

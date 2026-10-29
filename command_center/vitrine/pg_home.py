@@ -183,7 +183,7 @@ HOME = {
               "link": ("Talk to the team", "/professional-kart-team-racing-team/")}],
          "ctas": [("Plan your career, from here to F1, IndyCar or NASCAR", "/career/")]},
         # lá, esta faixa tem também três vídeos (mp4 do WordPress), que a política do site não toca
-        {"tipo": "depoimentos", "titulo": "Straight from the paddock", "itens": [*AVALIACOES, AARON],
+        {"tipo": "depoimentos", "titulo": "Straight from the paddock", "ancora": "reviews", "itens": [*AVALIACOES, AARON],
          "link": ("Read them all on Google", GOOGLE)},
         {"tipo": "videos", "eyebrow": "URACE Shorts", "titulo": "Onboard: watch the method", "itens": [
             ("URACE Karting Team Orlando", "https://www.youtube.com/watch?v=44IvXhh2T9o"),

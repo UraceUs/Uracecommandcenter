@@ -809,6 +809,8 @@ body:has(> main > .hero:first-child) main > .hero-sim:first-child .hero-in { pad
 /* os resultados da temporada (duas fotos) em meia largura no computador; os pilotos em duas colunas no celular */
 #top-step .figuras { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)) }
 #drivers .figuras { grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)) }
+/* as avaliações numa fileira só no computador (quatro na home, três na About) */
+#reviews .depoimentos { grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)) }
 /* o botão de contorno dos blocos (`btn-linha`) é branco: na faixa clara ele sumia */
 .clara .btn-linha { color: var(--tinta); border-color: var(--tinta) }
 /* o retrato do Italo inteiro (de lá vem em pé, 500 × 600), sem esticar */
