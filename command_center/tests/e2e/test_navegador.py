@@ -1558,6 +1558,32 @@ def test_mecanico_abre_no_meu_dia_preenche_o_checklist_com_foto(servidor, navega
     pg.close()
 
 
+def test_checklist_nao_perde_a_foto_quando_a_resposta_de_marcar_chega_depois(servidor, navegador, tmp_path):
+    """#453: marcar um item e logo subir a foto (sinal fraco). A resposta do "marcar" chega depois da foto e não pode
+    devolver a tela para trás: a foto continua lá e o item continua marcado. Checklist próprio, avulso, numa data só dele."""
+    pg = entrar(navegador, servidor, "italo@urace.us", largura=360, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    modelo = next(m for m in pg.request.get(servidor + "/api/checklists/modelos").json()["modelos"] if m["name"] == "Kart Checklist")
+    run = pg.request.post(servidor + "/api/checklists/runs", headers=csrf,
+                          data={"template_id": modelo["id"], "ctx": {"tipo": "avulso", "data": "2001-01-01", "titulo": "Corrida do marcar"}})
+    assert run.ok, run.text()
+    abrir(pg, servidor, f"/checklists/{run.json()['id']}")
+    pg.get_by_role("heading", name="Corrida do marcar", level=1).wait_for()
+    # o "marcar" leva 2,5 s para voltar; a foto volta antes
+    pg.evaluate("""() => { window.__pend = 0; const orig = window.fetch; window.fetch = async (u, o) => { window.__pend++;
+        try { const r = await orig(u, o); if (o && o.method === 'POST' && /\\/itens\\/\\d+$/.test(String(u))) await new Promise(ok => setTimeout(ok, 2500)); return r }
+        finally { window.__pend-- } } }""")
+    pg.get_by_role("checkbox", name="Check chain tension (+/- 25mm)").check()
+    pg.locator("input[aria-label='Subir foto: Check chain tension (+/- 25mm)']").set_input_files(_png_pequeno(tmp_path / "corrida.png"))
+    pg.get_by_text("Foto salva.").wait_for()
+    pg.wait_for_function("() => window.__pend === 0", timeout=15000)
+    pg.wait_for_timeout(800)                                   # a resposta atrasada já foi aplicada (ou ignorada)
+    assert pg.locator("img.ck-foto").count() == 1, "a resposta velha do marcar apagou a foto da tela"
+    assert pg.get_by_role("checkbox", name="Check chain tension (+/- 25mm)").is_checked()
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 @pytest.mark.parametrize("largura", [360, 390])
 def test_mecanico_ve_a_semana_e_o_mes_no_celular_e_toca_no_dia(servidor, navegador, largura):
     """Dono, 06/10: no celular do mecânico, "uma visão do calendário mensal… continua tendo a
