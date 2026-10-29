@@ -934,6 +934,18 @@ como montou o arrive and drive com todas as configurações ajustaveis"*.
 - **Os programas mensais** (3x, 2x, 1x por semana) são cartões da página em **Cartões das páginas › SIM2GRID**; o botão
   abre o contato com o programa já escrito (assunto *SIM2GRID racing simulator*).
 
+### Race the Winter 2027 (#505)
+
+`novo.urace.us/winter/` é a página da temporada de inverno, com o texto do urace.us de hoje, capítulo a capítulo: a
+janela (as cinco fases do inverno), o calendário (as sete provas, com filtro: casa, opcionais, a confirmar), o kart peça a
+peça (as oito peças abrem uma a uma; "Part 8 of the kart" abre o capacete), o motor e o **localizador de categoria**
+(data de nascimento → idade de corrida em 1º/01/2027 → as classes da SKUSA abertas), o formulário **Build your winter**
+(cai em Vendas, playbook de vendas, seção 5), o pacote dentro e fora da pista e a **estimativa**:
+a diária do kart de *Site › Serviços e preços* × os dias de teste que cabem na estadia (o resto é "quoted per event" ou
+"quoted separately"). O que a página de hoje tinha e saiu: o circuito em 3D e os três vídeos curtos (moram no WordPress;
+a vitória continua no link do Instagram). O que lá está escondido também não sai aqui ("We bring everything", a ficha da
+temporada e o "Next step"). Sem JavaScript a página mostra tudo; com "menos movimento" nada se mexe.
+
 ### Painel do site (#306)
 
 Dono, 16/10: *"uma sessão dedicada exclusiva somente para o site … uma seção com subseções de cada painel de lá …
