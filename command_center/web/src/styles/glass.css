@@ -878,6 +878,7 @@ a.suit-linha:hover{border-color:var(--glass-line-2)}
 .suit-arquivo{position:relative;overflow:hidden;cursor:pointer}.suit-arquivo input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .suit-etapa{margin:0;min-width:0;flex:1 1 220px}.suit-etapa select{width:100%;min-height:40px}
 .suit-ia{min-height:40px}
+.suit-liberar{margin:8px 0 0;color:var(--warn)}
 .suit-previa{max-width:min(100%,320px);max-height:220px;border-radius:10px;margin-top:10px;display:block}
 .suit-anexo{display:inline-flex;align-items:center;gap:6px;min-height:40px;margin-top:6px;overflow-wrap:anywhere}
 .suit-arquivo-nome{margin:8px 0 0;overflow-wrap:anywhere}

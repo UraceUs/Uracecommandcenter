@@ -333,10 +333,14 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [ia, setIa] = useState(true)
   const [indo, setIndo] = useState(false)
+  const { can } = useAuth()
+  // #448: sem a aprovação escrita registrada, só o administrador leva a Approved, com o motivo escrito na nota
+  const liberar = etapa === 'approved' && pedido.status !== 'approved' && pedido.aprovacao?.estado !== 'valida' && can('ADMIN')
   const ehImagem = !!arquivo && IMAGENS.includes(arquivo.type)
   const previa = useMemo(() => arquivo && ehImagem ? URL.createObjectURL(arquivo) : null, [arquivo, ehImagem])
   async function salvar() {
     if (!texto.trim() && !arquivo && etapa === pedido.status) { toast(tr("Escreva a nota, anexe um arquivo ou mude a etapa."), 'warn'); return }
+    if (liberar) return liberarAprovado()
     const fd = new FormData()
     fd.set('texto', texto.trim()); fd.set('status', etapa === pedido.status ? '' : etapa); fd.set('pedir_ia', String(ia && pedido.ia_ligada !== 0 && !!(texto.trim() || arquivo)))
     if (arquivo) {
@@ -350,6 +354,16 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
       setTexto(''); setArquivo(null); onDone()
     } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
   }
+  async function liberarAprovado() {
+    if (texto.trim().length < 5) { toast(tr("Escreva na nota o motivo de liberar sem a aprovação escrita (ex.: aprovou por WhatsApp)."), 'warn'); return }
+    setIndo(true)
+    try {
+      await api.post(`/suits/${pedido.id}/aprovar-admin`, { motivo: texto.trim() })
+      if (arquivo) { const fd = new FormData(); fd.set('arquivo', arquivo); await api.postForm(`/suits/${pedido.id}/notas`, fd) }
+      toast(tr("Pedido liberado para Approved."), 'ok')
+      setTexto(''); setArquivo(null); onDone()
+    } catch (e) { toast((e as ApiError).message, 'crit') } finally { setIndo(false) }
+  }
   return <Section title={tr("Nota")}>
     <label className="fld"><span className="sr-only">{tr("Nota")}</span><textarea rows={3} value={texto} onChange={e => setTexto(e.target.value)}
       placeholder={tr("O que aconteceu? Ex.: cliente aprovou o design, mandou as medidas no print, pediu outra cor…")} /></label>
@@ -360,8 +374,9 @@ function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onD
         {meta.etapas.filter(e => e.codigo === pedido.status || !meta.transicoes || (meta.transicoes[pedido.status] || []).includes(e.codigo)).map(e =>
           <option key={e.codigo} value={e.codigo}>{e.codigo === pedido.status ? tr("{0} (atual)", e.nome) : tr("mover para {0}", e.nome)}</option>)}</select></label>
       {pedido.ia_ligada !== 0 && <label className="check suit-ia"><input type="checkbox" checked={ia} onChange={e => setIa(e.target.checked)} /> {tr("Pedir à IA para seguir daqui")}</label>}
-      <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : tr("Salvar nota")}</button>
+      <button className="btn primary" disabled={indo} onClick={salvar}>{indo ? tr("Salvando…") : liberar ? tr("Liberar para Approved") : tr("Salvar nota")}</button>
     </div>
+    {liberar && <p className="small suit-liberar" role="note">{tr("Sem a aprovação final escrita do cliente registrada. Como administrador, você libera para Approved: escreva o motivo na nota (fica na linha do tempo, com o seu nome). O pedido ao fornecedor continua pedindo a aprovação registrada.")}</p>}
     {(etapa === 'photos_received' || pedido.status === 'in_production') && <p className="small muted">{tr("Fotos do fornecedor (WhatsApp): anexe cada foto aqui com a etapa Photos received. O Checked (OK da equipe) exige pelo menos uma.")}</p>}
     {previa && <img src={previa} alt={tr("Print anexado")} className="suit-previa" />}
     {arquivo && !ehImagem && <p className="small muted suit-arquivo-nome">{tr("Anexado:")} <b>{arquivo.name}</b> · {tr("vai para os arquivos do pedido")}</p>}

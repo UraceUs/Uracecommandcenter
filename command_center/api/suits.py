@@ -820,6 +820,25 @@ def rascunho_fornecedor(pid: int, request: Request, con: sqlite3.Connection = De
 
 
 # ------------------------------------------------------- aprovação final (#382, A)
+class LiberarIn(BaseModel):
+    motivo: str
+
+
+@r.post("/{pid}/aprovar-admin")
+def aprovar_pelo_admin(pid: int, dados: LiberarIn, request: Request, con: sqlite3.Connection = Depends(get_db),
+                       u=Depends(auth.exige("ADMIN"))):
+    """#448: o administrador move para Approved sem a aprovação escrita registrada, com o motivo. A IA não chama
+    sozinha: no painel_api e no conector esta rota pede o clique (`mcp_operar.PEDE_CONFIRMACAO`)."""
+    try:
+        sem = suits.liberar_aprovado(con, pid, u["id"], dados.motivo)
+    except LookupError:
+        raise HTTPException(404, "Pedido não encontrado.")
+    except suits.Invalido as e:
+        raise _invalido(e)
+    _aud(con, request, u, "suit.approved.admin", pid, {"sem_aprovacao_escrita": sem, "motivo": dados.motivo.strip()[:500]})
+    return ver(pid, con, u)
+
+
 class AprovacaoIn(BaseModel):
     trecho: str
     message_id: str | None = None

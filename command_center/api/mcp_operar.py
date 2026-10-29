@@ -43,7 +43,8 @@ METODOS = ("GET", "POST", "PATCH", "PUT", "DELETE")
 # Kommo pede confirmação, mas a regra procurava "kommo" no caminho e deixava o /crm/ passar.
 PEDE_CONFIRMACAO = re.compile(
     r"invoice|waiver|docusign|qbo|quickbooks|gmail|email|enviar|send|lembrete|reminder|kommo|/crm/|whatsapp|"
-    r"recorrencia|mensal|fechar|close|step/|cobr|deposit|pagamento|payment|asana|tasks|agendamentos/", re.I)
+    r"recorrencia|mensal|fechar|close|step/|cobr|deposit|pagamento|payment|asana|tasks|agendamentos/|"
+    r"aprovar-admin", re.I)        # #448: liberar o Suits sem a aprovação escrita é clique do administrador, nunca da IA sozinha
 
 
 def _papel_da_rota(dep):
