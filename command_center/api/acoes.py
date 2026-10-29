@@ -137,6 +137,84 @@ def ajustar_aos_parametros(acao, args):
     return {k: v for k, v in args.items() if k in p_}, sobrando
 
 
+# ----------------------------------------------------- a ferramenta existe? (debug 29/10)
+# As ações FAILED de setembro: a IA declarava ferramenta que não existe ("asana.asana_atualizar_tarefa
+# não existe") ou campo que a ferramenta não aceita, e a proposta virava cartão de aprovar que só
+# falhava depois do clique. Agora ela é conferida na hora em que a IA propõe, contra o registro do
+# próprio servidor MCP (o que o agente enxerga) e as ações do painel; a recusa volta com o motivo.
+_MODULO_DO_PREFIXO = {"asana": "asana", "docusign": "docusign", "gmail": "gmail", "google": "gmail",
+                      "qbo": "quickbooks", "quickbooks": "quickbooks", "kommo": "kommo"}
+# nome que o motor resolve na execução (açúcar SAFE): a ferramenta de verdade e o campo que o motor põe
+ALIAS_DE_FERRAMENTA = {"asana_mover_para_finished": ("asana_mover_para_secao", ("secao_gid",))}
+
+
+def _parametros(acao):
+    """(aceitos, obrigatórios, aceita_qualquer, irmãs) da ferramenta, ou None se ela não existe.
+    O módulo do MCP é só importado (sem credencial): conferir o nome não precisa de conta conectada."""
+    import importlib
+    import inspect
+    prefixo = acao.split("_")[0]
+    if prefixo in ("painel", "venda"):
+        from command_center.api import acoes_painel
+        irmas = sorted(n for n in acoes_painel.ACOES if n.startswith(prefixo + "_"))
+        if acao not in acoes_painel.ACOES:
+            return None, irmas
+        fn, aceitos = acoes_painel.ACOES[acao]
+        sig = inspect.signature(fn).parameters
+        return (list(aceitos), [k for k in aceitos if k in sig and sig[k].default is sig[k].empty], False), irmas
+    if prefixo not in _MODULO_DO_PREFIXO:
+        return None, []
+    import command_center.providers  # noqa: F401  (põe o adminai/mcp no caminho de import)
+    m = importlib.import_module(f"{_MODULO_DO_PREFIXO[prefixo]}_mcp")
+    registro = getattr(getattr(m, "srv", None), "_ferramentas", None) or {}
+    irmas = sorted(n for n in registro if n.startswith(prefixo + "_") and not eh_consulta(n))
+    if acao not in registro or not callable(getattr(m, acao, None)):
+        return None, irmas
+    ps = inspect.signature(getattr(m, acao)).parameters.values()
+    livre = any(p.kind == p.VAR_KEYWORD for p in ps)
+    ps = [p for p in ps if p.kind not in (p.VAR_POSITIONAL, p.VAR_KEYWORD)]
+    return ([p.name for p in ps], [p.name for p in ps if p.default is p.empty], livre), irmas
+
+
+def conferir_ferramenta(acao, args, normalizada=False):
+    """(args, None) quando a ferramenta existe e aceita os argumentos; (args, motivo) quando não.
+
+    Sem argumentos estruturados (None) só confere o nome: o cartão já diz que faltam os campos.
+    `normalizada`: os argumentos de invoice já passaram por `normalizar_invoice`, que troca os apelidos
+    pelos nomes certos e transforma o que falta em `problemas` (a proposta incompleta que o painel
+    completa); o que sobra de campo do painel que esta ferramenta não usa (o estimate não tem
+    vencimento) sai em silêncio."""
+    real, do_motor = ALIAS_DE_FERRAMENTA.get(acao, (acao, ()))
+    try:
+        p, irmas = _parametros(real)
+    except Exception as e:                                # o servidor nem carrega: a execução também falharia
+        return args, f"a ferramenta {acao} não está disponível neste painel ({type(e).__name__})"
+    if p is None:
+        sugestao = f" (as que existem: {', '.join(irmas)})" if irmas else ""
+        return args, f"a ferramenta {acao} não existe{sugestao}"
+    aceitos, obrigatorios, livre = p
+    if not isinstance(args, dict):
+        return args, None
+    if normalizada and acao in ACOES_INVOICE:
+        return {k: v for k, v in args.items() if k in aceitos}, None
+    sobrando = [] if livre else [k for k in args if k not in aceitos and k not in do_motor]
+    faltando = [k for k in obrigatorios if k not in do_motor and args.get(k) in (None, "")]
+    if sobrando or faltando:
+        partes = ([f"{acao} não aceita {', '.join(sobrando)}"] if sobrando else []) + \
+                 ([f"{acao} precisa de {', '.join(faltando)}"] if faltando else [])
+        return args, "; ".join(partes) + f" (campos dela: {', '.join(k for k in aceitos if k not in do_motor) or 'nenhum'})"
+    if real == "painel_api":                              # a rota também tem de existir no painel
+        from command_center.api import mcp_operar
+        try:
+            caminho = mcp_operar.caminho_seguro(args.get("caminho"))
+        except ValueError as e:
+            return args, str(e)
+        metodo = str(args.get("metodo") or "").upper()
+        if metodo not in mcp_operar.METODOS or not mcp_operar._operacao(metodo, caminho):
+            return args, f"{metodo} {caminho} não existe no painel (veja painel_operacoes)"
+    return args, None
+
+
 def itens_do_cache(con):
     return todos(con, "SELECT id, name, full_name, price FROM qbo_items WHERE active=1 ORDER BY name") if con else []
 
@@ -397,7 +475,11 @@ def normalizar(acao, args, texto_ia="", buscar_item=None, buscar_cliente=None, c
     return args, []
 
 
-def pedido_de_correcao(acao, problemas):
+def pedido_de_correcao(acao, problemas, recusada=False):
+    if recusada:                                          # ferramenta que não existe ou campo que ela não aceita
+        return ("\n\n[Command Center] A ação " + acao + " que você propôs foi recusada: " + "; ".join(problemas) + ". "
+                "Reescreva SOMENTE a linha ACAO, com uma ferramenta que existe e só com os campos dela. Se nenhuma "
+                "ferramenta faz isso, não declare a ação: diga ao dono o que precisa ser feito à mão.")
     return ("\n\n[Command Center] A ação " + acao + " que você propôs veio incompleta: " + "; ".join(problemas) + ". "
             "Reescreva SOMENTE as linhas ACAO, com os campos exatos: para invoice, "
             '{"cliente_id":"<id numérico do responsável no QBO, via qbo_clientes_buscar>","linhas":[{"item_id":"<id numérico via qbo_itens_buscar>","quantidade":1,"unitario":<valor em dólares, nunca 0>,"descricao":"…"}],"vence_em":"AAAA-MM-DD","memo":"…","email":"…"}. '

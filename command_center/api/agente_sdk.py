@@ -170,6 +170,11 @@ def resumo(nome, args):
 def pedir_aprovacao(con, command_id, nome, args):
     """Cria o cartão de aprovar (ou reaproveita o que já existe). Devolve a frase que volta ao agente."""
     from command_center.api import acoes, ia
+    # debug 29/10: o cartão executa exatamente estes argumentos; sem o obrigatório ou com campo que a
+    # ferramenta não tem, ele só falhava depois do clique. O motivo volta agora, e nenhum cartão nasce.
+    args, recusa = acoes.conferir_ferramenta(nome, args)
+    if recusa:
+        return f"Não executei e não criei o aprovar: {recusa}. Chame de novo com os campos certos."
     assin = acoes.assinatura(nome, args, resumo(nome, args))
     estado, antiga = acoes.ja_decidida(con, assin)
     if estado == "feita":
