@@ -1144,7 +1144,8 @@ ERRO_CHECKOUT = ('<p class="aviso-erro" role="alert">We couldn’t open the secu
 
 
 def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
-    p = next((x for x in produtos() if x["slug"] == slug), None)
+    todos = produtos()
+    p = next((x for x in todos if x["slug"] == slug), None)
     if not p:
         return None
     fotos = "".join(f'<img src="{foto_url(i["src"])}" alt="{e(i["alt"])}" width="800" height="800"{LAZY if n else ""}>' for n, i in enumerate(p["images"][:4]))
@@ -1195,7 +1196,12 @@ def product(host, slug, enviado=False, stripe=False, erro_checkout=False):
                      "priceCurrency": "USD", "url": f"https://{host}/store/p/{p['slug']}/",
                      "availability": "https://schema.org/InStock" if p["in_stock"] else "https://schema.org/OutOfStock",
                      **({"lowPrice": f"{p['price_min']:.2f}", "highPrice": f"{p['price_max']:.2f}"} if (p["price_min"] and p["price_max"] and p["price_max"] != p["price_min"]) else {"price": f"{p['price']:.2f}"})}}
-    desc = _desc(_resumo_produto(p), "From the URACE race shop at the Orlando Kart Center: parts, suits and gear chosen by racers.")
+    resumo = _resumo_produto(p)
+    # #479: o novo e o usado (e as variações do mesmo suporte) têm o mesmo texto na loja: com outro produto de
+    # resumo igual, o nome vai na frente, e cada página sai com a sua descrição no Google
+    if resumo != p["name"] and sum(_resumo_produto(x) == resumo for x in todos) > 1:
+        resumo = _corte(f"{p['name']}: {resumo}")
+    desc = _desc(resumo, "From the URACE race shop at the Orlando Kart Center: parts, suits and gear chosen by racers.")
     return layout(host=host, caminho=f"/store/p/{p['slug']}/", titulo=f"{p['name']} | URACE Store", descricao=desc, corpo=corpo,
                   schemas=(_negocio(host), ld, _trilha(host, ("Store", "/store/"), (cat["name"], f"/store/{cat['slug']}/"), (p["name"], f"/store/p/{p['slug']}/"))),
                   scripts=("contato.js",), foto=p["images"][0]["src"] if p["images"] else None)

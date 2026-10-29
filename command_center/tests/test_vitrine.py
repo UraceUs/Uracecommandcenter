@@ -88,8 +88,28 @@ def test_pagina_do_site_com_seo_completo(cli, caminho):
 
 
 def test_titulos_e_descricoes_unicos(cli):
-    vistos = {cli.get(c).text.split("<title>")[1].split("</title>")[0] for c in PAGINAS}
-    assert len(vistos) == len(PAGINAS)
+    titulos, descricoes = {}, {}
+    for c in PAGINAS:
+        html = cli.get(c).text
+        metas = {a.get("name"): a.get("content") for t, a in _le(html).attrs if t == "meta"}
+        titulos.setdefault(html.split("<title>")[1].split("</title>")[0], []).append(c)
+        descricoes.setdefault(metas["description"], []).append(c)
+    assert len(titulos) == len(PAGINAS)
+    # #479: o novo e o usado (e as variações do mesmo suporte) saíam com a mesma descrição
+    assert len(descricoes) == len(PAGINAS), [v for v in descricoes.values() if len(v) > 1]
+
+
+def test_og_locale_segue_o_idioma(cli):
+    """#479: a página em português dizia en_US ao Facebook e ao WhatsApp."""
+    from command_center.vitrine import paginas
+    html = lambda lang: paginas.layout(host="novo.urace.us", caminho="/", titulo="t", descricao="d", corpo="", lang=lang)  # noqa: E731
+    assert '<meta property="og:locale" content="en_US">' in html("en")
+    assert '<meta property="og:locale" content="pt_BR">' in html("pt")
+
+
+def test_rodape_leva_a_acessibilidade(cli):
+    """#479: a declaração de acessibilidade existia sem nenhum link no site."""
+    assert '<a href="/accessibility/">Accessibility</a>' in cli.get("/").text
 
 
 def test_nenhum_link_volta_ao_wordpress_e_nenhum_link_interno_quebra(cli):
