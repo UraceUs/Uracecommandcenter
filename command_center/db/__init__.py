@@ -285,6 +285,14 @@ MIGRACOES = [
     ("tasks", "deleted_at", "TEXT"),
     ("tasks", "deleted_by", "INTEGER"),
     ("tasks", "deleted_reason", "TEXT"),
+    # 29/10 — dono (#455): "as informações que estiverem no Asana serão as mesmas que estarão no Command Center,
+    # sempre". A descrição e as datas do Asana ficam na tarefa; subtarefas, comentários e anexos em task_*.
+    ("tasks", "notes", "TEXT"),
+    ("tasks", "asana_created_at", "TEXT"),
+    ("tasks", "asana_completed_at", "TEXT"),
+    ("tasks", "asana_modified_at", "TEXT"),      # o modified_at do Asana no último espelho completo
+    ("tasks", "mirrored_at", "TEXT"),            # quando o espelho completo foi feito (descrição, subtarefas, comentários, anexos)
+    ("tasks", "mirror_error", "TEXT"),
     # 01/10 — dono (#67): "todo agendamento... vira uma tarefa no asana".
     ("bookings", "asana_gid", "TEXT"),
     ("bookings", "asana_status", "TEXT"),        # a última situação levada ao Asana
