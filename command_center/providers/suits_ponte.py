@@ -254,7 +254,9 @@ def _guardas(pedido, papel, texto, cfg):
         for d in cfg.get("_designers") or []:
             dados += [d.get("email"), d.get("nome")]
         for dado in dados:
-            if dado and len(dado) >= 3 and dado.lower() in t:
+            # e-mail: por pedaço; nome: a palavra inteira (a designer "Ana" não trava "Mariana")
+            if dado and len(dado) >= 3 and (dado.lower() in t if "@" in dado else
+                                            re.search(r"(?<!\w)" + re.escape(dado.strip().lower()) + r"(?!\w)", t)):
                 raise Recusado("O cliente não pode ver o nome nem o contato do designer: fale como a URACE.")
     if papel == "fornecedor" and not pedido.get("checked_at"):
         # debug 29/10 (regra 11, #382): o endereço do cliente, e o telefone que vai com ele, só vão ao fornecedor depois do
