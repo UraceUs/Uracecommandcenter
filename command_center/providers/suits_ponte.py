@@ -121,12 +121,34 @@ def designer_do_pedido(con, pedido, cfg=None):
     """O designer escolhido no pedido; sem escolha, o padrão da lista; sem lista, o da configuração antiga."""
     r = None
     if pedido and pedido.get("designer_id"):
-        r = um(con, "SELECT id, name, email FROM suit_designers WHERE id=?", (pedido["designer_id"],))
-    r = r or um(con, "SELECT id, name, email FROM suit_designers WHERE is_current=1 ORDER BY id LIMIT 1")
+        r = um(con, "SELECT id, name, email, notes FROM suit_designers WHERE id=?", (pedido["designer_id"],))
+    r = r or um(con, "SELECT id, name, email, notes FROM suit_designers WHERE is_current=1 ORDER BY id LIMIT 1")
     if r:
-        return {"id": r["id"], "nome": r["name"], "email": (r["email"] or "").strip() or None}
+        return {"id": r["id"], "nome": r["name"], "email": (r["email"] or "").strip() or None, "contexto": r["notes"]}
     cfg = cfg or config(con)
-    return {"id": None, "nome": cfg.get("designer_nome") or None, "email": (cfg.get("designer_email") or "").strip() or None}
+    return {"id": None, "nome": cfg.get("designer_nome") or None, "email": (cfg.get("designer_email") or "").strip() or None,
+            "contexto": None}
+
+
+def fornecedor_do_pedido(con, pedido):
+    """O fornecedor escolhido no pedido; sem escolha, o atual."""
+    f = um(con, "SELECT * FROM suit_suppliers WHERE id=?", (pedido["supplier_id"],)) if pedido and pedido.get("supplier_id") else None
+    return f or um(con, "SELECT * FROM suit_suppliers WHERE is_current=1 ORDER BY id LIMIT 1")
+
+
+def _contexto_dos_contatos(con, pedido, dp):
+    """#495 (dono, 29/10: "já com os contextos"): quem são o designer e o fornecedor deste pedido, com o contexto que a
+    equipe escreveu no cadastro — a IA sabe com quem fala sem precisar perguntar."""
+    linhas = []
+    if dp.get("nome") or dp.get("email"):
+        linhas.append(f"DESIGNER DESTE PEDIDO: {dp.get('nome') or '—'} <{dp.get('email') or 'sem e-mail'}>"
+                      + (f". Contexto da equipe: {dp['contexto'].strip()[:800]}" if (dp.get("contexto") or "").strip() else ""))
+    f = fornecedor_do_pedido(con, pedido)
+    if f:
+        linhas.append(f"FORNECEDOR DESTE PEDIDO: {f['name']}" + (f" (contato: {f['contact']})" if f.get("contact") else "")
+                      + f" <{f.get('email') or 'sem e-mail'}>"
+                      + (f". Contexto da equipe: {f['comments'].strip()[:800]}" if (f.get("comments") or "").strip() else ""))
+    return ("\n\n" + "\n".join(linhas)) if linhas else ""
 
 
 def salvar_config(con, dados, uid=None):
@@ -1046,8 +1068,8 @@ def prompt(con, ev, cfg, anexos_baixados):
     if ev.get("historico"):
         historico = "\nCONVERSA ANTERIOR (contexto):\n" + "\n".join(
             f"- {m.get('de')} · {m.get('data')}: {(m.get('corpo') or '')[:800]}" for m in ev["historico"] if m not in ev["mensagens"])
-    dp = designer_do_pedido(con, um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,)), cfg) if pid else \
-        designer_do_pedido(con, None, cfg)
+    ped = um(con, "SELECT * FROM suit_orders WHERE id=?", (pid,)) if pid else None
+    dp = designer_do_pedido(con, ped, cfg)
     designer = dp["nome"] or "o designer"
     alvo = f"no pedido Suits #{pid}" if pid else "no pedido desta pessoa (o que ela já tem, pelo e-mail dela, ou o que você criar)"
     return (f"[PONTE DE E-MAIL DOS SUITS] Você é o meio de campo entre o cliente, {designer} e o fornecedor, no lugar da equipe "
@@ -1066,6 +1088,7 @@ def prompt(con, ev, cfg, anexos_baixados):
               "não responda: suits_precisa_humano com o motivo. No fim, se houver pedido, suits_anotar com o que fez em uma linha."
             + ("" if dp["email"] else "\nO e-mail do designer ainda não foi configurado: se precisar falar com ele, "
                "use suits_precisa_humano dizendo o que mandaria.")
+            + _contexto_dos_contatos(con, ped, dp)
             + _grupos_do_atelie()
             + f"\n\nPOLÍTICA DOS MACACÕES (do dono):\n{cfg['politica']}"
             + f"\n\nMODELO DE BOAS-VINDAS (referência; adapte ao idioma e ao pedido):\n{cfg['boas_vindas']}"

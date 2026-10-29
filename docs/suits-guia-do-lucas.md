@@ -27,7 +27,7 @@ Quem trabalha em cada pedido:
 |---|---|---|
 | Cliente | quem comprou (às vezes o pai ou a mãe do piloto) | boas-vindas, manual de medidas, a arte para aprovar |
 | Designer | **Mateus** (`carvalhovisual1@gmail.com`) | **só o design**, com a referência "Suits #id". Nunca nome completo, e-mail, telefone, endereço, valor ou pagamento do cliente. O e-mail a ele é **preparado** pela IA e **enviado por uma pessoa** |
-| Fornecedor | o marcado como **atual** em Fornecedores (hoje o Usman) | o pedido de produção (as 29 medidas e a arte final **aprovada**, sem endereço); depois do OK nas fotos, o endereço do cliente. Manda as fotos pelo WhatsApp e despacha **direto ao cliente** |
+| Fornecedor | o escolhido no pedido ou o marcado como **atual** em **Contatos** (hoje o Usman) | o pedido de produção (as 29 medidas e a arte final **aprovada**, sem endereço); depois do OK nas fotos, o endereço do cliente. Manda as fotos pelo WhatsApp e despacha **direto ao cliente** |
 | A URACE com o cliente | assina como **George** | — |
 
 ### Como a tela mostra cada um (#313)
@@ -39,7 +39,9 @@ As três listas usam o cartão do painel inteiro (o "padrão D", playbook geral,
   teste), **IA desligada** e quantas **notas** ele tem. Toque em qualquer lugar do cartão para abrir o pedido.
 - **Leads:** a situação (*aberto*, *virou pedido*, *perdido*), o nome, o e-mail e o telefone, a nota; embaixo,
   **Virar pedido** (azul), **Perdido**, **Card do cliente** e **Ver pedido**.
-- **Fornecedores:** *atual* em verde em cima, se tem FIA, **quantos pedidos** no bloco grande, os dados (contato,
+- **Contatos** (#495): os **fornecedores** e os **designers**, cada um com o e-mail fixo e o **Contexto para a IA** (o que
+  ele faz, como falar com ele), que vai junto para a IA em cada pedido. O endereço antigo `/suits/fornecedores` leva para cá.
+  Nos fornecedores: *atual* em verde em cima, se tem FIA, **quantos pedidos** no bloco grande, os dados (contato,
   valor, frete, prazo…) na lista e **Editar** (gerente).
 
 ### A página de um pedido (#464)
@@ -218,8 +220,9 @@ foram abertos por engano pela versão antiga da ponte, só por causa do marcador
 
 ## 6. A ponte de e-mail (a IA trabalhando sozinha)
 
-**Designers, fornecedores e as conversas do pedido (#481).** Em **Suits › Fornecedores** ficam os fornecedores e, logo
-abaixo, os **designers** (nome e e-mail fixo; o gerente cadastra; um é o **atual**). Na **Ponte de e-mail** de cada
+**Designers, fornecedores e as conversas do pedido (#481).** Na aba **Suits › Contatos** ficam os fornecedores e os
+**designers** (nome, e-mail fixo e o contexto para a IA; o gerente cadastra; um é o **atual**). A IA recebe, em cada
+pedido, quem são o designer e o fornecedor dele, com esse contexto. Na **Ponte de e-mail** de cada
 pedido você vê o e-mail do cliente e **escolhe o designer e o fornecedor** numa lista — o e-mail vem do cadastro
 ("vai para …"); sem escolha, vale o atual. **Puxar conversas do Gmail** procura e liga as conversas que faltam: com o
 cliente (pelo e-mail dele, a que fala de macacão), com o designer (a que cita "#número do pedido") e com o fornecedor
