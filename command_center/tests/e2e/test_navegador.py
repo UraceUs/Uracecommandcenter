@@ -956,6 +956,30 @@ def test_equipe_ve_como_conectar_o_claude(servidor, navegador):
     pg.close()
 
 
+def test_conversa_da_equipe_abre_uma_vez_e_nao_fica_recarregando(servidor, navegador):
+    """Debug 29/10: abrir uma conversa da equipe com mensagem entrava num laço. Marcar como lido avisava a lista, a lista
+    redesenhava, a conversa voltava do zero (piscando "carregando") e marcava lido de novo: centenas de pedidos por
+    segundo no celular do box. A conversa abre com uma busca e depois só pergunta o que é novo, a cada 5 s."""
+    pg = entrar(navegador, servidor, largura=390, altura=800)
+    csrf = {"X-CSRF": next(c["value"] for c in pg.context.cookies() if c["name"] == "cc_csrf")}
+    cid = pg.request.post(servidor + "/api/equipe/canais", headers=csrf,
+                          data={"name": "Box sem laço", "kind": "EQUIPE", "membros": []}).json()["id"]
+    for texto in ("Corrente do kart 7 trocada", "Pneus calibrados"):
+        assert pg.request.post(servidor + f"/api/equipe/canais/{cid}/mensagens", headers=csrf, data={"text": texto}).ok
+    pedidos = []
+    pg.on("request", lambda q: pedidos.append(f"{q.method} {q.url.split('/api/')[1].split('?')[0]}")
+          if f"/api/equipe/canais/{cid}" in q.url else None)
+    pg.goto(servidor + f"/equipe/{cid}")
+    pg.locator(".chat .bub", has_text="Pneus calibrados").wait_for()
+    pg.wait_for_timeout(3000)                                  # menos que os 5 s da próxima busca
+    leituras = pedidos.count(f"GET equipe/canais/{cid}")
+    lidos = pedidos.count(f"POST equipe/canais/{cid}/lido")
+    assert leituras <= 2 and lidos <= 1, f"a conversa ficou recarregando: {leituras} leituras e {lidos} 'lido' em 3 s"
+    assert pg.locator(".chat .bub", has_text="Pneus calibrados").count() == 1
+    assert not pg.erros_js and not pg.erros_api, (pg.erros_js, pg.erros_api)
+    pg.close()
+
+
 @pytest.mark.parametrize("largura", [360, 390])
 def test_area_do_cliente_escreve_tudo_do_mesmo_jeito(servidor, navegador, largura):
     """#81 (dono, 04/10: "veja as formatações que estão fora de padrão e padronize"): nome

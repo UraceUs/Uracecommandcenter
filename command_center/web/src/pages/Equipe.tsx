@@ -244,9 +244,13 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
     try { if (texto.trim()) localStorage.setItem(chaveRascunho, texto); else localStorage.removeItem(chaveRascunho) } catch { /* sem storage */ }
   }, [texto, chaveRascunho])
 
-  // a conversa recomeça quando o effect abaixo recomeça (mesmas dependências), limpa no render (#433)
-  const [depsVistas, setDepsVistas] = useState({ id, onMudou })
-  if (depsVistas.id !== id || depsVistas.onMudou !== onMudou) { setDepsVistas({ id, onMudou }); setConversa(null); setErro(null) }
+  // a conversa recomeça quando muda o canal (o effect abaixo), limpa no render (#433). O aviso à lista (onMudou) vai
+  // por ref, fora das dependências: ele nasce de novo a cada render da lista, e cada "lido" redesenha a lista. Com ele
+  // nas dependências, a conversa voltava do zero, marcava lido de novo e assim sem parar (debug 29/10).
+  const aoMudar = useRef(onMudou)
+  useEffect(() => { aoMudar.current = onMudou })
+  const [canalVisto, setCanalVisto] = useState(id)
+  if (canalVisto !== id) { setCanalVisto(id); setConversa(null); setErro(null) }
   useEffect(() => {
     let vivo = true
     ultimo.current = 0
@@ -262,14 +266,14 @@ function Conversa({ id, onVoltar, onMudou }: { id: number; onVoltar: () => void;
         const novas = d.mensagens
         if (novas.length) {
           ultimo.current = novas[novas.length - 1].id
-          api.post(`/equipe/canais/${id}/lido`, { ate: ultimo.current }).then(onMudou).catch(() => { /* marca de novo depois */ })
+          api.post(`/equipe/canais/${id}/lido`, { ate: ultimo.current }).then(() => aoMudar.current()).catch(() => { /* marca de novo depois */ })
         }
       } catch (e) { if (vivo && ultimo.current === 0) setErro(e as ApiError) }
     }
     puxar()
     const t = setInterval(puxar, 5000)
     return () => { vivo = false; clearInterval(t) }
-  }, [id, onMudou])
+  }, [id])
 
   useEffect(() => { fim.current?.scrollIntoView({ block: 'end' }) }, [conversa?.mensagens.length])
 
