@@ -1,5 +1,5 @@
 """As páginas institucionais do site novo (#164) com o texto do urace.us de 13/10/2026 (#207): Academy,
-Pro Team, For Beginners, Career (The Driver Factory + Plan Your Career), About, Contact e Accessibility.
+Pro Team, For Beginners, Career (The Driver Factory + Plan Your Career), Contact e Accessibility.
 
 Nada inventado: cada texto saiu da página citada. Correções de propósito: endereço com o Box 3
 (decisão de 01/10); o telefone da acessibilidade era "205 2291" no site antigo e aqui é o da
@@ -346,80 +346,6 @@ CAREER = {
     "fecho_cta": ("Find my next step", CONTATO),
 }
 
-# ------------------------------------------------------------------ About (urace.us/about/)
-ABOUT = {
-    "caminho": "/about/",
-    "titulo": "About URACE - Kart Academy & Racing Team in Orlando",
-    "descricao": ("URACE is a professional kart academy and racing team in Orlando, taking drivers from their first lap to "
-                  "national competition."),
-    "eyebrow": "About URACE",
-    "h1": "Since 2016, Building champions on and off the race track",
-    "foto": "sobre.webp",
-    "historia_titulo": "About URACE",
-    "historia": ("Racing has been our passion for generations! Our kart racing story started 26+ years ago in Brazil. Team "
-                 "principal Italo Silveira began by racing karts, winning numerous Brazilian regional and national championships. "
-                 "A successful professional car racing career followed in the internationally recognized Brazilian stock car "
-                 "series. In 2016, Italo moved to Florida and launched URACE, a karting team, to pass along his extensive "
-                 "knowledge and passion to young drivers. URACE is divided in 3 racing operations:",),
-    # #254: o primeiro item dizia "Kart School"; a porta de entrada de quem está conhecendo o esporte
-    # é o Arrive and Drive (o Kart School virou a URACE Academy)
-    "historia_itens": ("Arrive and Drive, for beginners learning about the sport;", "URACE Academy, for local drivers racing in Orlando FL;",
-                       "URACE Pro Team, for drivers ready to challenge for the podium Nationwide."),
-    "historia_fecho": "URACE builds winners on and off the tracks due to experience, professionalism, and the passion we have for the sport.",
-    "metodo_titulo": "Structure & Methodology",
-    "metodo_intro": "URACE is built on the real-world experience of a former pro driver — and that makes all the difference. Our method combines:",
-    "metodo": ("Pro-level driving technique", "In-depth understanding of kart setup & dynamics", "High-performance mental training and decision-making", "Constant progress through individual coaching"),
-    "metodo_fecho": "From first lap to national-level racing, our method prepares drivers every step of the way.",
-    "diferente_titulo": "Why is URACE different?",
-    "diferente": ("URACE is different because it was not created as a traditional race team, but as a complete driver development "
-                  "program designed by Italo Silveira, someone who has lived the sport firsthand and achieved real results. "
-                  "URACE’s advantage lies in Italo Silveira’s unique perspective. He began competing at the age of seven and has "
-                  "been coaching drivers since 2004, with a deep understanding of every aspect of racing: driving technique, "
-                  "mechanics, strategy, and the winning mindset.",
-                  "Because of this, our drivers learn:"),
-    "diferente_itens": ("Not just how to drive, but how to think like professional drivers;", "Not just how to compete, but how to develop the mindset and preparation required to win;",
-                        "Not just how to improve quickly, but how to achieve consistent excellence."),
-    "diferente_fecho": "This combination of experience, methodology, and close mentorship is what makes URACE a reference in driver development.",
-    "equipe_titulo": "Our team",
-    "equipe": ("URACE is led by Italo Silveira, a former professional race car driver and the founder of the team.", "His career includes:"),
-    "equipe_itens": ("Starting in karting at the age of seven;", "Regional and national titles in Brazil;", "Competing in Stock Car, the country's premier racing category;",
-                     "Nearly three decades of experience driving, coaching, and developing drivers."),
-    "equipe_fecho": ("Italo began coaching drivers at just fourteen years old and has continued this work throughout his entire career, "
-                     "building a comprehensive understanding of athlete development, technical progression, and the formation of a "
-                     "winning mindset, both on and off the track.",
-                     "Alongside him, Italo is supported by a team of experienced professionals at URACE who are deeply passionate "
-                     "about the sport. They are responsible for preparing the equipment, overseeing training sessions, guiding "
-                     "drivers, and ensuring continuous improvement."),
-    "visao": ("We are working to become the most victorious karting team in the United States. We are a reference in professional "
-              "driver training, proving many times to train drivers that excel and become a reference at the National level in "
-              "record time. Now our goal as a team is to retain those drivers so they can win as every URACE driver does, win "
-              "wearing our colors."),
-    "missao": ("Italo Silveira - “I founded URACE to provide the support and mentorship I wish I had received during my own career. "
-               "My mission is to transform the lives of drivers who have both talent and resources to become professionals, and "
-               "to truly help them get there.",
-               "I always had the necessary conditions to go far: skill, dedication, and investment, but I did not reach the professional "
-               "level because I lacked the right support at a critical moment. Even today, whenever I return to the track, my results "
-               "reflect the depth of my knowledge and my racecraft.",
-               "That is exactly why URACE exists: to give drivers the structure, knowledge, and competitive advantage I did not have, "
-               "allowing them to reach their full potential, whether they are just starting their journey or already pursuing "
-               "excellence at the highest level.”"),
-    "suporte_titulo": "Full Service Race Support",
-    "suporte": ("URACE is a full-service racing team built to support drivers at every level.",
-                "We take care of storage, maintenance, transportation to and from the track, and full trackside support.",
-                "From preparation to race day execution, we handle every detail so you can focus on what truly matters — driving.",
-                "You show up. You race. We handle the rest."),
-    "seguranca_titulo": "Safety",
-    "seguranca_intro": "Safety is a top priority at every stage of the URACE process. Every training, session, and race follows strict standards to ensure that:",
-    "seguranca": ("Drivers use approved safety gear", "Clear instructions are given before each session", "All driving is done in a supervised, controlled environment",
-                  "Skill development focuses on control, awareness, and risk prevention"),
-    "seguranca_fecho": "Our mission is to help drivers grow with confidence, discipline, and the protection needed to aim high.",
-    "depoimentos_titulo": "Built by URACE",
-    "depoimentos_sub": "Check out testimonials from parents and drivers",
-    "fecho": FECHO_DUVIDAS[0],
-    "fecho_sub": FECHO_DUVIDAS[1],
-    "fecho_cta": ("Talk to us", CONTATO),
-}
-
 # ------------------------------------------------------------------ Contact (urace.us/contact/)
 CONTACT = {
     "caminho": "/contact/",
@@ -585,4 +511,4 @@ TERMS = {
     ),
 }
 
-PAGINAS = (ACADEMY, PRO_TEAM, BEGINNERS, CAREER, ABOUT, CONTACT, ACCESSIBILITY, PRIVACY, TERMS)
+PAGINAS = (ACADEMY, PRO_TEAM, BEGINNERS, CAREER, CONTACT, ACCESSIBILITY, PRIVACY, TERMS)

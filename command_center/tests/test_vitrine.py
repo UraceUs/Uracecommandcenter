@@ -323,7 +323,7 @@ def test_agenda_publica_desconta_quem_ja_marcou(cli):
 # ------------------------------------------------------------------ #207: o texto do urace.us de hoje
 def test_texto_do_urace_us_de_hoje_no_menu_na_home_e_no_blog(cli):
     """Dono, 13/10: "vou pegar o copy que tá no site atual e jogar naquele outro site". Os rótulos do
-    menu e do rodapé, a home e o título dos artigos são os do urace.us de 13/10, nos caminhos novos."""
+    menu e do rodapé e o título dos artigos são os do urace.us de 13/10, nos caminhos novos; a home, a de 29/10 (#507)."""
     r = cli.get("/")
     menu = r.text.split('<nav class="menu"')[1].split("</nav>")[0]
     for rot, href in (("About URACE", "/about/"), ("Plan Your Career", "/career/"),
@@ -333,7 +333,7 @@ def test_texto_do_urace_us_de_hoje_no_menu_na_home_e_no_blog(cli):
     rodape = r.text.split('<nav aria-label="Footer">')[1].split("</nav>")[0]
     assert 'href="/services/">Our Services</a>' in rodape
     assert "<h1>The Champions Factory</h1>" in r.text
-    assert "The ladder ends on our grid" in r.text and "Our Contents" in r.text
+    assert "Four steps. One team." in r.text and "Read before you race" in r.text
     assert "© 2026 URACE | All rights reserved" in r.text and ">Navigation<" in r.text
     assert "invoice #" not in r.text, "o depoimento sai sem o pagamento do cliente"
     titulo = cli.get("/blog/upgrading-your-kart-chassis-when-and-why/").text.split("<title>")[1].split("</title>")[0]
@@ -355,9 +355,11 @@ def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     """Regra 2 da #207: o preço do Arrive and Drive sai de KARTS; os planos, do painel. O que o sistema
     não tem não vira número escrito na página."""
     minimo = f"${conteudo.preco_minimo():,}"          # #279: o "a partir de" é o aluguel do kart da URACE
-    for c in ("/", "/services/", "/for-beginners/", "/services/birthday-party/"):
+    # #507: a Programs do urace.us de 29/10 não mostra o preço do kart (a home mostra, na escada)
+    for c in ("/", "/for-beginners/", "/services/birthday-party/"):
         assert minimo in cli.get(c).text, c
-    for c in ("/services/", "/for-beginners/", "/career/", "/pro-team/"):
+    # #507: a home e a About de lá têm "$1,200 / month" (Sim2Grid) e "$2,756.90 / month" (Academy), que o painel não tem
+    for c in ("/", "/about/", "/services/", "/for-beginners/", "/career/", "/pro-team/"):
         html = cli.get(c).text
         for valor in ("$2,619.06", "$2,756.90", "$5,000", "$5K", "$3K", "$1,200", "$60 "):
             assert valor not in html, (c, valor)
@@ -381,12 +383,12 @@ def test_programas_fundidos_em_arrive_and_drive_e_urace_academy(cli):
     """Dono, 15/10 (#254): "o kart school se tornou Urace academy, e o professional coaching se tornou o
     arrive and drive". Os dois cartões e as duas páginas somem, o texto que fazia sentido fica em quem
     herdou, o endereço antigo redireciona e nada no site aponta para ele."""
+    # #507: a Programs do urace.us de 29/10 tem uma seção por programa, na ordem da escada (o texto que cada um herdou
+    # está na página dele, conferido abaixo)
     hub = cli.get("/services/").text
-    nomes = re.findall(r'<span class="servico-txt"><strong>([^<]+)</strong>', hub)
-    assert nomes[:2] == ["Arrive and Drive", "URACE Academy"]
+    nomes = re.findall(r'<h2 id="h-b\d+">([^<]+)</h2>', hub)
+    assert nomes[:4] == ["Sim 2 Grid", "Arrive and Drive", "URACE Academy", "Racing Team"]
     assert "Kart School" not in nomes and "Professional Coaching" not in nomes
-    assert "video breakdown and benchmark comparison" in hub, "o cartão do coaching entrou no Arrive and Drive"
-    assert "Become a racing driver" in hub, "o cartão da Kart School entrou na URACE Academy"
     # as páginas antigas não existem mais: fora do site, fora do sitemap, e 301 para quem herdou
     locs = {u.text for u in ET.fromstring(cli.get("/sitemap.xml").content).iter("{http://www.sitemaps.org/schemas/sitemap/0.9}loc")}
     for antigo, novo in ANTIGOS_254:

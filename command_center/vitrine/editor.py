@@ -401,10 +401,9 @@ def extrair(html):
 TRAVADOS = {
     "planos": "cartoes",        # planos da Academy e do Pro Team, cartões das páginas (Serviços e preços, Cartões)
     "mt": "cartoes",            # o título de cada grupo de planos ("4-stroke and Baby Kart · $689 per session")
-    "preco": "precos",          # "Starting at $719" da home (o menor preço de kart do painel)
+    "plano-preco": "precos",    # #507: o "From $719" dos cartões das páginas por blocos (a home, o menor preço de kart)
     "hero-preco": "precos",     # "From $719 per driver" do Arrive and Drive
     "preco-grande": "precos",   # "Investment" dos eventos (o preço por piloto do painel)
-    "servicos-grade": "precos",  # os programas do /services/ ("Starting at $719")
     "karts": "reserva",         # os karts da reserva, com o preço de cada um (Serviços e preços)
     "agenda": "reserva",        # a agenda e o total da reserva (agenda.js, os dias abertos e o depósito)
     "posts-grade": "blog",      # os artigos do blog na home (Site › Blog)

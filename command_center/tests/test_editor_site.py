@@ -26,7 +26,7 @@ from command_center.db import aplicar_schema, conectar, um
 from command_center.providers import editor_site as es
 from command_center.providers import servicos_site
 from command_center.vitrine import editor as ed
-from command_center.vitrine import html_seguro
+from command_center.vitrine import html_seguro, pg_home
 
 SENHA = "pista-molhada-7"
 
@@ -601,7 +601,9 @@ def test_codigo_mudou_a_troca_fica_de_fora_e_vira_texto_orfao(amb, monkeypatch):
 
 
 @pytest.mark.parametrize("caminho, trecho, area", [
-    ("/", "Starting at $", "precos"),                          # o "a partir de" do kart, do painel
+    # o "a partir de" do kart, do painel (#507: na home ele está no cartão por blocos, que não é texto que se escreve —
+    # `test_home.py` confere a trava de lá; aqui, o "Investment" dos eventos, o mesmo preço do painel)
+    ("/services/birthday-party/", "Starting at $", "precos"),
     ("/academy/", "4-stroke and Baby Kart", "cartoes"),        # o grupo de planos (kart e preço por sessão)
     ("/academy/", "12-month contract", "cartoes"),             # o cartão da Academy
     ("/services/arrive-and-drive/", "Pick a day", "reserva"),  # a agenda da reserva (os karts e o total)
@@ -630,11 +632,11 @@ def test_nenhum_texto_que_se_escreve_fica_dentro_de_bloco_de_dado(amb):
     from html.parser import HTMLParser
 
     from command_center.api import vitrine
-    assert {"planos", "mt", "preco", "hero-preco", "preco-grande", "servicos-grade", "karts", "agenda", "posts-grade",
+    assert {"planos", "mt", "plano-preco", "hero-preco", "preco-grande", "karts", "agenda", "posts-grade",
             "produtos-grade", "depoimentos", "campeoes"} <= set(ed.TRAVADOS) and {"form", "fieldset"} <= set(ed.TAGS_TRAVADAS)
-    dado = {"planos", "plano", "plano-preco", "preco", "hero-preco", "preco-grande", "karts", "kart", "agenda",
+    dado = {"planos", "plano", "plano-preco", "hero-preco", "preco-grande", "karts", "kart", "agenda",
             "agenda-total", "agenda-deposito", "posts-grade", "post-card", "produtos-grade", "depoimentos",
-            "campeoes", "servicos-grade"}
+            "campeoes"}
 
     class Dentro(HTMLParser):
         def __init__(self):
@@ -665,7 +667,8 @@ def test_nenhum_texto_que_se_escreve_fica_dentro_de_bloco_de_dado(amb):
             travas[caminho] = travas.get(caminho, set()) | set(re.findall(r'data-ed-trava="([a-z]+)"', m))
             assert not [f.texto for f in ed._analisar(s)[0] if ed.PRECO.search(f.texto)], (caminho, i)
         assert p.n > 0 and not p.ruins, (caminho, p.ruins)
-    assert {"precos", "blog", "pessoas"} <= travas["/"]
+    # #507: a home por blocos — o preço do painel (`plano-preco`) e o blog; as avaliações do Google entram com a #508
+    assert {"precos", "blog"} <= travas["/"] and "pessoas" in travas["/services/birthday-party/"]
     assert {"reserva", "precos"} <= travas["/services/arrive-and-drive/"]
     m = ed.marcar_original('<section><form action="/x/"><p>Send it</p></form><p>Say hi</p></section>', 0)
     assert '<form data-ed-trava="formulario"' in m and "<p>Send it</p>" in m and '<p data-ed-t="p.0:' in m, m
@@ -758,13 +761,16 @@ def test_faixa_se_acha_pela_ancora_quando_o_banco_tira_uma_faixa(amb, monkeypatc
     pid, itens = p["pagina"]["id"], p["pagina"]["draft"]["itens"]
     fx = _faixas("/")
     anc = ed.ancoras(fx)
-    i_blog, i_fim = anc.index("h-blog"), len(fx) - 1
+    # #507: a home por blocos — a âncora de cada faixa é o título dela (`h-b<n>`, n = o bloco)
+    blocos_home = pg_home.HOME["blocos"]
+    h_blog, h_videos = (f"h-b{next(i for i, b in enumerate(blocos_home) if b['tipo'] == t)}" for t in ("posts", "videos"))
+    i_blog, i_fim = anc.index(h_blog), len(fx) - 1
     assert i_fim > i_blog and [x["ancora"] for x in itens] == anc, "a página aberta guarda a âncora de cada faixa"
     k_fim = next(f.chave for f in ed._analisar(fx[i_fim])[0] if f.tag == "h2")
     k_blog = next(f.chave for f in ed._analisar(fx[i_blog])[0] if f.tag == "h2")
-    i_depo = anc.index("h-depo")
+    i_videos = anc.index(h_videos)                               # uma faixa de cima, que fica escondida
     itens = _com_textos(_com_textos(itens, i_fim, {k_fim: "Still curious? Ask us"}), i_blog, {k_blog: "Fresh from the track"})
-    itens = [{**x, "oculto": True} if x["indice"] == i_depo else x for x in itens]
+    itens = [{**x, "oculto": True} if x["indice"] == i_videos else x for x in itens]
     assert _salvar(painel, h, pid, conteudo={"itens": itens}).json()["erros"] == {}
     assert painel.post(f"/ops/api/site/editor/paginas/{pid}/publicar", headers=h).status_code == 200
     assert "Still curious? Ask us" in site.get("/").text and "Fresh from the track" in site.get("/").text
@@ -773,9 +779,9 @@ def test_faixa_se_acha_pela_ancora_quando_o_banco_tira_uma_faixa(amb, monkeypatc
     assert len(_faixas("/")) == len(fx) - 1
     html = site.get("/").text
     assert "Still curious? Ask us" in html and "Fresh from the track" not in html, "a troca segue a faixa dela"
-    assert 'aria-labelledby="h-depo"' not in html, "a faixa escondida continua escondida"
+    assert f'aria-labelledby="{h_videos}"' not in html, "a faixa escondida continua escondida"
     s = painel.get(f"/ops/api/site/editor/paginas/{pid}", headers=h).json()
-    blog_item = next(x for x in s["pagina"]["draft"]["itens"] if x["ancora"] == "h-blog")
+    blog_item = next(x for x in s["pagina"]["draft"]["itens"] if x["ancora"] == h_blog)
     assert blog_item["indice"] == -1 and s["orfaos"] == {blog_item["id"]: [k_blog]}
     assert any("1 texto(s) órfão(s)" in x for x in s["problemas"]), s["problemas"]
     r = _salvar(painel, h, pid, conteudo={"itens": s["pagina"]["draft"]["itens"]})

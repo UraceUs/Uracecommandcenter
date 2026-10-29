@@ -127,7 +127,7 @@ O detalhe do dia do box está no [playbook de mecânicos e coaches](playbook-mec
 | `parts.urace.us` | **só** o balcão do celular (leitor de peças). Qualquer outra tela responde "Este endereço é só do balcão." No painel, **Balcão › "Abrir o balcão do celular"** abre esse endereço já com o seu login (#311): um acesso de uso único, que vale 30 segundos e nunca aparece no endereço. Sair do painel tira você do balcão também |
 | `/ops/portal` | a **área do cliente** (outra porta, outro login). Não é o painel da equipe |
 | `/cart/` (site novo) | o **carrinho** do cliente (#236): sessões e produtos, um pagamento só no Stripe. **Toda compra pede a conta do site** (#248): sem conta, o carrinho pede os dados, o piloto (só o nome) e a senha, e a conta nasce no Checkout com o e-mail de boas-vindas (#305). Chave English/Português no topo |
-| `novo.urace.us/services/` | a **página de programas** do site. Desde 15/10 (#254) são sete: Arrive and Drive, URACE Academy, Intensive Training Camp, Racing Team, Birthday Party, Corporate Events e Group Events. **Kart School** virou a **URACE Academy** e **Professional Coaching** virou o **Arrive and Drive**; os dois endereços antigos redirecionam para quem herdou. O que a equipe vende por cada nome está no [playbook de vendas](playbook-vendas.md) |
+| `novo.urace.us/services/` | a **página de programas** do site (*Programs*). Desde 29/10 (#507) é a do urace.us: uma seção por degrau da escada — **Sim 2 Grid**, **Arrive and Drive**, **URACE Academy**, **Racing Team** e **Birthday party / Corporate Events** — com as perguntas de cada um (abrem no toque) e, no Sim 2 Grid, os **programas mensais do painel** (Site › Cartões das páginas). Termos, reembolso e preço de cada programa ficam na página dele. Desde 15/10 (#254), **Kart School** é a **URACE Academy** e **Professional Coaching** é o **Arrive and Drive**; os dois endereços antigos redirecionam para quem herdou. O que a equipe vende por cada nome está no [playbook de vendas](playbook-vendas.md) |
 | `/order/<código>/` (site novo) | a **página do pedido** do cliente (#245), link pessoal: pago, processando, pagamento não passou (Try again) ou checkout expirado (Restore cart), com os dados do cliente da conta; em inglês ou português (#248). A equipe copia o link em Site › Pedidos do site |
 
 **Endereço do urace.us de hoje** (#252): todo endereço que o site antigo publica abre no site novo —
@@ -878,7 +878,7 @@ assim como tinhamos no urace.us"*. Em toda página do site:
 - **Celular:** o ☰ abre o menu em tela cheia; cada grupo abre e fecha no toque. Conta e busca da loja ficam no fim da lista.
 - **Our Services** saiu do topo e continua no rodapé e nas páginas. Nenhum link de antes sumiu do site.
 - **Animações:** botão sobe 2 px e cartão sobe 4 px com sombra (mouse em cima); as seções surgem ao rolar, uma vez;
-  os campeões da home são um carrossel no celular (arrastar ou as setas ‹ ›); o "Book now" pulsa de leve três vezes
+  os campeões da Career são um carrossel no celular (arrastar ou as setas ‹ ›); o "Book now" pulsa de leve três vezes
   e para. Quem pediu ao celular/computador **menos movimento** (prefers-reduced-motion) vê tudo parado e à mostra.
 
 ### SIM2GRID: a hora de simulador (#392)
@@ -1087,7 +1087,7 @@ mexer, a página sai igual à de antes, byte a byte.
   ele; uma seção nova com outro H1 trava o Publicar). A pergunta frequente trocada também vai para o que o Google lê da
   página (os dados estruturados).
 - **O que vem do painel fica travado** (NO FAKE DATA, uma fonte só): os **planos e cartões** (Academy, Pro Team, For
-  Beginners e o título de cada grupo de planos), todo **preço** (o "Starting at" da home, o "From … per driver" e o
+  Beginners e o título de cada grupo de planos), todo **preço** (o "From" dos cartões da home, o "From … per driver" e o
   "Investment", qualquer texto com `$`), a **reserva** do Arrive and Drive (os karts e a agenda), os **artigos do blog**
   da home, os **produtos da loja**, **formulários** e as palavras e nomes de **pessoas de verdade** (depoimentos e
   campeões). Na prévia o mouse mostra que não se escreve ali; clicar seleciona a faixa e a barra diz **de onde vem e onde
@@ -1175,7 +1175,7 @@ mudados; o texto do artigo não vai para o log).
   **Publicar** de novo.
 - Publicado, o artigo entra **na hora**, no servidor, no blog, na categoria, na home (os 3 mais novos), no **mapa do site**
   (`/sitemap.xml`) e no **JSON-LD** (com a data de publicação e a da última mudança, `dateModified`). Sem nenhum artigo no
-  ar, a faixa do blog ("Our Contents") some da home.
+  ar, a faixa do blog ("Read before you race") some da home.
 - **"Na hora" vale para o servidor.** Quem já abriu a página guarda a cópia no navegador **até 5 minutos**; o mapa do site
   fica **até 24 horas** no cache (do navegador e de quem o lê, como o Google). Publicou e não viu? Espere ou recarregue.
 - **O endereço trava na primeira publicação** e não destrava ao tirar do ar: o Google e quem salvou o link já têm ele.

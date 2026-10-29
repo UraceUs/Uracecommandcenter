@@ -1,6 +1,6 @@
-"""As páginas do site novo além da home e do Arrive and Drive (#164): serviços, Academy, Pro Team,
-For Beginners, Career, About, Contact, Accessibility, blog e loja. Todas usam o `layout()` de
-`paginas.py` (cabeçalho, rodapé, metadados, JSON-LD) e o mesmo CSS.
+"""As páginas do site novo além do Arrive and Drive e das montadas por blocos (`pg_*.py`; a home, a About e a
+Programs, #507) (#164): eventos e camp, Academy, Pro Team, For Beginners, Career, Contact, Accessibility, blog e
+loja. Todas usam o `layout()` de `paginas.py` (cabeçalho, rodapé, metadados, JSON-LD) e o mesmo CSS.
 
 O conteúdo mora em `conteudo_servicos.py`, `conteudo_paginas.py` e em `dados/*.json` (loja e blog,
 copiados do urace.us). Aqui só se desenha.
@@ -219,32 +219,6 @@ def servico(host, d):
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo="".join(partes),
                   schemas=(_negocio(host), oferta, _faq_ld(d["faq"]), _trilha(host, ("Services", "/services/"), (d["h1"], d["caminho"]))),
                   foto=d.get("foto"))
-
-
-def hub(host):
-    d = S.HUB
-    # preço só onde o sistema tem o valor: "kart" é o menor preço do Arrive and Drive (KARTS)
-    def preco(pr):
-        return f"<em>Starting at {usd(preco_kart())}</em>" if pr == "kart" else ""
-    cards = "".join(f"""<a class="servico-card" href="{e(h)}"><img src="{estatico('img/' + f)}" alt="" width="640" height="400" loading="lazy">
-  <span class="servico-txt"><strong>{e(t)}</strong><span>{e(p)}</span>{preco(pr)}</span></a>""" for t, p, pr, h, f in d["cartoes"])
-    corpo = f"""<section class="hero hero-servico hero-hub"><div class="hero-in">
-  <p class="eyebrow">{e(d['eyebrow'])}</p><h1>{e(d['h1'])}</h1><p class="hero-sub">{e(d['sub'])}</p>
-  <div class="hero-acoes"><a class="btn" href="{PORTAL}/reserve">Book online</a><a class="btn btn-linha" href="/contact/">Talk to us</a></div>
-</div></section>
-<section class="faixa clara" aria-labelledby="h-lista"><div class="largura">
-  <h2 id="h-lista">Every URACE program</h2><div class="servicos-grade">{cards}</div>
-</div></section>
-<section class="faixa escura" aria-labelledby="h-sim" id="sim2grid"><div class="largura duas">
-  <div><p class="eyebrow">{e(d['sim_abertura'])}</p><h2 id="h-sim">{e(d['sim_titulo'])}</h2>{_ps(d['sim'])}
-    <p class="hero-acoes"><a class="btn" href="{e(d['sim_cta'][1])}">{e(d['sim_cta'][0])}</a></p></div>
-  <div class="fotos-duas">{"".join(f'<img src="{estatico("img/" + f)}" alt="URACE SIM2GRID racing simulator" width="640" height="420" loading="lazy">' for f in d['sim_fotos'])}</div>
-</div></section>
-{_fecho(d['fecho'], d['fecho_sub'], ('Tell us about the driver', '/contact/'))}"""
-    lista = {"@context": "https://schema.org", "@type": "ItemList", "itemListElement": [
-        {"@type": "ListItem", "position": i, "name": t, "url": f"https://{host}{h}"} for i, (t, _, _, h, _) in enumerate(d["cartoes"], 1)]}
-    return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
-                  schemas=(_negocio(host), lista, _trilha(host, ("Services", "/services/"))), foto="arrive-and-drive-hero.webp")
 
 
 # ------------------------------------------------------------------ institucionais
@@ -713,23 +687,6 @@ def career(host):
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'])}"""
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
                   schemas=(_negocio(host), _faq_ld(d["faq"]), _trilha(host, ("Career", d["caminho"]))), foto=d["foto"])
-
-
-def about(host):
-    d = P.ABOUT
-    corpo = f"""<section class="hero hero-servico">{_hero_foto(d['foto'])}<div class="hero-in">
-  <p class="eyebrow">{e(d['eyebrow'])}</p><h1>{e(d['h1'])}</h1></div></section>
-<section class="faixa clara" aria-labelledby="h-hist"><div class="largura estreita"><h2 id="h-hist">{e(d['historia_titulo'])}</h2>{_ps(d['historia'])}{_lista(d['historia_itens'], 'lista')}<p>{e(d['historia_fecho'])}</p></div></section>
-<section class="faixa escura" aria-labelledby="h-met"><div class="largura duas"><div><h2 id="h-met">{e(d['metodo_titulo'])}</h2><p>{e(d['metodo_intro'])}</p>{_lista(d['metodo'])}<p>{e(d['metodo_fecho'])}</p></div>
-  <div><h2>{e(d['diferente_titulo'])}</h2>{_ps(d['diferente'])}{_lista(d['diferente_itens'], 'lista')}<p>{e(d['diferente_fecho'])}</p></div></div></section>
-<section class="faixa clara" aria-labelledby="h-equipe"><div class="largura duas"><div><h2 id="h-equipe">{e(d['equipe_titulo'])}</h2>{_ps(d['equipe'])}{_lista(d['equipe_itens'], 'lista')}{_ps(d['equipe_fecho'])}</div>
-  <div><h2>Vision</h2><p>{e(d['visao'])}</p><h2>Mission</h2>{_ps(d['missao'])}</div></div></section>
-<section class="faixa vermelha" aria-labelledby="h-sup"><div class="largura duas"><div><h2 id="h-sup">{e(d['suporte_titulo'])}</h2>{_ps(d['suporte'])}</div>
-  <div><h2>{e(d['seguranca_titulo'])}</h2><p>{e(d['seguranca_intro'])}</p>{_lista(d['seguranca'], 'checks claras')}<p>{e(d['seguranca_fecho'])}</p></div></div></section>
-{_depoimentos(C.DEPOIMENTOS, d['depoimentos_titulo'], d['depoimentos_sub'])}
-{_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'], 'escura')}"""
-    return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
-                  schemas=(_negocio(host), _trilha(host, ("About", d["caminho"]))), foto=d["foto"])
 
 
 ENVIADO = ('<p class="aviso-ok" role="status">Thank you! We got your message and will reply shortly — usually within '

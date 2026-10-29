@@ -51,15 +51,12 @@ def csp(medindo=False):
 
 # Páginas fixas: caminho → função(host). As dinâmicas (blog, loja, contato) estão em `_dinamica`.
 PAGINAS = {
-    "/": paginas.home,
     "/services/arrive-and-drive/": paginas.arrive_and_drive,
-    "/services/": ps.hub,
     "/academy/": ps.academy,
     "/sim2grid-racing-simulator/": ps.sim2grid,          # #392: a LP do SIM2GRID, com a reserva por hora
     "/pro-team/": ps.pro_team,
     "/for-beginners/": ps.beginners,
     "/career/": ps.career,
-    "/about/": ps.about,
     "/accessibility/": ps.accessibility,
     "/privacy/": ps.privacy,                             # #488: a política e os termos do site (não os do app interno)
     "/terms/": ps.terms,
@@ -313,10 +310,12 @@ def _do_editor(caminho, host):
 
 
 def _pagina(request, caminho, host, q):
-    if not (caminho == "/" and (q.get("s") or "").strip()):
-        feita = _do_editor(caminho, host)
-        if feita:
-            return _html(feita)
+    # #261: a busca do WordPress (`/?s=`) é a da loja. Vem antes de tudo: a home é uma página por blocos (#507)
+    if caminho == "/" and (q.get("s") or "").strip():
+        return RedirectResponse(f"/store/?{urlencode({'s': q['s'].strip()[:80]})}", status_code=301)
+    feita = _do_editor(caminho, host)
+    if feita:
+        return _html(feita)
     if caminho in blocos.registro():                    # #502: as páginas por blocos (antes do molde antigo e do 301)
         return _html(_por_blocos(caminho, host, q))
     if caminho in (C.ARRIVE["caminho"], "/academy/", "/pro-team/", "/for-beginners/", ps.SG.CAMINHO):
@@ -329,8 +328,6 @@ def _pagina(request, caminho, host, q):
         from command_center.providers import stripe_loja
         return _sem_cache(ps.carrinho(host, cancelado=q.get("cancelled") == "1", stripe=stripe_loja.ligado(),
                                       lang=idioma.de_request(request)))
-    if caminho == "/" and (q.get("s") or "").strip():   # #261: a busca do WordPress (`/?s=`) é a da loja
-        return RedirectResponse(f"/store/?{urlencode({'s': q['s'].strip()[:80]})}", status_code=301)
     if caminho == "/store/":                            # #261: busca, filtro de preço e ordem vêm do endereço
         return _html(ps.store(host, None, q))
     if caminho in PAGINAS:
