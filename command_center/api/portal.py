@@ -19,6 +19,8 @@ import sqlite3
 import time
 from datetime import date, datetime, timedelta, timezone
 
+from typing import Annotated
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,6 +29,10 @@ from command_center.db import agora, atualizar, auditar, get_db, inserir, transa
 from command_center.providers import agenda_asana, agenda_sessoes as ag, portal, servicos_site, vinculo_site
 
 r = APIRouter(prefix="/ops/api/portal", tags=["portal"])
+
+# o banco guarda inteiro de 64 bits: número maior que isso na URL ou no corpo vira 404/422, não erro 500
+ID_MAX = 2**63 - 1
+IdUrl = Annotated[int, Path(ge=1, le=ID_MAX)]
 
 COOKIE = "cp_session"
 COOKIE_CSRF = "cp_csrf"
@@ -380,7 +386,7 @@ def novo_piloto(dados: PilotoIn, request: Request, cid=Depends(cliente_atual), c
 
 
 @r.patch("/drivers/{pid}")
-def editar_piloto(pid: int, dados: PilotoIn, request: Request, cid=Depends(cliente_atual),
+def editar_piloto(pid: IdUrl, dados: PilotoIn, request: Request, cid=Depends(cliente_atual),
                   con: sqlite3.Connection = Depends(get_db)):
     d = dados.model_dump(exclude_unset=True)
     d.pop("is_self", None)
@@ -427,8 +433,8 @@ class AgendarIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     date: str
     period: str
-    service_id: int | None = None
-    driver_id: int | None = None
+    service_id: int | None = Field(None, ge=1, le=ID_MAX)
+    driver_id: int | None = Field(None, ge=1, le=ID_MAX)
     notes: str | None = None
     origin: str | None = None                # #164: "site" quando veio do site novo
     utm: dict | None = None                  # #164: utm_source, utm_campaign… (para o marketing)
@@ -552,8 +558,8 @@ class DiaIn(BaseModel):
 
 class LoteIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    service_id: int
-    driver_id: int
+    service_id: int = Field(..., ge=1, le=ID_MAX)
+    driver_id: int = Field(..., ge=1, le=ID_MAX)
     slots: list[DiaIn]
     quote: str | None = None                 # o hash da cotação que o cliente viu
     notes: str | None = None
@@ -622,7 +628,7 @@ def marcar_lote(dados: LoteIn, request: Request, tarefas: BackgroundTasks, cid=D
 
 
 @r.get("/bookings/group/{gid}")
-def acompanhar_lote(gid: int, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def acompanhar_lote(gid: IdUrl, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """As etapas do pedido de vários dias: os dias, a invoice das extras (uma só), a waiver, confirmado."""
     from command_center.providers import venda_site
     if not um(con, "SELECT 1 AS x FROM booking_groups WHERE id=? AND account_id=?", (gid, cid)):
@@ -636,8 +642,8 @@ def acompanhar_lote(gid: int, response: Response, cid=Depends(cliente_atual), co
 # ------------------------------------------------------------------ plano mensal (#169)
 class PlanoIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    service_id: int
-    driver_id: int
+    service_id: int = Field(..., ge=1, le=ID_MAX)
+    driver_id: int = Field(..., ge=1, le=ID_MAX)
     origin: str | None = None
     utm: dict | None = None
 
@@ -671,7 +677,7 @@ def assinar_plano(dados: PlanoIn, request: Request, tarefas: BackgroundTasks, ci
 
 
 @r.get("/plans/{oid}")
-def acompanhar_plano(oid: int, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def acompanhar_plano(oid: IdUrl, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import venda_plano
     if not um(con, "SELECT 1 AS x FROM plan_orders WHERE id=? AND account_id=?", (oid, cid)):
         raise HTTPException(404, "Plan not found.")
@@ -682,7 +688,7 @@ def acompanhar_plano(oid: int, response: Response, cid=Depends(cliente_atual), c
 
 
 @r.get("/bookings/{bid}")
-def acompanhar(bid: int, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def acompanhar(bid: IdUrl, response: Response, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """As etapas de um pedido (#164): reservado → pagar → waiver → confirmado. Confere o pagamento
     direto no QuickBooks no máximo 1 vez por minuto."""
     from command_center.providers import venda_site
@@ -695,7 +701,7 @@ def acompanhar(bid: int, response: Response, cid=Depends(cliente_atual), con: sq
 
 
 @r.post("/bookings/{bid}/cancel")
-def cancelar(bid: int, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
+def cancelar(bid: IdUrl, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
              con: sqlite3.Connection = Depends(get_db)):
     try:
         ag.cancelar_pelo_cliente(con, cid, bid)
@@ -845,7 +851,7 @@ def waiver_modelo_pdf(kind: str, request: Request, driver: int | None = Query(No
 
 
 @r.post("/drivers/{pid}/waiver/review", status_code=201)
-def revisar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(cliente_atual),
+def revisar_waiver(pid: IdUrl, dados: WaiverIn, request: Request, cid=Depends(cliente_atual),
                    con: sqlite3.Connection = Depends(get_db)):
     """#112, passo 1: confere tudo menos o código e devolve o resumo que a tela mostra antes do clique final."""
     from command_center.providers import revisao_waiver as rv, selo_waiver, waiver_nativa as wn
@@ -862,7 +868,7 @@ def revisar_waiver(pid: int, dados: WaiverIn, request: Request, cid=Depends(clie
 
 
 @r.post("/drivers/{pid}/waiver", status_code=201)
-def assinar_waiver(pid: int, dados: WaiverIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
+def assinar_waiver(pid: IdUrl, dados: WaiverIn, request: Request, tarefas: BackgroundTasks, cid=Depends(cliente_atual),
                    con: sqlite3.Connection = Depends(get_db)):
     from command_center.providers import codigos, copia_waiver, selo_waiver, waiver_nativa as wn
     try:
@@ -890,7 +896,7 @@ class EventoTelaIn(BaseModel):
 
 
 @r.post("/drivers/{pid}/waiver/events", status_code=201)
-def waiver_evento(pid: int, dados: EventoTelaIn, request: Request, cid=Depends(cliente_atual),
+def waiver_evento(pid: IdUrl, dados: EventoTelaIn, request: Request, cid=Depends(cliente_atual),
                   con: sqlite3.Connection = Depends(get_db)):
     """#111: abriu a tela de assinar e leu todas as páginas, relatados pela tela, com hora do servidor, IP e aparelho."""
     from command_center.providers import trilha_waiver as tw, waiver_nativa as wn
@@ -1100,7 +1106,7 @@ def convite_pdf_assinado(token: str, request: Request, con: sqlite3.Connection =
 
 # ------------------------------------------------------------------ QR do balcão (#87)
 @r.get("/drivers/{pid}/qr.svg")
-def qr_do_piloto(pid: int, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
+def qr_do_piloto(pid: IdUrl, cid=Depends(cliente_atual), con: sqlite3.Connection = Depends(get_db)):
     """O QR que o cliente mostra no balcão. Só do piloto desta conta, e só depois que a equipe
     ligou o piloto ao card dele (antes disso não há card para a peça entrar)."""
     from command_center.providers import balcao
