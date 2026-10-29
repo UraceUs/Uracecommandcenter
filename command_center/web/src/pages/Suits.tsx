@@ -249,24 +249,35 @@ export function SuitPedido() {
     </PageHeader>
     <Descarte pedido={d} onDone={p.reload} />
     {d.is_test ? <p className="small" role="status" style={{ color: 'var(--info, var(--accent))' }}><b>{tr("Pedido de teste:")}</b> {tr("nenhum e-mail real sai dele, e ele não entra nas contagens nem na Atenção.")}</p> : null}
+    {/* #464: o desenho aprovado — as 4 fases, o "Agora" e duas colunas (o que fazer à esquerda, o pedido à direita) */}
     <Etapas meta={meta.data} atual={d.status} />
-    <p className="small muted suit-proxima"><b>{tr("Próximo passo:")}</b> {d.proxima_acao}</p>
-    <NovaNota meta={meta.data} pedido={d} onDone={p.reload} />
-    <Cliente pedido={d} onDone={p.reload} />
-    <Medidas meta={meta.data} pedido={d} onDone={p.reload} />
-    <Design meta={meta.data} pedido={d} onDone={p.reload} />
-    <AprovacaoFinal pedido={d} onDone={p.reload} />
-    <Preparados pedido={d} onDone={p.reload} />
-    <PonteDoPedido pedido={d} onDone={p.reload} />
-    <WhatsAppDoPedido pedido={d} onDone={p.reload} />
-    <EmailFornecedor pedido={d} onDone={p.reload} />
-    <EnderecoFornecedor pedido={d} onDone={p.reload} />
-    <Linha_do_tempo meta={meta.data} notas={d.notas} pid={d.id} />
-    {d.asana_notes || d.asana_gid ? <Section title={tr("Como estava no Asana")}>
+    {d.client_id ? <p className="small"><Link to={`/clients/${d.client_id}`}>{tr("Card do cliente #{0} ↗", d.client_id)}</Link></p> : null}
+    <div className="suit-g">
+      <div className="suit-col">
+        <section className="card suit-agora" aria-labelledby="agora-t"><div className="card-b">
+          <h2 className="h2" id="agora-t">{tr("Agora")} <span className="k">· {nomeEtapa(meta.data, d.status)}</span></h2>
+          <p className="suit-proxima">{d.proxima_acao}</p>
+        </div></section>
+        <NovaNota meta={meta.data} pedido={d} onDone={p.reload} />
+        <AprovacaoFinal pedido={d} onDone={p.reload} />
+        <Preparados pedido={d} onDone={p.reload} />
+        <Linha_do_tempo meta={meta.data} notas={d.notas} pid={d.id} />
+      </div>
+      <div className="suit-col">
+        <Cliente pedido={d} onDone={p.reload} />
+        <Medidas meta={meta.data} pedido={d} onDone={p.reload} />
+        <Design meta={meta.data} pedido={d} onDone={p.reload} />
+        <PonteDoPedido pedido={d} onDone={p.reload} />
+        <WhatsAppDoPedido pedido={d} onDone={p.reload} />
+        <EmailFornecedor pedido={d} onDone={p.reload} />
+        <EnderecoFornecedor pedido={d} onDone={p.reload} />
+        {d.asana_notes || d.asana_gid ? <Section title={tr("Como estava no Asana")}>
       {d.asana_status && <p className="small muted">{tr("Status no Asana:")} {d.asana_status}</p>}
       {d.asana_notes && <pre className="suit-pre">{d.asana_notes}</pre>}
       {d.asana_gid && <a href={`https://app.asana.com/0/0/${d.asana_gid}`} target="_blank" rel="noreferrer">{tr("Abrir a tarefa no Asana ↗")}</a>}
     </Section> : null}
+      </div>
+    </div>
   </>
 }
 
@@ -319,11 +330,24 @@ function Descarte({ pedido, onDone }: { pedido: PedidoApi; onDone: () => void })
   </>
 }
 
+/** #464: as 13 etapas em 4 fases; a fase atual diz em que etapa está e quantas faltam dentro dela */
+const FASES: [string, string[]][] = [
+  [tr("Medidas e design"), ['standby', 'awaiting_measurements', 'design_pending', 'design_review']],
+  [tr("Aprovação"), ['approved']],
+  [tr("Produção"), ['sent_to_supplier', 'supplier_accepted', 'in_production', 'photos_received', 'checked']],
+  [tr("Entrega"), ['address_sent', 'in_transit', 'delivered']],
+]
 function Etapas({ meta, atual }: { meta: Meta; atual: string }) {
-  const i = meta.etapas.findIndex(e => e.codigo === atual)
-  return <ol className="suit-etapas" aria-label={tr("Etapas do pedido")}>{meta.etapas.map((e, k) =>
-    <li key={e.codigo} className={e.codigo === atual ? 'atual' : k < i && atual !== 'canceled' ? 'feita' : ''} title={e.descricao}
-      aria-current={e.codigo === atual ? 'step' : undefined}><span className="n" aria-hidden="true">{k < i && atual !== 'canceled' ? '✓' : k + 1}</span>{e.nome}</li>)}</ol>
+  const fa = FASES.findIndex(([, cs]) => cs.includes(atual))
+  return <ol className="suit-etapas suit-fases" aria-label={tr("Etapas do pedido")}>{FASES.map(([nome, cs], k) => {
+    const feita = fa >= 0 && (k < fa || (atual === 'delivered' && k === fa))
+    const agora = k === fa && !feita
+    return <li key={nome} className={agora ? 'atual' : feita ? 'feita' : ''} aria-current={agora ? 'step' : undefined}
+      title={cs.map(c => nomeEtapa(meta, c)).join(' · ')}>
+      <span className="n" aria-hidden="true">{feita ? '✓' : k + 1}</span>
+      <span className="f"><b>{nome}</b><span className="small">{agora ? (cs.length > 1 ? tr("{0} · {1} de {2}", nomeEtapa(meta, atual), cs.indexOf(atual) + 1, cs.length) : nomeEtapa(meta, atual))
+        : cs.map(c => nomeEtapa(meta, c)).join(' · ')}</span></span></li>
+  })}</ol>
 }
 
 function NovaNota({ meta, pedido, onDone }: { meta: Meta; pedido: PedidoApi; onDone: () => void }) {
@@ -745,10 +769,24 @@ function SaudeTopo() {
   </p>
 }
 
+const FILTROS: [string, string, string[]][] = [['tudo', tr("Tudo"), []], ['nota', tr("Notas"), ['nota']], ['email', tr("E-mails"), ['email']],
+  ['whatsapp', 'WhatsApp', ['whatsapp']], ['etapa', tr("Etapas"), ['etapa']], ['ia', 'IA', ['ia']]]
+const diaFL = (iso: string) => { const d = new Date(iso.endsWith('Z') || iso.includes('+') ? iso : iso + 'Z'); return isNaN(d.getTime()) ? iso.slice(0, 10)
+  : d.toLocaleDateString(LOCALE(), { timeZone: 'America/New_York', weekday: 'short', day: '2-digit', month: '2-digit', year: '2-digit' }) }
+
 function Linha_do_tempo({ meta, notas, pid }: { meta: Meta; notas: Nota[]; pid: number }) {
-  const lista = [...notas].reverse()
+  const [filtro, setFiltro] = useState('tudo')
+  const kinds = FILTROS.find(f => f[0] === filtro)?.[2] || []
+  const lista = [...notas].reverse().filter(n => !kinds.length || kinds.includes(n.kind))
   return <Section title={tr("Linha do tempo")} count={notas.length}>
-    {!lista.length ? <Empty title={tr("Nada ainda")} /> : <ol className="suit-tempo">{lista.map(n => <li key={n.id} className={`k-${n.kind}`}>
+    <div className="suit-filtros" role="group" aria-label={tr("Filtrar a linha do tempo")}>{FILTROS.map(([k, rot, ks]) => {
+      const n = ks.length ? notas.filter(x => ks.includes(x.kind)).length : notas.length
+      return <button key={k} type="button" className={`btn sm${filtro === k ? ' primary' : ' ghost'}`} aria-pressed={filtro === k} disabled={!n && k !== 'tudo'} onClick={() => setFiltro(k)}>{rot} <span className="muted">{n}</span></button>
+    })}</div>
+    {!lista.length ? <Empty title={tr("Nada ainda")} /> : <ol className="suit-tempo">{lista.map((n, i) => {
+      const d = diaFL(n.created_at); const novoDia = i === 0 || diaFL(lista[i - 1].created_at) !== d
+      return <li key={n.id} className={`k-${n.kind}`}>
+      {novoDia && <div className="suit-dia">{d}</div>}
       <div className="small muted">{horaFL(n.created_at)} · {n.autor || (n.kind === 'ia' ? tr("IA") : tr("sistema"))} · {KIND[n.kind] || n.kind}{n.status ? ` · ${nomeEtapa(meta, n.status)}` : ''}</div>
       {n.text && <div className="suit-texto">{n.text}</div>}
       {n.tem_imagem ? <a href={`/ops/api/suits/notas/${n.id}/imagem`} target="_blank" rel="noreferrer"><img className="suit-img" loading="lazy" src={`/ops/api/suits/notas/${n.id}/imagem`} alt={tr("Print da nota")} /></a> : null}
@@ -756,7 +794,7 @@ function Linha_do_tempo({ meta, notas, pid }: { meta: Meta; notas: Nota[]; pid: 
       {n.ia && <div className="suit-ia-res">{n.ia.status === 'DONE' ? <Md text={n.ia.output || ''} /> : n.ia.status === 'FAILED'
         ? <span style={{ color: 'var(--crit)' }}>{tr("A IA não conseguiu:")} {n.ia.error}</span> : <span className="muted">{tr("A IA está trabalhando nesta nota…")}</span>}
         {n.command_id && <Link className="small" to={`/ai/${n.command_id}`}>{tr("abrir no AI Command")}</Link>}</div>}
-    </li>)}</ol>}
+    </li>})}</ol>}
   </Section>
 }
 
