@@ -145,7 +145,7 @@ sem dano ao kart; dano acima do depósito é cobrado à parte.
 | Fechar venda | **Fechar venda** | cada passo com "feito", "aguardando" ou "falhou"; auditoria `sales.close` |
 | Pagamento | QuickBooks → espelho do painel | o espelho sincroniza a cada 15 min |
 | Waiver | DocuSign ou área do cliente | `sent` → `completed`. **`delivered` não é assinada** |
-| Contato ou pedido pelo site | `/contact/` e a loja | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260). Limite contra robô: 8 envios por conexão a cada 10 min e 6 por hora para o mesmo e-mail (#438); passou disso, o site pede para tentar mais tarde |
+| Contato ou pedido pelo site | `/contact/`, a loja e as landings de campanha (#506) | oportunidade origem **Site** + a **campanha** de onde a pessoa veio (#260). Limite contra robô: 8 envios por conexão a cada 10 min e 6 por hora para o mesmo e-mail (#438); passou disso, o site pede para tentar mais tarde |
 | Chat do site | balão do Kommo nas páginas públicas (#170) | a conversa vira lead no Kommo, como no site antigo, e aparece no Chat do Kommo; responda por lá |
 
 ### As etapas e o que move cada uma
@@ -859,6 +859,23 @@ Preço, sempre da **planilha de preços** do dono (15/10, #273). A taxa de pista
 - **Fora do OKC**: Academy +$250 (hotel, comida e transporte).
 
 Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: não estão na planilha.
+
+**Landings de campanha (#506, dono 29/10: *"sim, pode trazer o texto"*):** os endereços que a home e os anúncios do
+urace.us usam abrem no site novo com o texto de lá, e o formulário de cada uma entra em **Vendas** (origem Site, com
+a campanha), no serviço da página. As respostas do formulário ficam na nota da oportunidade, uma por linha:
+
+| Landing | Serviço em Vendas | O que a nota traz |
+|---|---|---|
+| `/kart-lessons-for-beginners/`, `/kart-driving-school/` | Arrive and Drive | *Address*, *Option* (A: só experimentar · B: entrar na Academy · C: Racing Team · D: sem orçamento agora), *Previous experience* |
+| `/kart-training-packages/` | URACE Academy | idem |
+| `/professional-kart-team-racing-team/` | Racing Team | idem |
+| `/the-driver-factory/` | URACE Academy | idem; depois de enviar, a pessoa vai para `/the-driver-factory-thank-you-page/` |
+| `/arrive-and-drive-karting-experience/` | Arrive and Drive | *Experience for* (para quem é), *Driver age*, *Karting experience* e a mensagem; depois de enviar, `/arrive-and-drive-karting-thank-you/` |
+
+A **opção** é o que pesa: A é Arrive and Drive, B é Academy, C é Racing Team — mesmo quando o serviço da
+oportunidade é o da página. `/arrive-and-drive-karting-booking/` não tem formulário: o botão leva à reserva do site
+(`/services/arrive-and-drive/#reservar`). O **URACE Boost** que o urace.us ainda mostra nas landings da Academy e do
+Racing Team fica de fora no site novo, como na `/academy/` e no `/pro-team/`: não está na planilha (#273).
 
 **Na reserva do site** (#279, dono 15/10):
 - **Lead and Follow** é uma caixinha ao lado do kart: *Add Lead and Follow (+$769)*. Vai para o carrinho
