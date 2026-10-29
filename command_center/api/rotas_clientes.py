@@ -264,6 +264,9 @@ def client_patch(cid: int, dados: ClienteIn, request: Request, u=Depends(auth.ex
     if not um(con, "SELECT id FROM clients WHERE id=?", (cid,)):
         raise HTTPException(404, "Client not found.")
     campos = {k: v for k, v in dados.model_dump().items() if v is not None}
+    for k in ("relationship", "racing_class"):         # a tela manda null para esvaziar (a chave ausente continua "não mexe")
+        if k in dados.model_fields_set and getattr(dados, k) is None:
+            campos[k] = ""
     antes = um(con, f"SELECT {', '.join(CONTATO)} FROM clients WHERE id=?", (cid,))
     _contato_limpo(con, cid, campos, antes)
     _dados_limpos(campos, u)

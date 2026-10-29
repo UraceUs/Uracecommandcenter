@@ -140,3 +140,16 @@ def test_card_do_servico_waiver_anulada_nao_vale_e_a_valida_vence_a_reenviada(cl
     con.commit()
     w = cli.get(B + f"/tasks/{tid}/servico").json()["cliente"]["waiver"]
     assert w["status"] == "completed" and w["expires_at"] == "2027-09-02"
+
+
+def test_limpar_parentesco_e_classe_com_null_como_a_tela_manda(cli, con, espelhado):  # noqa: F811
+    """debug 29/10: a tela de Editar dados manda `null` para esvaziar o parentesco e a classe, e o servidor tratava
+    `null` como "não mexe": o campo voltava igual. Sem a chave, continua não mexendo."""
+    _, _, cid = espelhado
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"relationship": "mãe", "racing_class": "Cadet"}).status_code == 200
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"notes": "só a nota"}).status_code == 200
+    c = um(con, "SELECT relationship, racing_class FROM clients WHERE id=?", (cid,))
+    assert (c["relationship"], c["racing_class"]) == ("mãe", "Cadet")
+    assert cli.patch(B + f"/clients/{cid}", headers=_h(cli), json={"relationship": None, "racing_class": None}).status_code == 200
+    c = um(con, "SELECT relationship, racing_class FROM clients WHERE id=?", (cid,))
+    assert (c["relationship"], c["racing_class"]) == (None, None)
