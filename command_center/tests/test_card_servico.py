@@ -122,3 +122,21 @@ def test_dados_do_cliente_parentesco_classe_e_medidas(cli, con, espelhado):  # n
     assert ev["servico"]["subtarefas"] == [1, 2] and ev["servico"]["comentarios"] == 2
     assert ev["servico"]["ultimo_comentario"]["texto"] == "melhor volta 41.2"
     assert all("notes" not in t for t in c["tasks"])                 # a descrição do Asana não vai nas listas
+
+
+def test_card_do_servico_waiver_anulada_nao_vale_e_a_valida_vence_a_reenviada(cli, con, espelhado):  # noqa: F811
+    """debug 29/10: o card do serviço lia a waiver mais recente pelo status cru — a anulada (que continua `completed`)
+    aparecia como assinada, e um reenvio ainda não assinado escondia a assinada que vale (o card do cliente já separava)."""
+    _, tid, cid = espelhado
+    base = dict(client_id=cid, template="adult", signer_name="Nina Ficticia", signer_email="nina.ficticia@example.com")
+    anulada = inserir(con, "waivers", status="completed", sent_at="2026-09-01T10:00:00Z", completed_at="2026-09-01T11:00:00Z",
+                      expires_at="2027-09-01", **base)
+    inserir(con, "waiver_voids", waiver_id=anulada, by_name="Gerente", reason="assinada pelo responsável errado")
+    con.commit()
+    assert cli.get(B + f"/tasks/{tid}/servico").json()["cliente"]["waiver"]["status"] == "voided"
+    inserir(con, "waivers", status="completed", sent_at="2026-09-02T10:00:00Z", completed_at="2026-09-02T11:00:00Z",
+            expires_at="2027-09-02", **base)
+    inserir(con, "waivers", status="sent", sent_at="2026-10-20T10:00:00Z", **base)
+    con.commit()
+    w = cli.get(B + f"/tasks/{tid}/servico").json()["cliente"]["waiver"]
+    assert w["status"] == "completed" and w["expires_at"] == "2027-09-02"
