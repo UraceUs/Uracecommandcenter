@@ -188,3 +188,8 @@ def test_politica_de_discar_e_confirmacao_obrigatoria(cli):
     p = um(con, "SELECT policy FROM action_policies WHERE action='dialpad_ligar'")
     assert p and p["policy"] == "REQUIRES_CONFIRMATION"
     con.close()
+
+
+def test_chave_com_acento_no_webhook_e_recusada_sem_erro_500(cli):
+    """Debug 29/10: a chave da URL com acento dava erro 500 (compare_digest só aceita ASCII em texto)."""
+    assert cli.post(f"{B}/dialpad/webhook?key=chav%C3%A9", json=evento()).status_code == 403

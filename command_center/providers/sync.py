@@ -751,8 +751,8 @@ def sincronizar_corridas(con):
     """Coluna RACES do Asana = calendário de corridas. Uma corrida por tarefa
     (ligada por task_id); nome e data seguem a tarefa; tarefa concluída ou
     fora da coluna some do calendário (active=0), sem apagar convites."""
-    from datetime import date as _date
-    hoje_ = _date.today().isoformat()
+    from command_center.providers import portal
+    hoje_ = portal.hoje().isoformat()          # dia da Flórida, não o do relógio do servidor
     vistos = set()
     for t in todos(con, "SELECT id, title, due_on, status FROM tasks WHERE project='U-RACE' AND LOWER(COALESCE(section,''))='races'"):
         if _RX_TREINO.search(t["title"] or "") and not any(x.lower() in (t["title"] or "").lower() for x in SERIES):
