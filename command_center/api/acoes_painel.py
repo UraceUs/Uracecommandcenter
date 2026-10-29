@@ -46,7 +46,10 @@ def painel_unir_clientes(con, user_id, keep_id, drop_id, motivo=None):
         return {"aplicado": False, "motivo": "RECUSADO: a IA só une cards com o mesmo e-mail, telefone ou responsável; "
                                               "sem isso é decisão humana (Clientes → Unir dois clientes)"}
     antes = {t: um(con, f"SELECT COUNT(*) AS n FROM {t} WHERE client_id=?", (drop_id,))["n"] for t in ("tasks", "waivers", "emails", "invoices")}
-    identidade.unir(con, keep_id, drop_id, "ia", (motivo or "") + " · " + "; ".join(iguais))
+    try:
+        identidade.unir(con, keep_id, drop_id, "ia", (motivo or "") + " · " + "; ".join(iguais))
+    except identidade.ErroUniao as e:
+        return {"aplicado": False, "motivo": f"RECUSADO: {e}"}
     identidade.recalcular_status(con)
     auditar(con, "client.merge", "ia", user_id=user_id, entity_type="client", entity_id=keep_id,
             detail={"drop_id": drop_id, "criterio": iguais, "moved": antes, "motivo": motivo})

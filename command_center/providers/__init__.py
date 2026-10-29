@@ -18,6 +18,7 @@ if MCP_DIR not in sys.path:
     sys.path.insert(0, MCP_DIR)
 
 SISTEMAS = ("asana", "docusign", "gmail", "quickbooks", "kommo", "backup")      # #299: o backup do banco
+SEM_SINCRONIA = ("backup",)      # nenhuma sincronia grava o detalhe deles: o detalhe é a sondagem do dia, inteira
 
 
 class NaoConectado(Exception):

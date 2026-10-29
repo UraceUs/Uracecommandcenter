@@ -77,6 +77,18 @@ def test_sync_nao_junta_os_irmaos_mesmo_com_o_mesmo_email(con):
         "irmão não aparece como duplicado"
 
 
+def test_irmao_com_nome_parecido_tambem_nao_vira_par_de_duplicados(con):
+    """Debug 29/10: o filho com o nome do pai (Jr) e a irmã em cards de irmãos. Pelo contato o par já ficava de fora,
+    mas pelo nome parecido entrava em Possíveis duplicados, com o Unir recusando ("são irmãos"): ficava lá para sempre."""
+    junior = inserir(con, "clients", name="Joseph Kartian", pilot_name="Joseph Kartian Jr", email="joe.kartian@example.com",
+                     phone="407-555-0142", status="ACTIVE", source="asana")
+    lia, _ = identidade.criar_irmao(con, junior, "Lia Kartian")
+    assert identidade.nao_unir(con, junior, lia)
+    assert identidade.parecido("Joseph Kartian Jr", "Joseph Kartian"), "o piloto de um parece o responsável do outro"
+    for pares in (identidade.candidatos_duplicados(con), identidade.candidatos_duplicados(con, para=lia)):
+        assert not any({p["a"]["id"], p["b"]["id"]} == {junior, lia} for p in pares), pares
+
+
 def test_duplicado_de_verdade_continua_unindo_e_leva_o_vinculo(con):
     enzo, conta, p_enzo, _ = familia(con)
     dup = inserir(con, "clients", name="Joseph Kartian", pilot_name="Enzo Kartian", email="JOE.KARTIAN@example.com", status="ACTIVE", source="asana")

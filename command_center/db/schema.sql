@@ -433,6 +433,11 @@ CREATE TABLE IF NOT EXISTS emails (
   handled       INTEGER NOT NULL DEFAULT 0,
   synced_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
+-- O que é de cada cliente (debug 29/10): a lista de clientes conta tarefas, e-mails e a waiver de cada linha, e o card
+-- e o recálculo de ativo/inativo buscam por cliente. Sem estes, cada busca varria a tabela inteira (GET /clients ~2,4 s).
+CREATE INDEX IF NOT EXISTS tasks_client ON tasks(client_id);
+CREATE INDEX IF NOT EXISTS waivers_client ON waivers(client_id);
+CREATE INDEX IF NOT EXISTS emails_client ON emails(client_id);
 
 CREATE TABLE IF NOT EXISTS calendar_events (
   id            INTEGER PRIMARY KEY,

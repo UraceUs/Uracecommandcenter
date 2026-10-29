@@ -810,7 +810,7 @@ Primeiro nome parecido é só suspeita.
 |---|---|
 | serviço caiu no card errado | no card, aba Serviços › **Mover** (gerente+) e escolha o cliente certo |
 | serviço que não devia estar no calendário | Calendário › no serviço, **Excluir** (gerente+ e acesso livre), com o motivo. Some do calendário, do balcão, dos contadores e dos avisos, e a IA não age mais nele. No card, aba Serviços, continua como **excluído** (quem, quando, por quê), com **Restaurar**. No Asana nada muda; a auditoria guarda `task.deleted` e `task.restored` (#219) |
-| dois cards da mesma pessoa | Clientes › **⧉ Unir dois clientes**. O registro unido fica guardado e auditado |
+| dois cards da mesma pessoa | Clientes › **⧉ Unir dois clientes**. Tudo do card que sai vai junto (serviços, waivers, e-mails, invoices, ligações, mensalidade, balcão, estoque, pedidos do site, Suits…); se algo falhar no meio, nada muda. O registro unido fica guardado e auditado |
 | pares com nome quase igual | Clientes › **Possíveis duplicados**; dá para pedir o parecer da IA. A decisão é humana |
 
 ### "Vincular ao cliente" em toda inserção manual
@@ -1474,6 +1474,7 @@ Regras do dono. Valem para pessoa e para IA, em toda tela e em todo canal.
 | "Invoice e QuickBooks são decisão do gerente ou do administrador." | operador tentando aprovar proposta financeira | peça a um gerente |
 | "This action is blocked by policy and cannot be approved." | a política da ação é BLOCKED | não há como aprovar; fale com o dono se for o caso de mudar a política |
 | "Esses dois cards não se unem: …" | cards de drivers ou contas diferentes do site | não una; cada driver tem o seu card |
+| "Esses dois cards não se unem: os dois cards têm um rascunho aberto no balcão" (ou "a mensalidade do mesmo mês") | só cabe um por card | feche um dos rascunhos no Balcão (ou cancele a mensalidade repetida) e una de novo |
 | Venda do site com **Resolver:** "a vaga sumiu…" ou e-mail "Site · PAGO · SEM VAGA" | o cliente pagou no carrinho, mas a vaga acabou antes do pagamento; o pagamento está guardado e a sessão não entrou na agenda | quem vende liga, remarca (ou combina o reembolso com o gerente) e anota na venda |
 | E-mail "Site · PAGAMENTO FALHOU: pedido #N" | o pagamento que confirma depois (transferência) não passou; nada foi cobrado e nenhuma vaga ficou presa | Site › Pedidos do site › **Copiar o link** e mande ao cliente (botão Try again); sem e-mail do cliente, ligue |
 | E-mail "Site · PROCESSANDO O PAGAMENTO" ou "Site · CHECKOUT EXPIROU" | o cliente pagou com um meio que confirma depois, ou saiu do checkout sem pagar; ele já recebeu o e-mail com o link | nada a fazer no processando; no expirou, um contato ajuda a fechar (link em Pedidos do site) |
