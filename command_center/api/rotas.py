@@ -221,6 +221,7 @@ def tasks(status: str = "open", project: str | None = None, u=Depends(auth.usuar
         sql += " WHERE " + " AND ".join(where)
     rows = todos(con, sql + " ORDER BY t.due_on IS NULL, t.due_on, t.title", p)
     for t in rows:
+        t.pop("notes", None)                 # #457: a descrição do espelho do Asana vai só no detalhe da tarefa
         t["links"] = _links(con, "task", t["id"])
     return rows
 
