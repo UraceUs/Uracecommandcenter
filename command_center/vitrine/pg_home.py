@@ -24,7 +24,7 @@ Drive levam, até as landings entrarem, à página do Arrive and Drive (`AD_EXPE
 from datetime import datetime, timezone
 
 from command_center.vitrine import blocos
-from command_center.vitrine.conteudo import AVALIACOES, FECHO_DUVIDAS, GOOGLE, GRUPOS, LIGACAO, TRACK
+from command_center.vitrine.conteudo import AVALIACOES, FECHO_DUVIDAS, GOOGLE, GRUPOS, LIGACAO, RESULTADOS, TRACK
 from command_center.vitrine.paginas import _marca
 
 # o "Talk to us" da About e o "Book a 15-min call" da Programs são a `conteudo.LIGACAO`; o "Book a call" da home de lá
@@ -44,8 +44,8 @@ PRIMEIRA_CURVA = "arrive-and-drive-first-corner.webp"
 ACADEMY_FOTO = "img-7762-scaled.webp"
 ITALO = "italo-da-silveira-urace-founder.webp"
 
-TOPO = ("P1 + P3 · Bushnell, Florida", "Frankie Iadevaia wins Saturday, podium Sunday. The whole crew on the grid.")
-JACKSONVILLE_P1 = ("P1 · FLKC Rounds 7 & 8 · Jacksonville", "Frankie Iadevaia, URACE program driver. October 2026.")
+# #521: "On the top step" é `conteudo.RESULTADOS`, o mesmo da Academy e das landings
+TOPO = [{"foto": f, "alt": a, "titulo": t, "legenda": x} for f, a, t, x in RESULTADOS]
 SIM_ABRE = "Opens 1 Nov 2026"
 # o quarto depoimento da home de lá (não é do Google): o começo do depoimento do Aaron Benoit
 AARON = ("Aaron Benoit", "SKUSA X30 Senior race winner",
@@ -129,11 +129,7 @@ HOME = {
          "foto": BANDEIRADA, "alt": "URACE driver Frankie Iadevaia takes the checkered flag at FLKC Jacksonville",
          "nota": "**P1** Frankie Iadevaia · FLKC Rounds 7 & 8 · Jacksonville · October 2026"},
         {"tipo": "figuras", "eyebrow": "This season", "titulo": "On the top step", "fundo": "clara",
-         "ancora": "top-step", "itens": [
-            {"foto": BUSHNELL, "alt": "URACE team with the trophy after Frankie Iadevaia's P1 in Bushnell, Florida",
-             "titulo": TOPO[0], "legenda": TOPO[1]},
-            {"foto": JACKSONVILLE, "alt": "Frankie Iadevaia celebrating in his URACE suit, Jacksonville",
-             "titulo": JACKSONVILLE_P1[0], "legenda": JACKSONVILLE_P1[1]}]},
+         "ancora": "top-step", "itens": TOPO},
         {"tipo": "funcao", "render": _escolha, "dados": ESCOLHA},
         {"tipo": "cartoes", "eyebrow": "Choose your level", "titulo": "Where are you on track?", "itens": [
             {"titulo": "First time in a kart",
@@ -234,11 +230,7 @@ ABOUT = {
          "itens": [("300+", "Drivers trained by Italo and URACE"), ("500+", "Race wins by drivers trained by Italo and URACE"),
                    ("4", "Steps, one team: Sim2Grid, Arrive and Drive, Academy, Racing Team")]},
         {"tipo": "figuras", "eyebrow": "This season", "titulo": "On the top step", "fundo": "clara",
-         "ancora": "top-step", "itens": [
-            {"foto": BUSHNELL, "alt": "URACE team with the trophy after Frankie Iadevaia's P1 in Bushnell, Florida",
-             "titulo": TOPO[0], "legenda": TOPO[1]},
-            {"foto": JACKSONVILLE, "alt": "Frankie Iadevaia in his URACE suit, Jacksonville",
-             "titulo": JACKSONVILLE_P1[0], "legenda": JACKSONVILLE_P1[1]}]},
+         "ancora": "top-step", "itens": TOPO},
         {"tipo": "depoimentos", "eyebrow": "Google reviews", "ancora": "reviews", "itens": list(AVALIACOES),
          "link": ("Read them all on Google", GOOGLE)},
         {"tipo": "cartoes", "eyebrow": "Where to start", "titulo": "Find your step", "ancora": "find-your-step",

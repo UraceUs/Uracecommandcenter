@@ -136,6 +136,12 @@ HORARIO = ("We’re open every day, from 8 AM to 8 PM.",)
 LIGACAO = "https://calendar.app.google/KBbHhXjoRMS6sbHv8"
 GOOGLE = ("https://www.google.com/maps/place/URACE/@28.4108348,-81.377619,17z/data=!4m8!3m7!1s0x88e77d37e3e0fd25:"
           "0xa9426dd3f3d2290e!8m2!3d28.4108348!4d-81.377619!9m1!1b1")
+# #521: "On the top step", os resultados da temporada que o urace.us de 29/10 mostra (foto, alt, título, legenda): os mesmos
+# na home, na About, na Academy e nas landings. Resultado novo entra aqui, uma vez.
+RESULTADOS = (("urace-team-bushnell-p1-p3.webp", "URACE team with the trophy after Frankie Iadevaia's P1 in Bushnell, Florida",
+               "P1 + P3 · Bushnell, Florida", "Frankie Iadevaia wins Saturday, podium Sunday. The whole crew on the grid."),
+              ("urace-driver-jacksonville-p1.webp", "Frankie Iadevaia in his URACE suit, Jacksonville",
+               "P1 · FLKC Rounds 7 & 8 · Jacksonville", "Frankie Iadevaia, URACE program driver. October 2026."))
 # as avaliações do Google que o urace.us mostra (29/10): o texto e o nome como estão lá — o número de avaliações não se
 # escreve (fica velho); o link leva a todas
 AVALIACOES = (("Claire Baillie", "Parent · UK · Google review",
