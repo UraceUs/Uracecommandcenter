@@ -28,8 +28,6 @@ FECHO_PROXIMO = ("Every driver has a next step. Let's find yours.",
 # ------------------------------------------------------------------ Academy (urace.us/urace-academy/ + /services/)
 # #254 (dono, 15/10): *"o kart school se tornou Urace academy"* — o texto que fazia sentido da página
 # /services/kart-school/ entrou aqui, e aquele endereço virou 301 para esta página.
-ORDEM_DO_BOOST = 50        # #525: no painel, o cartão do Boost vem depois do grupo do 4 stroke (0–20)
-
 ACADEMY = {
     "caminho": "/academy/",
     # #506: /kart-training-packages/ e /kart-driving-school/ são landings próprias de novo (pg_landings.py)
@@ -63,10 +61,10 @@ ACADEMY = {
     # Kart) e para 2 stroke — "veja que tem academy para 4t e 2t". As contas batem com 4 × sessão,
     # 27 × sessão × 0,96 e 54 × sessão × 0,92, com entrada de 33% / 20% (test_vitrine trava). Saíram
     # 3 Months, 6 Months a 5% e o URACE Boost: não estão na planilha.
-    # #525 (dono, 30/10: *"usa os valores do urace us"*; *"URACE Boost: sim volta"*): o mensal sem contrato é o da
-    # Rate Card e do urace.us, com os 90 centavos ($2,756.90 e $3,156.90; a planilha os perdia na célula); os contratos
-    # continuam na conta da sessão de $689 / $789. O Boost volta, como no urace.us de 29/10 (o grupo entra no painel
-    # pela chave `academy:3:0`, depois do 4 stroke: `ORDEM_DO_BOOST`).
+    # #525: os planos da /academy/ continuam os da planilha ($2,756 / $3,156 sem contrato), os mesmos que o robô de
+    # vendas fala (`salesagent/.../urace-sales-agent.md`, que `test_sdr_final` amarra a esta lista; e a regra de 16/10
+    # do robô: "$2,756.90 não vai ao lead"). O $2,756.90 e o Boost do urace.us na /academy/ esperam o dono decidir o
+    # robô junto; nas outras páginas eles já saem (`conteudo.PRECOS`).
     # #390 (dono, 22/10: *"o texto maior seja sempre o valor do mes nao o total pois o total pode assustar"*): no
     # contrato, o preço grande é a parcela do mês; embaixo dele, o total e quanto economiza (dono: "o texto abaixo do
     # valor explicando o total a quantidade de desconto"); a entrada fica no texto.
@@ -75,7 +73,7 @@ ACADEMY = {
         ("4-stroke and Baby Kart · $689 per session", (
             ("No contract", "4 sessions a month",
              "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
-             "time with thirty days written notice. Additional sessions $689 each.", "$2,756.90", "per month"),
+             "time with thirty days written notice. Additional sessions $689 each.", "$2,756", "per month"),
             ("6-month contract", "27 sessions · 4% off",
              "$5,893.43 at signing (33%), then 5 monthly installments of $2,393.09. Contract total $17,858.88 "
              "(regular value $18,603.00). Recurring billing.", "$2,393.09",
@@ -87,7 +85,7 @@ ACADEMY = {
         ("2-stroke · $789 per session", (
             ("No contract", "4 sessions a month",
              "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
-             "time with thirty days written notice. Additional sessions $789 each.", "$3,156.90", "per month"),
+             "time with thirty days written notice. Additional sessions $789 each.", "$3,156", "per month"),
             ("6-month contract", "27 sessions · 4% off",
              "$6,748.79 at signing (33%), then 5 monthly installments of $2,740.42. Contract total $20,450.88 "
              "(regular value $21,303.00). Recurring billing.", "$2,740.42",
@@ -103,10 +101,6 @@ ACADEMY = {
             ("Your kart and your mechanic", "4 sessions a month",
              "You bring the kart and your mechanic; we bring the coaching and the track day. Additional sessions $300 each.",
              "$1,200", "per month"))),
-        ("URACE Boost · $625 per session", (
-            ("Boost", "8 sessions in 30 days",
-             "Eight sessions in 30 days for faster progression, at $625 a session, our lowest per-session rate. Built for "
-             "a race or a season ahead. No contract.", "$5,000", "per 30 days"),)),
     ),
     # #508: a página de hoje do urace.us é curta; o que é informação prática da página antiga (o que o plano inclui, o
     # que trazer e como entrar) fica aqui, na FAQ
