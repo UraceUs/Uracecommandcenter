@@ -261,7 +261,7 @@ def test_pagina_da_lp_com_seo_e_os_precos_do_painel(sim):
     assert '<link rel="canonical" href="https://novo.urace.us/sim2grid-racing-simulator/">' in r.text
     assert f"<title>{SG.PAGINA['titulo']}</title>" in r.text
     # #396: a página de cinema — a reserva logo depois da foto; o texto longo da LP saiu
-    for trecho in ("Book your seat", "Monthly programs", "10724 Cosmonaut Blvd, Box 5", "Starting at $50",
+    for trecho in ("Book your seat", "Monthly programs", "10724 Cosmonaut Blvd", "Starting at $50",
                    "What’s included in a simulator hour?", "Can I book this for my child?",
                    "What if I need to change or cancel my booking?", 'role="switch"', "With coach", "from $125/h",
                    "3 sessions per week", "$1,800", 'href="/pro-team/"', 'data-online="1"', "sim2grid.js", 'class="sim-barra"',

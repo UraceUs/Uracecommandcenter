@@ -253,7 +253,10 @@ def avisar_confirmada(con, bid, enviar_email=None):
         link = _link_grupo(b["group_id"])
     linhas = "\n".join(f"{x['service_name'] or 'Session'} · {x['date'][5:7]}/{x['date'][8:10]}/{x['date'][:4]} ({_per(x)})"
                        for x in juntas)
+    from command_center.vitrine.conteudo import endereco_com_box
+    # #527 (dono, 30/10): o Box não sai no site, só aqui, na confirmação
     texto = (f"Hi {a['name'].split(' ')[0]},\n\nYou're confirmed! See you at the track:\n\n{linhas}\n\n"
+             f"Where: Orlando Kart Center, {endereco_com_box('kart')}\n\n"
              "Your URACE QR is in your account: show it at the shop.\n"
              f"Your booking: {link}\n\nURACE.US · Orlando, FL")
     try:

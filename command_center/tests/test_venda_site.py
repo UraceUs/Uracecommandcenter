@@ -181,6 +181,8 @@ def test_paga_e_assinada_confirma_e_avisa_uma_vez_com_conferencia_direta_no_inte
     b = b_(con, bid)
     assert b["status"] == "confirmada" and b["paid_at"]
     assert [a for _, a, _ in emails.enviados] == ["You're confirmed: your URACE session"]
+    # #527 (dono, 30/10): o Box não sai no site, só aqui, na confirmação
+    assert "Where: Orlando Kart Center, 10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824" in emails.enviados[0][2]
     assert venda_site.checkout(con, bid)["confirmada"]
     assert not venda_site.avisar_confirmada(con, bid, emails) and len(emails.enviados) == 1
 

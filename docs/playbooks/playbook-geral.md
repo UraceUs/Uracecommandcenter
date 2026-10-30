@@ -985,6 +985,25 @@ ficam em `/ops/site/agendamentos`.
 Número zerado é zero de verdade; o que ainda não tem dado diz "sem dado" (NO FAKE DATA). As vendas feitas pela equipe
 (invoice do QuickBooks fora do site) estão em Vendas, não aqui.
 
+### Endereço, remarcação e horário da pista no site (#527)
+
+Dono, 30/10: *"não informe isso de cara assim, somente na confirmação de agendamento isso será passado"*; remarcação
+*"48h"*; o horário da pista *"é regulado pelo command center"*.
+
+- **Endereço:** as páginas, o rodapé, o schema do Google e a resposta automática do contato dizem só
+  **10724 Cosmonaut Blvd, Orlando, FL 32824**, sem o Box.
+- **O Box vai só no que o cliente recebe depois de marcar ou comprar:**
+  - **Box 3**: o e-mail "You're confirmed" da sessão de kart e o e-mail de pagamento do carrinho com uma sessão
+    marcada (linha "Where");
+  - **Box 3**: a retirada da loja (e-mail e página do pedido);
+  - **Box 5**: a hora de SIM2GRID paga.
+  - Mudou o Box? Troque em `BOX`, no `vitrine/conteudo.py`.
+- **Remarcação:** em todo o site é com **48 horas** de antecedência. Com menos que isso, há a taxa de US$ 95 (termos,
+  FAQ da Academy, reembolso e a letra miúda das landings).
+- **Horário da pista no formulário das landings:** a opção "A" diz os dias e os horários **abertos na agenda do painel**
+  (Site › Disponibilidade: dias da semana, manhã e tarde, e os horários de cada período). Abriu ou fechou um período
+  no painel, o formulário muda sozinho. Com nada aberto, a opção sai sem horário.
+
 ### Editor do site (#300, #315)
 
 Dono, 16/10: *"no site público a gente tenha é, como alterar o design, layout, puxando e arrastando e soltando de uma
