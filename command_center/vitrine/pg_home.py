@@ -10,7 +10,7 @@ O que fica diferente, de propósito:
   valores de lá (taxas, depósito, passes da pista) não têm fonte no painel e ficam de fora;
 - as avaliações do Google são as de `conteudo.AVALIACOES` (#508, o texto e o nome como estão lá), com o link para todas;
   a nota e o número de avaliações ("4.9", "38 reviews") não se escrevem à mão: ficam velhos;
-- os três vídeos de "Straight from the paddock" (mp4 do WordPress) e a faixa dos parceiros ainda não têm bloco;
+- os três vídeos de "Straight from the paddock" (#526) saem do próprio site (static/video, comprimidos), não do WordPress;
 - vídeo do YouTube é link (a política do site não deixa player de fora);
 - o que o texto de lá ainda diz e o dono já mudou fica de fora da Programs: a remarcação (fica na página do programa),
   as idades dos karts (dono, 08/10), o passo a passo do carrinho do WooCommerce (a reserva é a do site), os nomes Kart
@@ -24,7 +24,7 @@ Drive levam, até as landings entrarem, à página do Arrive and Drive (`AD_EXPE
 from datetime import datetime, timezone
 
 from command_center.vitrine import blocos
-from command_center.vitrine.conteudo import AVALIACOES, FECHO_DUVIDAS, GOOGLE, GRUPOS, LIGACAO, RESULTADOS, TRACK
+from command_center.vitrine.conteudo import AVALIACOES, CURTAS, FECHO_DUVIDAS, GOOGLE, GRUPOS, LIGACAO, RESULTADOS, TRACK
 from command_center.vitrine.paginas import _marca
 
 # o "Talk to us" da About e o "Book a 15-min call" da Programs são a `conteudo.LIGACAO`; o "Book a call" da home de lá
@@ -178,8 +178,13 @@ HOME = {
                         "data and video after every run, race-weekend coaching and trackside support."),
               "link": ("Talk to the team", "/professional-kart-team-racing-team/")}],
          "ctas": [("Plan your career, from here to F1, IndyCar or NASCAR", "/career/")]},
-        # lá, esta faixa tem também três vídeos (mp4 do WordPress), que a política do site não toca
-        {"tipo": "depoimentos", "titulo": "Straight from the paddock", "ancora": "reviews", "itens": [*AVALIACOES, AARON],
+        # #526: os três vídeos de lá ("On camera"), agora servidos pelo próprio site; as avaliações logo abaixo, como lá
+        {"tipo": "videos", "eyebrow": "On camera", "titulo": "Straight from the paddock", "fundo": "escura",
+         "ancora": "on-camera", "itens": [
+             {**CURTAS["vitoria"], "titulo": "Frankie Iadevaia", "legenda": "After the win · FLKC P1"},
+             {**CURTAS["primeira"], "titulo": "Brody", "legenda": "His first KA100 race"},
+             {**CURTAS["fundador"], "titulo": "Italo da Silveira", "legenda": "Founder · why URACE exists"}]},
+        {"tipo": "depoimentos", "rotulo_secao": "Google reviews", "ancora": "reviews", "itens": [*AVALIACOES, AARON],
          "link": ("Read them all on Google", GOOGLE)},
         {"tipo": "videos", "eyebrow": "URACE Shorts", "titulo": "Onboard: watch the method", "itens": [
             ("URACE Karting Team Orlando", "https://www.youtube.com/watch?v=44IvXhh2T9o"),
