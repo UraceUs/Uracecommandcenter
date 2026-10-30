@@ -117,6 +117,9 @@ SDR_ATENDER_SO_TAG = _bridge.get("SDR_ATENDER_SO_TAG", "").strip()
 # lead do Kommo por outro canal (Instagram/Facebook, SMS ou e-mail) há menos que isso, não responde de novo.
 # 0 desliga.
 SDR_DUPLICADO_MIN = int(_bridge.get("SDR_DUPLICADO_MIN", "30") or 0)
+# O time (ou outro bot) escreveu para a pessoa no chat há menos que isso: o robô não responde nem manda
+# follow-up (#533, dono 30/10: "o robô precisa ler a conversa e pegar o contexto"). 0 desliga.
+SDR_EQUIPE_JANELA_H = int(_bridge.get("SDR_EQUIPE_JANELA_H", "72") or 0)
 # Usuário do Kommo que recebe as tarefas de handoff (responsável único).
 KOMMO_RESPONSAVEL_ID = _bridge.get("KOMMO_RESPONSAVEL_ID", "")
 

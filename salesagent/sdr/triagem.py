@@ -101,6 +101,9 @@ def _decidir(evento, analise, card, agora):
     # 4. Card fechado que voltou a falar (dono, 28/10, #426: "robô responde e reabre"): o perdido volta para
     #    Comercial > ENTRADA, em qualquer funil e sem prazo; o ganho é cliente e fica onde está (reabrir apagaria a
     #    venda no Kommo). Opt-out já parou lá em cima. Funil fora do SDR segue com o aviso de contato antigo.
+    if card.get("fora_de_venda"):
+        # Fornecedor, parceiro, equipe (#533): o card fica como está, fechado ou não.
+        return _resultado(regras.FICA, "FORA_DE_VENDA", analise)
     if card.get("fechado") and card.get("do_sdr", True):
         if card.get("ganho"):
             return _resultado(regras.ANEXAR, "CLIENTE_VOLTOU", analise, tags=["sdr:cliente-voltou"])
