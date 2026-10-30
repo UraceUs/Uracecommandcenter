@@ -348,7 +348,8 @@ def test_oferta_de_call_com_link_de_reserva(motivo):
     for codigo in idiomas.IDIOMAS:
         msg = holding.call_offer("x", LINK, lang=codigo, motivo=motivo, book=BOOK)
         linhas = msg.split("\n")
-        assert len(linhas) == 4 and linhas[2] == LINK and linhas[3].endswith(BOOK), (codigo, motivo, linhas)
+        # 30/10 (#523): 3 balões, a oferta inteira, o link da agenda sozinho e a reserva (eram 4)
+        assert len(linhas) == 3 and linhas[1] == LINK and linhas[2].endswith(BOOK), (codigo, motivo, linhas)
         assert msg.count("?") <= 1
 
 

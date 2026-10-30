@@ -390,6 +390,57 @@ def rodar() -> list[str]:
     app._call_agent = lambda lead_id, msg, session_key=None: (com_link, textproc.extract_directives(com_link))
     c = app.turno_de_canal("email", "caio@example.com", "How much?", "Caio", True)
     check("no horário do time a primeira resposta segue sem link", not any(link in m for m in c["mensagens"]), c["mensagens"])
+
+    print("\n2j. Rede social (#523): menção em story, reação, aluno e comentário curto")
+    import holding
+    k.leads.update({120: _lead(120, 2, 20), 121: _lead(121, 2, 20), 122: _lead(122, 2, 20), 123: _lead(123, 1, 142)})
+    modelo = []
+    app._call_agent = lambda lead_id, msg, session_key=None: (modelo.append(msg) or resposta,
+                                                             textproc.extract_directives(resposta))
+    trilhas = []
+    app.scheduler.start_track = lambda lead_id, track: trilhas.append(lead_id)
+    bots0 = len(k.bots)
+    app.tratar_mensagem(120, "Mentioned you in their story")
+    pend = state.get_conversation(120).get("pending_followup_text") or ""
+    check("menção em story: um obrigado curto, sem venda e sem o modelo",
+          len(k.bots) == bots0 + 1 and "shoutout" in pend and "?" not in pend and "Mentioned" not in pend
+          and not modelo, pend)
+    app.tratar_mensagem(120, "Mentioned you in their story")
+    check("a segunda menção no mesmo dia não recebe nada", len(k.bots) == bots0 + 1, k.bots[-2:])
+    app.tratar_mensagem(120, "Reacted ❤️ to your message")
+    check("reação: nada a responder e nenhuma trilha", len(k.bots) == bots0 + 1 and not modelo and 120 not in trilhas)
+    check("o evento da rede não vira o idioma da pessoa",
+          "Mentioned" not in (state.get_conversation(120).get("last_inbound_text") or ""))
+
+    app.tratar_mensagem(121, "I do coaching with you guys")
+    check("quem diz que já é aluno fica marcado", state.get_conversation(121).get("cliente_atual") == 1)
+    check("o modelo sabe que é aluno e não faz triagem", modelo and "JÁ É ALUNO" in modelo[-1], modelo[-1:])
+    check("aluno não entra em trilha de follow-up de venda", 121 not in trilhas, trilhas)
+    app.tratar_mensagem(121, "Vou fazer minha primeira corrida no sábado, já compito")
+    pend = state.get_conversation(121).get("pending_followup_text") or ""
+    check("aluno contando da corrida conversa com o robô, sem a call de venda",
+          "calendar.app.google" not in pend and "JÁ É ALUNO" in modelo[-1], pend)
+    check("card ganho no Kommo é atendido como aluno",
+          sdr_ponte.pode_responder(123) == (True, "OK") and state.get_conversation(123).get("cliente_atual") == 1)
+
+    app.tratar_mensagem(122, "Racing🤩")
+    check("comentário curto: resposta de social media, sem triagem", "COMENTÁRIO CURTO" in modelo[-1], modelo[-1][:200])
+    app.tratar_mensagem(122, "Get a quote")
+    check("pedido de verdade segue como conversa", "COMENTÁRIO CURTO" not in modelo[-1], modelo[-1][:200])
+
+    check("a espera não cita o que não é pergunta",
+          "Racing" not in holding.waiting_message("Racing🤩", 1, pending_question="Racing🤩"))
+    check("a espera ainda cita pergunta de verdade", "own kart" in holding.waiting_message("can i bring my own kart?", 0))
+    check("resposta longa vira no máximo 3 balões",
+          len(app.dividir_em_mensagens("Um.\nDois.\nTrês.\nQuatro.\nCinco.")) == 3)
+
+    app.fora_do_horario_do_time = lambda quando=None: True
+    app._call_agent = lambda lead_id, msg, session_key=None: (modelo.append(msg) or resp_canal,
+                                                             textproc.extract_directives(resp_canal))
+    c = app.turno_de_canal("sms", "14075550133", "Can we move Saturday?", "Rafa", False, cliente=True)
+    check("SMS de cliente do painel: contexto de aluno e sem a call de venda fora do horário",
+          "JÁ É ALUNO" in modelo[-1] and not any(link in m for m in c["mensagens"]), c["mensagens"])
+    app.fora_do_horario_do_time = lambda quando=None: False
     return list(FALHAS)
 
 
