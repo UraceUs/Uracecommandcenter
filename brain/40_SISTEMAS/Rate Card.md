@@ -222,3 +222,17 @@ Não trocar um pelo outro.
 Envio de qualquer invoice desses produtos: **aprovação no painel, com prévia; aprovar = enviar** ([[D-2026-09-09 - Aprovar e enviar; mensalidade no dia 1 com previa]]).
 
 Na área do cliente (#314): a sessão extra do aluno recorrente é cobrada pelo sistema com esta regra (mensal do card ÷ sessões do mês, ou o valor combinado no card), sem depósito ([[D-2026-10-16 - Academy recorrente, pacote e sessao extra]]).
+
+## O que o site publica (#525, dono 30/10: *"usa os valores do urace us"*)
+
+`command_center/vitrine/conteudo.PRECOS`, os valores do urace.us de 29/10, que batem com esta tabela:
+
+| Programa | Site |
+|---|---|
+| URACE Academy (4 stroke / Baby Kart, sem contrato) | **$2.756,90 / mês** no About, no Racing Team e nas landings; a `/academy/` e o robô de vendas seguem $2.756 / $3.156 da planilha até o dono decidir |
+| URACE Boost | **$5.000 / 30 dias**, 8 sessões a **$625** |
+| Sim2Grid (lançamento, About e landings) | **$1.200 / mês**; os programas da página do SIM2GRID são $1.800 / $1.360 / $760 |
+| Race Weekend Support | "Let's talk · per event"; a estimativa da `/winter/` usa ~$4.500 (2-stroke), como o urace.us |
+
+A estimativa da `/winter/`: dia de teste = $689,23 (ou $625 com 8 dias ou mais) × diária do kart ÷ $719; fim de semana
+de corrida = $4.500 × diária do kart ÷ $819, arredondado de 50 em 50; faixa de 0,9× a 1,15× do total.

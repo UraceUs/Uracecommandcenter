@@ -4,8 +4,9 @@ Dono, 29/10: *"sim, pode trazer o texto e recriar a winter"*. O texto é o que o
 "home-new", a About reescrita na voz do Italo e a Programs com o título novo), na ordem de lá, nos endereços do site novo.
 O que fica diferente, de propósito:
 
-- **preço só do painel**: o "From $719" do Arrive and Drive é a chave `kart`. O "$1,200 / month" do Sim2Grid e o
-  "$2,756.90 / month" da Academy (home e About) não batem com a Rate Card nem com o painel: saem sem número. Na Programs,
+- **preço por chave, nunca escrito**: o "From $719" do Arrive and Drive é a chave `kart` (painel); o "$1,200 / month" do
+  Sim2Grid e o "$2,756.90 / month" da Academy (About) são as chaves `sim2grid` e `academy` (#525, `conteudo.PRECOS`,
+  os valores do urace.us). Na Programs,
   o "What it will cost" do Sim2Grid são os programas do painel (Site › Cartões das páginas, `sim2grid`); os outros
   valores de lá (taxas, depósito, passes da pista) não têm fonte no painel e ficam de fora;
 - as avaliações do Google são as de `conteudo.AVALIACOES` (#508, o texto e o nome como estão lá), com o link para todas;
@@ -242,10 +243,10 @@ ABOUT = {
          "intro": "Four steps, one team. Your coach tells you when you are ready for the next one.",
          "itens": [
              {"titulo": "Sim2Grid", "texto": ("VR motion simulator. Lines, braking points and habits before the kart.", SIM_ABRE),
-              "link": ("See Sim2Grid", "/sim2grid-racing-simulator/")},
+              "preco": "sim2grid", "link": ("See Sim2Grid", "/sim2grid-racing-simulator/")},
              {"titulo": "URACE Academy",
               "texto": "Four coached sessions a month, kart and equipment included. Month to month.",
-              "link": ("See the Academy", "/academy/")},
+              "preco": "academy", "link": ("See the Academy", "/academy/")},
              {"titulo": "URACE Racing Team", "texto": "Race-team program for regional, national and international grids.",
               "link": ("Talk to the team", "/professional-kart-team-racing-team/")}]},
     ],

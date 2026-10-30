@@ -40,8 +40,9 @@ Todo bloco aceita ``fundo`` (clara, escura, vermelha) e ``ancora`` (o `id` da se
 Texto é texto: sai escapado. Dentro dele, ``[rótulo](href)`` vira link e ``**assim**`` vira negrito. Link só para o próprio
 site (``/…``, ``#…``), ``https://``, ``tel:`` e ``mailto:``.
 
-**Preço nunca é texto** (Rate Card e painel são a fonte): o ``preco`` de um cartão é uma chave do painel (``kart``: "From
-$719", o menor preço de kart do Arrive and Drive). `problemas()` acusa preço escrito em qualquer texto, e o teste roda
+**Preço nunca é texto** (Rate Card e painel são a fonte): o ``preco`` de um cartão é uma chave (``kart``: "From
+$719", o menor preço de kart do Arrive and Drive, do painel; ``academy``, ``boost`` e ``sim2grid``: os programas,
+de `conteudo.PRECOS`, #525). No texto, o preço é marca: ``{academy}``, ``{boost_sessao}``… (`com_precos`). `problemas()` acusa preço escrito em qualquer texto, e o teste roda
 `problemas()` em todas as páginas registradas.
 """
 import importlib
@@ -64,7 +65,8 @@ NEGRITO = re.compile(r"\*\*([^*\n]{1,200})\*\*")
 HREF_OK = re.compile(r"(?:/(?!/)[^\s\"'<>]*|#[A-Za-z][\w-]{0,60}|https://[^\s\"'<>]+|tel:\+?[\d-]{7,20}|mailto:[^\s\"'<>@]+@[^\s\"'<>]+)")
 ANCORA = re.compile(r"[a-z][a-z0-9-]{0,40}")
 CAMINHO_SITE = re.compile(r"/(?:[a-z0-9]+(?:-[a-z0-9]+)*/)+")
-PRECOS_DO_PAINEL = ("kart",)
+PRECOS_DO_PAINEL = ("kart", "academy", "boost", "sim2grid")
+MARCA = re.compile(r"\{(kart|academy|academy_sessao|boost|boost_sessao|sim2grid|academy_k|boost_k)\}")
 
 
 class ErroBloco(ValueError):
@@ -116,9 +118,26 @@ def _externo(h):
     return ' rel="noopener"' if str(h).startswith("https://") else ""
 
 
+def valor(chave):
+    """#525: o valor de uma marca de preço do texto: `{kart}` é o do painel; os programas, `conteudo.PRECOS` (o
+    urace.us); `{academy_k}` e `{boost_k}` são o "a partir de" arredondado em milhar ("$3K", "$5K"), como o urace.us
+    escreve na Driver Factory."""
+    from command_center.vitrine.conteudo import PRECOS
+    if chave == "kart":
+        return usd(preco_kart())
+    if chave.endswith("_k"):
+        return f"${round(PRECOS[chave[:-2]] / 1000)}K"
+    return usd(PRECOS[chave])
+
+
+def com_precos(t):
+    """`{academy}`, `{boost_sessao}`… viram o valor. O texto guarda a marca, nunca o número (`problemas()`)."""
+    return MARCA.sub(lambda m: valor(m.group(1)), str(t or ""))
+
+
 def inline(t):
-    """Texto escapado, com [rótulo](href) e **negrito**."""
-    t = str(t or "")
+    """Texto escapado, com [rótulo](href), **negrito** e as marcas de preço (#525)."""
+    t = com_precos(t)
     partes, fim = [], 0
     for m in LINK.finditer(t):
         partes.append(_negrito(e(t[fim:m.start()])))
@@ -159,9 +178,15 @@ def _botoes(ctas, primeiro="btn", resto="btn btn-linha", centro=False):
     return f'<div class="hero-acoes{" centro" if centro else ""}">{bs}</div>'
 
 
+POR = {"academy": "/ month", "boost": "/ 30 days", "sim2grid": "/ month"}
+
+
 def preco(chave):
+    """O preço de um cartão: (valor, "por"). `kart` é o do painel ("From $719"); os programas, o urace.us (#525)."""
     if chave == "kart":
-        return f"From {usd(preco_kart())}"
+        return f"From {usd(preco_kart())}", ""
+    if chave in POR:
+        return valor(chave), POR[chave]
     raise ErroBloco(f"preço sem fonte no painel: {chave!r}")
 
 
@@ -224,7 +249,8 @@ def _cartoes(b, i, host, ctx):
         partes.append(_ps((c["texto"],) if isinstance(c.get("texto"), str) else c.get("texto")))
         partes.append(_lista(c.get("lista"), "lista"))
         if c.get("preco"):
-            partes.append(f'<p class="plano-preco"><strong>{e(preco(c["preco"]))}</strong></p>')
+            v, por = preco(c["preco"])
+            partes.append(f'<p class="plano-preco"><strong>{e(v)}</strong>{f"<span>{e(por)}</span>" if por else ""}</p>')
         if c.get("link"):
             r, h = c["link"]
             partes.append(f'<a class="{"btn btn-sm" if escuro else "seta"}" href="{href(h)}"{_externo(h)}>{e(r)}</a>')

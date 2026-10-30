@@ -56,11 +56,18 @@ REGRAS = {
 
 # Os programas mensais: cartões da página (site_offers, page='sim2grid'), editáveis em Site › Cartões das páginas.
 PLANOS_GRUPO = "Monthly programs · 30 students total · 10 places per plan"
+# #525 (dono, 30/10: *"use o que está no urace.us"*): os preços e a linha de cada programa como o urace.us de 29/10
+# mostra. O banco que já tinha os de 22/10 ($1,500 e $900) passa a estes só se ninguém mexeu (`PLANOS_ANTES`).
+PLANOS_TEXTO = "Coaching included. Each session lasts 2 hours, scheduled according to availability."
 PLANOS = (
-    ("3 sessions per week", "Initial allocation: 10 students", "Coaching included. Each session lasts 2 hours, scheduled according to availability.", "$1,800", "/ month"),
-    ("2 sessions per week", "Initial allocation: 10 students", "Coaching included. Each session lasts 2 hours, scheduled according to availability.", "$1,500", "/ month"),
-    ("1 session per week", "Initial allocation: 10 students", "Coaching included. Each session lasts 2 hours, scheduled according to availability.", "$900", "/ month"),
+    ("3 sessions per week", "Initial allocation: 10 students",
+     f"$69.28/hr of coaching · 10% off 4-stroke and 15% off 2-stroke Academy. {PLANOS_TEXTO}", "$1,800", "/ month"),
+    ("2 sessions per week", "Initial allocation: 10 students",
+     f"$78.52/hr of coaching · 5% off 4-stroke and 10% off 2-stroke Academy. {PLANOS_TEXTO}", "$1,360", "/ month"),
+    ("1 session per week", "Initial allocation: 10 students",
+     f"$87.75/hr of coaching · 5% off any Academy program. {PLANOS_TEXTO}", "$760", "/ month"),
 )
+PLANOS_ANTES = ("$1,800", "$1,500", "$900")
 
 # ------------------------------------------------------------------ o texto da página
 # #396 (dono, 23/10): *"muita informacao · pensa no usuario de mobile ... imagina vc indo ao cinema na hora de construir

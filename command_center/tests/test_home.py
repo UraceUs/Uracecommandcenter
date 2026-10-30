@@ -87,20 +87,23 @@ def test_as_tres_paginas_sao_as_do_urace_us_de_29_10(cli):
 
 
 def test_preco_so_do_painel_e_nenhum_escrito(cli, monkeypatch):
-    """O "From" do Arrive and Drive é o menor preço de kart do painel, ao vivo; o resto de lá não tem número. Na Programs,
-    o "What it will cost" do Sim2Grid são os cartões do painel."""
+    """O "From" do Arrive and Drive é o menor preço de kart do painel, ao vivo; o Sim2Grid e a Academy da About são os do
+    urace.us pela chave (#525); nenhum preço é texto. Na Programs, o "What it will cost" do Sim2Grid são os cartões do
+    painel."""
     from command_center.providers import cartoes_site
     monkeypatch.setattr(cartoes_site, "preco_kart", lambda con: 650)
     home = cli.get("/").text
     assert '<p class="plano-preco"><strong>From $650</strong></p>' in home
     for c in TRES:
         main = _main(cli.get(c).text)
-        # tirado o preço dos cartões (do painel), não sobra nenhum "$" na página
-        sem_painel = re.sub(r'<p class="plano-preco">.*?</p>', "", main, flags=re.S)
+        # tirados os cartões de preço (o painel e as chaves de `conteudo.PRECOS`, #525), não sobra nenhum "$" na página
+        sem_painel = re.sub(r'<p class="plano-preco">.*?</p>|<article class="plano">.*?</article>', "", main, flags=re.S)
         assert not re.search(r"\$\s?\d", sem_painel), (c, re.findall(r".{40}\$\s?\d.{20}", sem_painel))
         texto = _texto(cli.get(c).text)
-        for velho in ("$1,200", "$2,756.90", "$719", "$150", "$60", "$400", "$95", "$200", "38 reviews", "4.9"):
+        for velho in ("$719", "$150", "$60", "$400", "$95", "$200", "38 reviews", "4.9"):
             assert velho not in texto, (c, velho)
+    about = cli.get("/about/").text
+    assert "<strong>$1,200</strong><span>/ month</span>" in about and "<strong>$2,756.90</strong><span>/ month</span>" in about
     servicos = cli.get("/services/").text
     assert "What it will cost" in servicos and "$1,800" in servicos and "Apply for a place" in servicos, "os cartões do painel"
 

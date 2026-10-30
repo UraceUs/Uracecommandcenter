@@ -61,6 +61,10 @@ ACADEMY = {
     # Kart) e para 2 stroke — "veja que tem academy para 4t e 2t". As contas batem com 4 × sessão,
     # 27 × sessão × 0,96 e 54 × sessão × 0,92, com entrada de 33% / 20% (test_vitrine trava). Saíram
     # 3 Months, 6 Months a 5% e o URACE Boost: não estão na planilha.
+    # #525: os planos da /academy/ continuam os da planilha ($2,756 / $3,156 sem contrato), os mesmos que o robô de
+    # vendas fala (`salesagent/.../urace-sales-agent.md`, que `test_sdr_final` amarra a esta lista; e a regra de 16/10
+    # do robô: "$2,756.90 não vai ao lead"). O $2,756.90 e o Boost do urace.us na /academy/ esperam o dono decidir o
+    # robô junto; nas outras páginas eles já saem (`conteudo.PRECOS`).
     # #390 (dono, 22/10: *"o texto maior seja sempre o valor do mes nao o total pois o total pode assustar"*): no
     # contrato, o preço grande é a parcela do mês; embaixo dele, o total e quanto economiza (dono: "o texto abaixo do
     # valor explicando o total a quantidade de desconto"); a entrada fica no texto.
@@ -200,10 +204,14 @@ PRO_TEAM = {
     "mais_titulo": MAIS_TITULO,
     "mais": MAIS,
     "opcoes_titulo": "How we work with competitive drivers",
-    "opcoes_sub": "Two ways in, depending on where the driver is today.",
+    "opcoes_sub": "Three ways in, depending on where the driver is today.",
     # (nome, sub, texto, preço, por, link): o preço "academy"/"boost" é o do plano no painel; sem plano, sem preço
+    # #525: o Boost volta (urace.us de 29/10). Entra no fim (a chave do painel é a posição: `pro-team:2`) e aparece
+    # entre a Academy e o Race Weekend Support pela ordem (`ordem`, a mesma no painel)
     "opcoes": (("URACE Academy", "Not racing yet? Start here.", "Four coached sessions a month with kart, full equipment, maintenance and a professional coach included. Month to month, no minimum term.", "academy", "Per month", "/academy/"),
-               ("Race Weekend Support", "We run the kart. You drive.", "Kart preparation and trackside support at the rounds we are entered in. Race entries, tyres, fuel and consumables are quoted per event and are not part of the fee.", "Let’s talk", "Per event", CONTATO)),
+               ("Race Weekend Support", "We run the kart. You drive.", "Kart preparation and trackside support at the rounds we are entered in. Race entries, tyres, fuel and consumables are quoted per event and are not part of the fee.", "Let’s talk", "Per event", CONTATO),
+               ("URACE Boost", "Eight sessions in 30 days.", "A standalone intensive month for drivers preparing for a race or a season, at $625 a session, our lowest per-session rate. No contract.", "boost", "Per 30 days", CONTATO)),
+    "ordem": (0, 10, 5),
     # #508: como no urace.us de 29/10. A prova que já passou sai sozinha da lista (paginas_site._proximas)
     "calendario_rotulo": "Where we are racing",
     "calendario_titulo": "Next rounds on the calendar",
