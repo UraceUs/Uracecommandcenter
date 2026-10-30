@@ -39,12 +39,23 @@ def e(v):
 
 def _versao(nome):
     """Hash do arquivo no endereço (`site.css?v=…`): o navegador guarda por um ano e o deploy
-    seguinte troca o nome sozinho."""
+    seguinte troca o nome sozinho. #526: o hash fica guardado enquanto o arquivo não muda (data e tamanho) — o vídeo
+    tem megabytes e a página não relê o arquivo a cada visita."""
+    caminho = os.path.join(STATIC, nome)
     try:
-        with open(os.path.join(STATIC, nome), "rb") as f:
-            return hashlib.sha1(f.read()).hexdigest()[:10]
+        st = os.stat(caminho)
+        return _hash_do_arquivo(caminho, st.st_mtime_ns, st.st_size)
     except OSError:
         return "0"
+
+
+@lru_cache(maxsize=512)
+def _hash_do_arquivo(caminho, _mtime, _tamanho):
+    h = hashlib.sha1()
+    with open(caminho, "rb") as f:
+        for pedaco in iter(lambda: f.read(1 << 20), b""):
+            h.update(pedaco)
+    return h.hexdigest()[:10]
 
 
 def estatico(nome):

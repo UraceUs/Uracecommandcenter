@@ -4,8 +4,9 @@ Dono, 29/10: *"sim, pode trazer o texto e recriar a winter"*. O texto é o da p�
 2026), capítulo a capítulo, sem reescrever. O que muda, de propósito:
 
 - o circuito em 3D (three.js, traçado por satélite) sai; as cinco fases que ele contava viram passos;
-- os três vídeos curtos moram no WordPress (wp-content, 2,5 a 3,4 MB cada): a política do site só toca mídia do próprio
-  site e o repositório não guarda vídeo pesado. A vitória continua no link do Instagram;
+- os três vídeos curtos ("On camera · Hear it from the team") saem do próprio site (#526, static/video, comprimidos), numa
+  faixa logo depois da prova, em grade (no celular, de lado dentro da faixa) em vez do carrossel com setas de lá. A vitória
+  continua no link do Instagram;
 - "Build your winter" é o formulário por blocos: cai em Vendas (Racing Team) com o plano na nota (campos `x_*`);
 - a estimativa é a conta do urace.us (#525, dono 30/10: *"usa os valores do urace us"*), com a diária do kart do PAINEL
   (os serviços do Arrive and Drive, `Site › Serviços e preços`): o dia de teste é a sessão da Academy ($689.23; a do
@@ -22,7 +23,7 @@ from datetime import date, timedelta
 
 from command_center.vitrine import blocos
 from command_center.vitrine.blocos import e, img, inline
-from command_center.vitrine.conteudo import KARTS, PRECOS
+from command_center.vitrine.conteudo import CURTAS, KARTS, PRECOS
 from command_center.vitrine.paginas import _karts_do_painel, usd
 
 CAMINHO = "/winter/"
@@ -451,6 +452,10 @@ WINTER = {
                         "[See the win on Instagram](https://www.instagram.com/p/DeKcd53lDao/)"],
          "foto": "frankie-iadevaia-checkered-flag-flkc-jacksonville.webp",
          "alt": "Frankie Iadevaia takes the checkered flag at FLKC Jacksonville in a URACE kart"},
+        {"tipo": "videos", "ancora": "on-camera", "fundo": "escura", "eyebrow": "On camera", "titulo": "Hear it from the team",
+         "itens": [{**CURTAS["vitoria"], "titulo": "Frankie Iadevaia", "legenda": "After the win · FLKC P1 · 29 s"},
+                   {**CURTAS["primeira"], "titulo": "Brody", "legenda": "His first KA100 race · 19 s"},
+                   {**CURTAS["fundador"], "titulo": "Italo", "legenda": "Founder · why URACE exists · 20 s"}]},
         {"tipo": "passos", "ancora": "window", "eyebrow": "01 · The window", "titulo": "Snow stops racing. Orlando doesn’t.",
          "intro": ["No snow, no break. All four SKUSA Winter rounds run at Orlando Kart Center, our home track.",
                    "**The winter, lap by lap · Orlando Kart Center**"],

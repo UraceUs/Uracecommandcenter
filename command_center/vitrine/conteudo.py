@@ -150,6 +150,13 @@ GOOGLE = ("https://www.google.com/maps/place/URACE/@28.4108348,-81.377619,17z/da
           "0xa9426dd3f3d2290e!8m2!3d28.4108348!4d-81.377619!9m1!1b1")
 # #521: "On the top step", os resultados da temporada que o urace.us de 29/10 mostra (foto, alt, título, legenda): os mesmos
 # na home, na About, na Academy e nas landings. Resultado novo entra aqui, uma vez.
+# #526: os três vídeos curtos do urace.us (home e /winter/, "On camera"), servidos pelo próprio site: o mp4 em
+# static/video (H.264 + AAC, `faststart`, sem metadados) e o pôster em static/img (WebP do tamanho do vídeo). Para trocar
+# um: o arquivo novo com outro nome nas duas pastas e o nome aqui (o playbook geral, "Site › Vídeos", tem o passo a passo).
+CURTAS = {n: {"video": f"{a}.mp4", "poster": f"{a}-poster.webp"} for n, a in (
+    ("vitoria", "frankie-iadevaia-urace-after-the-win"), ("primeira", "brody-urace-first-race-k100"),
+    ("fundador", "italo-urace-founder-story"))}
+
 RESULTADOS = (("urace-team-bushnell-p1-p3.webp", "URACE team with the trophy after Frankie Iadevaia's P1 in Bushnell, Florida",
                "P1 + P3 · Bushnell, Florida", "Frankie Iadevaia wins Saturday, podium Sunday. The whole crew on the grid."),
               ("urace-driver-jacksonville-p1.webp", "Frankie Iadevaia in his URACE suit, Jacksonville",

@@ -21,7 +21,8 @@ Os blocos (`tipo`):
 - ``numeros``: eyebrow, titulo, intro, itens [(valor, rótulo)]
 - ``figuras``: eyebrow, titulo, intro, itens [{foto, alt, titulo, legenda}]
 - ``depoimentos``: eyebrow, titulo, intro, itens [(nome, quem, texto)], link (rótulo, href)
-- ``videos``: eyebrow, titulo, intro, itens [(titulo, url)]
+- ``videos``: eyebrow, titulo, intro, itens [(titulo, url)] — link (YouTube) — ou [{video, poster, titulo, legenda}] — o
+  player do próprio site (#526): o mp4 em static/video, o pôster (WebP do mesmo tamanho do vídeo) em static/img
 - ``definicoes``: eyebrow, titulo, intro, itens [(termo, descrição)]
 - ``faq``: eyebrow, titulo, intro, itens [(pergunta, resposta | (parágrafos,))] — vira FAQPage no JSON-LD
 - ``formulario``: eyebrow, titulo, texto, assunto, enviar, mensagem (rótulo do campo de texto, opcional), nota, obrigado,
@@ -52,7 +53,7 @@ import re
 from functools import lru_cache
 from html import escape
 
-from command_center.vitrine.paginas import _negocio, estatico, layout, preco_kart, tamanho_estatico, usd
+from command_center.vitrine.paginas import STATIC, _negocio, estatico, layout, preco_kart, tamanho_estatico, usd
 
 FUNDOS = ("clara", "escura", "vermelha")
 TIPOS = ("hero", "texto", "cartoes", "passos", "numeros", "figuras", "depoimentos", "videos", "definicoes", "faq",
@@ -289,9 +290,38 @@ def _depoimentos(b, i, host, ctx):
     return _secao(b, i, _cabeca(b, i) + f'<div class="depoimentos">{"".join(um(d) for d in b["itens"])}</div>' + link, padrao="escura")
 
 
+def video_estatico(nome):
+    """#526: o endereço (com versão) de um mp4 de static/video. Vídeo que não está lá não vai ao ar."""
+    nome = os.path.basename(str(nome or ""))
+    if not nome.endswith(".mp4") or not os.path.isfile(os.path.join(STATIC, "video", nome)):
+        raise ErroBloco(f"vídeo que não está em static/video: {nome}")
+    return estatico("video/" + nome)
+
+
+def _player(v, ident):
+    """#526: um vídeo curto do próprio site. Nada baixa antes do play (`preload="none"`), o pôster ocupa o lugar
+    (largura e altura do pôster = as do vídeo: a página não pula) e o nome na legenda é o nome do player."""
+    w, h = tamanho_estatico(v["poster"])
+    if not w:
+        raise ErroBloco(f"pôster que não está em static/img: {v['poster']}")
+    src = video_estatico(v["video"])
+    legenda = f"<span>{inline(v['legenda'])}</span>" if v.get("legenda") else ""
+    return (f'<figure class="curta"><video controls preload="none" playsinline poster="{estatico("img/" + v["poster"])}" '
+            f'width="{w}" height="{h}" aria-labelledby="{ident}"><source src="{src}" type="video/mp4">'
+            f'<a href="{src}">{e(v["titulo"])}</a></video>'
+            f'<figcaption><strong id="{ident}">{inline(v["titulo"])}</strong>{legenda}</figcaption></figure>')
+
+
 def _videos(b, i, host, ctx):
-    itens = "".join(f'<li><a class="seta" href="{href(u)}"{_externo(u)}>{e(t)}</a></li>' for t, u in b["itens"])
-    return _secao(b, i, _cabeca(b, i) + f'<ul class="videos">{itens}</ul>')
+    players = [v for v in b["itens"] if isinstance(v, dict)]
+    links = [v for v in b["itens"] if not isinstance(v, dict)]
+    miolo = _cabeca(b, i)
+    if players:
+        miolo += '<div class="curtas">' + "".join(_player(v, f"v-b{i}-{n}") for n, v in enumerate(players)) + "</div>"
+    if links:
+        itens = "".join(f'<li><a class="seta" href="{href(u)}"{_externo(u)}>{e(t)}</a></li>' for t, u in links)
+        miolo += f'<ul class="videos">{itens}</ul>'
+    return _secao(b, i, miolo)
 
 
 def _definicoes(b, i, host, ctx):
@@ -433,7 +463,7 @@ def _textos(x):
         yield x
     elif isinstance(x, dict):
         for k, v in x.items():
-            if k not in ("tipo", "foto", "fundo", "ancora", "alvo", "render", "pagina", "preco", "assunto"):
+            if k not in ("tipo", "foto", "fundo", "ancora", "alvo", "render", "pagina", "preco", "assunto", "video", "poster"):
                 yield from _textos(v)
     elif isinstance(x, (list, tuple)):
         for v in x:
