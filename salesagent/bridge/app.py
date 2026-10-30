@@ -34,6 +34,7 @@ import pausas
 import scheduler
 import sdr_ponte
 import social
+import conversa
 import state
 import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
@@ -419,6 +420,7 @@ _CONTEXTO_CANAL = {
 # call com o link do google calendar". Fora do horário do time (seg–sex 8h–18h, Orlando: D-2026-10-06) a resposta
 # leva o link da call, inclusive na primeira, porque ninguém do time vai pegar a conversa até a abertura.
 _ORLANDO = ZoneInfo("America/New_York")
+ORLANDO = _ORLANDO
 _CONTEXTO_FORA_DO_HORARIO = (
     "AGORA É FORA DO HORÁRIO DO NOSSO TIME (seg–sex, 8h–18h de Orlando): ninguém do time vai responder antes da "
     "abertura. Objetivo desta resposta: responder curto o que a pessoa perguntou e levá-la a marcar a call de 15 min "
@@ -574,6 +576,15 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         # continua sendo organizado; follow-up e resgate também ficam parados (scheduler).
         state.log("gate", lead_id, "IA pausada nesta conversa (Command Center) — sem resposta da ponte")
         sdr_ponte.triar_em_segundo_plano(lead_id, text)
+        _pending_returns.pop(lead_id, None)
+        return
+
+    motivo = _bloqueio_da_conversa(lead_id)
+    if motivo:
+        # Dono, 30/10 (#533): o robô lê a conversa. Se quem está falando com a pessoa é o time, ele não entra.
+        scheduler.cancel(lead_id, "o time está na conversa")
+        state.update_conversation(lead_id, last_outbound_at=int(time.time()))   # o resgate não responde por nós
+        state.log("gate", lead_id, f"sem resposta: {motivo}")
         _pending_returns.pop(lead_id, None)
         return
 
@@ -883,6 +894,12 @@ def _idioma_do_turno(text: str) -> str:
     return f"IDIOMA: o lead escreveu em {_NOME_DO_IDIOMA[lang]}. Responda inteiro nesse idioma.\n"
 
 
+def _contexto_da_conversa(lead_id: int) -> str:
+    conv = state.get_conversation(lead_id)
+    de_venda = bool(conv.get("driver_age") or conv.get("q_experience") or conv.get("followup_track"))
+    return conversa.contexto(lead_id, de_venda)
+
+
 def _contexto_social(texto: str, cliente: bool) -> str:
     """O que o modelo precisa saber sobre quem fala e o tipo de mensagem (#523): aluno é atendido, não
     vendido; comentário curto recebe resposta de social media, não triagem."""
@@ -910,7 +927,7 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     # Retrieval.md; orçamento imposto pelo indexador (top 3, ~3.5k chars).
     text_for_agent = text
     instrucoes = _sem_nomes_do_time(_instrucoes_comercial(lead_id)) + _contexto_social(
-        text, bool(state.get_conversation(lead_id).get("cliente_atual")))
+        text, bool(state.get_conversation(lead_id).get("cliente_atual"))) + _contexto_da_conversa(lead_id)
     if BRAIN_RETRIEVAL == "on":
         import brain_kb
         conv = state.get_conversation(lead_id)
@@ -1100,6 +1117,15 @@ def rescue_lead(conv: dict) -> bool:
     return entregue
 
 
+def _bloqueio_da_conversa(lead_id: int) -> str | None:
+    """O time (ou outro bot) escreveu para a pessoa há pouco: a conversa é dele (#533)."""
+    quando = conversa.equipe_falando(lead_id)
+    if not quando:
+        return None
+    hora = datetime.datetime.fromtimestamp(quando, ORLANDO).strftime("%d/%m %H:%M")
+    return f"o time (ou outro bot) escreveu para esta pessoa em {hora}: a conversa é dele"
+
+
 @app.on_event("startup")
 async def _start_scheduler():
     # Abaixo de "atender" o agendador fica parado. Ele é quem fala sozinho
@@ -1114,6 +1140,7 @@ async def _start_scheduler():
     scheduler.deliver_fn = deliver_followup
     scheduler.notify_fn = notify_human
     scheduler.rescue_fn = rescue_lead
+    scheduler.bloqueio_fn = _bloqueio_da_conversa
     scheduler.task_fn = kommo.add_task
     scheduler.tag_fn = kommo_tags_seguras
     scheduler.note_fn = kommo.add_note

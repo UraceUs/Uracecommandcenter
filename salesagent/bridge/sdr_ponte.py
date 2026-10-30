@@ -41,6 +41,7 @@ from sdr import estilo, evento, executor, funil, regras, roteador, triagem  # no
 
 import kommo_client as kommo  # noqa: E402
 import state  # noqa: E402
+import conversa  # noqa: E402
 from config import KOMMO_RESPONSAVEL_ID, KOMMO_TOKEN, SDR_ATENDER_SO_TAG, SDR_MODO  # noqa: E402
 
 _MAPA_TTL = 600
@@ -103,6 +104,7 @@ def _card(lead: dict, m: funil.Mapa) -> tuple[dict, dict]:
         "fechado": local["fechado"],
         "ganho": int(lead.get("status_id") or 0) == regras.STATUS_GANHO,
         "do_sdr": local["do_sdr"],
+        "fora_de_venda": conversa.fora_de_venda(t.get("name") for t in (lead.get("_embedded") or {}).get("tags", [])),
         "fechado_em": datetime.fromtimestamp(int(fechado_em), timezone.utc) if fechado_em else None,
         "etapa": local["etapa"],
     }
@@ -346,6 +348,9 @@ def pode_responder(lead_id: int) -> tuple[bool, str]:
     # Dono, 30/10 (#530): "conectado em todos os lugares p responder todos". Todo funil e Incoming leads também;
     # só a triagem continua só nos funis do SDR (card de outro funil não é movido, a equipe recebe o aviso).
     nome_funil = getattr(m, "nome_funil", lambda _pid: "")(lead.get("pipeline_id")) or ""
+    tags_do_card = [str(t.get("name") or "") for t in (lead.get("_embedded") or {}).get("tags", [])]
+    if conversa.fora_de_venda(tags_do_card):
+        return False, "FORA_DE_VENDA"                          # fornecedor, parceiro, equipe (#533)
     if any(f in nome_funil.lower() for f in FUNIS_DE_CLIENTE):
         state.update_conversation(lead_id, cliente_atual=1)    # pós-venda e operacional: já comprou (#530)
     tags = {str(t.get("name") or "") for t in (lead.get("_embedded") or {}).get("tags", [])}

@@ -47,6 +47,18 @@ Uma resposta tem no máximo 3 balões, e a espera só cita o que é pergunta. Os
 "URACE - Atendimento inicial DM" e "Agente qualificador de leads") ficam desligados nas DMs: dois robôs não
 respondem a mesma pessoa.
 
+## O robô lê a conversa antes de responder (dono, 30/10, #533)
+
+1. Lê as últimas 10 mensagens. 1-A: se houve conversa de venda, lê o histórico inteiro e segue dele. 1-B: se foi
+   só interação amigável, segue e identifica se é lead, **sem vender**.
+2. **Se alguém do time (ou outro bot) escreveu para a pessoa nas últimas 72 h, o robô não entra**: não responde,
+   não faz follow-up nem resgate. O Kommo não mostra o texto do que sai no chat, mas mostra quando saiu; o que
+   não foi o robô que mandou é do time. Ajuste: `SDR_EQUIPE_JANELA_H` no `bridge.env` (`0` desliga).
+3. Card com tag **Supplier**, fornecedor, parceiro, equipe ou `nao_e_lead` não recebe venda e não é reaberto.
+
+Por isso: **responder pelo Instagram, pelo WhatsApp ou pelo Kommo já tira o robô da conversa por 72 h.** O
+Pausar IA continua valendo para tirar antes ou por mais tempo.
+
 ## Quando uma pessoa assume a conversa (regra de ouro)
 
 O robô **não sabe** quando alguém da equipe escreve no chat. Antes de responder um lead à mão, faça **uma** destas:

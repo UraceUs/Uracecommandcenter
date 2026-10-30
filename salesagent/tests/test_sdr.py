@@ -179,6 +179,9 @@ def camada_pacote():
          roteador.RESPONDER),
         ("Oi", {"existe": True, "zona": regras.COMERCIAL, "fechado": True, "ganho": True}, regras.ANEXAR, None,
          roteador.RESPONDER),
+        # 30/10 (#533): fornecedor fechado que responde ao time não é reaberto como venda
+        ("Deixa comigo", {"existe": True, "zona": regras.COMERCIAL, "fechado": True, "fora_de_venda": True},
+         regras.FICA, None, roteador.RESPONDER),
     ]
     for texto, card, acao, etapa, rota in casos:
         r = sdr.avaliar(texto, card=card)
