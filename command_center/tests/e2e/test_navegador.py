@@ -2093,6 +2093,71 @@ def test_site_winter_localizador_e_estimativa_no_celular(servidor, navegador, la
     pg.close()
 
 
+@pytest.mark.parametrize("largura", [360, 390, 1280])
+def test_site_career_simulador_escolhe_o_destino_acha_o_degrau_e_monta_o_plano(servidor, navegador, largura):
+    """#528: o simulador do urace.us no /career/. Escolher o IndyCar mostra só a rota dele e anuncia a escolha; as três
+    perguntas dão o degrau de partida; o plano soma avulso e mensal (uma tarifa da Academy por vez). Sem JavaScript, as
+    três rotas e as quatro respostas ficam à vista. Nada rola para o lado e todo alvo de toque tem ≥ 40 px."""
+    site = servidor.removesuffix("/ops")
+    pg = navegador.new_page(viewport={"width": largura, "height": 800}, reduced_motion="reduce")
+    erros = []
+    pg.on("pageerror", lambda e: erros.append(str(e)))
+    pg.on("console", lambda m: erros.append(m.text) if m.type == "error" else None)
+    pg.goto(site + "/career/"); pg.wait_for_load_state("networkidle")
+    assert len([t for n, t in _cabecalhos(pg) if n == 1]) == 1
+    rotas = lambda: pg.evaluate("() => [...document.querySelectorAll('[data-rota]')].filter(e => !e.hidden).map(e => e.dataset.rota)")  # noqa: E731
+    assert rotas() == ["f1"], "abre no Formula 1, como lá"
+    pg.locator("label.car-alvo", has_text="IndyCar").click()
+    assert rotas() == ["indy"]
+    assert pg.locator("[data-car-anuncio]").inner_text() == "IndyCar, The Road to Indy: 11 steps, from Sim2Grid to IndyCar."
+    assert pg.locator('[data-rota-degraus="indy"]').is_visible() and not pg.locator('[data-rota-degraus="f1"]').is_visible()
+    pg.keyboard.press("ArrowRight")                          # o radio anda no teclado
+    assert rotas() == ["nascar"]
+
+    # "Find your step": criança de 4–6 que nunca andou começa no Arrive and Drive; quem já corre, no Racing Team
+    assert pg.locator("[data-resultado]:visible").count() == 0
+    achar = pg.locator("[data-car-localizador]")
+    for rot in ("My child", "4 – 6", "Never"):
+        achar.locator("label.car-opcao", has_text=rot).click()
+    assert pg.locator("[data-resultado]:visible h3").all_inner_texts() == ["Arrive and Drive"]
+    achar.locator("label.car-opcao", has_text="Races already").click()
+    assert pg.locator("[data-resultado]:visible h3").all_inner_texts() == ["URACE Racing Team"]
+
+    # o plano: 2 horas com coach ($150 cada) + a Academy de 3 meses; a de 6 meses tira a de 3
+    item = lambda k: pg.locator(f'[data-item="{k}"]')  # noqa: E731
+    item("sim-coach").locator("[data-por]").click()
+    item("sim-coach").get_by_role("button", name="Add one: Sim2Grid — coached hour").click()
+    item("ac-3").locator("[data-por]").click()
+    assert pg.locator("[data-tot-um]").inner_text() == "$300"
+    assert pg.locator("[data-tot-mes]").inner_text() == "$2,688.43"
+    item("ac-6").locator("[data-por]").click()
+    assert item("ac-3").locator("[data-por]").get_attribute("aria-pressed") == "false"
+    assert pg.locator("[data-tot-mes]").inner_text() == "$2,619.06"
+    item("team").locator("[data-por]").click()
+    assert pg.locator("[data-tot-cotar]").inner_text() == "1 item"
+    assert pg.locator("[data-plano-conta]").inner_text() == "3 items"
+
+    r = pg.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    menor = pg.evaluate("""() => [...document.querySelectorAll('main a, main button, main label.car-alvo, main label.car-opcao')]
+        .filter(e => e.offsetParent !== null && !e.closest('p:not(.hero-acoes):not(.car-mais), dd, address'))
+        .map(e => [e.getBoundingClientRect().height, (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 30)])
+        .filter(([h]) => h < 40)""")
+    assert not menor, menor
+    assert not erros, erros
+    pg.close()
+
+    # sem JavaScript: a página inteira continua lá
+    ctx = navegador.new_context(viewport={"width": largura, "height": 800}, java_script_enabled=False)
+    sem = ctx.new_page()
+    sem.goto(site + "/career/")
+    assert sem.locator("[data-rota]:visible").count() == 3 and sem.locator("[data-resultado]:visible").count() == 4
+    assert sem.locator("[data-car-alvos]").is_hidden() and sem.locator("[data-car-totais]").is_hidden()
+    r = sem.evaluate(_VAZA)
+    assert not r["rola"] and not r["culpados"], r
+    ctx.close()
+
+
 _ALVOS_DO_TOPO = """(sel) => [...document.querySelectorAll(sel)]
     .filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(e).visibility !== 'hidden' })
     .map(e => [Math.round(e.getBoundingClientRect().height), (e.innerText || e.getAttribute('aria-label') || '').trim().slice(0, 24)])

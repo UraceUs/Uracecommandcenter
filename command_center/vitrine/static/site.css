@@ -1009,3 +1009,96 @@ body:has(> main > .hero:first-child) main > .hero-sim:first-child .hero-in { pad
   .hero-bloco:has(> .hero-foto[src*="italo-da-silveira-urace-founder"]) .hero-foto { left: auto; right: 0; width: min(40%, 500px); object-position: 50% 30% }
   .hero-bloco:has(> .hero-foto[src*="italo-da-silveira-urace-founder"])::before { background: linear-gradient(90deg, #000 0%, #000 50%, rgba(0,0,0,.25) 75%, rgba(0,0,0,.1) 100%) }
 }
+
+/* ------------------------------------------------------------ O simulador de carreira do /career/ (#528)
+ * Os radios do destino, as perguntas e os botões do plano aparecem com o `carreira.js`; sem ele, as três rotas, as
+ * quatro respostas e a lista de preços ficam à vista. Alvo de toque ≥ 44 px; motion só transform/opacity. */
+.car-cabeca { display: grid; gap: 8px; max-width: 72ch }
+.car-cabeca h2, .car-cabeca p { margin: 0 }
+.car-alvos { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) }
+@media (min-width: 760px) { .car-alvos { grid-template-columns: repeat(3, minmax(0, 1fr)) } }
+.car-alvo { position: relative; display: grid; gap: 2px; min-height: 44px; padding: 14px 16px; border: 1.5px solid #e3e3ea;
+  border-radius: var(--raio); background: #fff; cursor: pointer; transition: transform var(--dur) var(--curva) }
+.car-alvo input { position: absolute; opacity: 0; width: 1px; height: 1px }
+.car-alvo-nome { font: 800 1.1rem/1.2 var(--titulo); font-stretch: 125% }
+.car-alvo-tag { color: var(--vermelho); font-weight: 700; font-size: .9rem }
+.car-alvo-linha { color: var(--cinza); font-size: .88rem; line-height: 1.4 }
+.car-alvo:has(input:checked) { border-color: var(--vermelho); box-shadow: 0 0 0 3px rgba(217,22,23,.12) }
+.car-alvo:has(input:focus-visible), .car-opcao:has(input:focus-visible) { outline: 3px solid var(--vermelho-2); outline-offset: 2px }
+.car-alvo:active, .car-opcao:active { transform: scale(.98) }
+.car-anuncio:empty { display: none }
+.car-anuncio { margin: 0; font-weight: 700 }
+.car-rota { display: grid; gap: 10px; min-width: 0 }
+.car-rota h3, .car-rota p { margin: 0 }
+.car-rota h3 span { display: block; color: var(--vermelho); font-size: .9rem; font-family: var(--texto); font-weight: 700 }
+.car-trilha { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)) }
+.car-trilha a { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: center; min-height: 52px;
+  padding: 8px 10px; border: 1.5px solid #e3e3ea; border-radius: var(--raio); color: var(--tinta); text-decoration: none; line-height: 1.2 }
+.car-trilha i { grid-row: span 2; font-style: normal; font-weight: 800; color: var(--cinza); min-width: 1.4em }
+.car-trilha b { font-size: .9rem; overflow-wrap: anywhere }
+.car-trilha small { color: var(--cinza); font-size: .76rem; overflow-wrap: anywhere }
+.car-trilha .car-nosso a { border-color: var(--vermelho) }
+.car-trilha .car-nosso i { color: var(--vermelho) }
+.car-escada { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; min-width: 0 }
+.car-degrau { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 16px; border: 1.5px solid #e3e3ea;
+  border-left: 6px solid var(--cinza-claro); border-radius: var(--raio); min-width: 0 }
+.car-degrau.car-nosso { border-left-color: var(--vermelho) }
+.car-degrau.car-destino { border-left-color: var(--tinta) }
+.car-degrau-corpo { display: grid; gap: 8px; min-width: 0 }
+.car-degrau h4 { margin: 0; font: 800 1.15rem/1.2 var(--titulo); font-stretch: 125% }
+.car-degrau p { margin: 0 }
+.car-passo { color: var(--vermelho); font-weight: 800; font-size: .78rem; letter-spacing: .06em; text-transform: uppercase }
+.car-quem { color: var(--cinza); font-size: .88rem; font-weight: 600 }
+.car-linhas, .car-numeros { margin: 0; display: grid; gap: 6px 16px; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) }
+.car-linhas { display: flex; flex-wrap: wrap; gap: 6px 28px }
+.car-linhas dt, .car-numeros dt { color: var(--cinza); font-size: .76rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em }
+.car-linhas dd, .car-numeros dd { margin: 0; font-weight: 700 }
+.car-numeros-titulo { color: var(--cinza); font-size: .8rem }
+.car-numeros dd { font-weight: 600; font-size: .92rem }
+.car-ramo { display: grid; gap: 12px; min-width: 0 }
+.car-divide { margin: 0; color: var(--cinza); font-weight: 700; font-size: .9rem }
+@media (min-width: 860px) {
+  .car-degrau { grid-template-columns: 120px minmax(0, 1fr); column-gap: 20px }
+}
+/* "Find your step" */
+.car-perguntas { display: grid; gap: 16px }
+.car-pergunta { border: 0; margin: 0; padding: 0; min-width: 0 }
+.car-pergunta legend { font-weight: 700; margin-bottom: 8px }
+.car-opcoes { display: flex; flex-wrap: wrap; gap: 8px }
+.car-opcao { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 8px 16px; border: 1.5px solid rgba(255,255,255,.45);
+  border-radius: 999px; cursor: pointer; font-weight: 600; transition: transform var(--dur) var(--curva) }
+.car-opcao input { position: absolute; opacity: 0; width: 1px; height: 1px }
+.car-opcao:has(input:checked) { background: var(--vermelho); border-color: var(--vermelho) }
+.car-respostas { display: grid; gap: 14px }
+.car-res { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--preto-2) }
+.car-res h3, .car-res p { margin: 0 }
+.car-se, .car-kicker { color: var(--cinza-claro); font-size: .88rem }
+.car-se b { color: #fff }
+.car-kicker { font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: .78rem; color: var(--vermelho-2) }
+/* "My career plan" */
+.car-plano h3 { margin: 8px 0 0 }
+.car-conta { margin: -12px 0 0; color: var(--cinza); font-weight: 700 }
+.car-itens { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px }
+.car-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 12px 14px;
+  border: 1.5px solid #e3e3ea; border-radius: var(--raio) }
+.car-item-txt { display: grid; min-width: 0 }
+.car-item-txt small { color: var(--cinza) }
+.car-item-preco { font-weight: 800; text-align: right }
+.car-item-acoes { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.car-por, .car-qtd button { min-height: 44px; min-width: 44px; padding: 8px 14px; border: 1.5px dashed var(--cinza); border-radius: 999px;
+  background: #fff; color: var(--tinta); font: 700 .9rem/1.2 var(--texto); cursor: pointer; transition: transform var(--dur) var(--curva) }
+.car-por[aria-pressed="true"] { border-style: solid; border-color: var(--vermelho); background: var(--vermelho); color: #fff }
+.car-por:active, .car-qtd button:active { transform: scale(.97) }
+.car-qtd { display: inline-flex; align-items: center; gap: 6px }
+.car-qtd button { padding: 0; border-style: solid }
+.car-qtd output { min-width: 2ch; text-align: center; font-weight: 800 }
+.car-totais { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); padding: 16px; border-radius: var(--raio);
+  background: var(--papel) }
+.car-totais div { display: grid }
+.car-totais div > span { color: var(--cinza); font-size: .85rem; font-weight: 700 }
+.car-totais b { font-size: 1.3rem }
+.car-totais small { font-size: .8rem; color: var(--cinza) }
+.btn:disabled { opacity: .5; cursor: default }
+@media (prefers-reduced-motion: reduce) {
+  .car-alvo:active, .car-opcao:active, .car-por:active, .car-qtd button:active { transform: none }
+}

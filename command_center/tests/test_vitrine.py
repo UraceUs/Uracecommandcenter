@@ -362,8 +362,9 @@ def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     for c in ("/", "/for-beginners/", "/services/birthday-party/"):
         assert minimo in cli.get(c).text, c
     # #525: a Academy, o Boost e o Sim2Grid são os do urace.us (`conteudo.PRECOS`), pela chave; o que nem o painel nem
-    # o urace.us confirmam continua fora
-    for c in ("/", "/about/", "/services/", "/for-beginners/", "/career/", "/pro-team/"):
+    # o urace.us confirmam continua fora. #528: o simulador do /career/ tem os planos de 3 e 6 meses do urace.us
+    # ($2,688.43, $2,619.06), que moram em `conteudo_carreira` (o test_simulador_career confere); fica fora daqui
+    for c in ("/", "/about/", "/services/", "/for-beginners/", "/pro-team/"):
         html = cli.get(c).text
         for valor in ("$2,619.06", "$5K", "$3K", "$60 "):
             assert valor not in html, (c, valor)

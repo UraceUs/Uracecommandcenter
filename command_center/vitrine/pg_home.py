@@ -65,7 +65,7 @@ ESCOLHA = {
         {"foto": BUSHNELL, "alt": "", "rotulo": "Career simulator", "titulo": "Plan your career",
          "texto": ("From a sim seat in Orlando to F1, IndyCar or NASCAR. Find your step on the ladder and build the real "
                    "budget, rung by rung."),
-         "link": ("Find your step", "/career/")},
+         "link": ("Find your step", "/career/#simulator")},   # #528: direto no simulador
         {"foto": SIM2GRID_KV, "alt": "", "rotulo": "Our services", "titulo": "From the sim to the grid",
          "texto": ("Every program in one place: Sim2Grid, Arrive and Drive, URACE Academy and the Racing Team. See them side "
                    "by side and pick your step."),
