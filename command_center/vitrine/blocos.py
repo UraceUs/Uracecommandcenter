@@ -65,8 +65,9 @@ NEGRITO = re.compile(r"\*\*([^*\n]{1,200})\*\*")
 HREF_OK = re.compile(r"(?:/(?!/)[^\s\"'<>]*|#[A-Za-z][\w-]{0,60}|https://[^\s\"'<>]+|tel:\+?[\d-]{7,20}|mailto:[^\s\"'<>@]+@[^\s\"'<>]+)")
 ANCORA = re.compile(r"[a-z][a-z0-9-]{0,40}")
 CAMINHO_SITE = re.compile(r"/(?:[a-z0-9]+(?:-[a-z0-9]+)*/)+")
-PRECOS_DO_PAINEL = ("kart", "academy", "boost", "sim2grid")
-MARCA = re.compile(r"\{(kart|academy|academy_sessao|boost|boost_sessao|sim2grid|academy_k|boost_k)\}")
+PRECOS_DO_PAINEL = ("kart", "academy", "boost", "sim2grid", "sim2grid_coach", "sim2grid_hora")
+MARCA = re.compile(r"\{(kart|academy|academy_sessao|boost|boost_sessao|sim2grid|sim2grid_programa_hora|sim2grid_coach|"
+                   r"sim2grid_hora|academy_k|boost_k)\}")
 
 
 class ErroBloco(ValueError):
@@ -178,7 +179,7 @@ def _botoes(ctas, primeiro="btn", resto="btn btn-linha", centro=False):
     return f'<div class="hero-acoes{" centro" if centro else ""}">{bs}</div>'
 
 
-POR = {"academy": "/ month", "boost": "/ 30 days", "sim2grid": "/ month"}
+POR = {"academy": "/ month", "boost": "/ 30 days", "sim2grid": "/ month", "sim2grid_coach": "/ hour", "sim2grid_hora": "/ hour"}
 
 
 def preco(chave):

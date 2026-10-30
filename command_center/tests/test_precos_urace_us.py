@@ -32,7 +32,8 @@ def cli(tmp_path, monkeypatch):
 
 def test_precos_sao_os_do_urace_us():
     assert C.PRECOS == {"academy": 2756.90, "academy_sessao": 689.23, "boost": 5000, "boost_sessao": 625, "sim2grid": 1200,
-                        "race_weekend": 4500}
+                        "sim2grid_programa_hora": 100, "sim2grid_coach": 150, "sim2grid_hora": 60, "race_weekend": 4500}
+    assert C.PRECOS["sim2grid"] / 12 == C.PRECOS["sim2grid_programa_hora"], "12 horas com coach no mês"
     assert round(C.PRECOS["academy"] / 4, 2) == C.PRECOS["academy_sessao"], "a sessão é o mensal ÷ 4 (Rate Card)"
     assert C.PRECOS["boost"] / 8 == C.PRECOS["boost_sessao"], "8 sessões em 30 dias"
     assert blocos.com_precos("at {boost_sessao} a session; {academy}; {academy_k}/mo; {boost_k}/mo") == \
@@ -55,10 +56,12 @@ def test_driver_factory_com_o_a_partir_de_do_urace_us(cli):
     assert "Programs starting at $3K/mo" in texto and "Programs starting at $5K/mo" in texto
 
 
-def test_pro_team_com_o_boost_e_a_academy_como_o_robo(cli):
-    # a /academy/ fica com a planilha que o robô de vendas fala (test_sdr_final amarra), até o dono decidir os dois
+def test_academy_e_pro_team_com_o_boost(cli):
     academy = cli.get("/academy/").text
-    assert "<strong>$2,756</strong>" in academy and "URACE Boost" not in academy
+    assert "URACE Boost · $625 per session" in academy and "Eight sessions in 30 days for faster progression" in academy
+    # o Boost vem logo depois do grupo do 4 stroke
+    grupos = re.findall(r'<h3 class="mt">([^<]+)</h3>', academy)
+    assert grupos[:2] == ["4-stroke and Baby Kart · $689 per session", "URACE Boost · $625 per session"], grupos
     pro = cli.get("/pro-team/").text
     titulos = re.findall(r'<article class="plano"><h3>([^<]+)</h3>', pro)
     assert titulos == ["URACE Academy", "URACE Boost", "Race Weekend Support"]
@@ -72,16 +75,18 @@ def test_painel_com_o_preco_antigo_de_fabrica_passa_ao_do_urace_us(tmp_path, mon
     con = conectar()
     aplicar_schema(con)
     # como o banco de produção estava em 30/10
+    con.execute("UPDATE site_offers SET price='$2,756' WHERE seed_key='academy:0:0'")
+    con.execute("UPDATE site_offers SET price='$3,156' WHERE seed_key='academy:1:0'")
     con.execute("UPDATE site_offers SET price='$1,500', body=? WHERE seed_key='sim2grid:1'", (SG.PLANOS_TEXTO,))
     con.execute("UPDATE site_offers SET price='$999' WHERE seed_key='sim2grid:2'")          # alguém editou
-    con.execute("DELETE FROM site_offers WHERE seed_key='pro-team:2'")   # o Boost ainda não existia
+    con.execute("DELETE FROM site_offers WHERE seed_key IN ('academy:3:0', 'pro-team:2')")   # o Boost ainda não existia
     con.commit()
     aplicar_schema(con)
     preco = {r["seed_key"]: (r["price"], r["body"], r["sort"]) for r in todos(con, "SELECT * FROM site_offers")}
-    assert preco["academy:0:0"][0] == "$2,756", "a Academy espera o dono (o robô fala a planilha)"
+    assert preco["academy:0:0"][0] == "$2,756.90" and preco["academy:1:0"][0] == "$3,156.90"
     assert preco["sim2grid:1"][:2] == ("$1,360", SG.PLANOS[1][2])
     assert preco["sim2grid:2"][0] == "$999", "o que a equipe mudou fica"
-    assert "academy:3:0" not in preco
+    assert (preco["academy:3:0"][0], preco["academy:3:0"][2]) == ("$5,000", 50)
     assert preco["pro-team:2"][0] == "{boost}" and preco["pro-team:2"][2] == 5
     con.close()
 

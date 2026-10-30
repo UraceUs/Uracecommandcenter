@@ -88,8 +88,8 @@ def test_as_tres_paginas_sao_as_do_urace_us_de_29_10(cli):
 
 def test_preco_so_do_painel_e_nenhum_escrito(cli, monkeypatch):
     """O "From" do Arrive and Drive é o menor preço de kart do painel, ao vivo; o Sim2Grid e a Academy da About são os do
-    urace.us pela chave (#525); nenhum preço é texto. Na Programs, o "What it will cost" do Sim2Grid são os cartões do
-    painel."""
+    urace.us pela chave (#525); nenhum preço é texto. Na Programs, o "What it will cost" do Sim2Grid é o do urace.us
+    (#539)."""
     from command_center.providers import cartoes_site
     monkeypatch.setattr(cartoes_site, "preco_kart", lambda con: 650)
     home = cli.get("/").text
@@ -100,12 +100,18 @@ def test_preco_so_do_painel_e_nenhum_escrito(cli, monkeypatch):
         sem_painel = re.sub(r'<p class="plano-preco">.*?</p>|<article class="plano">.*?</article>', "", main, flags=re.S)
         assert not re.search(r"\$\s?\d", sem_painel), (c, re.findall(r".{40}\$\s?\d.{20}", sem_painel))
         texto = _texto(cli.get(c).text)
-        for velho in ("$719", "$150", "$60", "$400", "$95", "$200", "38 reviews", "4.9"):
+        # #539: o $150 e o $60 do Sim2Grid saem nos cartões da Programs, pela chave (o "sem_painel" acima já confere)
+        for velho in ("$719", "$400", "$95", "$200", "38 reviews", "4.9"):
             assert velho not in texto, (c, velho)
     about = cli.get("/about/").text
     assert "<strong>$1,200</strong><span>/ month</span>" in about and "<strong>$2,756.90</strong><span>/ month</span>" in about
     servicos = cli.get("/services/").text
-    assert "What it will cost" in servicos and "$1,800" in servicos and "Apply for a place" in servicos, "os cartões do painel"
+    # #539 (dono, 30/10: "siga o valor que estiver no urace.us"): os três do urace.us, com o preço pela chave
+    custo = re.search(r'id="sim-2-grid-cost".*?</section>', servicos, re.S).group(0)
+    assert re.findall(r"<h3>([^<]+)</h3>", custo) == ["URACE Sim2Grid", "Coached Hour", "Sim Time"]
+    for preco, por in (("$1,200", "/ month"), ("$150", "/ hour"), ("$60", "/ hour")):
+        assert f"<strong>{preco}</strong><span>{por}</span>" in custo, preco
+    assert "works out at $100 an hour against $150 for a one-off" in custo
 
 
 def test_avaliacoes_do_google_sao_as_da_508_sem_nota_escrita(cli):

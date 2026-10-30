@@ -245,19 +245,22 @@ def test_contraproposta_vira_call_no_idioma_do_lead():
 
 def test_academy_com_os_valores_da_planilha_os_mesmos_do_site():
     """Dono, 16/10: o robô tira os valores da planilha de preços (a mesma do site, #273). Se um mudar sem o
-    outro, este teste acusa: cada valor dos planos da Academy no site precisa estar na persona."""
+    outro, este teste acusa: cada valor dos planos da Academy no site precisa estar na persona. Dono, 30/10 (#539):
+    o mensal sem contrato é $2,756.90 / $3,156.90, e o Boost volta."""
     texto = (SALESAGENT / "instructions" / "urace-sales-agent.md").read_text(encoding="utf-8")
     sys.path.insert(0, str(SALESAGENT.parent))
     from command_center.vitrine import conteudo_paginas
     valores = [plano[3] for _grupo, planos in conteudo_paginas.ACADEMY["planos_grupos"] for plano in planos]
-    assert len(valores) == 8
+    assert len(valores) == 9, "#539: o Boost voltou"
     for valor in valores:
         assert valor in texto, valor
-    for velho in ("2,756.90", "3,156.90", "689.23", "3-month contract", "no contract, no minimum"):
+    for velho in ("$2,756 a month", "$3,156 a month", "689.23", "3-month contract", "no contract, no minimum"):
         assert velho not in texto, velho
     from sdr import estilo
     limpo, v = estilo.aplicar("O Academy sai $2.756,90 por mês. Qual a idade dele?")
-    assert limpo == "Qual a idade dele?" and v
+    assert limpo == "O Academy sai $2.756,90 por mês. Qual a idade dele?" and not v, "#539: o valor certo passa"
+    limpo, v = estilo.aplicar("O Academy tem 10% off este mês. Qual a idade dele?")
+    assert limpo == "Qual a idade dele?" and v, "desconto continua fora do chat"
 
 
 def test_video_para_quem_compara():

@@ -171,7 +171,7 @@ Academy (training with the same coach; from the owner's price sheet, the
 same numbers as the website). Session price: 4-stroke and Baby Kart $689,
 2-stroke $789.
 - No contract, 4 sessions a month (cancel with 30 days written notice):
-  4-stroke or Baby Kart $2,756 a month, 2-stroke $3,156 a month. Extra
+  4-stroke or Baby Kart $2,756.90 a month, 2-stroke $3,156.90 a month. Extra
   session $689 / $789.
 - Contracts: lead with the monthly installment, not the total (owner, 22/10:
   the total can scare the client). Give the total and the saving after.
@@ -185,6 +185,9 @@ same numbers as the website). Session price: 4-stroke and Baby Kart $689,
   $39,197.52).
 - Own kart, no contract: $1,800 a month (extra $450). Own kart and own
   mechanic: $1,200 a month (extra $300).
+- URACE Boost: 8 sessions in 30 days, $5,000 ($625 a session, our lowest
+  per-session rate), no contract, for a driver preparing for a race or a
+  season.
 - Outside the Orlando Kart Center: +$250 (hotel, food, transport).
 - Lead and Follow (a partner trainer on track, any training day): $769.
 When they ask the Academy price: the no-contract monthly first, then one line
