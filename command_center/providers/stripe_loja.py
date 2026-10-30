@@ -443,20 +443,21 @@ def avisar(con, oid, enviar=None):
         from command_center.providers import carrinho
         return carrinho.avisar(con, oid, enviar)
     from command_center.providers import pedido_site
+    from command_center.vitrine.conteudo import endereco_com_box
     valor = o["amount_paid"] if o["amount_paid"] is not None else o["amount"]
     lang = pedido_site.lingua(o)                        # #248: no idioma em que a pessoa comprou
     pedido_site.registrar_no_card(con, o, "pago")       # #248: o pagamento na linha do tempo do card
     if lang == "pt":
-        entrega_cli = ("Avisamos quando estiver pronto para retirar no Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
-                       "Orlando, FL 32824)." if o["delivery"] == "retirada" else
+        entrega_cli = (f"Avisamos quando estiver pronto para retirar no Orlando Kart Center ({endereco_com_box('kart')})."
+                       if o["delivery"] == "retirada" else
                        pedido_site.texto_envio(o, pedido_site.linhas(con, o), lang))
         assunto = f"Pedido #{o['id']} confirmado — URACE Store"
         texto = (f"{pedido_site.ola(o, lang)},\n\nObrigado pelo pedido! Recebemos o seu pagamento.\n\n{descricao(o)}\n"
                  f"Total pago: US$ {valor:,.2f}\nPedido: #{o['id']}\n\n{entrega_cli}\n\nPágina do seu pedido: {pedido_site.link(o)}\n\n"
                  f"{pedido_site.contato(lang)}\n\nURACE — the Champion's Factory")
     else:
-        entrega_cli = ("We'll let you know when it's ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
-                       "Orlando, FL 32824)." if o["delivery"] == "retirada" else
+        entrega_cli = (f"We'll let you know when it's ready for pickup at the Orlando Kart Center ({endereco_com_box('kart')})."
+                       if o["delivery"] == "retirada" else
                        pedido_site.texto_envio(o, pedido_site.linhas(con, o), lang))
         assunto = f"Order #{o['id']} confirmed — URACE Store"
         texto = (f"{pedido_site.ola(o, lang)},\n\nThanks for your order! We received your payment.\n\n{descricao(o)}\nTotal paid: "

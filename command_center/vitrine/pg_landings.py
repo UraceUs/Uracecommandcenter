@@ -40,7 +40,7 @@ OBRIGADO_DF = "/the-driver-factory-thank-you-page/"
 LETRA_MIUDA = ("Taxes and fees not included. A refundable security deposit is added at checkout and returned within 5 "
                "business days after your session if there is no damage to the kart. Track admission is not included: "
                "driver and guest passes are paid separately to Orlando Kart Center. Rescheduling: requests made at least "
-               "24 hours before your session will be accommodated based on availability. Sessions missed without notice "
+               "48 hours before your session will be accommodated based on availability. Sessions missed without notice "
                "may be forfeited.")
 
 
@@ -65,13 +65,51 @@ def _fundador(proximo, fundo="escura"):
             "paragrafos": [f"[Watch on YouTube]({FUNDADOR})"], "ctas": [("Find my next step", proximo)]}
 
 
-def _campos_lp():
-    """Os campos do "Form LP URace" (o formulário da página no urace.us), sem o preço das opções."""
+def _hora(h):
+    """ "09:00" → "9am", "13:30" → "1:30pm" (como o urace.us escreve: "from 7am to 1pm")."""
+    hh, mm = (int(x) for x in h.split(":"))
+    return f"{(hh - 1) % 12 + 1}{f':{mm:02d}' if mm else ''}{'am' if hh < 12 else 'pm'}"
+
+
+DIAS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def horario_da_pista(agenda):
+    """#527: os dias e os horários de sessão na pista, da agenda do painel (Site › Agenda), que é quem manda (dono, 30/10:
+    *"deixe que isso é regulado pelo command center"*). Ex.: "Wednesday 9am–1pm or 1pm–5pm; Saturday and Sunday 9am–1pm".
+    Sem agenda (banco fora) ou sem nada aberto, devolve ""."""
+    if not agenda:
+        return ""
+    c = agenda["config"]
+    faixa = {"manha": f'{_hora(c["morning_start"])}–{_hora(c["morning_end"])}',
+             "tarde": f'{_hora(c["afternoon_start"])}–{_hora(c["afternoon_end"])}'}
+    por_dia = {}
+    for r in agenda["semana"]:
+        if r["open"]:
+            por_dia.setdefault(r["weekday"], []).append(r["period"])
+    grupos = []                                         # dias seguidos com os mesmos períodos vão juntos
+    for d in sorted(por_dia):
+        ps = tuple(p for p in ("manha", "tarde") if p in por_dia[d])
+        if grupos and grupos[-1][1] == ps:
+            grupos[-1][0].append(d)
+        else:
+            grupos.append(([d], ps))
+    def dias(ds):
+        nomes = [DIAS[d] for d in ds]
+        return nomes[0] if len(nomes) == 1 else ", ".join(nomes[:-1]) + " and " + nomes[-1]
+    return "; ".join(f'{dias(ds)} {" or ".join(faixa[p] for p in ps)}' for ds, ps in grupos)
+
+
+def _campos_lp(ctx=None):
+    """Os campos do "Form LP URace" (o formulário da página no urace.us), sem o preço das opções. O horário da pista
+    da opção A sai da agenda do painel (#527)."""
     def radio(nome, valor):
         v = escape(valor, quote=True)
         return f'<label class="opcao"><input type="radio" name="{nome}" value="{v}" required> <span>{v}</span></label>'
-    opcoes = ("A - I only want to try it and see if it is for me without commitment to continue (a track session is "
-              "from 7am to 1pm)",
+    agenda = (ctx or {}).get("agenda")
+    pista = horario_da_pista(agenda() if callable(agenda) else agenda)
+    opcoes = ("A - I only want to try it and see if it is for me without commitment to continue"
+              + (f" (track sessions: {pista})" if pista else ""),
               "B - I am new to the sport and I want to join the Academy",
               "C - I already have experience and I want to join the Racing Team",
               "D - I don't have the budget for any of the options above (😔In another moment when you are ready we will "
@@ -89,7 +127,7 @@ def _formulario_lp(assunto, obrigado=None):
     b = {"tipo": "formulario", "ancora": "form", "titulo": "Tell us about your goals",
          "texto": ("Our team will review your information and contact you to understand which URACE experience or "
                    "development program best matches your current stage."),
-         "assunto": assunto, "extras": _campos_lp(), "enviar": "Send",
+         "assunto": assunto, "extras": _campos_lp, "enviar": "Send",
          "nota": "By submitting this form, you agree to be contacted by the URACE team regarding your inquiry."}
     if obrigado:
         b["obrigado"] = obrigado

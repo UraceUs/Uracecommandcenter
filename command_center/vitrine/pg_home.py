@@ -12,7 +12,7 @@ O que fica diferente, de propósito:
   a nota e o número de avaliações ("4.9", "38 reviews") não se escrevem à mão: ficam velhos;
 - os três vídeos de "Straight from the paddock" (mp4 do WordPress) e a faixa dos parceiros ainda não têm bloco;
 - vídeo do YouTube é link (a política do site não deixa player de fora);
-- o que o texto de lá ainda diz e o dono já mudou fica de fora da Programs: remarcação com 48 h (vale 24 h, dono 08/10),
+- o que o texto de lá ainda diz e o dono já mudou fica de fora da Programs: a remarcação (fica na página do programa),
   as idades dos karts (dono, 08/10), o passo a passo do carrinho do WooCommerce (a reserva é a do site), os nomes Kart
   School e Professional Coaching (#254) e o "Until then you cannot book" do Sim2Grid (#392: já se reserva). Termos,
   reembolso e a pista de cada programa estão na página dele.

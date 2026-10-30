@@ -232,7 +232,7 @@ def test_arrive_and_drive_mostra_os_precos_de_hoje_e_leva_para_o_carrinho(cli):
     assert 'data-api="/ops/api/vitrine/agenda"' in r.text
     ofertas = [x for x in _le(r.text).ld if x.get("@type") == "Service"][0]["offers"]
     assert sorted(float(o["price"]) for o in ofertas) == [500.0, 719.0, 719.0, 819.0, 899.0], "#279: com o kart próprio"
-    assert "Box 3" in r.text and "Box 5" not in r.text, "endereço da decisão de 01/10"
+    assert "10724 Cosmonaut Blvd" in r.text and "Box " not in r.text, "#527: o Box só vai na confirmação"
 
 
 def test_sem_barra_final_redireciona(cli):
@@ -342,13 +342,15 @@ def test_texto_do_urace_us_de_hoje_no_menu_na_home_e_no_blog(cli):
 
 
 def test_decisoes_do_dono_continuam_valendo_em_todo_o_site(cli):
-    """O texto novo não traz de volta o que o dono já decidiu: Box 3 (o SIM2GRID no Box 5), remarcação com 24 h e o nome URACE."""
+    """O texto novo não traz de volta o que o dono já decidiu: o Box só na confirmação, remarcação com 48 h (#527, dono 30/10) e
+    o nome URACE."""
     for c in PAGINAS:
         if c.startswith("/store/"):
             continue                                   # nome e descrição do produto são os da loja
         texto = re.sub(r"<[^>]+>", " ", re.sub(r"<script.*?</script>", "", cli.get(c).text, flags=re.S))
-        # o SIM2GRID fica no Box 5 (dono, 22/10, #392); o resto do site no Box 3 (01/10)
-        assert ("Box 5" not in texto or c == "/sim2grid-racing-simulator/") and not re.search(r"\b48 ?h", texto), c
+        # #527 (dono, 30/10): o Box (3 do kart, 5 do SIM2GRID) não sai na página; a remarcação é com 48 h
+        assert not re.search(r"\bBox \d", texto), c
+        assert not re.search(r"(notice of|least|less than) 24 ?h|24 ?hours[’'] notice", texto), c
         assert not re.search(r"\bU(race|Race|Rrace)\b", texto), c
 
 
@@ -591,7 +593,7 @@ def test_schema_do_negocio_nao_perde_o_seo_local_do_urace_us(cli):
     assert negocio["priceRange"] and negocio["currenciesAccepted"] == "USD"
     assert [c["name"] for c in negocio["areaServed"]] == ["Orlando", "Kissimmee", "Winter Garden", "Florida"]
     assert any("yelp.com" in u for u in negocio["sameAs"]) and any("tripadvisor." in u for u in negocio["sameAs"])
-    assert negocio["address"]["streetAddress"].endswith("Box 3")
+    assert negocio["address"]["streetAddress"] == "10724 Cosmonaut Blvd", "#527: sem o Box"
     tipos = {str(x.get("@type")) for x in p.ld}
     assert "Organization" in tipos and "WebSite" in tipos
     # e em toda página o negócio continua completo (é o schema que o Google lê em qualquer entrada)

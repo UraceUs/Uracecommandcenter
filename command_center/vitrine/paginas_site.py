@@ -1560,8 +1560,10 @@ def _pedido_cliente(cli, lang):
     if cli["pilotos"]:
         linhas.append((T("Drivers", "Pilotos") if len(cli["pilotos"]) > 1 else T("Driver", "Piloto"), ", ".join(cli["pilotos"])))
     if cli["tem_produto"]:
-        entrega = (T("Pick up at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824)",
-                     "Retirada no Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824)") if cli["entrega"] == "retirada"
+        # #527: depois da compra o endereço vai inteiro, com o Box (nas páginas públicas ele não sai)
+        onde = C.endereco_com_box("kart")
+        entrega = (T(f"Pick up at the Orlando Kart Center ({onde})", f"Retirada no Orlando Kart Center ({onde})")
+                   if cli["entrega"] == "retirada"
                    else T("Ship to", "Enviar para") + ": " + (cli["endereco_entrega"] or T("the address you give in the checkout", "o endereço informado no checkout")))
         linhas.append((T("Delivery", "Entrega"), entrega))
     itens = "".join(f"<dt>{e(k)}</dt><dd>{e(v)}</dd>" for k, v in linhas if v)
