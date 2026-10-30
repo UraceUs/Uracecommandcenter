@@ -261,3 +261,24 @@ def instalar_mascara_nos_logs(nomes=("uvicorn.access", "uvicorn.error", "uvicorn
         lg = logging.getLogger(nome)
         if not any(isinstance(f, _MascaraDeLog) for f in lg.filters):
             lg.addFilter(_MascaraDeLog())
+
+
+ENVIOS_DA_PONTE = ("outbound", "outbound_fallback", "followup", "salesbot_continue")
+
+
+def envios_da_ponte(lead_id: int, desde_ts: int) -> list[int]:
+    """Quando a ponte entregou algo a este lead (para separar a nossa saída da do time, #533)."""
+    with db() as conn:
+        return [r[0] for r in conn.execute(
+            f"SELECT ts FROM audit WHERE lead_id=? AND ts>=? AND kind IN ({','.join('?' * len(ENVIOS_DA_PONTE))})",
+            (lead_id, int(desde_ts), *ENVIOS_DA_PONTE))]
+
+
+def historico(lead_id: int, limite: int = 10) -> list[tuple[int, str, str]]:
+    """As últimas falas da conversa que a ponte viu, em ordem: (ts, "lead"|"robo", texto)."""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT ts, kind, detail FROM audit WHERE lead_id=? AND kind IN ('inbound','outbound') "
+            "AND detail NOT LIKE 'via bots/run: %' AND detail <> '' ORDER BY ts DESC, id DESC LIMIT ?",
+            (lead_id, int(limite))).fetchall()
+    return [(r[0], "lead" if r[1] == "inbound" else "robo", r[2]) for r in reversed(rows)]

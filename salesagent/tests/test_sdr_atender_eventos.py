@@ -52,6 +52,11 @@ class _Kommo:
     def get_lead(self, lead_id):
         return self.leads[int(lead_id)]
 
+    saidas = {}
+
+    def saidas_do_chat(self, lead_id, desde_ts):
+        return [t for t in self.saidas.get(int(lead_id), []) if t >= desde_ts]
+
 
 class _Mapa:
     """Urace: 10 = First Contact (gerenciada), 11 = Hot Leads (equipe). Comercial: 20 = ENTRADA,
@@ -96,6 +101,8 @@ def rodar() -> list[str]:
     k = _Kommo()
     app.kommo = k
     sdr_ponte.kommo = k
+    import conversa
+    conversa.kommo = k
     sdr_ponte.mapa = lambda forcar=False: _Mapa()
     triados = []
     sdr_ponte.triar_em_segundo_plano = lambda lead_id, texto, rota=None: triados.append((lead_id, texto))
@@ -447,6 +454,28 @@ def rodar() -> list[str]:
     check("SMS de cliente do painel: contexto de aluno e sem a call de venda fora do horário",
           "JÁ É ALUNO" in modelo[-1] and not any(link in m for m in c["mensagens"]), c["mensagens"])
     app.fora_do_horario_do_time = lambda quando=None: False
+
+    print("\n2k. O robô lê a conversa (#533): time na conversa, fornecedor, 10 mensagens ou o histórico")
+    app._call_agent = lambda lead_id, msg, session_key=None: (modelo.append(msg) or resposta,
+                                                             textproc.extract_directives(resposta))
+    k.leads.update({130: _lead(130, 2, 20), 131: _lead(131, 2, 143, ["Supplier"]), 132: _lead(132, 2, 20),
+                    133: _lead(133, 2, 20)})
+    agora_ts = int(time.time())
+    k.saidas[130] = [agora_ts - 180]                         # alguém do time escreveu há 3 min
+    bots0, n_modelo = len(k.bots), len(modelo)
+    app.tratar_mensagem(130, "Deixa comigo")
+    check("o time escreveu há pouco: o robô fica quieto e não chama o modelo",
+          len(k.bots) == bots0 and len(modelo) == n_modelo and 130 not in trilhas, k.bots[-1:])
+    check("o follow-up também respeita", "o time" in (app._bloqueio_da_conversa(130) or ""))
+    state.log("outbound", 132, "Oi! Aqui é o Chase, da URACE.")
+    k.saidas[132] = [int(time.time()) + 5]                   # a saída é a nossa, registrada pelo Kommo depois
+    check("a saída que foi da própria ponte não trava o robô", app._bloqueio_da_conversa(132) is None)
+    check("card de fornecedor (tag Supplier) não recebe venda", sdr_ponte.pode_responder(131) == (False, "FORA_DE_VENDA"))
+    app.tratar_mensagem(132, "Deixa comigo")
+    check("1-B: conversa amigável, o modelo lê as últimas mensagens e não vende",
+          "1-B." in modelo[-1] and "Deixa comigo" in modelo[-1], modelo[-1][:400])
+    app.tratar_mensagem(133, "quanto custa uma aula pro meu filho de 8 anos?")
+    check("1-A: potencial de venda, o modelo recebe o histórico inteiro", "1-A." in modelo[-1], modelo[-1][:400])
     return list(FALHAS)
 
 

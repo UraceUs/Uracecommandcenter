@@ -69,6 +69,7 @@ notify_fn = None       # notify_fn(text) -> None  (WhatsApp interno)
 task_fn = None         # task_fn(lead_id, text, due_ts) -> None (tarefa Kommo)
 note_fn = None         # note_fn(lead_id, text) -> None (nota Kommo)
 rescue_fn = None       # rescue_fn(conv) -> bool (entrega a resposta devida ao lead)
+bloqueio_fn = None     # bloqueio_fn(lead_id) -> str|None: o time está na conversa, o robô não fala (#533)
 tag_fn = None          # tag_fn(lead_id, [tags]) -> None (tags no card, só somam)
 close_fn = None        # close_fn(lead_id) -> None (SDR: card vai para PERDIDO / NÃO QUALIFICADO)
 
@@ -265,6 +266,11 @@ def _fire_followup(conv: dict, now: int) -> None:
     track = conv["followup_track"]
     attempt = conv["followup_attempts"]  # 0-based: este é o (attempt+1)º toque
 
+    motivo = bloqueio_fn(lead_id) if bloqueio_fn else None
+    if motivo:
+        cancel(lead_id, motivo)
+        return
+
     # G3 vale aqui também: conversa escalada não recebe follow-up comercial.
     if conv["state"] not in ("AI_ACTIVE", "RESUMED"):
         cancel(lead_id, f"estado {conv['state']} não permite follow-up")
@@ -371,6 +377,8 @@ def _maybe_rescue(conv: dict, now: int) -> bool:
         return False  # frases distintas esgotadas: silêncio é melhor que loop
 
     if rescue_fn is None:
+        return False
+    if bloqueio_fn and bloqueio_fn(lead_id):
         return False
     entregue = rescue_fn(conv)
     log("rescue", lead_id,

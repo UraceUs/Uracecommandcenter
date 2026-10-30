@@ -118,3 +118,16 @@ def _log_run_bot(detalhe: str) -> None:
         state.log("salesbot_run", None, detalhe)
     except Exception:
         pass
+
+
+def saidas_do_chat(lead_id: int, desde_ts: int) -> list[int]:
+    """Quando saiu mensagem para o lead no chat (Instagram, Facebook, WhatsApp), desde `desde_ts`: o
+    created_at de cada evento outgoing_chat_message. O Kommo não dá o texto, mas dá o momento (#533)."""
+    params = {"filter[type]": "outgoing_chat_message", "filter[entity]": "lead",
+              "filter[entity_id]": str(lead_id), "filter[created_at][from]": str(int(desde_ts)), "limit": "100"}
+    with _client() as c:
+        r = c.get(f"{BASE}/events", params=params)
+        if r.status_code == 204:
+            return []
+        r.raise_for_status()
+        return [int(e.get("created_at") or 0) for e in (r.json().get("_embedded") or {}).get("events", [])]
