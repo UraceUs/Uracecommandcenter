@@ -24,7 +24,7 @@
 2. O funil da URACE no Command Center
 3. Achar ou criar o cliente certo
 4. Oportunidade e venda: abrir, ligar, fechar, reenviar, o seu Google Calendar
-5. Site › Agendamentos: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel; estoque do site, 5.3); Security deposit (5.4)
+5. Site › Agendamentos: carrinho, pagamento no Stripe e a loja do site (produtos, frete e depósito no painel; estoque do site, 5.3); o plano do simulador de carreira (5.2.1); Security deposit (5.4)
 6. CRM (Kommo) e o Robô SDR
 7. Suits (macacão)
 8. Tabela de operações para a IA
@@ -1209,6 +1209,20 @@ servidor, não um chute. São **24 por página**.
 
 **O catálogo mudou?** Desde o #298 os produtos da loja ficam **no banco** e se mudam pelo painel (veja a
 5.3). Os 70 produtos que vieram do WooCommerce entraram uma vez, como estavam.
+
+### 5.2.1 Quando o cliente chega com o "My career plan" do /career/ (#528)
+
+O `/career/` tem o simulador de carreira do urace.us: a pessoa escolhe o destino (Formula 1, IndyCar ou NASCAR), vê os
+onze degraus com o preço dos nossos, responde as três perguntas do **Find your step** e monta o **My career plan**
+(itens com quantidade; o total avulso e o mensal). O botão **Copy my plan** copia um texto que começa com
+`MY URACE CAREER PLAN`; se o cliente colar isso no WhatsApp ou no e-mail, é o plano que ele montou sozinho.
+
+- Os preços do simulador são **os do urace.us** (dono, 30/10): Sim2Grid $60 a hora sozinho, $150 com coach, $1,200 por
+  mês (12 horas com coach); Arrive and Drive $719 o dia; Academy $2,756.90 / $2,688.43 / $2,619.06 por mês (1, 3 e 6
+  meses); Racing Team sob cotação. **O que vale na venda é o painel e a Rate Card** (a /academy/ segue a planilha do #273):
+  se o número do plano do cliente for diferente, explique e feche pelo do painel.
+- A taxa da pista não entra no total do plano (a página diz que é à parte, com o valor do site no aviso).
+- O plano fica só no navegador da pessoa: a equipe não vê nada até ela mandar.
 
 ### 5.3 Produtos da loja no painel: preço, fotos, texto, opções, frete, depósito e estoque (#298, #309)
 

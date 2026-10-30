@@ -360,7 +360,9 @@ def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     for c in ("/", "/for-beginners/", "/services/birthday-party/"):
         assert minimo in cli.get(c).text, c
     # #507: a home e a About de lá têm "$1,200 / month" (Sim2Grid) e "$2,756.90 / month" (Academy), que o painel não tem
-    for c in ("/", "/about/", "/services/", "/for-beginners/", "/career/", "/pro-team/"):
+    # #528 (dono, 30/10: "usa os valores do urace us"): o simulador do /career/ mostra os preços do urace.us; eles moram
+    # num lugar só (`conteudo_carreira`) e o test_simulador_career confere. As outras páginas seguem sem esses números.
+    for c in ("/", "/about/", "/services/", "/for-beginners/", "/pro-team/"):
         html = cli.get(c).text
         for valor in ("$2,619.06", "$2,756.90", "$5,000", "$5K", "$3K", "$1,200", "$60 "):
             assert valor not in html, (c, valor)

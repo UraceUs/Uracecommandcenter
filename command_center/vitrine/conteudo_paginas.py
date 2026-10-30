@@ -274,14 +274,10 @@ CAREER = {
     "sub": ("Every pro climbed the same ladder. Here it is, from a sim seat in Orlando to F1, IndyCar or NASCAR. We run "
             "the bottom rungs and get drivers ready for the rest."),
     "foto": "enzo-1.webp",
-    "cta": ("Find my next step", CONTATO),
-    "degraus_titulo": "The ladder ends on our grid",
-    "degraus_intro": ("Sim 2 Grid. Arrive and Drive. URACE Academy. URACE Racing Team. Four steps, one team. Nobody skips to "
-                      "the top and nobody buys their way in — your coach tells you when you are ready, and not before."),
-    "degraus": (("Sim 2 Grid", "Opening 1 November 2026. A full motion cockpit — competition seat and harness, direct-drive wheel, racing pedals, triple screen.", "/sim2grid-racing-simulator/"),
-                ("Arrive and Drive", "Experience karting for one day. Your first opportunity to experience real karting with professional guidance and URACE support.", "/services/arrive-and-drive/"),
-                ("URACE Academy", "Start your development as a racing driver. Four coached sessions a month.", "/academy/"),
-                ("Racing Team", "Already competing? Pursue the next level.", "/pro-team/")),
+    # #528: os dois botões do topo de lá ("Find your step" e "Play the career simulator") levam às partes da página;
+    # a escada que ficava aqui ("The ladder ends on our grid") virou o simulador (`conteudo_carreira`)
+    "cta": ("Find your step", "#find-your-step"),
+    "cta2": ("Play the career simulator", "#simulator"),
     "perguntas_titulo": "Questions people actually ask",
     "perguntas_sub": "Straight answers, including the ones that cost us a sale.",
     "faq": (("Does my kid show potential?", ("There’s one honest way to find out, and it isn’t a quiz. Put them in a real race kart with a coach watching, and read the data afterwards. One day tells us more than a year of wondering — and we’ll tell you what we actually saw, including when the answer is “they love it, and that’s enough”.",)),
