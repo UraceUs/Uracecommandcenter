@@ -147,13 +147,14 @@ def _cartao_de(con, pagina, titulo):
 def test_os_cartoes_de_hoje_entram_uma_vez_e_nao_sao_sobrescritos(loja):  # noqa: F811
     cli, con, st, qbo, tmp, sid = loja
     contagem = {r["page"]: r["n"] for r in con.execute("SELECT page, COUNT(*) AS n FROM site_offers GROUP BY page")}
-    assert contagem == {"academy": 8, "pro-team": 2, "for-beginners": 3, "sim2grid": 3}, contagem     # #392: os programas
+    # #392: os programas do SIM2GRID; #525: o Boost no Racing Team
+    assert contagem == {"academy": 8, "pro-team": 3, "for-beginners": 3, "sim2grid": 3}, contagem
     c = _cartao_de(con, "academy", "6-month contract")
     cs.mudar(con, None, c["id"], {"price": "$9,999.00", "active": False})
     con.commit()
     aplicar_schema(con)
     aplicar_schema(con)
-    assert con.execute("SELECT COUNT(*) FROM site_offers").fetchone()[0] == 16, "nada é recriado (13 + os 3 programas do SIM2GRID, #392)"
+    assert con.execute("SELECT COUNT(*) FROM site_offers").fetchone()[0] == 17, "nada é recriado (13 + os 3 programas do SIM2GRID, #392, + o Boost do Racing Team, #525)"
     c = um(con, "SELECT * FROM site_offers WHERE id=?", (c["id"],))
     assert (c["price"], c["active"]) == ("$9,999.00", 0), "o que a equipe mudou fica"
 

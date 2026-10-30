@@ -237,6 +237,14 @@ FECHO_DUVIDAS = ("Do you still have questions?",
 AVISO_KART_PROPRIO = ("Your kart must arrive at the track at least 2 days before your session, so our mechanics can "
                       "check it and do the necessary maintenance.")
 
+# #525 (dono, 30/10: *"usa os valores do urace us"*): o preço dos programas, como o urace.us de 29/10 mostra e a Rate
+# Card (`brain/40_SISTEMAS/Rate Card.md`, tabelas de 09/09) confirma. A Academy é o mensal 4 stroke/Baby Kart sem
+# contrato ($689.23 a sessão = mensal ÷ 4); o Boost são 8 sessões em 30 dias a $625; o Sim2Grid é o mensal de
+# lançamento; o Race Weekend Support (2-stroke) é a base da estimativa da /winter/. O painel não tem esses planos à
+# venda (venderiam online): o site usa estes números até existirem lá (`paginas_site._preco_plano`).
+PRECOS = {"academy": 2756.90, "academy_sessao": 689.23, "boost": 5000, "boost_sessao": 625, "sim2grid": 1200,
+          "race_weekend": 4500}
+
 # #279 (dono, 15/10): "o lead and follow é um add on que pode ser adicionado no dia de treino … somente o de 769
 # por dia de treino". É um serviço do painel (preço do painel, #50) ligado por esta chave, como os karts.
 LEAD_AND_FOLLOW = {"chave": "Lead and Follow", "nome": "Lead and Follow", "preco": 769,

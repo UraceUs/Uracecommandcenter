@@ -10,10 +10,11 @@ domínio elas não podem quebrar. O texto é o da página de hoje (lida em 29/10
 - a The Driver Factory (16/10), de novo página própria (era 301 para o /career/), com o obrigado dela.
 
 O que não é cópia literal, de propósito:
-- **Preço só do painel.** O "from $719" do Arrive and Drive é o cartão com a chave `kart`; Academy, Racing Team,
-  Sim2Grid, o security deposit e as opções do formulário saem sem o número (o urace.us escreve à mão).
-- **O URACE Boost fica de fora** (não está na planilha de preços, dono 15/10, #273), como na /academy/ e no /pro-team/
-  (#508): o "Three ways in" das landings da Academy e do Racing Team fica com dois cartões, "Two ways in".
+- **Preço por chave, nunca escrito.** O "from $719" do Arrive and Drive é a chave `kart` (painel); a Academy, o Boost
+  e o Sim2Grid são as chaves `academy`, `boost` e `sim2grid` e, no texto, as marcas `{academy}`, `{boost_sessao}`…
+  (#525, dono 30/10: *"usa os valores do urace us"*, `conteudo.PRECOS`). O security deposit sai sem o número.
+- **O URACE Boost voltou** (#525, dono 30/10: *"sim volta"*): o "Three ways in" das landings da Academy e do Racing
+  Team tem os três cartões do urace.us.
 - **A reserva é a do site** (dono, 15/10, #262: um caminho só para reservar): a agenda da página de reserva do urace.us
   (kart, dia, Lead and Follow, checkout do WooCommerce) vira o botão para `/services/arrive-and-drive/#reservar`.
 - **O nome é URACE** (o urace.us escreve "URace" nas páginas do Arrive & Drive); citação de avaliação fica como está.
@@ -101,17 +102,18 @@ def horario_da_pista(agenda):
 
 
 def _campos_lp(ctx=None):
-    """Os campos do "Form LP URace" (o formulário da página no urace.us), sem o preço das opções. O horário da pista
-    da opção A sai da agenda do painel (#527)."""
+    """Os campos do "Form LP URace" (o formulário da página no urace.us). O horário da pista da opção A sai da agenda
+    do painel (#527); os preços, das chaves (#525: o kart do painel, a Academy e o Boost do urace.us)."""
+    from command_center.vitrine.blocos import valor
     def radio(nome, valor):
         v = escape(valor, quote=True)
         return f'<label class="opcao"><input type="radio" name="{nome}" value="{v}" required> <span>{v}</span></label>'
     agenda = (ctx or {}).get("agenda")
     pista = horario_da_pista(agenda() if callable(agenda) else agenda)
     opcoes = ("A - I only want to try it and see if it is for me without commitment to continue"
-              + (f" (track sessions: {pista})" if pista else ""),
-              "B - I am new to the sport and I want to join the Academy",
-              "C - I already have experience and I want to join the Racing Team",
+              f" ({valor('kart')}/day" + (f" - track sessions: {pista})" if pista else ")"),
+              f"B - I am new to the sport and I want to join the Academy ({valor('academy')}/mo)",
+              f"C - I already have experience and I want to join the Racing Team ({valor('boost')}/mo +)",
               "D - I don't have the budget for any of the options above (😔In another moment when you are ready we will "
               "be happy to help)")
     experiencia = ("No previous experience", "Recreational karting experience", "Karting school or training experience",
@@ -143,25 +145,28 @@ TEMPORADA = {"tipo": "cartoes", "eyebrow": "This season", "titulo": "On the top 
 AVALIACOES = {"tipo": "depoimentos", "eyebrow": "Google reviews", "rotulo_secao": "Google reviews", "itens": C.AVALIACOES,
               "link": ("Read them all on Google", C.GOOGLE)}
 
-# o Sim2Grid ($1,200 / month) e a Academy ($2,756.90 / month) saem sem o preço: não é o do painel
+# #525: o Sim2Grid e a Academy com o preço do urace.us (as chaves `sim2grid` e `academy`)
 ESCADA = {"tipo": "cartoes", "eyebrow": "Your next step", "titulo": "The ladder keeps going",
           "intro": "Four steps, one team. Your coach tells you when you are ready for the next one.", "itens": [
               {"rotulo": "Opens 1 Nov 2026", "titulo": "Sim2Grid",
-               "texto": "VR motion simulator. Lines, braking points and habits before the kart.",
+               "texto": "VR motion simulator. Lines, braking points and habits before the kart.", "preco": "sim2grid",
                "link": ("See Sim2Grid", "/sim2grid-racing-simulator/")},
               {"titulo": "URACE Academy", "texto": "Four coached sessions a month, kart and equipment included. Month to month.",
-               "link": ("See the Academy", "/academy/")},
+               "preco": "academy", "link": ("See the Academy", "/academy/")},
               {"titulo": "URACE Racing Team", "texto": "Race-team program for regional, national and international grids.",
                "link": ("Talk to the team", "/professional-kart-team-racing-team/")}]}
 
-# a Academy sem o número ($2,756.90 / month); o URACE Boost ($5,000 / 30 days) do urace.us fica de fora: não está na
-# planilha (#273), e a /academy/ e o /pro-team/ também não o oferecem. Com dois cartões, "Two ways in" (era "Three")
+# #525: os três cartões do urace.us de 29/10, com a Academy e o Boost pela chave de preço
 CAMINHOS = {"tipo": "cartoes", "eyebrow": "How we work with competitive drivers",
-            "titulo": "Two ways in, depending on where you are", "itens": [
+            "titulo": "Three ways in, depending on where you are", "itens": [
                 {"titulo": "URACE Academy",
                  "texto": ("Not racing yet? Start here. Four coached sessions a month with kart, full equipment, "
                            "maintenance and a professional coach included. Month to month, no minimum term."),
-                 "link": ("Join URACE Academy", "/academy/")},
+                 "preco": "academy", "link": ("Join URACE Academy", "/academy/")},
+                {"titulo": "URACE Boost",
+                 "texto": ("Eight sessions in 30 days. A standalone intensive month for drivers preparing for a race or a "
+                           "season, at {boost_sessao} a session, our lowest per-session rate. No contract."),
+                 "preco": "boost", "link": ("Talk to our racing team", CONVERSA)},
                 {"titulo": "Race Weekend Support",
                  "texto": ("We run the kart. You drive. Kart preparation and trackside support at the rounds we are "
                            "entered in. Entries, tyres, fuel and consumables are quoted per event.",
@@ -464,7 +469,8 @@ DRIVER_FACTORY = {
                         "and far beyond it.",
                         "**We are the first step toward becoming a professional racing driver.**"],
          "foto": "imagem-segunda-dobra.webp", "alt": "URACE Academy coaching and go-kart racing at Orlando Kart Center"},
-        # "Starting at $719" é o kart do painel; "Programs Starting at $3K/mo" e "$5K/mo" saem (não são do painel)
+        # "Starting at $719" é o kart do painel; "Programs Starting at $3K/mo" e "$5K/mo" são a Academy e o Boost
+        # arredondados em milhar, como o urace.us escreve (#525: as marcas `{academy_k}` e `{boost_k}`)
         {"tipo": "cartoes", "fundo": "escura", "eyebrow": "Where are you in your racing journey?",
          "titulo": "Every driver has a next step.", "itens": [
              {"titulo": "Arrive & Drive", "preco": "kart",
@@ -476,13 +482,13 @@ DRIVER_FACTORY = {
               "texto": ("**Start your development as a racing driver.**",
                         "A structured driver development program for young athletes who want to train, improve and build "
                         "the foundations required for competitive karting — with professional coaching, track experience, "
-                        "evaluation and mentorship."),
+                        "evaluation and mentorship.", "Programs starting at **{academy_k}/mo**"),
               "link": ("Join URACE Academy", "#form")},
              {"titulo": "Racing Team",
               "texto": ("**Already competing? Pursue the next level.**",
                         "Professional support for competitive drivers who want to improve their performance and pursue "
                         "higher levels of motorsport — coaching, race preparation, competition experience and "
-                        "professional guidance."),
+                        "professional guidance.", "Programs starting at **{boost_k}/mo**"),
               "link": ("Talk to our racing team", "#form")}]},
         _fundador("#form", fundo="clara"),
         {"tipo": "passos", "eyebrow": "The URACE driver pathway", "titulo": "Every driver starts somewhere.",

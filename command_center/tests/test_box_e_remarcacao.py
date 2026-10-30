@@ -83,5 +83,5 @@ def test_formulario_das_landings_diz_o_horario_do_painel(cli):
         con.close()
     html = cli.get("/kart-lessons-for-beginners/").text
     opcao = re.search(r'<input type="radio" name="x_option" value="(A - [^"]+)"', html).group(1)
-    assert opcao.endswith("(track sessions: Wednesday 9am–1pm or 1pm–5pm; Saturday and Sunday 9am–1pm)"), opcao
+    assert opcao.endswith(" - track sessions: Wednesday 9am–1pm or 1pm–5pm; Saturday and Sunday 9am–1pm)"), opcao
     assert "7am to 1pm" not in html

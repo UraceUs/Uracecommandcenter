@@ -121,14 +121,14 @@ def test_titulo_e_descricao_nao_se_repetem_com_o_career(cli):
 
 @pytest.mark.parametrize("caminho", CAMINHOS)
 def test_preco_so_do_painel(cli, caminho):
-    """O único valor em dólar das landings é o "a partir de" do kart, e ele é o do painel: o gerente muda no painel e a
-    página muda junto. Academy, Boost, Sim2Grid, depósito e as opções do formulário saem sem número."""
+    """O "a partir de" do kart é o do painel: o gerente muda no painel e a página muda junto. Academy, Boost e Sim2Grid são
+    os do urace.us (#525, `conteudo.PRECOS`), pela chave; o depósito sai sem número."""
     con = conectar(); aplicar_schema(con)
     con.execute("UPDATE booking_services SET price=650 WHERE site_kart IN ('Baby Kart', '4-stroke')")
     con.commit(); con.close()
     texto = re.sub(r"<[^>]+>", " ", _pagina(cli, caminho))
-    assert set(re.findall(r"\$\s?[\d,.]+", texto)) <= {"$650"}, caminho
-    for valor in ("$719", "$400", "$2,756.90", "$2756.90", "$5,000", "$5000", "$1,200", "$625", "$3K", "$5K", "$769"):
+    assert set(re.findall(r"\$\s?[\d,.]+K?", texto)) <= {"$650", "$2,756.90", "$5,000", "$1,200", "$625", "$3K", "$5K"}, caminho
+    for valor in ("$719", "$400", "$2756.90", "$5000", "$769"):
         assert valor not in texto, (caminho, valor)
     if caminho in ("/kart-lessons-for-beginners/", "/kart-driving-school/", "/arrive-and-drive-karting-experience/",
                    "/arrive-and-drive-karting-booking/", "/the-driver-factory/"):
@@ -213,11 +213,15 @@ def test_calendario_do_racing_team_so_mostra_a_prova_que_ainda_vem(cli):
 
 
 @pytest.mark.parametrize("caminho", ["/kart-training-packages/", "/professional-kart-team-racing-team/"])
-def test_o_boost_fica_fora_como_na_academy_e_no_pro_team(cli, caminho):
-    """O urace.us de 29/10 ainda mostra o URACE Boost; ele não está na planilha de preços (dono, 15/10, #273)."""
+def test_o_boost_voltou_como_no_urace_us(cli, caminho):
+    """#525 (dono, 30/10: *"URACE Boost: sim volta"*): os três cartões do urace.us de 29/10, com o preço de lá."""
     html = _pagina(cli, caminho)
-    assert "Boost" not in html and ">Two ways in, depending on where you are</h2>" in html
-    assert "Race Weekend Support" in html and 'href="/academy/"' in html
+    assert ">Three ways in, depending on where you are</h2>" in html
+    titulos = re.findall(r"<h3>([^<]+)</h3>", html.split("Three ways in", 1)[1])[:3]
+    assert titulos == ["URACE Academy", "URACE Boost", "Race Weekend Support"]
+    assert "<strong>$2,756.90</strong><span>/ month</span>" in html and "<strong>$5,000</strong><span>/ 30 days</span>" in html
+    assert "at $625 a session, our lowest per-session rate" in html
+    assert 'href="/academy/"' in html
 
 
 def test_avaliacoes_com_link_para_o_google_e_sem_numero_a_mao(cli):

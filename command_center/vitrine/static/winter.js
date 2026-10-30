@@ -8,7 +8,10 @@
  * - O localizador de categoria: a idade de corrida em 1º de janeiro de 2027 e as classes abertas; a idade e o peso vão
  *   para o formulário, à vista (a pessoa muda se quiser; o que ela digitou lá não é trocado).
  * - O plano: fins de semana, dias de teste dentro da estadia, semanas na Flórida e os avisos (as regras de hoje).
- * - A estimativa: a diária do kart (do painel, no `data-preco` do botão) × os dias de teste. O resto não vira número.
+ * - A estimativa (#525, a conta do urace.us): o dia de teste é a sessão da Academy (ou a do Boost, com 8 dias ou mais)
+ *   na proporção da diária do kart do painel (`data-preco`) para a do 4-stroke; o fim de semana de corrida é o Race
+ *   Weekend Support na proporção para a do 2-stroke, arredondado de 50 em 50; a faixa vai de 0,9× a 1,15× do total.
+ *   As tarifas vêm do formulário (`data-sessao`, `data-boost`, `data-corrida`, `data-base-teste`, `data-base-corrida`).
  * - O link personalizado de hoje (?driver=Nome&from=europe|north|other) continua valendo.
  * Nada se mexe sozinho: só texto e atributos mudam, então prefers-reduced-motion não tem o que desligar aqui. */
 (function () {
@@ -207,8 +210,9 @@
     ul.hidden = !p.avisos.length
   }
 
-  // ------------------------------------------------------------- a estimativa: diária do kart do painel × dias de teste
+  // ------------------------------------------------------------- a estimativa: as tarifas do urace.us × o kart do painel
   var est = $('[data-estimativa]')
+  var tarifa = function (nome) { return est ? parseFloat(est.getAttribute('data-' + nome)) : NaN }
   var karts = est ? $$('[data-kt]', est) : []
   var regua = est && $('[data-testes]', est)
   if (est) {
@@ -244,29 +248,38 @@
       regua.value = String(k)
       $('[data-testes-v]', est).textContent = k
       $('[data-testes-dica]', est).textContent = p.testes
-        ? plural(p.testes, 'testing day falls', 'testing days fall') + ' inside your stay.'
+        ? plural(p.testes, 'testing day falls', 'testing days fall') + ' inside your stay. 8 or more days run at the Boost rate.'
         : 'No testing windows inside your stay yet. Stretch the dates in chapter 05.'
     }
     var kart = kartEscolhido()
     var nome = kart ? kart.getAttribute('data-nome') : ''
     var nota = $('[data-kt-nota]', est)
     if (nota && kart) nota.textContent = kart.getAttribute('data-nota')
-    $('[data-sub-corrida]', est).textContent = plural(p.fins, 'race weekend', 'race weekends') + (nome ? ' · ' + nome : '') +
-      ' · kart prep and trackside support'
-    var linha = $('[data-linha-testes]', est)
     var preco = kart ? parseFloat(kart.getAttribute('data-preco')) : NaN
+    var teste = Math.round((k >= 8 ? tarifa('boost') : tarifa('sessao')) * preco / tarifa('base-teste') * 100) / 100
+    var corrida = Math.round(tarifa('corrida') * preco / tarifa('base-corrida') / 50) * 50
+    var conta = !isNaN(teste) && !isNaN(corrida)
+    $('[data-sub-corrida]', est).textContent = (conta ? p.fins + ' × ~' + usd(corrida) : plural(p.fins, 'race weekend', 'race weekends')) +
+      (nome ? ' · ' + nome : '') + ' · kart prep and trackside support · estimate, quoted per event'
+    if (conta) $('[data-total-corrida]', est).textContent = usd(p.fins * corrida)
+    var linha = $('[data-linha-testes]', est)
     if (linha) {
-      linha.hidden = isNaN(preco)
-      if (!isNaN(preco)) {
-        $('[data-sub-testes]', est).textContent = k + ' × ' + usd(preco) + ' · ' + nome + ' · kart, maintenance, coach'
-        $('[data-total-testes]', est).textContent = usd(k * preco)
+      linha.hidden = !conta
+      if (conta) {
+        $('[data-sub-testes]', est).textContent = k + ' × ' + usd(teste) + ' · ' + nome +
+          (k >= 8 ? ' · Boost rate, 8+ days' : ' · Academy rate') + ' · kart, maintenance, coach'
+        $('[data-total-testes]', est).textContent = usd(k * teste)
       }
     }
     $$('[data-extra-sub]', est).forEach(function (s) {
       s.textContent = (p.extras.indexOf(s.getAttribute('data-extra-sub')) >= 0 ? 'In your plan' : 'Available on request') + s.getAttribute('data-resto')
     })
-    $('[data-total]', est).textContent = isNaN(preco) || !k ? '–' : usd(k * preco)
-    $('[data-total-nota]', est).hidden = !p.fins
+    var total = conta ? p.fins * corrida + k * teste : 0
+    $('[data-total]', est).textContent = total ? usd(Math.round(total)) : '–'
+    $('[data-total-nota]', est).textContent = total
+      ? 'Range ' + usd(Math.floor(total * 0.9 / 100) * 100) + ' – ' + usd(Math.ceil(total * 1.15 / 100) * 100) + ' · URACE services'
+      : 'Pick at least one weekend in chapter 05.'
+
     $('[data-quem]', est).textContent = p.nome + (nome ? ' · ' + nome : '') + ' · ' + plural(p.fins, 'race weekend', 'race weekends') + ' · ' +
       plural(k, 'testing day', 'testing days')
   }

@@ -2057,16 +2057,26 @@ def test_site_winter_localizador_e_estimativa_no_celular(servidor, navegador, la
     assert pg.locator(".winter-classes li.aberta strong").all_inner_texts() == ["Mini Swift", "KA100 Junior", "X30 Junior"]
     assert pg.locator("[data-idade-campo]").input_value() == "12", "a idade vai para o formulário, à vista"
 
-    # a estimativa: 2-stroke (o padrão de 7 anos para cima) × 6 dos 18 dias de teste entre 11/01 e 14/02
+    # a estimativa (#525, a conta do urace.us): 2-stroke (o padrão de 7 anos para cima), 6 dos 18 dias de teste entre
+    # 11/01 e 14/02 à tarifa da Academy e os fins de semana ao Race Weekend Support, na proporção da diária do kart
     usd = lambda v: f"${v:,.0f}" if float(v).is_integer() else f"${v:,.2f}"     # noqa: E731
+    est = pg.locator("[data-estimativa]")
+    t = {k: float(est.get_attribute(f"data-{k}")) for k in ("sessao", "boost", "corrida", "base-teste", "base-corrida")}
+
+    def conta(preco, dias, fins):
+        teste = round((t["boost"] if dias >= 8 else t["sessao"]) * preco / t["base-teste"], 2)
+        return fins * round(t["corrida"] * preco / t["base-corrida"] / 50) * 50 + dias * teste
     kart = pg.locator('[data-kt][aria-pressed="true"]')
     assert kart.get_attribute("data-kt") == "2s"
     preco = float(kart.get_attribute("data-preco"))
     assert pg.locator("[data-n-testes]").inner_text() == "18" and pg.locator("[data-testes-v]").inner_text() == "6"
-    assert pg.locator("[data-total]").inner_text() == usd(6 * preco)
+    fins = int(pg.locator("[data-n-fins]").inner_text())
+    assert fins >= 1 and pg.locator("[data-total]").inner_text() == usd(round(conta(preco, 6, fins)))
+    assert "Academy rate" in pg.locator("[data-sub-testes]").inner_text()
+    assert pg.locator("[data-total-nota]").inner_text().startswith("Range $")
     shifter = pg.locator('[data-kt="shift"]')
     shifter.click()
-    assert pg.locator("[data-total]").inner_text() == usd(6 * float(shifter.get_attribute("data-preco")))
+    assert pg.locator("[data-total]").inner_text() == usd(round(conta(float(shifter.get_attribute("data-preco")), 6, fins)))
     # a volta em 24/01 deixa só a 1ª janela de teste (19–21/01) dentro da estadia
     pg.locator("[data-volta]").select_option(label="Sunday 24 Jan")
     assert pg.locator("[data-testes-v]").inner_text() == "3"
