@@ -1,0 +1,33 @@
+# #529 (dono, 30/10): "monitore o que for alterado lá, muita gente mexe". A cada 3 horas lê a data de alteração das
+# páginas, posts e produtos do urace.us (API pública do WordPress) e, se algo mudou desde o
+# conferido (docs/site-publico/urace-us-conferido.json), abre ou completa a issue "urace.us mudou". Some depois da
+# troca do DNS: aí o urace.us já é o site novo.
+name: Vigia do urace.us
+
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: vigia-urace-us
+  cancel-in-progress: false
+
+jobs:
+  vigiar:
+    name: O que mudou no urace.us
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Comparar com o conferido
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python -m command_center.vitrine.vigia_urace_us
