@@ -475,12 +475,8 @@ NUNCA_DIZER = [
     # 14/10: reabrir conversa antiga com intimidade denuncia o bot.
     ("bom te ver de novo", "não puxar contexto antigo; responder o que perguntou agora"),
     ("good to see you again", "não puxar contexto antigo; responder o que perguntou agora"),
-    # 16/10: o Academy só sai com os valores da planilha do dono ($2,756 / $3,156 sem contrato). O $2,756.90 e o
-    # $1,378.45 vêm de contrato antigo e de invoice, não da tabela: não vão ao lead.
-    ("2,756.90", "Academy: o valor da planilha é $2,756 (sem contrato)"),
-    ("2.756,90", "Academy: o valor da planilha é $2,756 (sem contrato)"),
-    ("3,156.90", "Academy: o valor da planilha é $3,156 (sem contrato)"),
-    ("3.156,90", "Academy: o valor da planilha é $3,156 (sem contrato)"),
+    # 30/10 (#539, dono: "2,756.90"): o Academy sem contrato é $2,756.90 / $3,156.90, como o site e a Rate Card. A
+    # trava de 16/10 (que proibia os 90 centavos) saiu. O $1,378.45 de contrato antigo continua fora da lista do robô.
 ]
 
 # ---------------------------------------------------------------- cadência

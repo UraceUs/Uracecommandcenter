@@ -242,8 +242,11 @@ AVISO_KART_PROPRIO = ("Your kart must arrive at the track at least 2 days before
 # contrato ($689.23 a sessão = mensal ÷ 4); o Boost são 8 sessões em 30 dias a $625; o Sim2Grid é o mensal de
 # lançamento; o Race Weekend Support (2-stroke) é a base da estimativa da /winter/. O painel não tem esses planos à
 # venda (venderiam online): o site usa estes números até existirem lá (`paginas_site._preco_plano`).
+# #539 (dono, 30/10: "siga o valor que estiver no urace.us"): o "What it will cost" do Sim2Grid na Programs de lá
+# (o programa de 12 horas com coach a $100 a hora, a hora com coach e a hora sozinho). A reserva do SIM2GRID continua
+# com as faixas do painel, que são as da página do Sim2Grid no urace.us.
 PRECOS = {"academy": 2756.90, "academy_sessao": 689.23, "boost": 5000, "boost_sessao": 625, "sim2grid": 1200,
-          "race_weekend": 4500}
+          "sim2grid_programa_hora": 100, "sim2grid_coach": 150, "sim2grid_hora": 60, "race_weekend": 4500}
 
 # #279 (dono, 15/10): "o lead and follow é um add on que pode ser adicionado no dia de treino … somente o de 769
 # por dia de treino". É um serviço do painel (preço do painel, #50) ligado por esta chave, como os karts.

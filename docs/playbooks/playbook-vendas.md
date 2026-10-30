@@ -851,10 +851,9 @@ Preço, sempre da **planilha de preços** do dono (15/10, #273). A taxa de pista
   2 stroke $819 · Adult Shifter $899.
 - **Lead and Follow** é um **add-on do dia de treino** — Arrive and Drive ou Academy — e no site vale só
   **$769 por dia de treino** (dono, 15/10). O pacote de 5 e o last-minute não são oferecidos no site.
-- **Academy, mensal sem contrato (4 sessões)**: Baby Kart e 4 stroke **$2.756** ($689 a sessão) · 2 stroke
-  **$3.156** ($789) · kart próprio $1.800 ($450 a sessão extra) · kart próprio + mecânico $1.200 ($300). É o que a
-  `/academy/` e o robô de vendas falam. O About, o Racing Team e as landings mostram **$2.756,90**, como o urace.us
-  (#525): o dono decide se a `/academy/` e o robô passam aos 90 centavos.
+- **Academy, mensal sem contrato (4 sessões)**: Baby Kart e 4 stroke **$2.756,90** ($689,23 a sessão) · 2 stroke
+  **$3.156,90** ($789,23) · kart próprio $1.800 ($450 a sessão extra) · kart próprio + mecânico $1.200 ($300). Os 90
+  centavos são os da Rate Card e do urace.us (#525, dono 30/10: *"usa os valores do urace us"*).
 - **Contrato de 6 meses** (27 sessões, 4%, entrada de 33% e 5 parcelas): 4 stroke **$17.858,88**
   (entrada $5.893,43, parcelas de $2.393,09) · 2 stroke **$20.450,88** ($6.748,79 e 5 × $2.740,42).
 - **Contrato de 12 meses** (54 sessões, 8%, entrada de 20% e 11 parcelas): 4 stroke **$34.229,52**
@@ -862,11 +861,15 @@ Preço, sempre da **planilha de preços** do dono (15/10, #273). A taxa de pista
 - **Fora do OKC**: Academy +$250 (hotel, comida e transporte).
 
 - **URACE Boost** (#525, dono 30/10: *"sim volta"*): **8 sessões em 30 dias, $5.000** ($625 a sessão, a menor), sem
-  contrato, para quem prepara uma corrida ou uma temporada. Está no Racing Team e nas landings (na `/academy/` e no
-  robô, só quando o dono decidir).
+  contrato, para quem prepara uma corrida ou uma temporada. Está na Academy, no Racing Team e nas landings.
 - **Sim2Grid, programas mensais** (com coach, sessões de 2 h): 3 por semana **$1.800** · 2 por semana **$1.360** ·
-  1 por semana **$760**, como no urace.us. Na About e nas landings, o Sim2Grid aparece "a partir de" **$1.200 / mês**
-  (o valor de lançamento que o urace.us mostra nessas páginas).
+  1 por semana **$760**, como no urace.us. Na About, nas landings e na página de programas (`/services/`), o Sim2Grid
+  aparece como o urace.us mostra nessas páginas (#539, dono 30/10: *"siga o valor que estiver no urace.us"*): **$1.200 /
+  mês** (12 horas com coach, $100 a hora), **Coached Hour $150** e **Sim Time $60 a hora**. A reserva da página do
+  SIM2GRID usa as faixas do painel (sem coach a partir de $50; com coach $125–$150), as mesmas da página do Sim2Grid no
+  urace.us.
+- **Robô de vendas** (#539, dono 30/10: *"2,756.90"*): fala os mesmos planos da `/academy/`: o mensal com os 90
+  centavos, os contratos e o Boost. A trava de 16/10 que proibia o $2.756,90 saiu.
 - **Race Weekend Support**: no site é "Let's talk · per event". A estimativa da `/winter/` usa ~$4.500 por fim de
   semana (2-stroke) só como conta aproximada, igual ao urace.us; o preço de verdade é cotado por evento.
 

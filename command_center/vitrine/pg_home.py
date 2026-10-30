@@ -6,9 +6,9 @@ O que fica diferente, de propósito:
 
 - **preço por chave, nunca escrito**: o "From $719" do Arrive and Drive é a chave `kart` (painel); o "$1,200 / month" do
   Sim2Grid e o "$2,756.90 / month" da Academy (About) são as chaves `sim2grid` e `academy` (#525, `conteudo.PRECOS`,
-  os valores do urace.us). Na Programs,
-  o "What it will cost" do Sim2Grid são os programas do painel (Site › Cartões das páginas, `sim2grid`); os outros
-  valores de lá (taxas, depósito, passes da pista) não têm fonte no painel e ficam de fora;
+  os valores do urace.us). Na Programs, o "What it will cost" do Sim2Grid é o de lá (#539: o programa, a hora com coach
+  e a hora sozinho, chaves `sim2grid`, `sim2grid_coach` e `sim2grid_hora`); os outros valores de lá (taxas, depósito,
+  passes da pista) não têm fonte no painel e ficam de fora;
 - as avaliações do Google são as de `conteudo.AVALIACOES` (#508, o texto e o nome como estão lá), com o link para todas;
   a nota e o número de avaliações ("4.9", "38 reviews") não se escrevem à mão: ficam velhos;
 - os três vídeos de "Straight from the paddock" (#526) saem do próprio site (static/video, comprimidos), não do WordPress;
@@ -297,8 +297,21 @@ PROGRAMS = {
                                               "to the Racing Team.",
                                               "A kart day depends on the circuit’s hours, the forecast and a driver pass. "
                                               "This step depends on nothing but you showing up."))]},
-        # "What it will cost": os programas do Sim2Grid com o preço do painel (o de lá não bate com o painel)
-        {"tipo": "cartoes_painel", "pagina": "sim2grid", "eyebrow": "What it will cost", "ancora": "sim-2-grid-cost"},
+        # "What it will cost": o texto e os preços do urace.us (#539, dono 30/10: "siga o valor que estiver no urace.us")
+        {"tipo": "cartoes", "fundo": "escura", "eyebrow": "What it will cost", "ancora": "sim-2-grid-cost",
+         "intro": "Launch pricing, from 1 November 2026.", "itens": [
+             {"titulo": "URACE Sim2Grid", "preco": "sim2grid",
+              "texto": ("This is the step. Twelve coached hours a month with the same coach, a plan behind them, and your "
+                        "data reviewed between sessions. That works out at {sim2grid_programa_hora} an hour against "
+                        "{sim2grid_coach} for a one-off, so the programme is a third cheaper than buying hours as you go. "
+                        "Month to month, thirty days’ notice to stop.")},
+             {"titulo": "Coached Hour", "preco": "sim2grid_coach",
+              "texto": ("One hour with a URACE coach beside you. We set the car up, watch your inputs live and tell you what "
+                        "to change while you are still driving. You leave with one thing to fix and the laps that prove "
+                        "it worked.")},
+             {"titulo": "Sim Time", "preco": "sim2grid_hora",
+              "texto": ("The rig, a circuit, and you. No coach, no programme. The cheapest hour in the building, and the one "
+                        "our own drivers use to put the work in between lessons.")}]},
         # Arrive and Drive
         {"tipo": "texto", "ancora": "driving-experience", "titulo": "Arrive and Drive",
          "paragrafos": ["Are you visiting Orlando and looking for something more exciting than the go karts at Magic "
