@@ -436,11 +436,12 @@ def test_precos_do_site_batem_com_a_rate_card(cli):
     assert "$395" not in arrive and "$245" not in arrive
     academy = cli.get("/academy/").text
     # #273: a planilha do dono — 4 stroke/Baby Kart e 2 stroke com preço próprio, contratos de 6 e 12 meses
-    for valor in ("$2,756", "$3,156", "$17,858.88", "$34,229.52", "$20,450.88", "$39,197.52", "$1,800", "$1,200",
+    for valor in ("$2,756.90", "$3,156.90", "$17,858.88", "$34,229.52", "$20,450.88", "$39,197.52", "$1,800", "$1,200",
                   "$769 per training day", "extra $250"):
         assert valor in academy, valor
-    # #525: a /academy/ segue a planilha que o robô de vendas fala (o $2,756.90 e o Boost esperam o dono decidir o robô)
-    for velho in ("$2,756.90", "$2,688.43", "$2,619.06", "URACE Boost", "3 Months"):
+    # #525 (dono, 30/10): o Boost volta, com o preço do urace.us; o resto que a planilha tirou continua fora
+    assert "URACE Boost · $625 per session" in academy and "<strong>$5,000</strong>" in academy
+    for velho in ("$2,688.43", "$2,619.06", "3 Months"):
         assert velho not in academy, velho
 
 
@@ -456,7 +457,7 @@ def test_planos_da_academy_batem_com_a_conta_da_planilha():
     grupos = dict(conteudo_paginas.ACADEMY["planos_grupos"])
     for titulo, sessao in (("4-stroke and Baby Kart · $689 per session", 689), ("2-stroke · $789 per session", 789)):
         cards = {n: (t, pr) for n, _, t, pr, _ in grupos[titulo]}
-        assert cards["No contract"][1] == f"${4 * sessao:,}"
+        assert cards["No contract"][1] == f"${4 * sessao:,}.90", "#525: o mensal da Rate Card, com os 90 centavos"
         for nome, n, desc, entrada, parcelas in (("6-month contract", 27, 0.04, 0.33, 5), ("12-month contract", 54, 0.08, 0.20, 11)):
             total = round(n * sessao * (1 - desc), 2)
             sinal = round(total * entrada, 2)
@@ -467,8 +468,9 @@ def test_planos_da_academy_batem_com_a_conta_da_planilha():
             assert usd(n * sessao) in texto and usd(sinal) in texto and usd(total) in texto, (titulo, nome, texto)
             por = next(p for nm, _, _, _, p in grupos[titulo] if nm == nome)
             assert por == f"per month · contract total {usd(total)} · you save {usd(n * sessao - total)} ({round(desc * 100)}% off)"
-    for _, cards in grupos.items():
-        assert all(por.startswith("per month") for *_, por in cards), "todo cartão da Academy mostra o valor do mês"
+    for g, cards in grupos.items():
+        if not g.startswith("URACE Boost"):        # #525: o Boost é por 30 dias
+            assert all(por.startswith("per month") for *_, por in cards), "todo cartão da Academy mostra o valor do mês"
 
 
 def test_cartao_de_contrato_ja_gravado_passa_ao_valor_do_mes_sem_mexer_no_editado(tmp_path, monkeypatch):
