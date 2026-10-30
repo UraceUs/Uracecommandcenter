@@ -361,21 +361,23 @@ def test_preco_de_servico_vem_do_sistema_e_nao_do_texto(cli):
     # #507: a Programs do urace.us de 29/10 não mostra o preço do kart (a home mostra, na escada)
     for c in ("/", "/for-beginners/", "/services/birthday-party/"):
         assert minimo in cli.get(c).text, c
-    # #507: a home e a About de lá têm "$1,200 / month" (Sim2Grid) e "$2,756.90 / month" (Academy), que o painel não tem
+    # #525: a Academy, o Boost e o Sim2Grid são os do urace.us (`conteudo.PRECOS`), pela chave; o que nem o painel nem
+    # o urace.us confirmam continua fora
     for c in ("/", "/about/", "/services/", "/for-beginners/", "/career/", "/pro-team/"):
         html = cli.get(c).text
-        for valor in ("$2,619.06", "$2,756.90", "$5,000", "$5K", "$3K", "$1,200", "$60 "):
+        for valor in ("$2,619.06", "$5K", "$3K", "$60 "):
             assert valor not in html, (c, valor)
+    pro = cli.get("/pro-team/").text
+    assert "<strong>$2,756.90</strong>" in pro and "<strong>$5,000</strong>" in pro, "sem plano no painel, o do urace.us"
     # com os planos no painel, o Pro Team mostra o preço deles
     from command_center.providers import servicos_site
     con = conectar(); aplicar_schema(con)
-    servicos_site.criar(con, None, {"name": "Academy 1 month", "price": 2756.9, "kind": "plan", "months": 1, "sessions_month": 4})
-    servicos_site.criar(con, None, {"name": "URACE Boost", "price": 5000, "kind": "plan", "months": 1, "sessions_month": 8})
+    servicos_site.criar(con, None, {"name": "Academy 1 month", "price": 2800, "kind": "plan", "months": 1, "sessions_month": 4})
+    servicos_site.criar(con, None, {"name": "URACE Boost", "price": 5200, "kind": "plan", "months": 1, "sessions_month": 8})
     con.commit()
     html = cli.get("/pro-team/").text
-    assert "<strong>$2,756.90</strong>" in html
-    # #273: o URACE Boost não está na planilha de preços do dono, então o Pro Team não o oferece mais
-    assert "URACE Boost" not in html and "<strong>$5,000</strong>" not in html
+    # #525: o Boost voltou; com plano no painel, o preço é o do painel (ele manda sobre o do urace.us)
+    assert "<strong>$2,800</strong>" in html and "URACE Boost" in html and "<strong>$5,200</strong>" in html
 
 
 # ------------------------------------------------------------------ #254: os dois programas que se fundiram
@@ -433,10 +435,12 @@ def test_precos_do_site_batem_com_a_rate_card(cli):
     assert "$395" not in arrive and "$245" not in arrive
     academy = cli.get("/academy/").text
     # #273: a planilha do dono — 4 stroke/Baby Kart e 2 stroke com preço próprio, contratos de 6 e 12 meses
-    for valor in ("$2,756", "$3,156", "$17,858.88", "$34,229.52", "$20,450.88", "$39,197.52", "$1,800", "$1,200",
+    for valor in ("$2,756.90", "$3,156.90", "$17,858.88", "$34,229.52", "$20,450.88", "$39,197.52", "$1,800", "$1,200",
                   "$769 per training day", "extra $250"):
         assert valor in academy, valor
-    for velho in ("$2,756.90", "$2,688.43", "$2,619.06", "$5,000", "URACE Boost", "3 Months"):
+    # #525 (dono, 30/10): o Boost volta, com o preço do urace.us; o resto que a planilha tirou continua fora
+    assert "URACE Boost · $625 per session" in academy and "<strong>$5,000</strong>" in academy
+    for velho in ("$2,688.43", "$2,619.06", "3 Months"):
         assert velho not in academy, velho
 
 
@@ -452,7 +456,7 @@ def test_planos_da_academy_batem_com_a_conta_da_planilha():
     grupos = dict(conteudo_paginas.ACADEMY["planos_grupos"])
     for titulo, sessao in (("4-stroke and Baby Kart · $689 per session", 689), ("2-stroke · $789 per session", 789)):
         cards = {n: (t, pr) for n, _, t, pr, _ in grupos[titulo]}
-        assert cards["No contract"][1] == f"${4 * sessao:,}"
+        assert cards["No contract"][1] == f"${4 * sessao:,}.90", "#525: o mensal da Rate Card, com os 90 centavos"
         for nome, n, desc, entrada, parcelas in (("6-month contract", 27, 0.04, 0.33, 5), ("12-month contract", 54, 0.08, 0.20, 11)):
             total = round(n * sessao * (1 - desc), 2)
             sinal = round(total * entrada, 2)
@@ -463,8 +467,9 @@ def test_planos_da_academy_batem_com_a_conta_da_planilha():
             assert usd(n * sessao) in texto and usd(sinal) in texto and usd(total) in texto, (titulo, nome, texto)
             por = next(p for nm, _, _, _, p in grupos[titulo] if nm == nome)
             assert por == f"per month · contract total {usd(total)} · you save {usd(n * sessao - total)} ({round(desc * 100)}% off)"
-    for _, cards in grupos.items():
-        assert all(por.startswith("per month") for *_, por in cards), "todo cartão da Academy mostra o valor do mês"
+    for g, cards in grupos.items():
+        if not g.startswith("URACE Boost"):        # #525: o Boost é por 30 dias
+            assert all(por.startswith("per month") for *_, por in cards), "todo cartão da Academy mostra o valor do mês"
 
 
 def test_cartao_de_contrato_ja_gravado_passa_ao_valor_do_mes_sem_mexer_no_editado(tmp_path, monkeypatch):

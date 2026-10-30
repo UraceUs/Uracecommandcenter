@@ -1135,6 +1135,10 @@ mexer, a página sai igual à de antes, byte a byte.
 - **Texto órfão**: se a página do código mudar o texto que foi trocado (o time mudou o site), a troca não entra mais (o
   site mostra o texto novo do código) e vira pendência **"texto(s) órfão(s)"**. Em **Página**, **Descartar os textos
   órfãos** tira a troca; escreva de novo, se quiser, no texto novo.
+- **Preço dos programas** (#525): a Academy, o Boost e o Sim2Grid das páginas do código saem de `conteudo.PRECOS` (os
+  valores do urace.us que o dono mandou usar em 30/10), por chave e por marca (`{academy}`, `{boost_sessao}`…), nunca
+  escritos. Mudou um desses preços? Troque em `PRECOS` (e a Rate Card); os cartões do painel (Cartões das páginas)
+  mudam no painel. Com um plano à venda no painel, o Racing Team mostra o preço do plano.
 - **Preço só do painel**: um texto escrito com preço (`$99`, `US$ 99`, `USD 99`, `99 dollars`), numa faixa original ou
   num título, texto, botão, lista ou pergunta, salva no rascunho mas vira pendência: *"O preço vem de Serviços e preços /
   Loja; escreva sem o valor"*. Os karts, produtos e cartões que mostram o preço do painel não contam.

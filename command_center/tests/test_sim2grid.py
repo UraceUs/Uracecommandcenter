@@ -77,8 +77,9 @@ def test_a_semente_da_lp_entra_uma_vez_e_o_que_a_equipe_muda_fica(sim):
     cfg = sim2grid.config(con)
     assert (cfg["capacity"], cfg["min_hours"], cfg["online"], cfg["waiver_required"], cfg["min_age"]) == (5, 1, 1, 1, None)
     planos = todos(con, "SELECT title, price, per FROM site_offers WHERE page='sim2grid' ORDER BY sort")
-    assert [(p["title"], p["price"]) for p in planos] == [("3 sessions per week", "$1,800"), ("2 sessions per week", "$1,500"),
-                                                          ("1 session per week", "$900")]
+    # #525 (dono, 30/10: "use o que está no urace.us")
+    assert [(p["title"], p["price"]) for p in planos] == [("3 sessions per week", "$1,800"), ("2 sessions per week", "$1,360"),
+                                                          ("1 session per week", "$760")]
     # a equipe muda; a próxima subida não desfaz nem duplica
     f = next(x for x in sim2grid.faixas(con) if x["seed_key"] == "solo:semana:dia")
     sim2grid.mudar_faixa(con, None, f["id"], {"price": 55})

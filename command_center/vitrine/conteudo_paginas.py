@@ -28,6 +28,8 @@ FECHO_PROXIMO = ("Every driver has a next step. Let's find yours.",
 # ------------------------------------------------------------------ Academy (urace.us/urace-academy/ + /services/)
 # #254 (dono, 15/10): *"o kart school se tornou Urace academy"* — o texto que fazia sentido da página
 # /services/kart-school/ entrou aqui, e aquele endereço virou 301 para esta página.
+ORDEM_DO_BOOST = 50        # #525: no painel, o cartão do Boost vem depois do grupo do 4 stroke (0–20)
+
 ACADEMY = {
     "caminho": "/academy/",
     # #506: /kart-training-packages/ e /kart-driving-school/ são landings próprias de novo (pg_landings.py)
@@ -61,6 +63,10 @@ ACADEMY = {
     # Kart) e para 2 stroke — "veja que tem academy para 4t e 2t". As contas batem com 4 × sessão,
     # 27 × sessão × 0,96 e 54 × sessão × 0,92, com entrada de 33% / 20% (test_vitrine trava). Saíram
     # 3 Months, 6 Months a 5% e o URACE Boost: não estão na planilha.
+    # #525 (dono, 30/10: *"usa os valores do urace us"*; *"URACE Boost: sim volta"*): o mensal sem contrato é o da
+    # Rate Card e do urace.us, com os 90 centavos ($2,756.90 e $3,156.90; a planilha os perdia na célula); os contratos
+    # continuam na conta da sessão de $689 / $789. O Boost volta, como no urace.us de 29/10 (o grupo entra no painel
+    # pela chave `academy:3:0`, depois do 4 stroke: `ORDEM_DO_BOOST`).
     # #390 (dono, 22/10: *"o texto maior seja sempre o valor do mes nao o total pois o total pode assustar"*): no
     # contrato, o preço grande é a parcela do mês; embaixo dele, o total e quanto economiza (dono: "o texto abaixo do
     # valor explicando o total a quantidade de desconto"); a entrada fica no texto.
@@ -69,7 +75,7 @@ ACADEMY = {
         ("4-stroke and Baby Kart · $689 per session", (
             ("No contract", "4 sessions a month",
              "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
-             "time with thirty days written notice. Additional sessions $689 each.", "$2,756", "per month"),
+             "time with thirty days written notice. Additional sessions $689 each.", "$2,756.90", "per month"),
             ("6-month contract", "27 sessions · 4% off",
              "$5,893.43 at signing (33%), then 5 monthly installments of $2,393.09. Contract total $17,858.88 "
              "(regular value $18,603.00). Recurring billing.", "$2,393.09",
@@ -81,7 +87,7 @@ ACADEMY = {
         ("2-stroke · $789 per session", (
             ("No contract", "4 sessions a month",
              "Kart, full safety equipment, maintenance and a professional coach included. No minimum term — cancel any "
-             "time with thirty days written notice. Additional sessions $789 each.", "$3,156", "per month"),
+             "time with thirty days written notice. Additional sessions $789 each.", "$3,156.90", "per month"),
             ("6-month contract", "27 sessions · 4% off",
              "$6,748.79 at signing (33%), then 5 monthly installments of $2,740.42. Contract total $20,450.88 "
              "(regular value $21,303.00). Recurring billing.", "$2,740.42",
@@ -97,6 +103,10 @@ ACADEMY = {
             ("Your kart and your mechanic", "4 sessions a month",
              "You bring the kart and your mechanic; we bring the coaching and the track day. Additional sessions $300 each.",
              "$1,200", "per month"))),
+        ("URACE Boost · $625 per session", (
+            ("Boost", "8 sessions in 30 days",
+             "Eight sessions in 30 days for faster progression, at $625 a session, our lowest per-session rate. Built for "
+             "a race or a season ahead. No contract.", "$5,000", "per 30 days"),)),
     ),
     # #508: a página de hoje do urace.us é curta; o que é informação prática da página antiga (o que o plano inclui, o
     # que trazer e como entrar) fica aqui, na FAQ
@@ -200,10 +210,14 @@ PRO_TEAM = {
     "mais_titulo": MAIS_TITULO,
     "mais": MAIS,
     "opcoes_titulo": "How we work with competitive drivers",
-    "opcoes_sub": "Two ways in, depending on where the driver is today.",
+    "opcoes_sub": "Three ways in, depending on where the driver is today.",
     # (nome, sub, texto, preço, por, link): o preço "academy"/"boost" é o do plano no painel; sem plano, sem preço
+    # #525: o Boost volta (urace.us de 29/10). Entra no fim (a chave do painel é a posição: `pro-team:2`) e aparece
+    # entre a Academy e o Race Weekend Support pela ordem (`ordem`, a mesma no painel)
     "opcoes": (("URACE Academy", "Not racing yet? Start here.", "Four coached sessions a month with kart, full equipment, maintenance and a professional coach included. Month to month, no minimum term.", "academy", "Per month", "/academy/"),
-               ("Race Weekend Support", "We run the kart. You drive.", "Kart preparation and trackside support at the rounds we are entered in. Race entries, tyres, fuel and consumables are quoted per event and are not part of the fee.", "Let’s talk", "Per event", CONTATO)),
+               ("Race Weekend Support", "We run the kart. You drive.", "Kart preparation and trackside support at the rounds we are entered in. Race entries, tyres, fuel and consumables are quoted per event and are not part of the fee.", "Let’s talk", "Per event", CONTATO),
+               ("URACE Boost", "Eight sessions in 30 days.", "A standalone intensive month for drivers preparing for a race or a season, at $625 a session, our lowest per-session rate. No contract.", "boost", "Per 30 days", CONTATO)),
+    "ordem": (0, 10, 5),
     # #508: como no urace.us de 29/10. A prova que já passou sai sozinha da lista (paginas_site._proximas)
     "calendario_rotulo": "Where we are racing",
     "calendario_titulo": "Next rounds on the calendar",

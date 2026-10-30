@@ -831,12 +831,14 @@ def _cartoes_das_paginas():
     linhas = []
     for gi, (grupo, cards) in enumerate(P.ACADEMY["planos_grupos"]):
         for ci, (n, s, t, pr, por) in enumerate(cards):
+            # #525: o Boost (o último grupo, para a chave dos outros não mudar) aparece logo depois do 4 stroke
+            ordem = P.ORDEM_DO_BOOST if grupo.startswith("URACE Boost") else gi * 100 + ci * 10
             linhas.append((f"academy:{gi}:{ci}", "academy", grupo, n, s, t, pr, por,
                            f"/contact/?assunto=academy&produto={quote(grupo.split(' · ')[0] + ' — ' + n)}", "Choose",
-                           gi * 100 + ci * 10))
+                           ordem))
     for i, (n, s, t, pr, por, h) in enumerate(P.PRO_TEAM["opcoes"]):
         linhas.append((f"pro-team:{i}", "pro-team", None, n, s, t, {"academy": "{academy}", "boost": "{boost}"}.get(pr, pr),
-                       por, h, "Choose", i * 10))
+                       por, h, "Choose", P.PRO_TEAM["ordem"][i]))
     for i, (n, s, t, pr, h, b) in enumerate(P.BEGINNERS["proximo"]):
         linhas.append((f"for-beginners:{i}", "for-beginners", None, n, s, t, "{kart}" if pr == "kart" else (pr or None),
                        "Starting at" if pr == "kart" else None, h, b, i * 10))
@@ -870,6 +872,20 @@ def _academy_valor_do_mes():
         yield (f"UPDATE site_offers SET price='{parcela}', per='{por}' "
                f"WHERE seed_key='{chave}' AND price='{total}' AND COALESCE(per,'')='contract total'")
         yield f"UPDATE site_offers SET body='{novo}' WHERE seed_key='{chave}' AND body='{antigo}'"
+
+
+def _precos_do_urace_us():
+    """#525 (dono, 30/10: *"usa os valores do urace us"*): o cartão que ainda tem o preço de fábrica antigo passa ao do
+    urace.us — o mensal da Academy com os 90 centavos e os programas do SIM2GRID. Cartão que alguém editou fica."""
+    from command_center.vitrine import conteudo_sim2grid as SG
+
+    def q(v):
+        return "'" + str(v).replace("'", "''") + "'"
+    for chave, antes, depois in (("academy:0:0", "$2,756", "$2,756.90"), ("academy:1:0", "$3,156", "$3,156.90")):
+        yield f"UPDATE site_offers SET price={q(depois)} WHERE seed_key={q(chave)} AND price={q(antes)}"
+    for i, ((_, _, texto, preco, _), antes) in enumerate(zip(SG.PLANOS, SG.PLANOS_ANTES)):
+        yield f"UPDATE site_offers SET price={q(preco)} WHERE seed_key='sim2grid:{i}' AND price={q(antes)}"
+        yield f"UPDATE site_offers SET body={q(texto)} WHERE seed_key='sim2grid:{i}' AND body={q(SG.PLANOS_TEXTO)}"
 
 
 # ------------------------------------------------------------ o SIM2GRID (#392)
@@ -1012,6 +1028,7 @@ POS_MIGRACAO = [
     *_cartoes_das_paginas(),
     *_academy_valor_do_mes(),     # #390: depois da semente, para o cartão recém-criado já nascer certo
     *_semente_do_sim2grid(),      # #392: os formatos, as faixas, as regras e os programas da LP, uma vez
+    *_precos_do_urace_us(),       # #525: depois das sementes, o preço de fábrica que mudou (só o que ninguém mexeu)
     # #317: a caixa "Security deposit obrigatório" nasce marcada em toda sessão que já cobra depósito (os karts do
     # site, com US$ 400). Só toca quem ainda não decidiu (NULL): o que o gerente desmarcar continua desmarcado.
     """UPDATE booking_services SET deposit_required =

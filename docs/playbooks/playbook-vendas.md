@@ -851,15 +851,24 @@ Preço, sempre da **planilha de preços** do dono (15/10, #273). A taxa de pista
   2 stroke $819 · Adult Shifter $899.
 - **Lead and Follow** é um **add-on do dia de treino** — Arrive and Drive ou Academy — e no site vale só
   **$769 por dia de treino** (dono, 15/10). O pacote de 5 e o last-minute não são oferecidos no site.
-- **Academy, mensal sem contrato (4 sessões)**: Baby Kart e 4 stroke **$2.756** ($689 a sessão) · 2 stroke
-  **$3.156** ($789) · kart próprio $1.800 ($450 a sessão extra) · kart próprio + mecânico $1.200 ($300).
+- **Academy, mensal sem contrato (4 sessões)**: Baby Kart e 4 stroke **$2.756,90** ($689,23 a sessão) · 2 stroke
+  **$3.156,90** ($789,23) · kart próprio $1.800 ($450 a sessão extra) · kart próprio + mecânico $1.200 ($300). Os 90
+  centavos são os da Rate Card e do urace.us (#525, dono 30/10: *"usa os valores do urace us"*).
 - **Contrato de 6 meses** (27 sessões, 4%, entrada de 33% e 5 parcelas): 4 stroke **$17.858,88**
   (entrada $5.893,43, parcelas de $2.393,09) · 2 stroke **$20.450,88** ($6.748,79 e 5 × $2.740,42).
 - **Contrato de 12 meses** (54 sessões, 8%, entrada de 20% e 11 parcelas): 4 stroke **$34.229,52**
   (entrada $6.845,90, parcelas de $2.489,42) · 2 stroke **$39.197,52** ($7.839,50 e 11 × $2.850,73).
 - **Fora do OKC**: Academy +$250 (hotel, comida e transporte).
 
-Os planos de 3 meses, o de 6 meses a 5% e o **URACE Boost** saíram do site: não estão na planilha.
+- **URACE Boost** (#525, dono 30/10: *"sim volta"*): **8 sessões em 30 dias, $5.000** ($625 a sessão, a menor), sem
+  contrato, para quem prepara uma corrida ou uma temporada. Está na Academy, no Racing Team e nas landings.
+- **Sim2Grid, programas mensais** (com coach, sessões de 2 h): 3 por semana **$1.800** · 2 por semana **$1.360** ·
+  1 por semana **$760**, como no urace.us. Na About e nas landings, o Sim2Grid aparece "a partir de" **$1.200 / mês**
+  (o valor de lançamento que o urace.us mostra nessas páginas).
+- **Race Weekend Support**: no site é "Let's talk · per event". A estimativa da `/winter/` usa ~$4.500 por fim de
+  semana (2-stroke) só como conta aproximada, igual ao urace.us; o preço de verdade é cotado por evento.
+
+Os planos de 3 meses e o de 6 meses a 5% saíram do site: não estão na planilha.
 
 **Landings de campanha (#506, dono 29/10: *"sim, pode trazer o texto"*):** os endereços que a home e os anúncios do
 urace.us usam abrem no site novo com o texto de lá, e o formulário de cada uma entra em **Vendas** (origem Site, com
@@ -875,8 +884,9 @@ a campanha), no serviço da página. As respostas do formulário ficam na nota d
 
 A **opção** é o que pesa: A é Arrive and Drive, B é Academy, C é Racing Team — mesmo quando o serviço da
 oportunidade é o da página. `/arrive-and-drive-karting-booking/` não tem formulário: o botão leva à reserva do site
-(`/services/arrive-and-drive/#reservar`). O **URACE Boost** que o urace.us ainda mostra nas landings da Academy e do
-Racing Team fica de fora no site novo, como na `/academy/` e no `/pro-team/`: não está na planilha (#273).
+(`/services/arrive-and-drive/#reservar`). Desde 30/10 (#525) as opções do formulário trazem o preço, como no urace.us:
+A (kart, por dia, e os horários de pista da agenda do painel), B (Academy, por mês) e C (Racing Team, a partir do Boost).
+O **URACE Boost** está no "Three ways in" das landings da Academy e do Racing Team.
 
 **Na reserva do site** (#279, dono 15/10):
 - **Lead and Follow** é uma caixinha ao lado do kart: *Add Lead and Follow (+$769)*. Vai para o carrinho

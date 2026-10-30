@@ -359,12 +359,12 @@ def academy(host, planos=None, cartoes=None):
 
 def _preco_plano(planos, qual):
     """O preço por mês do plano do painel: "boost" (o de um mês com boost no nome) ou "academy" (o
-    mensal de um mês, ou o de menos meses). Sem plano cadastrado, sem preço."""
+    mensal de um mês, ou o de menos meses). Sem plano cadastrado, o do urace.us (`conteudo.PRECOS`, #525)."""
     boost = [p for p in planos or () if p["months"] == 1 and "boost" in p["name"].lower()]
     if qual == "boost":
-        return usd(boost[0]["price"]) if boost else ""
+        return usd(boost[0]["price"] if boost else C.PRECOS["boost"])
     outros = sorted((p for p in planos or () if p not in boost), key=lambda p: p["months"])
-    return usd(outros[0]["price"]) if outros else ""
+    return usd(outros[0]["price"] if outros else C.PRECOS["academy"])
 
 
 def _ultimo_dia(quando):
@@ -406,7 +406,7 @@ def pro_team(host, planos=None, cartoes=None):
     # #297: as opções são os cartões do painel, quando há; {academy}/{boost} no preço viram o plano do painel
     opcoes = ([c[:7] for c in _dos_cartoes(cartoes, planos)] if cartoes else
               [(n, s, t, _preco_plano(planos, pr) if pr in ("academy", "boost") else pr, por, h)
-               for n, s, t, pr, por, h in d["opcoes"]])
+               for _o, (n, s, t, pr, por, h) in sorted(zip(d["ordem"], d["opcoes"]), key=lambda x: x[0])])
     suporte = "".join(f"<article class='cartao'><h3>{e(t)}</h3>{f'<p>{e(p)}</p>' if p else ''}</article>" for t, p in d['suporte'])
     corpo = f"""{_hero(d)}
 <section class="faixa clara" aria-labelledby="h-metodo"><div class="largura estreita"><h2 id="h-metodo">{e(d['suporte_titulo'])}</h2><p>{e(d['metodo'])}</p>

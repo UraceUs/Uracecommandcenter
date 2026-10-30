@@ -7,9 +7,11 @@ Dono, 29/10: *"sim, pode trazer o texto e recriar a winter"*. O texto é o da p�
 - os três vídeos curtos moram no WordPress (wp-content, 2,5 a 3,4 MB cada): a política do site só toca mídia do próprio
   site e o repositório não guarda vídeo pesado. A vitória continua no link do Instagram;
 - "Build your winter" é o formulário por blocos: cai em Vendas (Racing Team) com o plano na nota (campos `x_*`);
-- a estimativa é a diária do kart do PAINEL (os serviços do Arrive and Drive, `Site › Serviços e preços`) × os dias de
-  teste. O que não tem fonte no painel (o apoio do fim de semana de corrida, a faixa de ±) não vira número:
-  "quoted per event";
+- a estimativa é a conta do urace.us (#525, dono 30/10: *"usa os valores do urace us"*), com a diária do kart do PAINEL
+  (os serviços do Arrive and Drive, `Site › Serviços e preços`): o dia de teste é a sessão da Academy ($689.23; a do
+  Boost, $625, com 8 dias ou mais) na proporção da diária do kart para a do 4-stroke; o fim de semana de corrida é o
+  Race Weekend Support ($4,500, 2-stroke) na proporção para a do 2-stroke; a faixa vai de 0,9× a 1,15×. As tarifas são
+  `conteudo.PRECOS` e vão no formulário (`data-*`): nenhuma é texto da página;
 - o contato direto da equipe sai pelo formulário e pela agenda do Lucas (o telefone da página de hoje não entra no
   repositório público, #244).
 
@@ -20,6 +22,7 @@ from datetime import date, timedelta
 
 from command_center.vitrine import blocos
 from command_center.vitrine.blocos import e, img, inline
+from command_center.vitrine.conteudo import KARTS, PRECOS
 from command_center.vitrine.paginas import _karts_do_painel, usd
 
 CAMINHO = "/winter/"
@@ -302,8 +305,9 @@ def _karts_com_preco(servicos):
 
 
 def _estimativa(b, i, host, ctx):
-    """"What it costs": a diária do kart do painel × os dias de teste que cabem na estadia do plano (o `winter.js` faz a
-    conta; o número nunca é texto da página). O fim de semana de corrida e as opções: "quoted per event / separately"."""
+    """"What it costs": a conta do urace.us (#525) com a diária do kart do painel, os fins de semana e os dias de teste que
+    cabem na estadia do plano (o `winter.js` faz a conta; as tarifas vão em `data-*`, o número nunca é texto da página).
+    Sem JavaScript: "Quoted per event". As opções: "quoted separately"."""
     karts = _karts_com_preco(ctx["servicos"]() if ctx.get("servicos") else None)
     marcado = "2s" if any(k["kt"] == "2s" for k, _p in karts) else (karts[0][0]["kt"] if karts else None)
     botoes = "".join(
@@ -318,12 +322,16 @@ def _estimativa(b, i, host, ctx):
         f'<div class="winter-opcional"><span>{e(nome)}<small data-extra-sub="{e(nome)}" data-resto=" · {e(resto)}">'
         f'{"In your plan" if no_plano else "Available on request"} · {e(resto)}</small></span><b>{e(opcional)}</b></div>'
         for _campo, nome, _t, no_plano, resto in EXTRAS)
-    form = f"""<form class="winter-estimativa" data-estimativa aria-label="Estimate">
+    base = {k["nome"]: k["preco"] for k in KARTS}
+    tarifas = (f'data-sessao="{PRECOS["academy_sessao"]:g}" data-boost="{PRECOS["boost_sessao"]:g}" '
+               f'data-corrida="{PRECOS["race_weekend"]:g}" data-base-teste="{base["4-stroke"]:g}" '
+               f'data-base-corrida="{base["2-stroke"]:g}"')
+    form = f"""<form class="winter-estimativa" data-estimativa {tarifas} aria-label="Estimate">
   <div class="winter-est-esq">{kart}
     <div class="winter-testes" data-so-js hidden><label>{e(b["testes_titulo"])} <strong data-testes-v>0</strong>
       <input type="range" min="0" max="0" value="0" step="1" data-testes></label><p class="small" data-testes-dica></p></div>
     <div class="winter-linhas">
-      <div><span>{e(corrida[0])}<small data-sub-corrida>{e(corrida[1])}</small></span><b>{e(corrida[2])}</b></div>
+      <div><span>{e(corrida[0])}<small data-sub-corrida>{e(corrida[1])}</small></span><b data-total-corrida>{e(corrida[2])}</b></div>
       <div data-linha-testes hidden><span>{e(testes[0])}<small data-sub-testes></small></span><b data-total-testes></b></div>
       {extras}
     </div>
@@ -529,9 +537,9 @@ WINTER = {
                 kart_titulo="Kart & equipment", testes_titulo="Testing days with the crew",
                 linhas=(("Race Weekend Support", "kart prep and trackside support", "Quoted per event"),
                         ("Testing days",), "Optional · quoted separately"),
-                total_nota="+ Race Weekend Support · quoted per event",
-                letra_miuda=("USD, before taxes. Day rates from the urace.us rate card by kart type (Arrive & Drive); race "
-                             "weekend support is quoted per event. Not included: race entries, tyres, track passes, fuel and "
+                total_nota="Pick at least one weekend in chapter 05.",
+                letra_miuda=("USD, before taxes. Day rates from the urace.us rate card by kart type (Arrive & Drive, Academy "
+                             "and Boost); race weekend support is a rough estimate, quoted per event. Not included: race entries, tyres, track passes, fuel and "
                              "consumables, travel and accommodation. Concierge, mental performance and the Lake Nona "
                              "Performance Club camp are offered as options and quoted separately."),
                 cta="Get the real quote",
