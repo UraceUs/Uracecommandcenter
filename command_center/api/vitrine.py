@@ -276,12 +276,18 @@ def _contar_visita(request, caminho, q, resp):
 EDITAVEIS = tuple(c for c in dict.fromkeys([*PAGINAS, *blocos.registro()]) if c not in ("/store/", "/blog/"))
 
 
+def _agenda_da_pista():
+    """#527: os horários e os dias abertos da agenda do painel (o formulário das landings diz quando há pista)."""
+    from command_center.providers import agenda_sessoes as ag
+    return _do_banco(lambda con: {"config": ag.config(con), "semana": ag.semana(con)})
+
+
 def _por_blocos(caminho, host, q=None):
     """#502: a página montada por blocos (`vitrine/pg_*.py`), com os cartões, os planos e os serviços do painel (#505: a
     estimativa da /winter/ usa a diária de cada kart)."""
     return blocos.pagina(host, blocos.registro()[caminho],
                          {"cartoes": _cartoes, "planos": _planos, "servicos": _servicos_do_site,
-                          "enviado": (q or {}).get("sent") == "1"})
+                          "agenda": _agenda_da_pista, "enviado": (q or {}).get("sent") == "1"})
 
 
 def html_da_pagina(caminho, host):
@@ -573,7 +579,7 @@ async def contato(request: Request, con: sqlite3.Connection = Depends(get_db)):
     confirmacao = ("We got your message — URACE",
                    f"Hi {_saudacao(c['nome'])},\n\nThanks for reaching out to URACE. We received your message about "
                    f"{assunto} and will reply shortly, usually within one business day.\n\nIn a hurry? Call or WhatsApp "
-                   f"+1 (407) 250 2291.\n\nURACE — the Champion's Factory\nOrlando Kart Center, 10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824")
+                   f"+1 (407) 250 2291.\n\nURACE — the Champion's Factory\nOrlando Kart Center, 10724 Cosmonaut Blvd, Orlando, FL 32824")
     # dono, 20/10: com o robô ligado no e-mail, é ele quem escreve o follow-up (no lugar da confirmação genérica)
     from command_center.providers import sdr_canais
     if sdr_canais.vai_responder_formulario(con, c["email"]):

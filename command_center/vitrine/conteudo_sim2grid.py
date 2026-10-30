@@ -15,8 +15,9 @@ from command_center.vitrine.conteudo import SITE
 
 CAMINHO = "/sim2grid-racing-simulator/"
 TELEFONE = "+1 (407) 250-2291"
-# Dono, 22/10 (#392): o SIM2GRID fica no Box 5, como na LP ("lp antiga"); o resto do site segue no Box 3 (01/10).
-RUA = "10724 Cosmonaut Blvd, Box 5"
+# Dono, 22/10 (#392): o SIM2GRID fica no Box 5. Desde 30/10 (#527) o Box só vai na confirmação da reserva
+# (`conteudo.endereco_com_box("sim2grid")`); a página mostra a rua.
+RUA = SITE["endereco"]["rua"]
 ENDERECO = (RUA, "Orlando, Florida", SITE["endereco"]["onde"])
 
 # ------------------------------------------------------------------ a semente do painel (entra uma vez)

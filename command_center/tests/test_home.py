@@ -118,10 +118,10 @@ def test_avaliacoes_do_google_sao_as_da_508_sem_nota_escrita(cli):
 
 
 def test_programs_nao_traz_de_volta_o_que_o_dono_ja_mudou(cli):
-    """Remarcação com 24 h, idades dos karts de 08/10, a reserva do site (não o carrinho do WooCommerce), Kart School e
+    """A remarcação não sai na Programs (fica na página do programa, com 48 h desde 30/10, #527), idades dos karts de 08/10, a reserva do site (não o carrinho do WooCommerce), Kart School e
     Professional Coaching (#254) e o "Until then you cannot book" do Sim2Grid (#392)."""
     texto = _texto(cli.get("/services/").text)
-    for velho in ("48h", "48 hours", "Add to Cart", "Age 11+", "Age 6-13", "Kart School", "Professional Coaching",
+    for velho in ("24h", "24 hours", "Add to Cart", "Age 11+", "Age 6-13", "Kart School", "Professional Coaching",
                   "Until then you cannot book", "representatives will reach out"):
         assert velho not in texto, velho
     assert "The rig opens on 1 November 2026." in texto and "Book your sim session" in texto

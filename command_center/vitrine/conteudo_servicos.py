@@ -3,8 +3,8 @@
 Dono, 08/10: *"estamos refazendo todo o site ... eu preciso de uma cópia com as novas URLs e também
 com a nossa identidade visual"*; dono, 13/10: *"vou pegar o copy que tá no site atual e jogar naquele
 outro site"*. Nada aqui é inventado: cada texto saiu da página citada. O que fica diferente do site
-atual, de propósito (decisões do dono, ver `conteudo.py`): remarcação com 24 h, idade dos karts do
-produto, endereço com o Box 3, os botões de reservar levam à reserva do site e o passo a passo da
+atual, de propósito (decisões do dono, ver `conteudo.py`): remarcação com 48 h, idade dos karts do
+produto, endereço sem o Box (só na confirmação, #527), os botões de reservar levam à reserva do site e o passo a passo da
 reserva é o do site (o atual fala do carrinho do WooCommerce).
 
 Preço de serviço não é texto fixo aqui: o do Arrive and Drive vem de `conteudo.KARTS` (o mesmo da

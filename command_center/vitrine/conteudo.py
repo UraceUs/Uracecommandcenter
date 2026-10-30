@@ -5,9 +5,10 @@ copy que tá no site atual e jogar naquele outro site lá, o novo.urace.us"*. Na
 cada texto saiu da página citada ao lado, do jeito que está no urace.us de 13/10.
 
 O que fica diferente do site atual, de propósito:
-- endereço da pista com o Box 3 (decisão de 01/10, `docs/site-publico/decisoes-2026-10-01.md`);
-- remarcação com **24 horas** de antecedência e a taxa de US$ 95 (dono, 08/10; o site atual ainda
-  diz 48 h em parte das páginas);
+- o endereço público é o da pista, sem o Box. O Box (3 para o kart, 5 para o SIM2GRID) vai só na confirmação do
+  agendamento (dono, 30/10, #527: *"somente na confirmação de agendamento isso será passado"*);
+- remarcação com **48 horas** de antecedência e a taxa de US$ 95 (dono, 30/10, #527: *"48h"*; de 08/10 a 30/10
+  foram 24 h);
 - idade dos karts: a do produto (Baby 4–7, 4-stroke 7+, 2-stroke 7+, Adult Shifter 14+; dono, 08/10);
 - o nome da marca sai sempre "URACE" (o site atual alterna Urace, URace e URrace);
 - preço de serviço não é texto fixo: vem do sistema (`KARTS`, os planos do painel) ou não aparece.
@@ -16,7 +17,7 @@ O que fica diferente do site atual, de propósito:
 SITE = {
     "nome": "URACE",
     "slogan": "the Champion's Factory",
-    "endereco": {"rua": "10724 Cosmonaut Blvd, Box 3", "cidade": "Orlando", "estado": "FL", "cep": "32824",
+    "endereco": {"rua": "10724 Cosmonaut Blvd", "cidade": "Orlando", "estado": "FL", "cep": "32824",
                  "pais": "US", "onde": "inside the Orlando Kart Center"},
     "telefone": "+1 (407) 250 2291",
     "telefone_e164": "+14072502291",
@@ -45,6 +46,17 @@ SITE = {
                "Orlando_Florida.html",
                "https://www.google.com/maps/place/Urace+-+Kart+team+and+school/@28.4108348,-81.377619,17z"),
 }
+
+# #527 (dono, 30/10): o Box não sai nas páginas; vai só no que o cliente recebe depois de marcar ou comprar
+# (a confirmação da sessão e a retirada da loja). Box 3 é o do kart e da loja; Box 5, o do SIM2GRID (#392).
+BOX = {"kart": "Box 3", "sim2grid": "Box 5"}
+
+
+def endereco_com_box(onde="kart"):
+    """O endereço inteiro, com o Box, para a confirmação: "10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824"."""
+    end = SITE["endereco"]
+    return f'{end["rua"]}, {BOX[onde]}, {end["cidade"]}, {end["estado"]} {end["cep"]}'
+
 
 # #511: a faixa antes do rodapé do urace.us de 29/10: "Powered by" o Orlando Kart Center e os parceiros, com o nome e o
 # logo como estão lá (sem link). Os logos moram em static/img.
@@ -120,14 +132,14 @@ TERMOS = (
     "activities or while on site.",
 )
 
-# Dono, 08/10: "24 horas com a taxa" (o site atual ainda diz 48 h).
+# Dono, 30/10 (#527): remarcação com 48 h e a taxa (de 08/10 a 30/10 foram 24 h).
 REEMBOLSO = (
     "Our service requires planning, preparation, coordination and transportation to the track on our end, for those "
-    "reasons we do not offer refunds. Rescheduling will be available with a minimum notice of 24h and potential costs "
+    "reasons we do not offer refunds. Rescheduling will be available with a minimum notice of 48h and potential costs "
     "of rearrangement.",
-    "Rescheduling Policy: if a class is rescheduled with less than 24 hours’ notice, a flat fee of $95 will be charged. "
+    "Rescheduling Policy: if a class is rescheduled with less than 48 hours’ notice, a flat fee of $95 will be charged. "
     "If a Driver Pass is required, it will be charged additionally.",
-    "To avoid this fee, we recommend notifying us of any changes at least 24 hours in advance.",
+    "To avoid this fee, we recommend notifying us of any changes at least 48 hours in advance.",
 )
 
 HORARIO = ("We’re open every day, from 8 AM to 8 PM.",)
@@ -176,10 +188,10 @@ FAQ_EVENTO = (
                               "of any nature that may happen while on site.")),
     ("Refund policy", ("Our service requires planning, preparation, coordination and transportation to the track on our "
                        "end, for those reasons we cannot offer a refund. Rescheduling will be available with a minimum "
-                       "of 24h notice.",
-                       "Rescheduling policy. If a class is rescheduled with less than 24 hours’ notice: a flat fee of $95 "
+                       "of 48h notice.",
+                       "Rescheduling policy. If a class is rescheduled with less than 48 hours’ notice: a flat fee of $95 "
                        "will be charged, and if a Driver Pass is required it will be charged additionally. To avoid this "
-                       "fee, we recommend notifying us of any changes at least 24 hours in advance.",
+                       "fee, we recommend notifying us of any changes at least 48 hours in advance.",
                        "Please note that if a training session needs to be rescheduled due to circumstances outside of "
                        "URACE’s control, a fee will be charged to cover our costs of preparation. This fee will be "
                        "calculated based on the cost to reschedule the session and the amount of drivers involved. This "

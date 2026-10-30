@@ -662,10 +662,14 @@ def avisar(con, oid, enviar=None):
                       "Your payment is safe.")
         cli.append(linha)
     tem_produto = any(x["kind"] == "produto" for x in ls)
+    # #527 (dono, 30/10): o Box só vai na confirmação. Sessão de kart marcada → onde é, com o Box 3
+    from command_center.vitrine.conteudo import endereco_com_box
+    onde_kart = endereco_com_box("kart")
+    if any(x["kind"] == "sessao" and x["booking_id"] for x in ls):
+        cli.append(f"\n{'Onde' if pt else 'Where'}: Orlando Kart Center, {onde_kart}")
     if pt:
         entrega = ("" if not tem_produto else
-                   "\nItens da loja: avisamos quando estiverem prontos para retirar no Orlando Kart Center (10724 Cosmonaut Blvd, "
-                   "Box 3, Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
+                   f"\nItens da loja: avisamos quando estiverem prontos para retirar no Orlando Kart Center ({onde_kart}).\n" if o["delivery"] == "retirada" else
                    f"\nItens da loja: {pedido_site.texto_envio(o, ls, lang)}\n")
         deposito = ("\nDepósito de segurança: " + dica.DEPOSITO_INFO_PT + "\n"
                     if any(x["deposit"] for x in ls) else "")
@@ -675,8 +679,7 @@ def avisar(con, oid, enviar=None):
                  f"Página do seu pedido: {pedido_site.link(o)}\n\n{pedido_site.contato(lang)}\n\nURACE — the Champion's Factory")
     else:
         entrega = ("" if not tem_produto else
-                   "\nStore items: we'll let you know when they're ready for pickup at the Orlando Kart Center (10724 Cosmonaut Blvd, Box 3, "
-                   "Orlando, FL 32824).\n" if o["delivery"] == "retirada" else
+                   f"\nStore items: we'll let you know when they're ready for pickup at the Orlando Kart Center ({onde_kart}).\n" if o["delivery"] == "retirada" else
                    f"\nStore items: {pedido_site.texto_envio(o, ls, lang)}\n")
         deposito = ("\nSecurity deposit: " + dica.DEPOSITO_INFO + "\n"
                     if any(x["deposit"] for x in ls) else "")
@@ -712,8 +715,8 @@ def _texto_sim(con, lang):
     """#392: a hora de simulador paga, no e-mail de confirmação: onde fica e, com a waiver ligada, o lembrete."""
     from command_center import enderecos
     from command_center.providers import sim2grid
-    from command_center.vitrine.conteudo_sim2grid import ENDERECO
-    onde = f"{ENDERECO[0]}, {ENDERECO[1]}"
+    from command_center.vitrine.conteudo import endereco_com_box
+    onde = endereco_com_box("sim2grid")                 # #527: o Box 5 só vai aqui, na confirmação
     w = sim2grid.config(con)["waiver_required"]
     conta = f"https://{enderecos.CLIENTE}/ops/portal"
     if lang == "pt":

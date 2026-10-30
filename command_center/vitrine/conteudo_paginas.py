@@ -2,9 +2,9 @@
 Pro Team, For Beginners, Career (Plan Your Career), Contact e Accessibility. As landings de anúncio e a The Driver
 Factory são páginas próprias de novo (#506, `pg_landings.py`); a About é por blocos (#507, `pg_home.py`).
 
-Nada inventado: cada texto saiu da página citada. Correções de propósito: endereço com o Box 3
-(decisão de 01/10); o telefone da acessibilidade era "205 2291" no site antigo e aqui é o da
-empresa, (407) 250 2291; remarcação com 24 h e as idades dos karts do produto (dono, 08/10); os
+Nada inventado: cada texto saiu da página citada. Correções de propósito: endereço sem o Box, que só vai na
+confirmação do agendamento (dono, 30/10, #527); o telefone da acessibilidade era "205 2291" no site antigo e aqui é o da
+empresa, (407) 250 2291; remarcação com 48 h (#527) e as idades dos karts do produto (dono, 08/10); os
 botões de comprar levam à reserva do site. Preço de serviço não é texto fixo: os planos vêm do painel
 (Site › Serviços) e o Arrive and Drive de `conteudo.KARTS`; o que o sistema não tem fica sem preço.
 """
@@ -163,9 +163,9 @@ ACADEMY = {
                 "in case you are unable to stay with your child. This service must be requested beforehand.")),
             ("Refund and rescheduling policy", (
                 "Our service requires planning, preparation, coordination and transportation to the track on our end; for those "
-                "reasons we do not offer refunds. Rescheduling is available with a minimum notice of 24 hours. With less than "
-                "24 hours' notice, a flat fee of $95 is charged, plus the Driver Pass if required. To avoid this fee, we "
-                "recommend notifying us of any changes at least 24 hours in advance.",
+                "reasons we do not offer refunds. Rescheduling is available with a minimum notice of 48 hours. With less than "
+                "48 hours' notice, a flat fee of $95 is charged, plus the Driver Pass if required. To avoid this fee, we "
+                "recommend notifying us of any changes at least 48 hours in advance.",
                 "Please note that if a training session needs to be rescheduled due to circumstances outside of URACE's control, "
                 "a fee will be charged to cover personnel costs. This fee will be in addition to any other costs associated with "
                 "the session itself. By using URACE's services, you agree to this policy and understand that rescheduling fees "
@@ -463,7 +463,7 @@ TERMS = {
         )),
         ("Refunds and rescheduling", (
             "Our services require planning, preparation, coordination and transportation to the track, so we do not offer "
-            "refunds. Rescheduling is available with a minimum notice of 24 hours. With less than 24 hours' notice, a flat "
+            "refunds. Rescheduling is available with a minimum notice of 48 hours. With less than 48 hours' notice, a flat "
             "fee of $95 is charged, and a Driver Pass, when required, is charged additionally.",
             "Track fees charged directly by the circuit are separate from URACE prices.",
         )),
@@ -485,7 +485,7 @@ TERMS = {
             "operation. Content and photos on this site belong to URACE or are used with permission.",
         )),
         ("Contact", (
-            "URACE.US INC · 10724 Cosmonaut Blvd, Box 3, Orlando, FL 32824 · +1 (407) 250 2291 · support@urace.us.",
+            "URACE.US INC · 10724 Cosmonaut Blvd, Orlando, FL 32824 · +1 (407) 250 2291 · support@urace.us.",
             f"Last updated: {ATUALIZADO}.",
         )),
     ),
