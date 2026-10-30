@@ -253,15 +253,24 @@ def oportunidade_da_equipe(opp):
     return bool(opp.get("closer_user_id")) or (opp.get("stage") or "NOVO") != "NOVO"
 
 
-def da_equipe(con, canal, valor):
-    """Por que este contato é da equipe e não do robô (None = é lead para o robô). Cliente, oportunidade em
-    aberto com o closer e card do Kommo com tag de passagem."""
+def cliente_do_painel(con, canal, valor):
+    """O contato é cliente do painel? Desde 30/10 (#523, dono: "fala tbm") o robô atende cliente e aluno, sem
+    vender: a ponte recebe `cliente=True` e troca a triagem pelo atendimento."""
     from command_center.providers import identidade
     if canal == "sms":
         from command_center.api import dialpad
+        return bool(dialpad.liga_a_quem(con, valor).get("client_id"))
+    cli, _ = identidade.acha_pessoa(con, email=contato_de("email", valor))
+    return bool(cli)
+
+
+def da_equipe(con, canal, valor):
+    """Por que este contato é da equipe e não do robô (None = o robô responde). Oportunidade em aberto com o
+    closer e card do Kommo com tag de passagem. Cliente do painel não é mais motivo (#523): ver
+    `cliente_do_painel`."""
+    if canal == "sms":
+        from command_center.api import dialpad
         achado = dialpad.liga_a_quem(con, valor)
-        if achado.get("client_id"):
-            return "cliente do painel: é a equipe que responde"
         if achado.get("opportunity_id"):
             opp = um(con, "SELECT stage, closer_user_id FROM opportunities WHERE id=?", (achado["opportunity_id"],))
             if opp and oportunidade_da_equipe(opp):
@@ -269,9 +278,6 @@ def da_equipe(con, canal, valor):
         lead = um(con, "SELECT * FROM crm_leads WHERE id=?", (achado["lead_id"],)) if achado.get("lead_id") else None
     else:
         email = contato_de("email", valor)
-        cli, _ = identidade.acha_pessoa(con, email=email)
-        if cli:
-            return "cliente do painel: é a equipe que responde"
         for opp in todos(con, "SELECT stage, closer_user_id FROM opportunities WHERE email=? AND stage NOT IN ('GANHO','PERDIDO')",
                          (email,)):
             if oportunidade_da_equipe(opp):
@@ -322,7 +328,7 @@ def leads_do_kommo(con, canal, contato_):
     return [str(r["external_id"]) for r in linhas if r and str(r["external_id"] or "").isdigit()]
 
 
-def perguntar_ao_robo(canal, contato_, texto, nome, primeira, kommo_leads=()):
+def perguntar_ao_robo(canal, contato_, texto, nome, primeira, kommo_leads=(), cliente=False):
     """POST /tools/canal na ponte. Devolve {rota, motivo, mensagens, precisa_gente, nota, ...}."""
     falso = os.environ.get("CC_PONTE_FAKE")
     if falso:                                    # teste: a resposta da ponte vem de um arquivo JSON
@@ -332,7 +338,8 @@ def perguntar_ao_robo(canal, contato_, texto, nome, primeira, kommo_leads=()):
     if not chave:
         raise RuntimeError("a ponte do robô não está configurada neste servidor (AGENT_API_KEY)")
     corpo = json.dumps({"canal": canal, "contato": contato_, "texto": texto, "nome": nome or "",
-                        "primeira": bool(primeira), "kommo_leads": list(kommo_leads)}).encode()
+                        "primeira": bool(primeira), "kommo_leads": list(kommo_leads),
+                        "cliente": bool(cliente)}).encode()
     pedido = urllib.request.Request(sdr_api.PONTE + "/tools/canal", data=corpo, method="POST",
                                     headers={"Content-Type": "application/json", "X-Api-Key": chave})
     with urllib.request.urlopen(pedido, timeout=150) as resp:
@@ -549,7 +556,7 @@ def _responder_sms(con, contato_id, esperar):
         return {"robo": motivo}
     texto = "\n".join(m["texto"] for m in novas)
     resposta = perguntar_ao_robo("sms", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0,
-                                 leads_do_kommo(con, "sms", row["contato"]))
+                                 leads_do_kommo(con, "sms", row["contato"]), cliente_do_painel(con, "sms", row["contato"]))
     baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
     if not baloes:
         motivo = sem_baloes(con, row, "sms", resposta)
@@ -779,7 +786,7 @@ def ler_email(con):
         if (row.get("respostas") or 0) == 0 and ultima.get("assunto"):
             texto = f"{ultima['assunto']}\n{texto}"
         resposta = perguntar_ao_robo("email", row["contato"], texto, row.get("nome"), (row.get("respostas") or 0) == 0,
-                                     leads_do_kommo(con, "email", row["contato"]))
+                                     leads_do_kommo(con, "email", row["contato"]), cliente_do_painel(con, "email", email))
         baloes = [b for b in (resposta.get("mensagens") or []) if b.strip()]
         if not baloes:
             motivo = sem_baloes(con, row, "email", resposta)

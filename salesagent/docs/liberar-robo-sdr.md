@@ -28,6 +28,23 @@ Este roteiro é para tirar essa trava, com a segurança de poder desligar em um 
 
 Liberado em 27/10 (a linha foi comentada, `#SDR_ATENDER_SO_TAG=teste-sdr`, com backup em `bridge.env.bak-AAAA-MM-DD`).
 
+## Um robô só, do jeito certo em cada interação (dono, 30/10, #523)
+
+O Chase é o mesmo no Instagram, no Facebook, no WhatsApp, no SMS e no e-mail. Comentário em foto ou post e DM
+são do robô; aluno e cliente também. Cada interação tem a sua resposta:
+
+| Chega | O robô |
+|---|---|
+| Menção ou resposta em story ("Mentioned you in their story") | um obrigado curto, uma vez por dia, sem venda e sem follow-up |
+| Reação ou curtida | nada |
+| Comentário curto ou emoji ("Racing🤩", "10/10") | uma frase de social media, sem triagem, sem preço e sem link |
+| Aluno ou cliente (disse que já é aluno, card ganho, cliente do painel no SMS e no e-mail) | atende sem triagem, sem call de venda e sem link de reserva; agenda e pagamento vão para o time; sem trilha de follow-up |
+| Pergunta de lead novo | como sempre: responde, qualifica e leva à call |
+
+Uma resposta tem no máximo 3 balões, e a espera só cita o que é pergunta. Os bots nativos do Kommo (menu
+"URACE - Atendimento inicial DM" e "Agente qualificador de leads") ficam desligados nas DMs: dois robôs não
+respondem a mesma pessoa.
+
 ## Quando uma pessoa assume a conversa (regra de ouro)
 
 O robô **não sabe** quando alguém da equipe escreve no chat. Antes de responder um lead à mão, faça **uma** destas:
