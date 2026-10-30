@@ -22,7 +22,9 @@ Este roteiro é para tirar essa trava, com a segurança de poder desligar em um 
 2. `sudo systemctl restart sales-bridge && systemctl is-active sales-bridge`
 3. A partir daí o robô responde todo lead do Instagram e do Facebook com card aberto nos funis Urace e Comercial,
    **em qualquer etapa, inclusive as da equipe** (dono, 27/10, #403: "responde imediatamente"). Não recebe: Incoming
-   leads, funil fora do SDR, conversa com a IA pausada e card fechado com a tag `opt_out`.
+   conversa com a IA pausada e card fechado com a tag `opt_out`. **Desde 30/10 (#530) o robô responde em todo funil
+   do Kommo e em Incoming leads** (dono: "conectado em todos os lugares p responder todos"); card de Pós Venda ou
+   Operacional Vendas é atendido como aluno. A organização do card (etapa, tags) continua só em Urace e Comercial.
    **Card fechado que volta a falar (dono, 28/10, #428):** o robô responde; o perdido volta para Comercial >
    ENTRADA com a tag `sdr:reaberto`, e o ganho (cliente) fica como está, com a tag `sdr:cliente-voltou`.
 

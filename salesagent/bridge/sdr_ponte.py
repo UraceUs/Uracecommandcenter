@@ -329,6 +329,7 @@ def _primeira_vez(chave: str) -> bool:
 
 
 TAGS_DE_OPT_OUT = set(regras.TAGS_POR_MOTIVO["OPT_OUT"])
+FUNIS_DE_CLIENTE = ("pós venda", "pos venda", "operacional")
 
 
 def pode_responder(lead_id: int) -> tuple[bool, str]:
@@ -337,14 +338,16 @@ def pode_responder(lead_id: int) -> tuple[bool, str]:
     equipe trabalha (dono, 27/10, #403: "responda todo mundo que está lá no Kommo ... responde
     imediatamente"). Quando uma pessoa assume a conversa, ela usa Pausar IA (a ponte não enxerga quem
     escreve no chat). Card fechado também recebe e a triagem reabre o perdido (dono, 28/10, #426), menos
-    quem pediu para parar (tag opt_out). Não em Incoming leads, em funil fora do SDR e, na fase de teste, em
-    lead sem a tag SDR_ATENDER_SO_TAG."""
+    quem pediu para parar (tag opt_out). Desde 30/10 (#530) também em Incoming leads e em todo funil do Kommo
+    (Pós Venda, Contact list, Emails, SIM 2 GRID...). Não só na fase de teste, em lead sem SDR_ATENDER_SO_TAG."""
     lead = kommo.get_lead(lead_id)
-    local = mapa().localizar(lead.get("pipeline_id"), lead.get("status_id"))
-    if local["incoming"]:
-        return False, "INCOMING_LEADS"
-    if not local["do_sdr"]:
-        return False, "FUNIL_FORA_DO_SDR"
+    m = mapa()
+    local = m.localizar(lead.get("pipeline_id"), lead.get("status_id"))
+    # Dono, 30/10 (#530): "conectado em todos os lugares p responder todos". Todo funil e Incoming leads também;
+    # só a triagem continua só nos funis do SDR (card de outro funil não é movido, a equipe recebe o aviso).
+    nome_funil = getattr(m, "nome_funil", lambda _pid: "")(lead.get("pipeline_id")) or ""
+    if any(f in nome_funil.lower() for f in FUNIS_DE_CLIENTE):
+        state.update_conversation(lead_id, cliente_atual=1)    # pós-venda e operacional: já comprou (#530)
     tags = {str(t.get("name") or "") for t in (lead.get("_embedded") or {}).get("tags", [])}
     if int(lead.get("status_id") or 0) == regras.STATUS_GANHO:
         state.update_conversation(lead_id, cliente_atual=1)    # card ganho: atende como aluno (#523)

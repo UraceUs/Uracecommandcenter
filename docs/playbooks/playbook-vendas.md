@@ -1449,6 +1449,8 @@ O robô de vendas no Kommo. Três níveis:
   888) não recebem resposta do robô nem viram Precisa de atenção; a mensagem fica guardada na conversa.
 - **Lead do Kommo sem resposta? (#414)** `GET /ops/api/sdr/rastro/{lead_id}` mostra o que a ponte fez com ele
   (mensagem, resposta, trava, erro) e um veredito: respondido, ou a trava ou o erro que segurou a resposta.
+- **Todos os funis (#530):** o robô responde card de qualquer funil do Kommo (Pós Venda, Contact list, Emails,
+  SIM 2 GRID, Operacional Vendas...) e de Incoming leads. Pós Venda e Operacional Vendas são atendidos como aluno.
 - **Rede social, um robô só (#523):** menção em story recebe um obrigado curto; reação, nada; comentário curto, uma
   frase de social media. Aluno e cliente (diz que já treina, card ganho, cliente do painel) são atendidos sem triagem
   nem link de venda, e agenda ou pagamento vêm para o time. No máximo 3 balões por resposta.
