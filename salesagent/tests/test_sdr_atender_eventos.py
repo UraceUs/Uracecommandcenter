@@ -69,6 +69,9 @@ class _Mapa:
         return {"do_sdr": False, "zona": None, "fechado": fechado, "incoming": False,
                 "gerenciada": False, "resgate": False, "etapa": None}
 
+    def nome_funil(self, pipeline_id):
+        return {1: "Urace", 2: "Comercial", 9: "Pós Venda"}.get(int(pipeline_id or 0), str(pipeline_id))
+
 
 def _lead(lid, pipeline, status, tags=()):
     return {"id": lid, "pipeline_id": pipeline, "status_id": status, "created_at": int(time.time()) - 86400,
@@ -120,7 +123,9 @@ def rodar() -> list[str]:
     print("1. Escopo: onde o robô responde")
     # dono, 27/10 (#403): etapa da equipe (Hot Leads, ATENDIMENTO) também recebe resposta, na hora
     for lid, esperado in ((101, (True, "OK")), (102, (True, "OK")), (103, (True, "OK")),
-                          (104, (True, "OK")), (105, (False, "FUNIL_FORA_DO_SDR")),
+                          (104, (True, "OK")),
+                          # dono, 30/10 (#530): todo funil do Kommo recebe resposta
+                          (105, (True, "OK")),
                           # dono, 28/10 (#426): card fechado responde e reabre; quem pediu para parar, nunca
                           (106, (True, "OK")), (108, (False, "OPT_OUT")), (109, (True, "OK"))):
         check(f"lead {lid} -> {esperado}", sdr_ponte.pode_responder(lid) == esperado, sdr_ponte.pode_responder(lid))
@@ -309,13 +314,14 @@ def rodar() -> list[str]:
         check("canal desconhecido é recusado", getattr(exc, "status_code", 0) == 400, exc)
     app._call_agent = lambda lead_id, msg, session_key=None: (resposta, textproc.extract_directives(resposta))
 
-    print("\n3. Fora do escopo: só organiza")
+    print("\n3. Funil fora do SDR também recebe resposta (dono, 30/10, #530: \"responder todos\")")
     sdr_ponte.SDR_ATENDER_SO_TAG = ""
     antes = len(k.bots)
     r = app.responder_eventos(_evento("m3", 105, "oi, tudo certo pra sexta?"), espera=0)
-    check("lead de funil fora do SDR não recebe resposta da ponte",
-          r == [{"lead_id": 105, "resposta": "FUNIL_FORA_DO_SDR"}] and len(k.bots) == antes, (r, k.bots))
-    check("mas o card é organizado", (105, "oi, tudo certo pra sexta?") in triados)
+    check("lead de outro funil (Pós Venda, Contact list...) recebe resposta da ponte",
+          r == [{"lead_id": 105, "resposta": "RESPONDIDA"}] and len(k.bots) == antes + 1, (r, k.bots))
+    check("e o card continua passando pela triagem", (105, "oi, tudo certo pra sexta?") in triados)
+    check("card do Pós Venda é atendido como aluno", state.get_conversation(105).get("cliente_atual") == 1)
 
     print("\n4. Se o Salesbot do Kommo já tratou a mensagem, a ponte não responde de novo")
     state.update_conversation(103, last_inbound_at=int(time.time()), last_inbound_text="tem aula sábado?")
