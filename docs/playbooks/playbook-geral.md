@@ -886,6 +886,16 @@ assim como tinhamos no urace.us"*. Em toda página do site:
 - **Powered by e parceiros** (#511): antes do rodapé, em toda página, a faixa do urace.us de 29/10 com o logo do
   Orlando Kart Center e os parceiros (ILX Group, AZ Car Rental, CANOTOPS e Allure Global Events), sem link. Parceiro que
   entra ou sai muda pelo desenvolvimento (`conteudo.PARCEIROS`, com o logo em `static/img`).
+- **Vídeos "On camera"** (#526, dono 30/10: os 3 vídeos "no site"): na home ("Straight from the paddock", antes das
+  avaliações do Google) e na Winter ("Hear it from the team", logo depois da prova de Jacksonville), os três vídeos
+  curtos do urace.us (a vitória, a primeira corrida e a história do fundador) tocam no próprio site: o player do navegador, com o pôster, e nada
+  baixa antes do play. No celular ficam lado a lado (desliza dentro da faixa); no computador, os três na grade. **Onde
+  moram:** o vídeo em `command_center/vitrine/static/video/` (mp4 H.264 + AAC, até ~3,5 MB, sem metadados) e o pôster
+  em `static/img/` (`<nome>-poster.webp`, do tamanho do vídeo); a lista fica em `conteudo.CURTAS` e a legenda de cada
+  página em `pg_home.py`/`pg_winter.py`. **Trocar um vídeo** é pelo desenvolvimento: comprimir (ffmpeg: H.264 `yuv420p`,
+  AAC, `-movflags +faststart`, `-map_metadata -1`), tirar o pôster em WebP, pôr os dois com **nome novo** nas pastas,
+  apontar `conteudo.CURTAS` para eles e ajustar a legenda (a da Winter diz os segundos; o teste
+  `test_videos_site.py` confere tamanho, formato e duração).
 - **Animações:** botão sobe 2 px e cartão sobe 4 px com sombra (mouse em cima); as seções surgem ao rolar, uma vez;
   os campeões da Career são um carrossel no celular (arrastar ou as setas ‹ ›); o "Book now" pulsa de leve três vezes
   e para. Quem pediu ao celular/computador **menos movimento** (prefers-reduced-motion) vê tudo parado e à mostra.
@@ -951,8 +961,8 @@ peça (as oito peças abrem uma a uma; "Part 8 of the kart" abre o capacete), o 
 (data de nascimento → idade de corrida em 1º/01/2027 → as classes da SKUSA abertas), o formulário **Build your winter**
 (cai em Vendas, playbook de vendas, seção 5), o pacote dentro e fora da pista e a **estimativa**:
 a diária do kart de *Site › Serviços e preços* × os dias de teste que cabem na estadia (o resto é "quoted per event" ou
-"quoted separately"). O que a página de hoje tinha e saiu: o circuito em 3D e os três vídeos curtos (moram no WordPress;
-a vitória continua no link do Instagram). O que lá está escondido também não sai aqui ("We bring everything", a ficha da
+"quoted separately"). Os três vídeos curtos ("On camera", #526) tocam do próprio site, logo depois da prova (a vitória
+continua também no link do Instagram). O que a página de hoje tinha e saiu: o circuito em 3D. O que lá está escondido também não sai aqui ("We bring everything", a ficha da
 temporada e o "Next step"). Sem JavaScript a página mostra tudo; com "menos movimento" nada se mexe.
 
 ### Painel do site (#306)
