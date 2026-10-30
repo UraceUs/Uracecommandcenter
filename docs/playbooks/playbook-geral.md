@@ -1220,6 +1220,21 @@ mudados; o texto do artigo não vai para o log).
 - As capas e fotos do blog ficam na mesma pasta das fotos do editor do site (`~/.urace/site-fotos`), que o backup do banco
   não copia (seção 10.1).
 
+### Vigia do urace.us até a troca do DNS (#529)
+
+Dono, 30/10: *"monitore o que for alterado lá, muita gente mexe"*. Até a troca do DNS, o urace.us de hoje (WordPress)
+continua sendo editado. O que mudar lá precisa vir para o site novo, senão se perde na troca.
+
+- **Como funciona:** o workflow **Vigia do urace.us** (GitHub › Actions) roda a cada 3 horas. Ele lê a data de
+  alteração das páginas, posts e produtos (a API pública do WordPress; nenhuma senha) e compara com
+  `docs/site-publico/urace-us-conferido.json`, o que já foi trazido.
+- **Mudou alguma coisa:** abre a issue **"urace.us mudou: trazer para o site novo"**, com cada página nova, mudada ou
+  que saiu do ar, e a hora (GMT). Se essa issue já está aberta, comenta nela, sem repetir o que já avisou.
+- **Trouxe a mudança:** no mesmo PR, rode `python -m command_center.vitrine.vigia_urace_us --conferir`, comite o
+  `urace-us-conferido.json` e feche a issue.
+- **Pilotos e depoimentos ficam de fora:** o endereço tem o nome da pessoa, e o repositório é público.
+- **Depois da troca do DNS:** o workflow sai, porque o urace.us passa a ser o site novo.
+
 ### Medição de campanha no site (#260)
 
 Dono, 15/10, para *"o site novo não tem GTM, Analytics nem pixel do Meta — campanha paga fica cega;
