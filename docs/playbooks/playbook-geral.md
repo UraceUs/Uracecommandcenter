@@ -873,7 +873,7 @@ assim como tinhamos no urace.us"*. Em toda página do site:
 | No topo | Abre (⌄) |
 |---|---|
 | **URACE Academy** | Academy · Racing Team · Arrive and Drive |
-| **For Beginners** | Sim 2 Grid (a página do SIM2GRID) · Plan Your Career |
+| **For Beginners** | Sim 2 Grid (a página do SIM2GRID) · Plan Your Career (com o simulador de carreira, #528) |
 | **Store** | Engines · Chassis · Tires · Parts · Apparel · Suits — só a categoria que **tem produto** na loja; categoria vazia some do menu sozinha e volta quando um produto entra nela (Site › Produtos da loja) |
 | **About** | About URACE · Blog · Contact us |
 | ícones | **conta** (área do cliente), **busca da loja** (leva ao campo de busca da Store) e **carrinho** (com o número de itens) |
@@ -954,6 +954,27 @@ a diária do kart de *Site › Serviços e preços* × os dias de teste que cabe
 "quoted separately"). O que a página de hoje tinha e saiu: o circuito em 3D e os três vídeos curtos (moram no WordPress;
 a vitória continua no link do Instagram). O que lá está escondido também não sai aqui ("We bring everything", a ficha da
 temporada e o "Next step"). Sem JavaScript a página mostra tudo; com "menos movimento" nada se mexe.
+
+### Simulador de carreira no /career/ (#528)
+
+Dono, 30/10: *"sim pfvr"* e *"usa os valores do urace us"*. `novo.urace.us/career/` tem o simulador do
+urace.us/plan-your-career/, na ordem de lá: **Select your career** (Formula 1, IndyCar ou NASCAR; o caminho inteiro em
+onze passos, do Sim2Grid ao destino, com o preço dos quatro degraus da URACE e o nível dos de fora, e a escada degrau a
+degrau com os números típicos de cada um), **Find your step** (três perguntas: quem dirige, a idade e se já andou de
+kart; a resposta é o degrau de partida) e **My career plan** (pôr e tirar itens, quantidade, o total avulso e o mensal,
+copiar e limpar; uma tarifa da Academy por vez). Os botões do topo levam a cada parte e o cartão "Plan your career" da
+home vai direto ao simulador (`/career/#simulator`). O endereço antigo `/plan-your-career/` cai no `/career/` (301).
+
+- **Onde moram os números:** `command_center/vitrine/conteudo_carreira.py`, copiados do script da página de lá (degraus,
+  textos, números típicos, a regra do Find your step e os itens do plano). Não há tela no painel para eles: mudou no
+  urace.us, muda pelo desenvolvimento. O `carreira.js` não tem preço nenhum (lê o da página).
+- **O que ficou de fora, de propósito:** o "Who is driving?" (lá só troca o desenho do boneco), o carro que sobe a
+  escada, o item "Professional Coaching" do plano (o nome saiu do site, #254) e a taxa da pista de lá na nota do plano
+  (o site segue a do robô, dono 20/10).
+- **Atenção:** os preços da Academy no simulador (1, 3 e 6 meses) são os do urace.us e não os da /academy/ (planilha,
+  #273). Na venda vale o painel (playbook de vendas, 5.2.1).
+- Sem JavaScript a página mostra tudo (as três rotas, as quatro respostas e a lista de preços); com "menos movimento"
+  nada se mexe. O plano fica só no navegador de quem montou.
 
 ### Painel do site (#306)
 

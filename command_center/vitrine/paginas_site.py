@@ -19,7 +19,7 @@ from command_center.vitrine import conteudo as C
 from command_center.vitrine import conteudo_paginas as P
 from command_center.vitrine import conteudo_servicos as S
 from command_center.vitrine import conteudo_sim2grid as SG
-from command_center.vitrine import dica, idioma, medicao
+from command_center.vitrine import carreira, dica, idioma, medicao
 from command_center.vitrine.paginas import PORTAL, _lista, _negocio, estatico, foto_url, layout, preco_kart, tamanho_estatico, usd  # noqa: F401
 
 DADOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dados")
@@ -716,12 +716,14 @@ def sim2grid(host, formatos=None, faixas=None, regras=None, cartoes=None):
 
 
 def career(host):
+    """#528: o "Plan your career" do urace.us: o simulador (a escolha do destino e a escada), o "Find your step" e o
+    "My career plan" (`vitrine/carreira.py`), na ordem de lá, e o resto da página como estava."""
     d = P.CAREER
-    degraus = "".join(f"""<li><a href="{e(h)}"><strong>{e(t)}</strong><span>{e(p)}</span></a></li>""" for t, p, h in d["degraus"])
     fotos = "".join(f'<figure><img src="{estatico("img/" + f)}" alt="{e(a)}" width="480" height="600" loading="lazy"><figcaption>{e(a)}</figcaption></figure>' for f, a in d["fotos"])
     corpo = f"""{_hero(d)}
-<section class="faixa clara" aria-labelledby="h-degraus"><div class="largura"><h2 id="h-degraus">{e(d['degraus_titulo'])}</h2><p>{e(d['degraus_intro'])}</p><ol class="degraus">{degraus}</ol>
-  {_ps(d['aviso'], 'muted small')}</div></section>
+{carreira.simulador(d['aviso'])}
+{carreira.localizador()}
+{carreira.plano()}
 <section class="faixa escura" aria-labelledby="h-pessoa"><div class="largura duas"><div><h2 id="h-pessoa">{e(d['pessoa_titulo'])}</h2>{_ps(d['pessoa'])}</div><div class="campeoes">{fotos}</div></div></section>
 <section class="faixa clara" aria-labelledby="h-prof"><div class="largura estreita"><h2 id="h-prof">{e(d['profissional_titulo'])}</h2>{_ps(d['profissional'])}{_lista(f"{t}: {p}" for t, p in d['profissional_itens'])}</div></section>
 <section class="faixa escura" aria-labelledby="h-eventos"><div class="largura estreita"><h2 id="h-eventos">{e(d['eventos_titulo'])}</h2>{_ps(d['eventos'])}{_faq(d['eventos_faq'], 'faq-eventos')}
@@ -729,7 +731,8 @@ def career(host):
 <section class="faixa clara" aria-labelledby="h-faq"><div class="largura estreita"><h2 id="h-faq">{e(d['perguntas_titulo'])}</h2><p class="muted">{e(d['perguntas_sub'])}</p>{_faq(d['faq'])}</div></section>
 {_fecho(d['fecho'], d['fecho_sub'], d['fecho_cta'])}"""
     return layout(host=host, caminho=d["caminho"], titulo=d["titulo"], descricao=d["descricao"], corpo=corpo,
-                  schemas=(_negocio(host), _faq_ld(d["faq"]), _trilha(host, ("Career", d["caminho"]))), foto=d["foto"])
+                  schemas=(_negocio(host), _faq_ld(d["faq"]), _trilha(host, ("Career", d["caminho"]))), scripts=("carreira.js",),
+                  foto=d["foto"])
 
 
 ENVIADO = ('<p class="aviso-ok" role="status">Thank you! We got your message and will reply shortly — usually within '
