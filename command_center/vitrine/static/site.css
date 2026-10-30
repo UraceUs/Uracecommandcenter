@@ -804,6 +804,18 @@ body:has(> main > .hero:first-child) main > .hero-sim:first-child .hero-in { pad
 .figuras figcaption span { color: var(--cinza-claro) }
 .clara .figuras figcaption span { color: #3c3d50 }
 .videos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 18px }
+/* #526: os vídeos curtos (9:16) do próprio site. No celular ficam lado a lado e deslizam dentro da faixa (a página não
+   rola para o lado); a partir de 760 px, os três na grade */
+.curtas { display: grid; grid-auto-flow: column; grid-auto-columns: min(240px, 72%); gap: 14px; overflow-x: auto;
+  scroll-snap-type: x mandatory; overscroll-behavior-x: contain; padding-bottom: 8px; margin-bottom: 18px }
+.curta { margin: 0; display: grid; gap: 8px; align-content: start; scroll-snap-align: start; min-width: 0 }
+.curta video { display: block; width: 100%; height: auto; aspect-ratio: 9 / 16; object-fit: cover; background: #000; border-radius: var(--raio) }
+.curta figcaption { display: grid; gap: 2px }
+.curta figcaption span { color: var(--cinza-claro) }
+.clara .curta figcaption span { color: #3c3d50 }
+@media (min-width: 760px) {
+  .curtas { grid-auto-flow: row; grid-template-columns: repeat(3, minmax(0, 280px)); overflow-x: visible }
+}
 .cartao img, .plano img { border-radius: var(--raio); width: 100%; height: auto }
 .contador { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; max-width: 520px }
 .contador div { display: grid; gap: 2px; justify-items: center; background: var(--preto-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 14px 4px }
