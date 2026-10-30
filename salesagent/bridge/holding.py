@@ -229,7 +229,9 @@ def waiting_message(lead_text: str, sent_before: int = 0,
     lang = detect_language(lead_text)
     if sent_before > 0 and is_acknowledgement(lead_text):
         return textproc.customer_facing(_ACK[lang])
-    ref = _citavel(lead_text if is_substantive(lead_text) else pending_question)
+    # Só cita PERGUNTA (#523): citar "Racing🤩" ou "Mentioned you in their story" de volta soa robô.
+    fonte = lead_text if is_substantive(lead_text) else pending_question
+    ref = _citavel(fonte) if fonte and "?" in fonte else ""
     if ref:
         variants = _WAITING_REF[lang]
         texto = variants[min(sent_before, len(variants) - 1)].format(q=ref)
@@ -309,13 +311,14 @@ def call_offer(lead_text: str, link: str, contact_name: str | None = None,
                lang: str | None = None, motivo: str = "objecao", book: str | None = None) -> str:
     """A oferta de call com o nosso time e o link do calendário, na medida do motivo
     ("objecao", "decisao" ou "competidor"). Com `book`, a última linha oferece também a reserva direta
-    (dono, 23/10), e o "escolhe um horário" sobe para a linha de cima: continuam 4 balões."""
+    (dono, 23/10) e a oferta inteira vai num balão só: 3 balões (#523)."""
     lang = lang or detect_language(lead_text)
     nome = _primeiro_nome(contact_name)
     nome = "," + nome if nome else ""        # "Entendo, Eduardo." / "Entendo."
     linhas = list(_OFERTA_CALL.get(motivo, _OFERTA_CALL["objecao"])[lang])
     if book:
-        linhas = [linhas[0], f"{linhas[1]} {linhas[2]}", linhas[3], _RESERVAR.get(lang, _RESERVAR["en"])]
+        # 3 balões (#523): a oferta inteira, o link da agenda sozinho, a reserva direta
+        linhas = [f"{linhas[0]} {linhas[1]} {linhas[2]}", linhas[3], _RESERVAR.get(lang, _RESERVAR["en"])]
     texto = "\n".join(l.format(nome=nome, link=link, book=book or "") for l in linhas)
     return textproc.customer_facing(texto)
 

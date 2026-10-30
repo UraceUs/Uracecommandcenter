@@ -346,6 +346,8 @@ def pode_responder(lead_id: int) -> tuple[bool, str]:
     if not local["do_sdr"]:
         return False, "FUNIL_FORA_DO_SDR"
     tags = {str(t.get("name") or "") for t in (lead.get("_embedded") or {}).get("tags", [])}
+    if int(lead.get("status_id") or 0) == regras.STATUS_GANHO:
+        state.update_conversation(lead_id, cliente_atual=1)    # card ganho: atende como aluno (#523)
     # Card fechado responde e reabre (dono, 28/10, #426); quem pediu para parar (tag opt_out) nunca.
     if local["fechado"] and TAGS_DE_OPT_OUT & tags:
         return False, "OPT_OUT"

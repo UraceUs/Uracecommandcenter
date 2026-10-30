@@ -119,10 +119,25 @@ def test_eco_do_robo_nao_pausa_e_resposta_da_equipe_pausa(ambiente, monkeypatch)
     assert "pessoa assumiu" in r["robo"] and len(enviados("sms")) == antes
 
 
-def test_sms_de_cliente_o_robo_nao_responde(ambiente, monkeypatch):
+def _pedidos_a_ponte(monkeypatch):
+    """Guarda o que o painel manda para a ponte (o teste da ponte cuida do resto)."""
+    vistos, original = [], sdr_canais.perguntar_ao_robo
+
+    def espiao(*args, **kwargs):
+        vistos.append(kwargs.get("cliente", args[6] if len(args) > 6 else False))
+        return original(*args, **kwargs)
+    monkeypatch.setattr(sdr_canais, "perguntar_ao_robo", espiao)
+    return vistos
+
+
+def test_sms_de_cliente_o_robo_atende_como_aluno(ambiente, monkeypatch):
+    # dono, 30/10 (#523): "aluno e cliente atual: o robô fala tbm" (antes a equipe respondia à mão)
     monkeypatch.setenv("SDR_CANAL_SMS", "1")
+    vistos = _pedidos_a_ponte(monkeypatch)
     r = sdr_canais.sms_evento(ambiente["con"], sms("Amanhã tem treino?", numero="+13055550145"), esperar=False)
-    assert "cliente" in r["robo"] and enviados("sms") == []
+    assert r["robo"] == "respondeu" and len(enviados("sms")) == 2 and vistos == [True]
+    sdr_canais.sms_evento(ambiente["con"], sms("Oi, quanto custa?", sid="s-9"), esperar=False)
+    assert vistos == [True, False], "quem não é cliente segue como lead"
 
 
 def test_lista_de_teste_como_a_tag_teste_sdr(ambiente, monkeypatch):
@@ -221,11 +236,12 @@ def test_email_automatico_ou_filtrado_o_robo_nao_responde(ambiente, monkeypatch,
     assert enviados("email") == []
 
 
-def test_email_de_cliente_o_robo_nao_responde(ambiente, monkeypatch):
+def test_email_de_cliente_o_robo_atende_como_aluno(ambiente, monkeypatch):
     monkeypatch.setenv("SDR_CANAL_EMAIL", "1")
+    vistos = _pedidos_a_ponte(monkeypatch)
     caixa([thread(de="Rafael <rafael.pistoni@example.com>", corpo="Can we move Saturday?")])
     r = sdr_canais.ler_email(ambiente["con"])
-    assert "cliente" in r["conversas"][0]["robo"] and enviados("email") == []
+    assert r["conversas"][0]["robo"] == "respondeu" and len(enviados("email")) == 1 and vistos == [True]
 
 
 def test_email_que_a_equipe_ja_respondeu_e_da_equipe(ambiente, monkeypatch):

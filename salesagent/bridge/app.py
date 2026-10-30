@@ -33,6 +33,7 @@ import knowledge_writer
 import pausas
 import scheduler
 import sdr_ponte
+import social
 import state
 import textproc
 from config import (AGENT_API_KEY, BRAIN_RETRIEVAL, BRAIN_TOP_DOCS,
@@ -327,10 +328,12 @@ _playground: dict[str, dict] = {}
 
 
 def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, session_key: str,
-                     link_na_primeira: bool = False) -> dict:
+                     link_na_primeira: bool = False, cliente: bool = False) -> dict:
     """Um turno do robô fora do Kommo: rota antes do modelo, modelo, guarda depois dele. Não escreve em
     card nenhum; quem chama decide o que fazer com a decisão (o painel de teste mostra, o canal envia)."""
     rota = sdr_ponte.rotear(texto)
+    if cliente and rota["acao"] == "escalar" and rota.get("motivo") in holding.MOTIVO_DA_CALL:
+        rota = {**rota, "acao": "responder"}         # aluno não recebe a call de venda (#523)
     saida = {"rota": rota.get("acao"), "motivo": rota.get("motivo"), "diretivas": [],
              "cortes": [], "nota": "", "mensagens": [], "precisa_gente": False}
     if rota["acao"] == "silenciar":
@@ -343,8 +346,8 @@ def _turno_sem_kommo(texto: str, nome: str, primeira: bool, contexto: str, sessi
         resposta = sdr_ponte.mensagem_adiar(texto)
         saida["nota"] = (f"Lead adiou: agradece, não insiste, sem follow-up automático. Tarefa para uma pessoa "
                          f"retomar em {sdr_ponte.regras.ADIAR_RETOMADA_DIAS} dias e tag sdr:agora-nao.")
-    elif PROGRAM_LINKS.get("call_link") and (holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "")
-                                           or sdr_ponte.objecao_de_preco(texto)):
+    elif not cliente and PROGRAM_LINKS.get("call_link") and (holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "")
+                                                             or sdr_ponte.objecao_de_preco(texto)):
         tipo = holding.MOTIVO_DA_CALL.get(rota.get("motivo") or "") or "objecao"
         resposta = holding.call_offer(texto, PROGRAM_LINKS["call_link"], contact_name=nome or None, motivo=tipo,
                                        book=PROGRAM_LINKS.get("book_link"))
@@ -443,7 +446,7 @@ def _com_link_da_call(saida: dict, texto: str) -> dict:
 
 
 def turno_de_canal(canal: str, contato: str, texto: str, nome: str = "", primeira: bool = True,
-                   kommo_leads: list | tuple = ()) -> dict:
+                   kommo_leads: list | tuple = (), cliente: bool = False) -> dict:
     """`kommo_leads`: os cards do Kommo da mesma pessoa (o painel acha pelo telefone ou e-mail). Se o robô
     respondeu um deles pelo Instagram/Facebook há pouco, aqui não responde de novo (#408)."""
     texto = (texto or "").strip()[:3000]
@@ -457,10 +460,13 @@ def turno_de_canal(canal: str, contato: str, texto: str, nome: str = "", primeir
                     "cortes": [], "mensagens": [], "precisa_gente": False,
                     "nota": f"O robô respondeu esta pessoa por {outro[0]} há {outro[1] // 60} min: não repete aqui."}
     chave = hashlib.sha256(f"{canal}:{contato.strip().lower()}".encode()).hexdigest()[:20]
-    contexto, fora = _CONTEXTO_CANAL[canal], fora_do_horario_do_time() and bool(PROGRAM_LINKS.get("call_link"))
+    cliente = cliente or social.diz_que_ja_e_aluno(texto)
+    contexto = _CONTEXTO_CANAL[canal] + "\n" + _contexto_social(texto, cliente)
+    fora = fora_do_horario_do_time() and bool(PROGRAM_LINKS.get("call_link")) and not cliente
     if fora:
         contexto += "\n" + _CONTEXTO_FORA_DO_HORARIO.format(link=PROGRAM_LINKS["call_link"])
-    saida = _turno_sem_kommo(texto, nome, primeira, contexto, f"canal-{canal}-{chave}", link_na_primeira=fora)
+    saida = _turno_sem_kommo(texto, nome, primeira, contexto, f"canal-{canal}-{chave}", link_na_primeira=fora,
+                             cliente=cliente)
     if fora and saida.get("rota") == "responder":
         saida = _com_link_da_call(saida, texto)
     if saida["mensagens"]:
@@ -485,7 +491,8 @@ async def tool_canal(request: Request, x_api_key: str | None = Header(None)):
     p = await request.json()
     return {"ok": True, **await asyncio.to_thread(
         turno_de_canal, str(p.get("canal", "")), str(p.get("contato", "")), str(p.get("texto", "")),
-        str(p.get("nome", "")), bool(p.get("primeira", True)), p.get("kommo_leads") or [])}
+        str(p.get("nome", "")), bool(p.get("primeira", True)), p.get("kommo_leads") or [],
+        bool(p.get("cliente")))}
 
 
 @app.post("/tools/sdr")
@@ -542,7 +549,11 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
     (/kommo/eventos, nível atender). A resposta sai pelo return_url do Salesbot quando há um, e
     pelo bots/run quando não há (ver send_to_lead)."""
     state.log("inbound", lead_id, text)
-    campos = {"last_inbound_at": int(time.time()), "last_inbound_text": text[:500]}
+    evento = social.evento_da_rede(text)
+    idioma_antes = state.get_conversation(lead_id).get("last_inbound_text") or ""
+    campos = {"last_inbound_at": int(time.time())}
+    if not evento:                      # "Mentioned you in their story" não é o idioma da pessoa
+        campos["last_inbound_text"] = text[:500]
     if contact_name:
         campos["contact_name"] = contact_name
     state.update_conversation(lead_id, **campos)
@@ -566,7 +577,31 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
         _pending_returns.pop(lead_id, None)
         return
 
+    if evento:
+        # Menção em story e reação (dono, 30/10, #523): não são pergunta. A menção ganha um obrigado curto, uma
+        # vez por dia; a reação, nada. Sem triagem de venda e sem follow-up. Antes, a menção caía na espera
+        # e o lead lia "Still working on the answer to "Mentioned you in their story"".
+        agora_ts = int(time.time())
+        conv_ev = state.get_conversation(lead_id)
+        if evento == "mencao" and agora_ts - (conv_ev.get("mencao_agradecida_at") or 0) > 86400:
+            state.update_conversation(lead_id, mencao_agradecida_at=agora_ts)
+            state.log("gate", lead_id, "rede social: menção em story — obrigado curto, sem venda")
+            send_to_lead(lead_id, social.agradecimento(holding.detect_language(idioma_antes)))
+            return
+        state.update_conversation(lead_id, last_outbound_at=agora_ts)   # o resgate não responde por nós
+        state.log("gate", lead_id, f"rede social: {evento} — sem resposta")
+        _pending_returns.pop(lead_id, None)
+        return
+
+    cliente = bool(state.get_conversation(lead_id).get("cliente_atual"))
+    if not cliente and social.diz_que_ja_e_aluno(text):
+        cliente = True
+        state.update_conversation(lead_id, cliente_atual=1)
+        state.log("gate", lead_id, "a pessoa disse que já é aluno/cliente: atende sem vender (#523)")
     rota = sdr_ponte.rotear(text)
+    if cliente and rota["acao"] == "escalar" and rota.get("motivo") in holding.MOTIVO_DA_CALL:
+        # Aluno contando que vai correr não é "piloto competidor pronto para a call" (#523): o robô conversa.
+        rota = {**rota, "acao": "responder"}
     sdr_ponte.triar_em_segundo_plano(lead_id, text, rota)
     if rota["acao"] == "silenciar":
         # Não é lead (e-mail automático, código, spam, grupo): não recebe
@@ -692,6 +727,8 @@ def tratar_mensagem(lead_id: int, text: str, contact_name: str | None = None) ->
     # tem precedência e não é sobrescrita. Em estado escalado nenhuma
     # trilha comercial começa (G3) — o guard de state cobre isso.
     conv = state.get_conversation(lead_id)
+    if conv.get("cliente_atual"):
+        return                          # aluno não entra em trilha de follow-up de venda (#523)
     if conv["state"] in ("AI_ACTIVE", "RESUMED") and conv.get("followup_track") != "scheduled":
         track = "link_sent" if _last_turn_price_sent.pop(lead_id, False) else "initial"
         scheduler.start_track(lead_id, track)
@@ -703,6 +740,8 @@ def _resposta_de_espera(lead_id: int, lead_text: str, motivo: str | None = None)
     com o nosso time, com o link do calendário (pedido do dono, 13/10; estendida na revisão final de
     14/10). O resto, a espera de sempre. A escalação e o aviso à equipe seguem iguais."""
     link = PROGRAM_LINKS.get("call_link")
+    if state.get_conversation(lead_id).get("cliente_atual"):
+        link = None                     # aluno não recebe a call de venda (#523)
     tipo = holding.MOTIVO_DA_CALL.get(motivo or "")
     if link and not tipo and sdr_ponte.objecao_de_preco(lead_text):
         tipo = "objecao"
@@ -844,6 +883,12 @@ def _idioma_do_turno(text: str) -> str:
     return f"IDIOMA: o lead escreveu em {_NOME_DO_IDIOMA[lang]}. Responda inteiro nesse idioma.\n"
 
 
+def _contexto_social(texto: str, cliente: bool) -> str:
+    """O que o modelo precisa saber sobre quem fala e o tipo de mensagem (#523): aluno é atendido, não
+    vendido; comentário curto recebe resposta de social media, não triagem."""
+    return (social.CONTEXTO_ALUNO if cliente else "") + (social.CONTEXTO_SOCIAL if social.curta(texto) else "")
+
+
 def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     """Um turno do agente OpenClaw, com sessão isolada por lead.
 
@@ -864,7 +909,8 @@ def run_agent(lead_id: int, text: str, escalated_guard: bool = False) -> str:
     # [SYSTEM]. Ordem das camadas conforme brain/00_SYSTEM/Regras de
     # Retrieval.md; orçamento imposto pelo indexador (top 3, ~3.5k chars).
     text_for_agent = text
-    instrucoes = _sem_nomes_do_time(_instrucoes_comercial(lead_id))
+    instrucoes = _sem_nomes_do_time(_instrucoes_comercial(lead_id)) + _contexto_social(
+        text, bool(state.get_conversation(lead_id).get("cliente_atual")))
     if BRAIN_RETRIEVAL == "on":
         import brain_kb
         conv = state.get_conversation(lead_id)
@@ -1081,7 +1127,7 @@ async def _start_scheduler():
 # separadas por este caractere, e o bot é disparado de novo para cada uma.
 _SEP_MENSAGENS = "\x1e"
 MENSAGEM_MAX = 160
-MENSAGENS_MAX = 4
+MENSAGENS_MAX = 3                  # #523: 4 balões por resposta pareciam rajada
 # Ritmo humano (14/10, ideia do delivery-queue do b2b-sdr-agent-template): o intervalo até o próximo balão
 # cresce com o tamanho dele (quem escreve leva tempo), com teto, e ganha uma variação pequena.
 INTERVALO_ENTRE_MENSAGENS_S = 1.5

@@ -1449,6 +1449,9 @@ O robô de vendas no Kommo. Três níveis:
   888) não recebem resposta do robô nem viram Precisa de atenção; a mensagem fica guardada na conversa.
 - **Lead do Kommo sem resposta? (#414)** `GET /ops/api/sdr/rastro/{lead_id}` mostra o que a ponte fez com ele
   (mensagem, resposta, trava, erro) e um veredito: respondido, ou a trava ou o erro que segurou a resposta.
+- **Rede social, um robô só (#523):** menção em story recebe um obrigado curto; reação, nada; comentário curto, uma
+  frase de social media. Aluno e cliente (diz que já treina, card ganho, cliente do painel) são atendidos sem triagem
+  nem link de venda, e agenda ou pagamento vêm para o time. No máximo 3 balões por resposta.
 - **Fim de semana e noite (#418):** o robô responde o SMS e o e-mail todo dia, a qualquer hora. Fora do horário do
   time (seg–sex 8h–18h) ele leva a pessoa a marcar a call de 15 min pelo link do Google Calendar, já na primeira
   resposta. A call marcada aparece na agenda do time como sempre.

@@ -19,7 +19,8 @@ quem recebe, filtra, envia e guarda a conversa. **Tudo começa desligado.**
 | SMS de código curto (menos de 10 dígitos) ou de número 0800 dos EUA (800, 833, 844, 855, 866, 877, 888) | **não responde** e não vira Precisa de atenção: é serviço automático, não lead (#412) |
 | SMS só com HELP / INFO | **não responde**: o Dialpad manda a mensagem de ajuda do escritório |
 | "pare de mandar mensagem", "unsubscribe" no e-mail | confirma uma vez e nunca mais escreve para o contato |
-| Cliente do painel, oportunidade com o closer, card do Kommo com tag de passagem (`escalated`, `sdr:handoff`, `sdr:agora-nao`) | **não responde**: é da equipe |
+| Cliente do painel (aluno ou cliente atual) | **responde como aluno** (dono, 30/10, #523: "fala tbm"): sem triagem, sem call de venda e sem link de reserva; agenda e pagamento vão para o time |
+| Oportunidade com o closer, card do Kommo com tag de passagem (`escalated`, `sdr:handoff`, `sdr:agora-nao`) | **não responde**: é da equipe |
 | Card do Kommo em qualquer etapa, inclusive as da equipe (dono, 27/10, #403) | **responde na hora**; quem assume a conversa usa Pausar |
 | A mesma pessoa (mesmo telefone ou e-mail do card do Kommo) foi respondida pelo robô no Instagram/Facebook há menos de 30 min | **não repete** no SMS ou no e-mail, e vice-versa (#408; `SDR_DUPLICADO_MIN` no `bridge.env`, `0` desliga) |
 | O robô voltou sem texto (rota diferente de "não é lead") | **não conta como respondido**: vira **Precisa de atenção** para alguém responder à mão (#403) |

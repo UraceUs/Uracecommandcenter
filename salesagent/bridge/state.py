@@ -85,6 +85,8 @@ _MIGRATIONS = [
     "ALTER TABLE conversations ADD COLUMN contact_name TEXT",            # nome do lead no Kommo (escalação legível)
     "ALTER TABLE conversations ADD COLUMN last_inbound_text TEXT",       # última fala do lead (idioma p/ resgate)
     "ALTER TABLE conversations ADD COLUMN pending_question TEXT",        # a pergunta que espera resposta humana
+    "ALTER TABLE conversations ADD COLUMN cliente_atual INTEGER",        # já é aluno/cliente (#523): atende, não vende
+    "ALTER TABLE conversations ADD COLUMN mencao_agradecida_at INTEGER", # último obrigado por menção em story (#523)
 ]
 
 
